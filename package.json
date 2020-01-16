@@ -19,6 +19,11 @@
   "homepage": "https://github.com/bpeters132/DimbyBot2#readme",
   "dependencies": {
     "discord.js": "^11.5.1",
-    "opusscript": "0.0.7"
-  }
+    "enmap": "^5.2.4",
+    "ffmpeg": "0.0.4",
+    "fs": "0.0.1-security",
+    "opusscript": "0.0.7",
+    "ytdl-core": "^1.0.6"
+  },
+  "devDependencies": {}
 }
