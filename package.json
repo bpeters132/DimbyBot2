@@ -18,11 +18,14 @@
   },
   "homepage": "https://github.com/bpeters132/DimbyBot2#readme",
   "dependencies": {
-    "@discordjs/opus": "github:discordjs/opus",
     "discord.js": "github:discordjs/discord.js",
     "discord.js-commando": "github:discordjs/Commando",
     "dotenv": "^8.2.0",
+    "ffmpeg": "0.0.4",
     "ffmpeg-static": "^3.0.0",
+    "git": "^0.1.5",
+    "node-opus": "^0.3.3",
+    "simple-youtube-api": "^5.2.1",
     "sodium": "^3.0.2",
     "ytdl-core": "^1.0.6"
   },

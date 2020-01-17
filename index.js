@@ -1,13 +1,30 @@
 require('dotenv').config()
-const commando = require('discord.js-commando')
+const {CommandoClient} = require('discord.js-commando')
+const {Structures} = require('discord.js')
 const path = require('path')
+
 const token = process.env.token
 const prefix = process.env.prefix
-const ownerid = process.env.ownerid
+const owner_id = process.env.owner_id
 
-const client = new commando.CommandoClient({
+Structures.extend('Guild', Guild => {
+  class MusicGuild extends Guild {
+    constructor(client, data) {
+      super(client, data)
+      this.musicData = {
+        queue: [],
+        isPlaying: false,
+        songDispatcher: null
+      }
+    }
+  }
+  return MusicGuild
+})
+
+const client = new CommandoClient({
   commandPrefix: '.',
-  owner: ownerid
+  owner: owner_id,
+  unknownCommandResponse: false
 })
 
 client.registry
@@ -27,7 +44,7 @@ client.on('ready', () => {
   console.log(`Logged in as ${client.user.tag}! (${client.user.id})`)
     client.user.setActivity(
       `${prefix}help | Running on ${client.guilds.size} servers`
-  )
+    )
 })
 
 client.on('error', console.error)
