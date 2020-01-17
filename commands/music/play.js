@@ -36,7 +36,7 @@ module.exports = class PlayCommand extends Command {
     var voiceChannel = message.member.voice.channel;
     if (!voiceChannel) return message.say('Join a channel and try again');
     // end initial check
-
+    var bot_volume = 10
     // This if statement checks if the user entered a youtube playlist url
     if (
       query.match(
@@ -256,13 +256,13 @@ module.exports = class PlayCommand extends Command {
           )
           .on('start', () => {
             message.guild.musicData.songDispatcher = dispatcher;
-            message.guild.musicData.songDispatcher.setVolume(message.guild.musicData.bot_volume / 100);
+            message.guild.musicData.songDispatcher.setVolume(bot_volume / 100);
             const videoEmbed = new MessageEmbed()
               .setThumbnail(queue[0].thumbnail)
               .setColor('#e9f931')
               .addField('Now Playing:', queue[0].title)
               .addField('Duration:', queue[0].duration)
-              .addField(`Volume: **${message.guild.musicData.bot_volume}**%`)
+              .addField('Volume:', `${message.guild.musicData.bot_volume}%`)
             if (queue[1]) videoEmbed.addField('Next Song:', queue[1].title);
             message.say(videoEmbed);
             message.guild.musicData.nowPlaying = queue[0];
@@ -270,6 +270,7 @@ module.exports = class PlayCommand extends Command {
           })
           .on('finish', () => {
             if (queue.length >= 1) {
+              bot_volume = (message.guild.musicData.songDispatcher.volume * 100)
               return this.playSong(queue, message);
             } else {
               message.guild.musicData.isPlaying = false;
