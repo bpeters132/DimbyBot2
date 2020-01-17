@@ -242,6 +242,7 @@ module.exports = class PlayCommand extends Command {
       );
     }
   }
+
   playSong(queue, message) {
     queue[0].voiceChannel
       .join()
@@ -255,13 +256,13 @@ module.exports = class PlayCommand extends Command {
           )
           .on('start', () => {
             message.guild.musicData.songDispatcher = dispatcher;
-            message.guild.musicData.songDispatcher.setVolume(20/100);
-
+            message.guild.musicData.songDispatcher.setVolume(message.guild.musicData.bot_volume / 100);
             const videoEmbed = new MessageEmbed()
               .setThumbnail(queue[0].thumbnail)
               .setColor('#e9f931')
               .addField('Now Playing:', queue[0].title)
-              .addField('Duration:', queue[0].duration);
+              .addField('Duration:', queue[0].duration)
+              .addField(`Volume: **${message.guild.musicData.bot_volume}**%`)
             if (queue[1]) videoEmbed.addField('Next Song:', queue[1].title);
             message.say(videoEmbed);
             message.guild.musicData.nowPlaying = queue[0];

@@ -7,7 +7,7 @@ module.exports = class VolumeCommand extends Command {
             group: 'music',
             memberName: 'volume',
             guildOnly: true,
-            description: 'Adjust bot volume',
+            description: 'Adjust bot volume 1 to 100, default is 10',
             throttling: {
                 usages: 1,
                 duration: 5,
@@ -15,9 +15,9 @@ module.exports = class VolumeCommand extends Command {
             args: [
                 {
                     key: 'desiredVolume',
-                    prompt: 'What would you like the volume set to? 1 to 200 (Default volume is 20%)',
+                    prompt: 'What would you like the volume set to? 1 to 100 (Default volume is 10%)',
                     type: 'integer',
-                    validate: desiredVolume => desiredVolume >= 1 && desiredVolume <= 200
+                    validate: desiredVolume => desiredVolume >= 1 && desiredVolume <= 100
                 }
             ]
         })
@@ -34,6 +34,7 @@ module.exports = class VolumeCommand extends Command {
           return message.reply('There is no song playing right now!');
         }
         const volume = desiredVolume / 100;
+        message.guild.musicData.bot_volume == volume
         message.guild.musicData.songDispatcher.setVolume(volume);
         message.reply(`Volume has been set to **${desiredVolume}**%`)
       }
