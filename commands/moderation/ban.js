@@ -19,7 +19,7 @@ module.exports = class BanCommand extends Command{
                 {
                     key: 'ban_reason',
                     prompt: 'Please specify a reason for the ban',
-                    type: 'string'
+                    type: 'srting'
                 }
             ]
         })
