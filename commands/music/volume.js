@@ -15,7 +15,7 @@ module.exports = class VolumeCommand extends Command {
             args: [
                 {
                     key: 'desiredVolume',
-                    prompt: 'What would you like the volume set to? 1 to 200',
+                    prompt: 'What would you like the volume set to? 1 to 200 (Default volume is 20%)',
                     type: 'integer',
                     validate: desiredVolume => desiredVolume >= 1 && desiredVolume <= 200
                 }
