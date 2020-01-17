@@ -1,53 +1,35 @@
 require('dotenv').config()
-const discord = require('discord.js')
+const commando = require('discord.js-commando')
+const path = require('path')
 const token = process.env.token
 const prefix = process.env.prefix
+const ownerid = process.env.ownerid
 
-const client = new discord.Client()
+const client = new commando.CommandoClient({
+  commandPrefix: '.',
+  owner: ownerid
+})
 
-client.on('ready', async () => {
-  console.log(`Logged in as ${client.user.tag}`)
-  client.user.setActivity(
-    `${prefix}help | Running on ${client.guilds.size} servers`
+client.registry
+  .registerDefaultTypes()
+  .registerGroups([
+    ['fun', 'Commands For Fun'],
+    ['moderation', 'Moderation Commands'],
+    ['music', 'Music Commands'],
+    ['status', 'Bot/Server Status Commands']
+  ])
+  .registerDefaultGroups()
+  .registerDefaultCommands()
+  .registerCommandsIn(path.join(__dirname, 'commands'))
+
+
+client.on('ready', () => {
+  console.log(`Logged in as ${client.user.tag}! (${client.user.id})`)
+    client.user.setActivity(
+      `${prefix}help | Running on ${client.guilds.size} servers`
   )
 })
 
-client.on('message', message =>{
-  if (!message.content.startsWith(prefix) || message.author.bot) return
-
-  const args = message.content.slice(prefix.length).split(/ +/)
-  const command = args.shift().toLowerCase()
-
-  if(command === 'ping'){
-    message.reply('pong!')
-  }
-  else if (command === 'args_info'){
-    if(!args.length) {
-      return message.channel.send(`You didn't specify any args, ${message.author}`)
-    }
-
-    message.channel.send(`Command name: ${command}\nArguments: ${args}`)
-  }
-  else if (command === 'kick'){
-    if (!message.mentions.users.size) {
-      return message.reply('You need to specify a user for this command to work!')
-    }
-
-    const taggedUser = message.mentions.users.first()
-
-    message.channel.send(`You wanted to kick: ${taggedUser.username}`)
-  }
-  else if (command ==='avatar'){
-    if (!message.mentions.users.seize){
-      return message.reply(`Your Avater: <${message.author.displayAvatarURL}>`)
-    }
-
-    const avatarList = message.mentions.users.map(user => {
-      return `${user.username}'s avater: <${user.displayAvatarURL}>`
-    })
-
-    message.channel.send(avatarList);
-  }
-})
+client.on('error', console.error)
 
 client.login(token)
