@@ -17,6 +17,8 @@ module.exports = class PlayCommand extends commando.Command {
     }
 
     run(message) {
-        return
+        if(message.member.voice.channel){
+            const connection = message.member.voice.channel.join()
+        }
     }
 }
