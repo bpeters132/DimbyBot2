@@ -14,6 +14,7 @@ module.exports = class LeaveCommand extends Command {
 
   run(message) {
     var voiceChannel = message.member.voiceChannel;
+    console.log(voiceChannel)
     if (!voiceChannel) return message.reply('Join a channel and try again');
 
     if (
