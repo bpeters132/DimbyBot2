@@ -1,18 +1,19 @@
 const { Command } = require('discord.js-commando')
 
-module.exports = class PauseCommand extends Command {
+module.exports = class SkipCommand extends Command {
     constructor(client) {
         super(client, {
-            name: 'pause',
+            name: 'skip',
+            aliases: ['skip-song', 'advance-song'],
+            memberName: 'skip',
             group: 'music',
-            memberName: 'pause',
-            guildOnly: true,
-            description: 'Pause the bot\'s playback',
+            description: 'Skip the current playing song',
+            guildOnly: true
         })
     }
 
     run(message) {
-        var voiceChannel = message.member.voice.channel
+        const voiceChannel = message.member.voice.channel
         var bot_channel = message.guild.me.voice.channel
 
         if (!voiceChannel) return message.reply('Join a channel and try again')
@@ -21,13 +22,10 @@ module.exports = class PauseCommand extends Command {
             typeof message.guild.musicData.songDispatcher == 'undefined' ||
             message.guild.musicData.songDispatcher == null
         ) {
-            return message.say('There is no song playing right now!')
+            return message.reply('There is no song playing right now!')
         }
-
         if (voiceChannel === bot_channel) {
-            message.say('Song paused :pause_button:')
-            message.guild.musicData.songDispatcher.pause()
-            
+            message.guild.musicData.songDispatcher.end()
         } else {
             return message.reply('You need to be in the same channel as me to use that command!')
         }
