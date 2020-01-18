@@ -24,14 +24,14 @@ module.exports = class LeaveCommand extends Command {
     if (!message.guild.musicData.queue)
       return message.say('There are no songs in queue');
 
-    if (voiceChannel === voiceConnection.channel) {
+    if (voiceChannel === message.Guild.voiceConnection.channel) {
       message.guild.musicData.songDispatcher.end();
       message.guild.musicData.queue.length = 0;
       return;
 
     } else {
       return message.say('You are not in the same channel as me!')
-      
+
     }
   }
 };
