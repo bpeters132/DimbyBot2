@@ -6,7 +6,7 @@ module.exports = class SpankCommand extends Command {
             name: 'spankeveryone',
             group: 'fun',
             memberName: 'spankeveryone',
-            description: 'Spanks specified user.',
+            description: 'Spanks everyone in the server.',
             ownerOnly: true
         })
     }
