@@ -51,8 +51,12 @@ client.on('ready', () => {
 client.on('message', message => {
   if (message.author.bot) return
 
-  if (message.content === 'no u'){
+  if (message.content === 'no u' || message.content ==='No u' || message.content === 'no  u' || message.content === 'No  u'){
     message.channel.send('no u')
+  }
+
+  if (message.content === 'u no'){
+    message.channel.send({files: ["https://i.imgflip.com/2rytcz.jpg"]})
   }
 })
 
