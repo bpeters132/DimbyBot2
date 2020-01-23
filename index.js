@@ -23,7 +23,7 @@ Structures.extend('Guild', Guild => {
 })
 
 const client = new CommandoClient({
-  commandPrefix: '.',
+  commandPrefix: prefix,
   owner: owner_id,
   unknownCommandResponse: false
 })
