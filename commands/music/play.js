@@ -9,7 +9,7 @@ module.exports = class PlayCommand extends Command {
   constructor(client) {
     super(client, {
       name: 'play',
-      aliases: ['play-song', 'add', 'join'],
+      aliases: ['queue', 'add', 'join'],
       memberName: 'play',
       group: 'music',
       description: 'Play any song or playlist from youtube',
@@ -295,13 +295,13 @@ module.exports = class PlayCommand extends Command {
   formatDuration(durationObj) {
     const duration = `${durationObj.hours ? durationObj.hours + ':' : ''}${
       durationObj.minutes ? durationObj.minutes : '00'
-    }:${
+      }:${
       durationObj.seconds < 10
         ? '0' + durationObj.seconds
         : durationObj.seconds
-        ? durationObj.seconds
-        : '00'
-    }`
+          ? durationObj.seconds
+          : '00'
+      }`
     return duration
   }
 }
