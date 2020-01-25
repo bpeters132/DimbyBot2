@@ -51,7 +51,7 @@ client.on('ready', () => {
 client.on('message', message => {
   if (message.author.bot) return
 
-  if (message.content === 'no u' || message.content ==='No u' || message.content === 'no  u' || message.content === 'No  u'){
+  if (message.content.toLocaleLowerCase === 'no u'){
     message.channel.send('no u')
   }
 
