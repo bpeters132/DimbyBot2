@@ -50,13 +50,12 @@ client.on('ready', () => {
 
 client.on('message', message => {
   if (message.author.bot) return
-  const conditioned_content = (message.content).toLowerCase()
 
-  if (conditioned_content === 'no u'){
+  if ((message.content).toLowerCase() === 'no u'){
     message.channel.send('no u')
   }
 
-  if (conditioned_content === 'u no'){
+  if ((message.content).toLowerCase() === 'u no'){
     message.channel.send({files: ["https://i.imgflip.com/2rytcz.jpg"]})
   }
 })
