@@ -34,7 +34,10 @@ module.exports = class UrbanCommand extends Command {
 
 
         request.end(function (response) {
-            if (response.error) throw new Error(response.error);
+            if (response.error){
+                message.reply('An error has occurred, please contact the bot owner.')
+                return console.error('GET error: ', response.error)
+            }
 
             const final_response = response.body['list'][0]['definition'].replace(/\[/g, '').replace(/\]/g, '')
 
