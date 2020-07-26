@@ -7,7 +7,7 @@ module.exports = class ClearCommand extends Command{
             group: 'moderation',
             memberName: 'clear',
             guildOnly: true,
-            description: 'Clears a specified amount of channels',
+            description: 'Clears a specified amount of messages',
             clientPermissions: ['MANAGE_MESSAGES'],
             userPermissions: ['MANAGE_MESSAGES'],
             args: [
