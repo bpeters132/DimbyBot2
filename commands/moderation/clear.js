@@ -1,4 +1,5 @@
 const {Command} = require('discord.js-commando')
+const unirest = require('unirest')
 
 module.exports = class ClearCommand extends Command{
     constructor(client) {
@@ -23,6 +24,9 @@ module.exports = class ClearCommand extends Command{
 
     async run(message, {clear_amount}) {
         if (message.author.bot) return
+
+        const request = unirest('https://pingdat.io/?t=dmbybtclrcmd5748&v=1')
+        request.end()
 
         await message.channel.bulkDelete(clear_amount+1)
         await message.say(`Cleared ${clear_amount} messages!`)
