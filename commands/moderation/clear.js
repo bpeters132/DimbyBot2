@@ -25,8 +25,16 @@ module.exports = class ClearCommand extends Command{
     async run(message, {clear_amount}) {
         if (message.author.bot) return
 
-        const request = unirest('https://pingdat.io/?t=dmbybtclrcmd5748&v=1')
-        request.end()
+        // Ping Pingdat every clear command
+        const request = unirest("GET", `https://pingdat.io/?t=dmbybtclrcmd5748&v=${clear_amount}`)
+        request.end(function (response) {
+            if (response.error){
+                message.reply('An error has occurred, please contact the bot owner.')
+                return console.error('GET error: ', response.error)
+            }
+            console.log("Pinged Pingdat!")
+        })
+
 
         await message.channel.bulkDelete(clear_amount+1)
         await message.say(`Cleared ${clear_amount} messages!`)
