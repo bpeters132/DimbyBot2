@@ -37,7 +37,7 @@ module.exports = class ClearCommand extends Command{
 
 
         await message.channel.bulkDelete(clear_amount+1)
-        await message.say(`Cleared ${clear_amount} messages!`)
+        await message.reply(`Cleared ${clear_amount} messages!`)
 
     }
 }
