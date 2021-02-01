@@ -1,8 +1,9 @@
 require('dotenv').config()
 const {CommandoClient} = require('discord.js-commando')
-const {Structures} = require('discord.js')
 const path = require('path')
 const unirest = require('unirest')
+const io = require('@pm2/io')
+
 
 const token = process.env.token
 const prefix = process.env.prefix
@@ -51,6 +52,11 @@ client.on('message', message => {
   if ((message.content).toLowerCase() === 'u no'){
     message.channel.send({files: ["https://i.imgflip.com/2rytcz.jpg"]})
   }
+})
+
+io.init({
+  transactions: true, // will enable the transaction tracing
+  http: true // will enable metrics about the http server (optional)
 })
 
 client.on('error', console.error)
