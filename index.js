@@ -8,21 +8,6 @@ const token = process.env.token
 const prefix = process.env.prefix
 const owner_id = process.env.owner_id
 
-Structures.extend('Guild', Guild => {
-  class MusicGuild extends Guild {
-    constructor(client, data) {
-      super(client, data)
-      this.musicData = {
-        queue: [],
-        isPlaying: false,
-        songDispatcher: null,
-        bot_volume: 10
-      }
-    }
-  }
-  return MusicGuild
-})
-
 const client = new CommandoClient({
   commandPrefix: prefix,
   owner: owner_id,
@@ -33,9 +18,7 @@ client.registry
   .registerDefaultTypes()
   .registerGroups([
     ['fun', 'Commands For Fun'],
-    ['moderation', 'Moderation Commands'],
-    ['music', 'Music Commands'],
-    ['status', 'Bot/Server Status Commands']
+    ['moderation', 'Moderation Commands']
   ])
   .registerDefaultGroups()
   .registerDefaultCommands()
