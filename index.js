@@ -14,8 +14,7 @@ client.registry
   .registerDefaultTypes()
   .registerGroups([
     ["fun", "Commands For Fun"],
-    ["moderation", "Moderation Commands"],
-    ["musicc", "Music Commands"],
+    ["moderation", "Moderation Commands"]
   ])
   .registerDefaultGroups()
   .registerDefaultCommands()
