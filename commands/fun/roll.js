@@ -6,12 +6,13 @@ module.exports = class Roll extends Command {
             name: 'roll',
             group: 'fun',
             memberName: 'roll',
-            description: 'Roll a random number between 1 and specified maximum',
+            description: 'Roll a random number between 1 and specified maximum, not larger than 9223372036854775807 or smaller than 1',
             args: [
                 {
                     key: 'num',
                     prompt: 'Please enter a max number',
                     type: 'integer',
+                    validate: num => num >= 1 && clear_amount <= 9223372036854775807
                 },
             ],
         })
