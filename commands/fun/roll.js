@@ -12,7 +12,7 @@ module.exports = class Roll extends Command {
                     key: 'num',
                     prompt: 'Please enter a max number',
                     type: 'integer',
-                    validate: num => num >= 1 && clear_amount <= 9223372036854775807
+                    validate: num => num >= 1 && num <= 9223372036854775807
                 },
             ],
         })
