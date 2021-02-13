@@ -39,7 +39,11 @@ module.exports = class UrbanCommand extends Command {
                 return console.error('GET error: ', response.error)
             }
 
-            const final_response = response.body['list'][0]['definition'].replace(/\[/g, '').replace(/\]/g, '')
+            try {
+                var final_response = response.body['list'][0]['definition'].replace(/\[/g, '').replace(/\]/g, '')  
+            } catch (error) {
+                message.reply('There was no definition found for your term.. try again.')
+            } 
 
             if (final_response.length > 1024 && final_response.length < 2000) {
                 message.say(`${word.charAt(0).toUpperCase() + word.substring(1)}: ${final_response}`)
