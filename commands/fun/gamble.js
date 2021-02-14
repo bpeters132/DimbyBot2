@@ -82,7 +82,6 @@ module.exports = class Gamble extends (
         );
       }
     }
-
     const updatedjson = JSON.stringify(jsondata, null, 2);
     fs.writeFileSync(
       path.join(__dirname, "../../", "data", "balances.json"),
