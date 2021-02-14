@@ -2,15 +2,15 @@ const { Command } = require("discord.js-commando");
 const fs = require("fs");
 const path = require("path");
 
-module.exports = class Gamble extends (
+module.exports = class Bet extends (
   Command
 ) {
   constructor(client) {
     super(client, {
-      name: "gamble",
+      name: "bet",
       group: "fun",
-      memberName: "gamble",
-      description: "Gamble your money away!",
+      memberName: "bet",
+      description: "Bet your money away!",
       args: [
         {
           key: "bet",
