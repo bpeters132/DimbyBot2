@@ -25,7 +25,7 @@ module.exports = class BanCommand extends Command{
         })
     }
 
-    run(message, {ban_user, ban_reason}) {
+    async run(message, {ban_user, ban_reason}) {
        ban_user.ban(ban_reason)
        message.reply(`User ${ban_user} has been banned for reason: ${ban_reason}`)
     }

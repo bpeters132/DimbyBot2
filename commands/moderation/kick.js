@@ -25,7 +25,7 @@ module.exports = class KickCommand extends Command{
         })
     }
 
-    run(message, {kick_user, kick_reason}) {
+    async run(message, {kick_user, kick_reason}) {
        kick_user.kick(kick_reason)
        message.reply(`User ${kick_user} has been kicked for reason: ${kick_reason}`)
     }

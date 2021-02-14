@@ -18,7 +18,7 @@ module.exports = class Roll extends Command {
         })
     }
 
-    run(message, {num}){
+    async run(message, {num}){
         message.reply((Math.floor(Math.random() * Math.floor(num)))+1)
     }
 }

@@ -20,7 +20,7 @@ module.exports = class UrbanCommand extends Command {
         })
     }
 
-    run(message, { word }) {
+    async run(message, { word }) {
         const request = unirest("GET", "https://mashape-community-urban-dictionary.p.rapidapi.com/define");
 
         request.query({

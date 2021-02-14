@@ -17,7 +17,7 @@ module.exports = class SpankCommand extends Command {
         })
     }
 
-    run(message, { spankie }) {
+    async run(message, { spankie }) {
         return message.say(`${spankie} has been spanked!`)
     }
 }
