@@ -19,7 +19,7 @@ function updateDataFile(jsondata) {
 function createUser(authorID) {
     const jsondata = readDataFile();
     jsondata[authorID] = {
-        balance: 100,
+        balance: 7500,
         daily: 0,
         stocks: {},
     };

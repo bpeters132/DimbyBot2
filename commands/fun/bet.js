@@ -19,6 +19,7 @@ module.exports = class Bet extends (
                     key: "bet",
                     prompt: "Please enter a bet",
                     type: "integer",
+                    validate: (bet) => bet > 0,
                 },
             ],
         });

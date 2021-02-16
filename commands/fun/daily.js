@@ -23,7 +23,7 @@ module.exports = class Daily extends (
 
         if (jsondata[authorID]) {
             if (jsondata[authorID].daily < Date.now() - 86400) {
-                jsondata[authorID].balance += 50;
+                jsondata[authorID].balance += 2000;
                 jsondata[authorID].daily = Date.now();
 
                 updateDataFile(jsondata);
