@@ -4,7 +4,7 @@
   "description": "Orcs#0001's discord bot built for friends",
   "main": "index.js",
   "scripts": {
-    "test": "node index.js"
+    "test": "nodemon"
   },
   "repository": {
     "type": "git",
@@ -23,6 +23,8 @@
     "auto-git-update": "^2.0.1",
     "discord.js": "^12.5.1",
     "discord.js-commando": "^0.12.0",
+    "nodemon": "^2.0.7",
+    "redis": "^3.0.2",
     "unirest": "^0.6.0"
   },
   "devDependencies": {}

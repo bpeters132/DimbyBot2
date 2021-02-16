@@ -7,6 +7,7 @@ module.exports = class Balance extends (
     constructor(client) {
         super(client, {
             name: "balance",
+            aliases: ['bal','dollars'],
             group: "fun",
             memberName: "balance",
             description: "Check your money balance",
