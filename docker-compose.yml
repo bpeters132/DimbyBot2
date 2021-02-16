@@ -1,0 +1,10 @@
+version: '3.3'
+
+services:
+  node:
+    image: dimbydev
+    working_dir: /home/app
+    volumes: 
+      - .:/home/app
+    command: nodemon -L --ignore data/
+
