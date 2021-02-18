@@ -25,20 +25,27 @@ module.exports = class UrbanCommand extends Command {
 
     async run(message, { symbol }) {
         var cache = readCache(symbol);
+        console.log(cache)
         if (cache) {
-            if (cache["updated"] < Date.now() - (300 * 1000)) {
-                message.reply("Updating cached stock data")
-                
+            if (cache["updated"] < Date.now() - 300 * 1000) {
+                message.reply("Updating cached stock data");
+
                 searchSymbol(symbol, (res) => {
                     cacheStock(res["Global Quote"]);
                 });
+
+                cache = readCache(symbol);
+                message.reply("```" + JSON.stringify(cache, null, 2) + " ```");
             } else {
-                message.reply("Printing cached stock data")
+                message.reply("Printing cached stock data");
+                message.reply("```" + JSON.stringify(jsondata, null, 2) + " ```");
             }
         } else {
             searchSymbol(symbol, (res) => {
                 cacheStock(res["Global Quote"]);
             });
+            cache = readCache(symbol);
+            message.reply("```" + JSON.stringify(jsondata, null, 2) + " ```");
         }
     }
 };
