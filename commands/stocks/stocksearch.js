@@ -1,6 +1,6 @@
 const { Command } = require("discord.js-commando");
-const Discord = require("discord.js");
-const { searchSymbol, cacheStock, readCache } = require("../../scripts/stocks");
+const { MessageEmbed } = require("discord.js");
+const { searchPrice, cacheStock, readCache } = require("../../scripts/stocks");
 
 module.exports = class UrbanCommand extends Command {
     constructor(client) {
@@ -8,7 +8,7 @@ module.exports = class UrbanCommand extends Command {
             name: "stocksearch",
             group: "stocks",
             memberName: "stocksearch",
-            aliases: ["ss", "stock"],
+            aliases: ["stock", "s"],
             description:
                 "Look up a stock's current stats and price with it's symbol",
             args: [
@@ -24,28 +24,95 @@ module.exports = class UrbanCommand extends Command {
     }
 
     async run(message, { symbol }) {
-        var cache = readCache(symbol);
-        console.log(cache)
+        var symbol = await symbol.toUpperCase();
+        var cache = await readCache(symbol);
+        // console.log(cache);
         if (cache) {
-            if (cache["updated"] < Date.now() - 300 * 1000) {
-                message.reply("Updating cached stock data");
+            if (cache["updated"] < Date.now() - 30000) {
+                var newcache = await searchPrice(symbol);
 
-                searchSymbol(symbol, (res) => {
-                    cacheStock(res["Global Quote"]);
-                });
+                await cacheStock(newcache, symbol);
 
-                cache = readCache(symbol);
-                message.reply("```" + JSON.stringify(cache, null, 2) + " ```");
+                cache = await readCache(symbol);
+                if (typeof cache !== "undefined") {
+                    const embed = new MessageEmbed()
+                        .setColor("#c7ffed")
+                        .setTitle(cache.name)
+                        .setThumbnail(
+                            "https://dummyimage.com/160x160/c7ffed/000000.png&text=" +
+                                symbol
+                        )
+                        .addFields(
+                            { name: "Current Price", value: cache.price },
+                            { name: "Open", value: cache.open, inline: true },
+                            { name: "High", value: cache.high, inline: true },
+                            { name: "Low", value: cache.low, inline: true },
+                            {
+                                name: "Previous",
+                                value: cache.previous,
+                                inline: true,
+                            }
+                        )
+                        .setTimestamp();
+                    message.channel.send(embed);
+                } else {
+                    message.reply("Stock " + symbol + " does not exist!");
+                }
             } else {
-                message.reply("Printing cached stock data");
-                message.reply("```" + JSON.stringify(jsondata, null, 2) + " ```");
+                const embed = new MessageEmbed()
+                    .setColor("#c7ffed")
+                    .setTitle(cache.name)
+                    .setThumbnail(
+                        "https://dummyimage.com/160x160/c7ffed/000000.png&text=" +
+                            symbol
+                    )
+                    .addFields(
+                        { name: "Current Price", value: cache.price },
+                        { name: "Open", value: cache.open, inline: true },
+                        { name: "High", value: cache.high, inline: true },
+                        { name: "Low", value: cache.low, inline: true },
+                        {
+                            name: "Previous",
+                            value: cache.previous,
+                            inline: true,
+                        }
+                    )
+                    .setTimestamp();
+                message.channel.send(embed);
             }
         } else {
-            searchSymbol(symbol, (res) => {
-                cacheStock(res["Global Quote"]);
+            var newcache = await searchPrice(symbol);
+            // console.log(newcache)
+            await cacheStock(newcache, symbol).catch((err) => {
+                console.log(err);
             });
-            cache = readCache(symbol);
-            message.reply("```" + JSON.stringify(jsondata, null, 2) + " ```");
+            cache = await readCache(symbol);
+            // console.log(cache)
+
+            if (typeof cache !== "undefined") {
+                const embed = new MessageEmbed()
+                    .setColor("#c7ffed")
+                    .setTitle(cache.name)
+                    .setThumbnail(
+                        "https://dummyimage.com/160x160/c7ffed/000000.png&text=" +
+                            symbol
+                    )
+                    .addFields(
+                        { name: "Current Price", value: cache.price },
+                        { name: "Open", value: cache.open, inline: true },
+                        { name: "High", value: cache.high, inline: true },
+                        { name: "Low", value: cache.low, inline: true },
+                        {
+                            name: "Previous",
+                            value: cache.previous,
+                            inline: true,
+                        }
+                    )
+                    .setTimestamp();
+                message.channel.send(embed);
+            } else {
+                message.reply("Stock " + symbol + " does not exist!");
+            }
         }
     }
 };

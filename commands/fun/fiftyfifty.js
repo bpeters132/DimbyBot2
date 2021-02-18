@@ -5,14 +5,15 @@ const {
     updateDataFile,
 } = require("../../scripts/datafile");
 
-module.exports = class Bet extends (
+module.exports = class FiftyFifty extends (
     Command
 ) {
     constructor(client) {
         super(client, {
-            name: "bet",
+            name: "fiftyfifty",
             group: "fun",
-            memberName: "bet",
+            aliases:['5050', 'ff'],
+            memberName: "fiftyfifty",
             description: "Bet your money away!",
             args: [
                 {
