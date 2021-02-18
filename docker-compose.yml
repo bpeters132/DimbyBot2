@@ -6,5 +6,5 @@ services:
     working_dir: /home/app
     volumes: 
       - .:/home/app
-    command: nodemon -L --ignore data/
+    command: nodemon -L --ignore data/   
 
