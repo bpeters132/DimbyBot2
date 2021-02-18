@@ -54,24 +54,47 @@ function cacheStock(stockQuote) {
     );
     var jsondata = JSON.parse(rawdata);
 
-    searchName(stockQuote["01. symbol"], (res) => {
-            jsondata[stockQuote["01. symbol"]] = {
-
-            name: res["bestMatches"][0]["2. name"],
+    if (jsondata[stockQuote["01. symbol"]]) {
+        jsondata[stockQuote["01. symbol"]] = {
+            name: jsondata[stockQuote["01. symbol"]].name,
             open: stockQuote["02. open"],
             high: stockQuote["03. high"],
             low: stockQuote["04. low"],
             price: stockQuote["05. price"],
             "previous close": stockQuote["05. previous close"],
-            updated: Date.now()
-        
+            updated: Date.now(),
         };
-
+        console.log(
+            "Updating " + stockQuote["01. symbol"] + " with single query"
+        );
         updateCacheFile(jsondata);
-    });
+    } else {
+        searchName(stockQuote["01. symbol"], (res) => {
+            jsondata[stockQuote["01. symbol"]] = {
+                name: res["bestMatches"][0]["2. name"],
+                open: stockQuote["02. open"],
+                high: stockQuote["03. high"],
+                low: stockQuote["04. low"],
+                price: stockQuote["05. price"],
+                "previous close": stockQuote["05. previous close"],
+                updated: Date.now(),
+            };
+            console.log(
+                "Updating " + stockQuote["01. symbol"] + " with double query"
+            );
+            updateCacheFile(jsondata);
+        });
+    }
 }
 
-function readCache(symbol) {}
+function readCache(symbol) {
+    const rawdata = fs.readFileSync(
+        path.join(__dirname, "../", "data", "stocks.json")
+    );
+    jsondata = JSON.parse(rawdata);
+    return jsondata[symbol];
+}
 
 exports.searchSymbol = searchSymbol;
 exports.cacheStock = cacheStock;
+exports.readCache = readCache;

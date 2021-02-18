@@ -1,6 +1,6 @@
 const { Command } = require("discord.js-commando");
 const Discord = require("discord.js");
-const { searchSymbol, cacheStock } = require("../../scripts/stocks");
+const { searchSymbol, cacheStock, readCache } = require("../../scripts/stocks");
 
 module.exports = class UrbanCommand extends Command {
     constructor(client) {
@@ -24,8 +24,21 @@ module.exports = class UrbanCommand extends Command {
     }
 
     async run(message, { symbol }) {
-        searchSymbol(symbol, (res) => {
-            cacheStock(res["Global Quote"]);
-        });
+        var cache = readCache(symbol);
+        if (cache) {
+            if (cache["updated"] < Date.now() - (300 * 1000)) {
+                message.reply("Updating cached stock data")
+                
+                searchSymbol(symbol, (res) => {
+                    cacheStock(res["Global Quote"]);
+                });
+            } else {
+                message.reply("Printing cached stock data")
+            }
+        } else {
+            searchSymbol(symbol, (res) => {
+                cacheStock(res["Global Quote"]);
+            });
+        }
     }
 };

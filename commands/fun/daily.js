@@ -22,7 +22,7 @@ module.exports = class Daily extends (
         var authorID = message.author.id;
 
         if (jsondata[authorID]) {
-            if (jsondata[authorID].daily < Date.now() - 86400) {
+            if (jsondata[authorID].daily < Date.now() - (86400 * 1000)) {
                 jsondata[authorID].balance += 2000;
                 jsondata[authorID].daily = Date.now();
 
