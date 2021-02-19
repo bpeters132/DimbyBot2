@@ -2,10 +2,12 @@ const path = require("path");
 const fs = require("fs");
 
 function readDataFile() {
-    const rawdata = fs.readFileSync(
-        path.join(__dirname, "../", "data", "balances.json")
-    );
-    return (jsondata = JSON.parse(rawdata));
+    return new Promise((resolve, reject) =>{
+        const rawdata = fs.readFileSync(
+            path.join(__dirname, "../", "data", "balances.json")
+        );
+        resolve (jsondata = JSON.parse(rawdata));
+    })
 }
 
 function updateDataFile(jsondata) {
@@ -17,13 +19,17 @@ function updateDataFile(jsondata) {
 }
 
 function createUser(authorID) {
-    const jsondata = readDataFile();
-    jsondata[authorID] = {
-        balance: 7500,
-        daily: 0,
-        stocks: {},
-    };
-    updateDataFile(jsondata);
+    return new Promise((resolve, reject) => {
+        const jsondata = readDataFile();
+        jsondata[authorID] = {
+            balance: 7500,
+            daily: 0,
+            stocks: {},
+        };
+        updateDataFile(jsondata);
+        resolve();
+    })
+
 }
 
 exports.createUser = createUser;

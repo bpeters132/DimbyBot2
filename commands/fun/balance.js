@@ -14,33 +14,28 @@ module.exports = class Balance extends Command {
     }
 
     async run(message) {
-        var jsondata = readDataFile();
+        var jsondata = await readDataFile();
         var authorID = message.author.id;
 
-        if (jsondata[authorID]) {
+        function mesembed(mes, data) {
             const embed = new MessageEmbed()
                 .setColor("#c7ffed")
-                .setTitle(message.author.username)
-                .setThumbnail(message.author.avatarURL())
+                .setTitle(mes.author.username)
+                .setThumbnail(mes.author.avatarURL())
                 .addFields(
-                    { name: "Current Balance", value: "$" + jsondata[authorID].balance },
-                    { name: "Stocks", value: JSON.stringify(jsondata[authorID].stocks, 2, null)}
+                    { name: "Current Balance", value: "$" + data[authorID].balance },
+                    { name: "Stocks", value: JSON.stringify(data[authorID].stocks, 2, null) }
                 )
                 .setTimestamp();
-            message.channel.send(embed);
+            return mes.channel.send(embed);
+        }
+
+        if (jsondata[authorID]) { // if userdata exists, send the message
+            mesembed(message, jsondata)
         } else {
-            createUser(authorID);
-            var jsondata = readDataFile();
-            const embed = new MessageEmbed()
-                .setColor("#c7ffed")
-                .setTitle(message.author.username)
-                .setThumbnail(message.author.avatar)
-                .addFields(
-                    { name: "Current Balance", value: "$" + jsondata[authorID].balance },
-                    { name: "Stocks", value: JSON.stringify(jsondata[authorID].stocks, 2, null)}
-                )
-                .setTimestamp();
-            message.channel.send(embed);
+            await createUser(authorID); // if no userdata, create userdata first then send message
+            var jsondata = await readDataFile();
+            mesembed(message, jsondata)
         }
     }
 };
