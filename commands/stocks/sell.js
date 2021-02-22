@@ -6,18 +6,18 @@ const {
 } = require("../../scripts/datafile");
 const { searchPrice, cacheStock, readCache } = require("../../scripts/stocks");
 
-module.exports = class Buystock extends Command {
+module.exports = class sellstock extends Command {
     constructor(client) {
         super(client, {
-            name: "buystock",
-            aliases: ["buy"],
+            name: "sellstock",
+            aliases: ["sell"],
             group: "stocks",
-            memberName: "buystock",
-            description: "Buy stocks at their current price",
+            memberName: "sellstock",
+            description: "Sell stocks at their current price",
             args: [
                 {
                     key: "amount",
-                    prompt: "How much you would like to purchase",
+                    prompt: "How much you would like to sell",
                     type: "integer",
                     validate: (amount) => amount >= 1,
                 },
@@ -33,41 +33,31 @@ module.exports = class Buystock extends Command {
     }
 
     async run(message, { symbol, amount }) {
-        function buyStock(stock, quantity, stockData, datafile, user) {
+        function sellStock(stock, quantity, stockData, datafile, user) {
             return new Promise((resolve, reject) => {
-                var purchasePrice = stockData.price * quantity;
+                var sellPrice = stockData.price * quantity;
+                var foundIndex = datafile[user].stocks.findIndex(
+                    (element) => element.symbol == stock
+                );
 
-                if (datafile[user].balance > purchasePrice) {
-                    datafile[user].balance -= purchasePrice;
+                if (foundIndex != -1) {
+                    if (datafile[user].stocks[foundIndex].count >= quantity) {
+                        datafile[user].stocks[foundIndex].count -= quantity;
+                        datafile[user].balance += sellPrice;
 
-                    if (datafile[user].stocks.length > 0) {
-                        var foundIndex = datafile[user].stocks.findIndex(
-                            (element) => element.symbol == stock
-                        );
-
-                        if (foundIndex != -1) {
-                            datafile[user].stocks[foundIndex].count += quantity;
+                        if (datafile[user].stocks[foundIndex].count == 0) {
+                            datafile[user].stocks.splice(foundIndex, 1);
                             resolve(datafile);
                         } else {
-                            var purchaseStocks = {
-                                symbol: stock,
-                                count: quantity,
-                            };
-
-                            datafile[user].stocks.push(purchaseStocks);
                             resolve(datafile);
                         }
                     } else {
-                        var purchaseStocks = {
-                            symbol: stock,
-                            count: quantity,
-                        };
-
-                        datafile[user].stocks.push(purchaseStocks);
-                        resolve(datafile);
+                        reject(
+                            `You do not have ${quantity} of ${stockData.name} to sell!`
+                        );
                     }
                 } else {
-                    reject("Unable to purchase due to lack of balance.");
+                    reject(`You do not own any ${stockData.name}`);
                 }
             });
         }
@@ -76,7 +66,7 @@ module.exports = class Buystock extends Command {
         var cache = await readCache(symbol);
         var datafile = await readDataFile();
         var authorID = message.author.id;
-
+        
         if (typeof datafile[authorID] == 'undefined'){
             await createUser(authorID)
             datafile = await readDataFile();
@@ -91,11 +81,11 @@ module.exports = class Buystock extends Command {
 
                 cache = await readCache(symbol);
                 if (typeof cache !== "undefined") {
-                    buyStock(symbol, amount, cache, datafile, authorID)
+                    sellStock(symbol, amount, cache, datafile, authorID)
                         .then((datafile) => {
                             updateDataFile(datafile);
                             message.reply(
-                                `Successfully purchased ${amount} of ${cache.name} at $${cache.price}`
+                                `Successfully sold ${amount} of ${cache.name} at $${cache.price}`
                             );
                         })
                         .catch((err) => {
@@ -105,11 +95,11 @@ module.exports = class Buystock extends Command {
                     message.reply("Stock " + symbol + " does not exist!");
                 }
             } else {
-                buyStock(symbol, amount, cache, datafile, authorID)
+                sellStock(symbol, amount, cache, datafile, authorID)
                     .then((datafile) => {
                         updateDataFile(datafile);
                         message.reply(
-                            `Successfully purchased ${amount} of ${cache.name} at $${cache.price}`
+                            `Successfully sold ${amount} of ${cache.name} at $${cache.price}`
                         );
                     })
                     .catch((err) => {
@@ -126,11 +116,11 @@ module.exports = class Buystock extends Command {
             // console.log(cache)
 
             if (typeof cache !== "undefined") {
-                buyStock(symbol, amount, cache, datafile, authorID)
+                sellStock(symbol, amount, cache, datafile, authorID)
                     .then((datafile) => {
                         updateDataFile(datafile);
                         message.reply(
-                            `Successfully purchased ${amount} of ${cache.name} at $${cache.price}`
+                            `Successfully sold ${amount} of ${cache.name} at $${cache.price}`
                         );
                     })
                     .catch((err) => {

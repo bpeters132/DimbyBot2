@@ -18,7 +18,7 @@ module.exports = class Daily extends (
     }
 
     async run(message) {
-        var jsondata = readDataFile();
+        var jsondata = await readDataFile();
         var authorID = message.author.id;
 
         if (jsondata[authorID]) {
@@ -37,8 +37,8 @@ module.exports = class Daily extends (
                 message.reply("You can only use the daily command once a day!");
             }
         } else {
-            createUser(authorID);
-            var jsondata = readDataFile();
+            await createUser(authorID);
+            var jsondata = await readDataFile();
             jsondata[authorID].daily = Date.now();
 
             updateDataFile(jsondata);
