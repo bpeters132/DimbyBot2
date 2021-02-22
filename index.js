@@ -17,6 +17,7 @@ client.registry
         ["fun", "Commands For Fun"],
         ["moderation", "Moderation Commands"],
         ["stocks", "Commands to buy/sell stocks with dimby dollars"],
+        ["help", "Help Commands"]
     ])
     .registerDefaultGroups()
     .registerDefaultCommands()
