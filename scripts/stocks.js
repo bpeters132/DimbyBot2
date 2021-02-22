@@ -60,11 +60,11 @@ function cacheStock(stockPrice, symbol) {
         if (jsondata[symbol]) {
             jsondata[symbol] = {
                 name: jsondata[symbol].name,
-                open: stockPrice.o,
-                high: stockPrice.h,
-                low: stockPrice.l,
-                price: stockPrice.c,
-                previous: stockPrice.pc,
+                open: Math.floor(stockPrice.o),
+                high: Math.floor(stockPrice.h),
+                low: Math.floor(stockPrice.l),
+                price: Math.floor(stockPrice.c),
+                previous: Math.floor(stockPrice.pc),
                 updated: Date.now(),
             };
             console.log("Updating " + symbol + " with single query");
@@ -77,11 +77,11 @@ function cacheStock(stockPrice, symbol) {
                     // console.log("TEST 4", res)
                     jsondata[symbol] = {
                         name: res["bestMatches"][0]["2. name"],
-                        open: stockPrice.o,
-                        high: stockPrice.h,
-                        low: stockPrice.l,
-                        price: stockPrice.c,
-                        previous: stockPrice.pc,
+                        open: Math.floor(stockPrice.o),
+                        high: Math.floor(stockPrice.h),
+                        low: Math.floor(stockPrice.l),
+                        price: Math.floor(stockPrice.c),
+                        previous: Math.floor(stockPrice.pc),
                         updated: Date.now(),
                     };
                     console.log("Updating " + symbol + " with double query");

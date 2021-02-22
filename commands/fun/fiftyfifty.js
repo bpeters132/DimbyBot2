@@ -1,3 +1,4 @@
+const { MessageEmbed } = require("discord.js");
 const { Command } = require("discord.js-commando");
 const {
     createUser,
@@ -27,25 +28,46 @@ module.exports = class FiftyFifty extends (
     }
 
     async run(message, { bet }) {
-        var jsondata = readDataFile();
+        var jsondata = await readDataFile();
         var authorID = message.author.id;
+
+        function mesembed(mes, data, bet, win) {
+            if (win == false){
+                const embed = new MessageEmbed()
+                .setColor("#DD1717")
+                .setTitle(mes.author.username)
+                .setThumbnail(mes.author.avatarURL())
+                .addFields(
+                    { name: "You lost!", value: "-$" + bet},
+                    { name: "New Balance", value: "$" + data },
+                )
+                .setTimestamp();
+                return mes.channel.send(embed);
+            } else {
+                const embed = new MessageEmbed()
+                .setColor("#11B146")
+                .setTitle(mes.author.username)
+                .setThumbnail(mes.author.avatarURL())
+                .addFields(
+                    { name: "You win!", value: "+$" + bet},
+                    { name: "New Balance", value: "$" + data },
+                )
+                .setTimestamp();
+                return mes.channel.send(embed);
+            }
+            
+            
+        }
 
         function fiftyFifty(authorBalance) {
             if (authorBalance >= bet) {
                 if (Math.random() < 0.5) {
                     authorBalance += bet;
-                    message.reply(
-                        "You won the bet! Your new balance is " +
-                            authorBalance +
-                            " dimby dollars."
-                    );
+                    mesembed(message, authorBalance, bet, true)
+
                 } else {
                     authorBalance -= bet;
-                    message.reply(
-                        "You lost the bet! Your new balance is " +
-                            authorBalance +
-                            " dimby dollars."
-                    );
+                    mesembed(message, authorBalance, bet, false)
                 }
             } else {
                 message.reply(
@@ -65,6 +87,6 @@ module.exports = class FiftyFifty extends (
             jsondata[authorID].balance = fiftyFifty(jsondata[authorID].balance);
         }
 
-        updateDataFile(jsondata);
+        await updateDataFile(jsondata);
     }
 };

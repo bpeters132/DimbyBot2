@@ -14,7 +14,7 @@ module.exports = class UrbanCommand extends Command {
             args: [
                 {
                     key: "symbol",
-                    prompt: "You need to specify a stock symbol",
+                    prompt: "Specify the stock's symbol",
                     type: "string",
                     validate: (symbol) =>
                         symbol.length >= 3 && symbol.length <= 4,
