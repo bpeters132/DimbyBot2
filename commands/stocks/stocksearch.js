@@ -17,7 +17,7 @@ module.exports = class UrbanCommand extends Command {
                     prompt: "Specify the stock's symbol",
                     type: "string",
                     validate: (symbol) =>
-                        symbol.length >= 3 && symbol.length <= 4,
+                        symbol.length >= 2 && symbol.length <= 4,
                 },
             ],
         });
