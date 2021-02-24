@@ -4,3 +4,5 @@ data/balances.json
 .prettierrc
 .gitattributes
 data/stocks.json
+dimbybot-0109e15569a6.json
+functions/firebase-debug.log

@@ -65,7 +65,7 @@ client.on("message", (message) => {
 
     const request = unirest(
         "GET",
-        `https://pingdat.io/?t=dmbybtmsgsnd4574&v=1`
+        "https://pingdat.io/?t=dmbybtmsgsnd4574&v=1"
     );
     request.end(function (response) {
         if (response.error) {
