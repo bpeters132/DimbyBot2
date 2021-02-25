@@ -7,7 +7,7 @@ function getStockData(symbol) {
             `https://dimbybot-default-rtdb.firebaseio.com/stocks/${symbol}.json`
         ).end((res) => {
             if (res.error) reject(res.error);
-            resolve(JSON.parse(res.raw_body));
+            resolve(res.raw));
         });
     });
 }
@@ -24,7 +24,7 @@ function saveStockData(symbol, data) {
             .send(JSON.stringify(data))
             .end(function (res) {
                 if (res.error) reject(res.error);
-                resolve(res.raw_body);
+                resolve(res.body);
             });
     });
 }
