@@ -1,36 +1,53 @@
-const path = require("path");
-const fs = require("fs");
+const unirest = require("unirest");
+const { firebase_rtdb_url, firebase_rtdb_url_dev_suffix } = require("../config.json")
 
-function readDataFile() {
+function readUserData(authorID) {
     return new Promise((resolve, reject) => {
-        const rawdata = fs.readFileSync(
-            path.join(__dirname, "../", "data", "balances.json")
-        );
-        resolve((jsondata = JSON.parse(rawdata)));
+        unirest('GET', `${firebase_rtdb_url}balances/${authorID}.json${firebase_rtdb_url_dev_suffix}`)
+            .headers({
+                'Content-Type': 'application/json'
+            })
+            .send(JSON.stringify({}))
+            .end(function (res) {
+                if (res.error) reject(res.error);
+                resolve(res.body);
+            });
     });
 }
 
-function updateDataFile(jsondata) {
-        const updatedjson = JSON.stringify(jsondata, null, 2);
-        fs.writeFileSync(
-            path.join(__dirname, "../", "data", "balances.json"),
-            updatedjson
-        );
+function updateUserData(authorID, userData) {
+    return new Promise((resolve, reject) => {
+        unirest('PUT', `${firebase_rtdb_url}balances/${authorID}.json${firebase_rtdb_url_dev_suffix}`)
+            .headers({
+                'Content-Type': 'application/json'
+            })
+            .send(JSON.stringify(userData))
+            .end(function (res) {
+                if (res.error) reject(res.error);
+                resolve(res.body);
+            });
+    })
 }
 
 function createUser(authorID) {
     return new Promise((resolve, reject) => {
-        const jsondata = readDataFile();
-        jsondata[authorID] = {
+        const payload = {
             balance: 7500,
             daily: 0,
-            stocks: [],
+            stocks: [0]
         };
-        updateDataFile(jsondata);
-        resolve();
+        unirest('PUT', `${firebase_rtdb_url}balances/${authorID}.json${firebase_rtdb_url_dev_suffix}`)
+            .headers({
+                'Content-Type': 'application/json'
+            })
+            .send(JSON.stringify(payload))
+            .end(function (res) {
+                if (res.error) reject(res.error);
+                resolve(res.body);
+            });
     });
 }
 
 exports.createUser = createUser;
-exports.readDataFile = readDataFile;
-exports.updateDataFile = updateDataFile;
+exports.readUserData = readUserData;
+exports.updateUserData = updateUserData;

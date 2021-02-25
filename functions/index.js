@@ -2,7 +2,7 @@
 // const admin = require("firebase-admin");
 // admin.initializeApp();
 
-// exports.updateTreasure = functions.https.onRequest(async (req, res) => {
+// exports.updateStock = functions.https.onRequest(async (req, res) => {
 //   switch (req.method) {
 //     case "POST":
 //       await admin.database().ref("/GME").set(req.body);
