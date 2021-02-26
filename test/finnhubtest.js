@@ -5,7 +5,7 @@ api_key.apiKey = "" // Replace this
 const finnhubClient = new finnhub.DefaultApi()
 
 //Quote
-finnhubClient.quote("AAPL", (error, data, response) => {
+finnhubClient.quote("GME", (error, data, response) => {
     if (error) console.log(error)
     console.log(JSON.stringify(data.c, 2, null))
 });
