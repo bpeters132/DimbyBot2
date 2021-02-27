@@ -16,7 +16,7 @@ client.registry
         ["fun", "Commands For Fun"],
         ["moderation", "Moderation Commands"],
         ["stocks", "Commands to buy/sell stocks with dimby dollars"],
-        ["help", "Help Commands"]
+        ["help", "Help Commands"],
     ])
     .registerDefaultGroups()
     .registerDefaultCommands()
@@ -32,19 +32,14 @@ client.once("ready", () => {
 client.on("message", (message) => {
     if (message.author.bot) return;
 
-    // const request = unirest(
-    //     "GET",
-    //     "https://pingdat.io/?t=dmbybtmsgsnd4574&v=1"
-    // );
-    // request.end(function (response) {
-    //     if (response.error) {
-    //         message.reply(
-    //             "An error has occurred, please contact the bot owner."
-    //         );
-    //         return console.error("GET error: ", response.error);
-    //     }
-    //     console.log("Pinged Pingdat!");
-    // });
+    const request = unirest(
+        "GET",
+        "https://pingdat.io/?t=dmbybtmsgsnd4574&v=1"
+    );
+    request.end(function (response) {
+        if (response.error) return console.error("GET error: ", response.error);
+        console.log("Pinged Pingdat!");
+    });
 
     if (message.content.toLowerCase() === "no u") {
         message.channel.send("no u");

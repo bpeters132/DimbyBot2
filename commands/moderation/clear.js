@@ -35,12 +35,7 @@ module.exports = class ClearCommand extends (
             `https://pingdat.io/?t=dmbybtclrcmd5748&v=${clear_amount}`
         );
         request.end(function (response) {
-            if (response.error) {
-                message.reply(
-                    "An error has occurred, please contact the bot owner."
-                );
-                return console.error("GET error: ", response.error);
-            }
+            if (response.error) return console.error("GET error: ", response.error);
             console.log("Pinged Pingdat!");
         });
 

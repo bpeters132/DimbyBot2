@@ -7,7 +7,7 @@ function getStockData(symbol) {
             `https://dimbybot-default-rtdb.firebaseio.com/stocks/${symbol}.json`
         ).end((res) => {
             if (res.error) reject(res.error);
-            resolve(res.raw));
+            resolve(res.raw);
         });
     });
 }
