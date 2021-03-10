@@ -67,11 +67,11 @@ function cacheStock(stockData, symbol, cache) {
               // console.log("TEST 4", res)
               payload = {
                 name: res["bestMatches"][0]["2. name"],
-                open: Math.floor(stockData.o),
-                high: Math.floor(stockData.h),
-                low: Math.floor(stockData.l),
-                price: Math.floor(stockData.c),
-                previous: Math.floor(stockData.pc),
+                open: stockData.o,
+                high: stockData.h,
+                low: stockData.l,
+                price: stockData.c,
+                previous: stockData.pc,
                 updated: Date.now(),
               };
               console.log("Updating " + symbol + " with double query");
@@ -86,11 +86,11 @@ function cacheStock(stockData, symbol, cache) {
         default:
           payload = {
             name: cache.name,
-            open: Math.floor(stockData.o),
-            high: Math.floor(stockData.h),
-            low: Math.floor(stockData.l),
-            price: Math.floor(stockData.c),
-            previous: Math.floor(stockData.pc),
+            open: stockData.o,
+            high: stockData.h,
+            low: stockData.l,
+            price: stockData.c,
+            previous: stockData.pc,
             updated: Date.now(),
           };
           console.log("Updating " + symbol + " with single query");
