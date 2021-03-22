@@ -1,2 +1,7 @@
-15:40:35.548 [NamespaceSystem-akka.actor.default-dispatcher-4] INFO akka.event.slf4j.Slf4jLogger - Slf4jLogger started
-15:40:35.684 [main] INFO com.firebase.server.forge.App$ - Listening at localhost:9000
+16:44:35.176 [NamespaceSystem-akka.actor.default-dispatcher-4] INFO akka.event.slf4j.Slf4jLogger - Slf4jLogger started
+16:44:35.291 [main] INFO com.firebase.server.forge.App$ - Listening at localhost:9000
+17:24:47.189 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$1011966266:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+17:26:05.245 [FirebaseWorkerPool-1-4:fake-server$-1853265271:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+17:26:08.948 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$1069933003:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+17:28:43.821 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$-216826695:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+17:28:59.608 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$2032121285:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
