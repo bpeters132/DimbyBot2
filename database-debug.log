@@ -14,9 +14,3 @@
 17:33:02.965 [FirebaseWorkerPool-1-1:dimbybot-default-rtdb$1695581299:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
 17:33:05.811 [FirebaseWorkerPool-1-2:dimbybot-default-rtdb$2025142297:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
 17:33:08.353 [FirebaseWorkerPool-1-3:dimbybot-default-rtdb$-492495841:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
-17:36:01.656 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$-2032765517:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
-17:43:37.847 [FirebaseWorkerPool-1-3:dimbybot-default-rtdb$673768151:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
-17:47:16.771 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$749942945:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
-17:47:17.386 [FirebaseWorkerPool-1-1:dimbybot-default-rtdb$-1735208252:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
-17:47:17.391 [FirebaseWorkerPool-1-2:dimbybot-default-rtdb$2138769003:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
-17:47:17.397 [FirebaseWorkerPool-1-3:dimbybot-default-rtdb$888869002:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.

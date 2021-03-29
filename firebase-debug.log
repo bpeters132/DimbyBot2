@@ -1,0 +1,129 @@
+[debug] [2021-03-22T21:44:33.542Z] ----------------------------------------------------------------------
+[debug] [2021-03-22T21:44:33.544Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\bpete\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js emulators:start
+[debug] [2021-03-22T21:44:33.544Z] CLI Version:   9.5.0
+[debug] [2021-03-22T21:44:33.544Z] Platform:      win32
+[debug] [2021-03-22T21:44:33.544Z] Node Version:  v14.15.4
+[debug] [2021-03-22T21:44:33.545Z] Time:          Mon Mar 22 2021 16:44:33 GMT-0500 (Central Daylight Time)
+[debug] [2021-03-22T21:44:33.545Z] ----------------------------------------------------------------------
+[debug] [2021-03-22T21:44:33.545Z] 
+[debug] [2021-03-22T21:44:33.550Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2021-03-22T21:44:33.550Z] > authorizing via signed-in user
+[info] i  emulators: Starting emulators: auth, functions, database, hosting {"metadata":{"emulator":{"name":"hub"},"message":"Starting emulators: auth, functions, database, hosting"}}
+[debug] [2021-03-22T21:44:33.569Z] [hub] writing locator at C:\Users\bpete\AppData\Local\Temp\hub-dimbybot.json
+[warn] !  hosting: The hosting emulator is configured but there is no hosting configuration. Have you run firebase init hosting? {"metadata":{"emulator":{"name":"hosting"},"message":"The hosting emulator is configured but there is no hosting configuration. Have you run \u001b[1mfirebase init hosting\u001b[22m?"}}
+[warn] !  functions: The following emulators are not running, calls to these services from the Functions emulator will affect production: firestore, hosting, pubsub {"metadata":{"emulator":{"name":"functions"},"message":"The following emulators are not running, calls to these services from the Functions emulator will affect production: \u001b[1mfirestore, hosting, pubsub\u001b[22m"}}
+[warn] !  Your requested "node" version "12" doesn't match your global version "14" {"metadata":{"emulator":{"name":"functions"},"message":"Your requested \"node\" version \"12\" doesn't match your global version \"14\""}}
+[debug] [2021-03-22T21:44:33.607Z] defaultcredentials: writing to file C:\Users\bpete\AppData\Roaming\firebase\b_peters132_gmail.com_application_default_credentials.json
+[debug] [2021-03-22T21:44:33.609Z] Setting GAC to C:\Users\bpete\AppData\Roaming\firebase\b_peters132_gmail.com_application_default_credentials.json {"metadata":{"emulator":{"name":"functions"},"message":"Setting GAC to C:\\Users\\bpete\\AppData\\Roaming\\firebase\\b_peters132_gmail.com_application_default_credentials.json"}}
+[debug] [2021-03-22T21:44:33.611Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/dimbybot/adminSdkConfig [none]
+[debug] [2021-03-22T21:44:33.797Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/dimbybot/adminSdkConfig 200
+[debug] [2021-03-22T21:44:33.797Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/dimbybot/adminSdkConfig {"projectId":"dimbybot","databaseURL":"https://dimbybot-default-rtdb.firebaseio.com","storageBucket":"dimbybot.appspot.com"}
+[debug] [2021-03-22T21:44:33.808Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/dimbybot [none]
+[debug] [2021-03-22T21:44:33.991Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/dimbybot 200
+[debug] [2021-03-22T21:44:33.991Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/dimbybot {"projectId":"dimbybot","projectNumber":"905044299932","displayName":"DimbyBot","name":"projects/dimbybot","resources":{"hostingSite":"dimbybot","realtimeDatabaseInstance":"dimbybot-default-rtdb"},"state":"ACTIVE"}
+[debug] [2021-03-22T21:44:33.991Z] database rules config:  [{"instance":"dimbybot-default-rtdb","rules":"C:\\Users\\bpete\\Documents\\GitHub\\DimbyBot2\\database.rules.json"}]
+[debug] [2021-03-22T21:44:33.994Z] Ignoring unsupported arg: projectId {"metadata":{"emulator":{"name":"database"},"message":"Ignoring unsupported arg: projectId"}}
+[debug] [2021-03-22T21:44:33.994Z] Ignoring unsupported arg: auto_download {"metadata":{"emulator":{"name":"database"},"message":"Ignoring unsupported arg: auto_download"}}
+[debug] [2021-03-22T21:44:33.994Z] Ignoring unsupported arg: rules {"metadata":{"emulator":{"name":"database"},"message":"Ignoring unsupported arg: rules"}}
+[debug] [2021-03-22T21:44:33.994Z] Starting Database Emulator with command {"binary":"java","args":["-Duser.language=en","-jar","C:\\Users\\bpete\\.cache\\firebase\\emulators\\firebase-database-emulator-v4.7.2.jar","--host","localhost","--port",9000,"--functions_emulator_host","localhost","--functions_emulator_port",5001],"optionalArgs":["port","host","functions_emulator_port","functions_emulator_host"],"joinArgs":false} {"metadata":{"emulator":{"name":"database"},"message":"Starting Database Emulator with command {\"binary\":\"java\",\"args\":[\"-Duser.language=en\",\"-jar\",\"C:\\\\Users\\\\bpete\\\\.cache\\\\firebase\\\\emulators\\\\firebase-database-emulator-v4.7.2.jar\",\"--host\",\"localhost\",\"--port\",9000,\"--functions_emulator_host\",\"localhost\",\"--functions_emulator_port\",5001],\"optionalArgs\":[\"port\",\"host\",\"functions_emulator_port\",\"functions_emulator_host\"],\"joinArgs\":false}"}}
+[info] i  database: Database Emulator logging to database-debug.log {"metadata":{"emulator":{"name":"database"},"message":"Database Emulator logging to \u001b[1mdatabase-debug.log\u001b[22m"}}
+[debug] [2021-03-22T21:44:35.178Z] 16:44:35.176 [NamespaceSystem-akka.actor.default-dispatcher-4] INFO akka.event.slf4j.Slf4jLogger - Slf4jLogger started
+ {"metadata":{"emulator":{"name":"database"},"message":"16:44:35.176 [NamespaceSystem-akka.actor.default-dispatcher-4] INFO akka.event.slf4j.Slf4jLogger - Slf4jLogger started\r\n"}}
+[debug] [2021-03-22T21:44:35.291Z] 16:44:35.291 [main] INFO com.firebase.server.forge.App$ - Listening at localhost:9000
+ {"metadata":{"emulator":{"name":"database"},"message":"16:44:35.291 [main] INFO com.firebase.server.forge.App$ - Listening at localhost:9000\r\n"}}
+[warn] !  hosting: The hosting emulator is configured but there is no hosting configuration. Have you run firebase init hosting? {"metadata":{"emulator":{"name":"hosting"},"message":"The hosting emulator is configured but there is no hosting configuration. Have you run \u001b[1mfirebase init hosting\u001b[22m?"}}
+[warn] !  ui: Emulator UI unable to start on port 4000, starting on 4001 instead. {"metadata":{"emulator":{"name":"ui"},"message":"Emulator UI unable to start on port 4000, starting on 4001 instead."}}
+[debug] [2021-03-22T21:44:37.471Z] Ignoring unsupported arg: auto_download {"metadata":{"emulator":{"name":"ui"},"message":"Ignoring unsupported arg: auto_download"}}
+[debug] [2021-03-22T21:44:37.471Z] Ignoring unsupported arg: port {"metadata":{"emulator":{"name":"ui"},"message":"Ignoring unsupported arg: port"}}
+[debug] [2021-03-22T21:44:37.471Z] Starting Emulator UI with command {"binary":"node","args":["C:\\Users\\bpete\\.cache\\firebase\\emulators\\ui-v1.4.2\\server.bundle.js"],"optionalArgs":[],"joinArgs":false} {"metadata":{"emulator":{"name":"ui"},"message":"Starting Emulator UI with command {\"binary\":\"node\",\"args\":[\"C:\\\\Users\\\\bpete\\\\.cache\\\\firebase\\\\emulators\\\\ui-v1.4.2\\\\server.bundle.js\"],\"optionalArgs\":[],\"joinArgs\":false}"}}
+[info] i  ui: Emulator UI logging to ui-debug.log {"metadata":{"emulator":{"name":"ui"},"message":"Emulator UI logging to \u001b[1mui-debug.log\u001b[22m"}}
+[debug] [2021-03-22T21:44:37.558Z] Web / API server started at http://localhost:4001
+ {"metadata":{"emulator":{"name":"ui"},"message":"Web / API server started at http://localhost:4001\n"}}
+[info] i  functions: Watching "C:\Users\bpete\Documents\GitHub\DimbyBot2\functions" for Cloud Functions... {"metadata":{"emulator":{"name":"functions"},"message":"Watching \"C:\\Users\\bpete\\Documents\\GitHub\\DimbyBot2\\functions\" for Cloud Functions..."}}
+[debug] [2021-03-22T21:44:37.745Z] [worker-pool] addWorker(~diagnostic~) {"metadata":{"emulator":{"name":"functions"},"message":"[worker-pool] addWorker(~diagnostic~)"}}
+[debug] [2021-03-22T21:44:37.746Z] [worker-pool] Adding worker with key ~diagnostic~, total=1 {"metadata":{"emulator":{"name":"functions"},"message":"[worker-pool] Adding worker with key ~diagnostic~, total=1"}}
+[debug] [2021-03-22T21:44:37.746Z] [worker-pool] submitWork(triggerId=) {"metadata":{"emulator":{"name":"functions"},"message":"[worker-pool] submitWork(triggerId=)"}}
+[debug] [2021-03-22T21:44:37.746Z] [worker-~diagnostic~-b64cfb72-4390-4ae4-aeab-e69104eafcec]: Assigning socketPath: \\?\pipe\C:\Users\bpete\Documents\GitHub\DimbyBot2\functions\34560 {"metadata":{"emulator":{"name":"functions"},"message":"[worker-~diagnostic~-b64cfb72-4390-4ae4-aeab-e69104eafcec]: Assigning socketPath: \\\\?\\pipe\\C:\\Users\\bpete\\Documents\\GitHub\\DimbyBot2\\functions\\34560"}}
+[debug] [2021-03-22T21:44:37.746Z] [worker-~diagnostic~-b64cfb72-4390-4ae4-aeab-e69104eafcec]: BUSY {"metadata":{"emulator":{"name":"functions"},"message":"[worker-~diagnostic~-b64cfb72-4390-4ae4-aeab-e69104eafcec]: BUSY"}}
+[debug] [2021-03-22T21:44:37.893Z] [runtime-status] [34560] Functions runtime initialized. {"cwd":"C:\\Users\\bpete\\Documents\\GitHub\\DimbyBot2\\functions","node_version":"14.15.4"} {"metadata":{"emulator":{"name":"functions"},"message":"[runtime-status] [34560] Functions runtime initialized. {\"cwd\":\"C:\\\\Users\\\\bpete\\\\Documents\\\\GitHub\\\\DimbyBot2\\\\functions\",\"node_version\":\"14.15.4\"}"}}
+[debug] [2021-03-22T21:44:37.893Z] [runtime-status] [34560] Disabled runtime features: undefined {"metadata":{"emulator":{"name":"functions"},"message":"[runtime-status] [34560] Disabled runtime features: undefined"}}
+[debug] [2021-03-22T21:44:37.895Z] [runtime-status] [34560] Resolved module firebase-admin {"declared":true,"installed":true,"version":"9.5.0","resolution":"C:\\Users\\bpete\\Documents\\GitHub\\DimbyBot2\\functions\\node_modules\\firebase-admin\\lib\\index.js"} {"metadata":{"emulator":{"name":"functions"},"message":"[runtime-status] [34560] Resolved module firebase-admin {\"declared\":true,\"installed\":true,\"version\":\"9.5.0\",\"resolution\":\"C:\\\\Users\\\\bpete\\\\Documents\\\\GitHub\\\\DimbyBot2\\\\functions\\\\node_modules\\\\firebase-admin\\\\lib\\\\index.js\"}"}}
+[debug] [2021-03-22T21:44:37.896Z] [runtime-status] [34560] Resolved module firebase-functions {"declared":true,"installed":true,"version":"3.13.2","resolution":"C:\\Users\\bpete\\Documents\\GitHub\\DimbyBot2\\functions\\node_modules\\firebase-functions\\lib\\index.js"} {"metadata":{"emulator":{"name":"functions"},"message":"[runtime-status] [34560] Resolved module firebase-functions {\"declared\":true,\"installed\":true,\"version\":\"3.13.2\",\"resolution\":\"C:\\\\Users\\\\bpete\\\\Documents\\\\GitHub\\\\DimbyBot2\\\\functions\\\\node_modules\\\\firebase-functions\\\\lib\\\\index.js\"}"}}
+[debug] [2021-03-22T21:44:37.897Z] [runtime-status] [34560] Resolved module firebase-functions {"declared":true,"installed":true,"version":"3.13.2","resolution":"C:\\Users\\bpete\\Documents\\GitHub\\DimbyBot2\\functions\\node_modules\\firebase-functions\\lib\\index.js"} {"metadata":{"emulator":{"name":"functions"},"message":"[runtime-status] [34560] Resolved module firebase-functions {\"declared\":true,\"installed\":true,\"version\":\"3.13.2\",\"resolution\":\"C:\\\\Users\\\\bpete\\\\Documents\\\\GitHub\\\\DimbyBot2\\\\functions\\\\node_modules\\\\firebase-functions\\\\lib\\\\index.js\"}"}}
+[debug] [2021-03-22T21:44:37.899Z] [runtime-status] [34560] Outgoing network have been stubbed. [{"name":"http","status":"mocked"},{"name":"http","status":"mocked"},{"name":"https","status":"mocked"},{"name":"https","status":"mocked"},{"name":"net","status":"mocked"}] {"metadata":{"emulator":{"name":"functions"},"message":"[runtime-status] [34560] Outgoing network have been stubbed. [{\"name\":\"http\",\"status\":\"mocked\"},{\"name\":\"http\",\"status\":\"mocked\"},{\"name\":\"https\",\"status\":\"mocked\"},{\"name\":\"https\",\"status\":\"mocked\"},{\"name\":\"net\",\"status\":\"mocked\"}]"}}
+[debug] [2021-03-22T21:44:37.899Z] [runtime-status] [34560] Resolved module firebase-functions {"declared":true,"installed":true,"version":"3.13.2","resolution":"C:\\Users\\bpete\\Documents\\GitHub\\DimbyBot2\\functions\\node_modules\\firebase-functions\\lib\\index.js"} {"metadata":{"emulator":{"name":"functions"},"message":"[runtime-status] [34560] Resolved module firebase-functions {\"declared\":true,\"installed\":true,\"version\":\"3.13.2\",\"resolution\":\"C:\\\\Users\\\\bpete\\\\Documents\\\\GitHub\\\\DimbyBot2\\\\functions\\\\node_modules\\\\firebase-functions\\\\lib\\\\index.js\"}"}}
+[debug] [2021-03-22T21:44:37.932Z] [runtime-status] [34560] Checked functions.config() {"config":{}} {"metadata":{"emulator":{"name":"functions"},"message":"[runtime-status] [34560] Checked functions.config() {\"config\":{}}"}}
+[debug] [2021-03-22T21:44:37.933Z] [runtime-status] [34560] firebase-functions has been stubbed. {"functionsResolution":{"declared":true,"installed":true,"version":"3.13.2","resolution":"C:\\Users\\bpete\\Documents\\GitHub\\DimbyBot2\\functions\\node_modules\\firebase-functions\\lib\\index.js"}} {"metadata":{"emulator":{"name":"functions"},"message":"[runtime-status] [34560] firebase-functions has been stubbed. {\"functionsResolution\":{\"declared\":true,\"installed\":true,\"version\":\"3.13.2\",\"resolution\":\"C:\\\\Users\\\\bpete\\\\Documents\\\\GitHub\\\\DimbyBot2\\\\functions\\\\node_modules\\\\firebase-functions\\\\lib\\\\index.js\"}}"}}
+[debug] [2021-03-22T21:44:37.933Z] [runtime-status] [34560] Resolved module firebase-functions {"declared":true,"installed":true,"version":"3.13.2","resolution":"C:\\Users\\bpete\\Documents\\GitHub\\DimbyBot2\\functions\\node_modules\\firebase-functions\\lib\\index.js"} {"metadata":{"emulator":{"name":"functions"},"message":"[runtime-status] [34560] Resolved module firebase-functions {\"declared\":true,\"installed\":true,\"version\":\"3.13.2\",\"resolution\":\"C:\\\\Users\\\\bpete\\\\Documents\\\\GitHub\\\\DimbyBot2\\\\functions\\\\node_modules\\\\firebase-functions\\\\lib\\\\index.js\"}"}}
+[debug] [2021-03-22T21:44:37.934Z] [runtime-status] [34560] Resolved module firebase-admin {"declared":true,"installed":true,"version":"9.5.0","resolution":"C:\\Users\\bpete\\Documents\\GitHub\\DimbyBot2\\functions\\node_modules\\firebase-admin\\lib\\index.js"} {"metadata":{"emulator":{"name":"functions"},"message":"[runtime-status] [34560] Resolved module firebase-admin {\"declared\":true,\"installed\":true,\"version\":\"9.5.0\",\"resolution\":\"C:\\\\Users\\\\bpete\\\\Documents\\\\GitHub\\\\DimbyBot2\\\\functions\\\\node_modules\\\\firebase-admin\\\\lib\\\\index.js\"}"}}
+[debug] [2021-03-22T21:44:37.934Z] [runtime-status] [34560] Resolved module firebase-functions {"declared":true,"installed":true,"version":"3.13.2","resolution":"C:\\Users\\bpete\\Documents\\GitHub\\DimbyBot2\\functions\\node_modules\\firebase-functions\\lib\\index.js"} {"metadata":{"emulator":{"name":"functions"},"message":"[runtime-status] [34560] Resolved module firebase-functions {\"declared\":true,\"installed\":true,\"version\":\"3.13.2\",\"resolution\":\"C:\\\\Users\\\\bpete\\\\Documents\\\\GitHub\\\\DimbyBot2\\\\functions\\\\node_modules\\\\firebase-functions\\\\lib\\\\index.js\"}"}}
+[debug] [2021-03-22T21:44:37.934Z] [runtime-status] [34560] firebase-admin has been stubbed. {"adminResolution":{"declared":true,"installed":true,"version":"9.5.0","resolution":"C:\\Users\\bpete\\Documents\\GitHub\\DimbyBot2\\functions\\node_modules\\firebase-admin\\lib\\index.js"}} {"metadata":{"emulator":{"name":"functions"},"message":"[runtime-status] [34560] firebase-admin has been stubbed. {\"adminResolution\":{\"declared\":true,\"installed\":true,\"version\":\"9.5.0\",\"resolution\":\"C:\\\\Users\\\\bpete\\\\Documents\\\\GitHub\\\\DimbyBot2\\\\functions\\\\node_modules\\\\firebase-admin\\\\lib\\\\index.js\"}}"}}
+[debug] [2021-03-22T21:44:37.936Z] >>> HTTP REQUEST PUT http://localhost:9000/.settings/rules.json?ns=dimbybot-default-rtdb  
+ {
+  "rules": {
+    ".read": "auth.uid === 'ijnco4fTN5sDvZwsjWpmntPFzl60IQMh'",
+    ".write": "auth.uid === 'ijnco4fTN5sDvZwsjWpmntPFzl60IQMh'"
+  }
+}
+[debug] [2021-03-22T21:44:37.937Z] [worker-~diagnostic~-b64cfb72-4390-4ae4-aeab-e69104eafcec]: IDLE {"metadata":{"emulator":{"name":"functions"},"message":"[worker-~diagnostic~-b64cfb72-4390-4ae4-aeab-e69104eafcec]: IDLE"}}
+[debug] [2021-03-22T21:44:37.978Z] <<< HTTP RESPONSE 200 {"content-length":"15","content-type":"application/json; charset=utf-8","access-control-allow-origin":"*","cache-control":"no-cache","x-firebase-project-id":"dimbybot-default-rtdb","x-firebase-project-number":"123456789","x-firebase-uuid":"c281b56c-cfb1-4913-9023-a4bf41bc4898"}
+[info] 
+┌─────────────────────────────────────────────────────────────┐
+│ ✔  All emulators ready! It is now safe to connect your app. │
+│ i  View Emulator UI at http://localhost:4001                │
+└─────────────────────────────────────────────────────────────┘
+
+┌────────────────┬──────────────────────────────────┬─────────────────────────────────┐
+│ Emulator       │ Host:Port                        │ View in Emulator UI             │
+├────────────────┼──────────────────────────────────┼─────────────────────────────────┤
+│ Authentication │ localhost:9099                   │ http://localhost:4001/auth      │
+├────────────────┼──────────────────────────────────┼─────────────────────────────────┤
+│ Functions      │ localhost:5001                   │ http://localhost:4001/functions │
+├────────────────┼──────────────────────────────────┼─────────────────────────────────┤
+│ Database       │ localhost:9000                   │ http://localhost:4001/database  │
+├────────────────┼──────────────────────────────────┼─────────────────────────────────┤
+│ Hosting        │ Failed to initialize (see above) │                                 │
+└────────────────┴──────────────────────────────────┴─────────────────────────────────┘
+  Emulator Hub running at localhost:4400
+  Other reserved ports: 4500
+
+Issues? Report them at https://github.com/firebase/firebase-tools/issues and attach the *-debug.log files.
+ 
+[debug] [2021-03-22T22:24:47.189Z] 17:24:47.189 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$1011966266:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+ {"metadata":{"emulator":{"name":"database"},"message":"17:24:47.189 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$1011966266:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.\r\n"}}
+[debug] [2021-03-22T22:26:05.245Z] 17:26:05.245 [FirebaseWorkerPool-1-4:fake-server$-1853265271:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+ {"metadata":{"emulator":{"name":"database"},"message":"17:26:05.245 [FirebaseWorkerPool-1-4:fake-server$-1853265271:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.\r\n"}}
+[debug] [2021-03-22T22:26:08.948Z] 17:26:08.948 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$1069933003:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+ {"metadata":{"emulator":{"name":"database"},"message":"17:26:08.948 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$1069933003:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.\r\n"}}
+[info] i  database: Change detected, updating rules for dimbybot-default-rtdb... {"metadata":{"emulator":{"name":"database"},"message":"Change detected, updating rules for dimbybot-default-rtdb..."}}
+[debug] [2021-03-22T22:27:34.944Z] >>> HTTP REQUEST PUT http://localhost:9000/.settings/rules.json?ns=dimbybot-default-rtdb  
+ {
+  "rules": {
+    ".read": "false",
+    ".write": "false"
+  }
+}
+[debug] [2021-03-22T22:27:34.953Z] <<< HTTP RESPONSE 200 {"content-length":"15","content-type":"application/json; charset=utf-8","access-control-allow-origin":"*","cache-control":"no-cache","x-firebase-project-id":"dimbybot-default-rtdb","x-firebase-project-number":"123456789","x-firebase-uuid":"c281b56c-cfb1-4913-9023-a4bf41bc4898"}
+[info] +  database: Rules updated. {"metadata":{"emulator":{"name":"database"},"message":"Rules updated."}}
+[debug] [2021-03-22T22:28:43.821Z] 17:28:43.821 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$-216826695:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+ {"metadata":{"emulator":{"name":"database"},"message":"17:28:43.821 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$-216826695:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.\r\n"}}
+[debug] [2021-03-22T22:28:59.608Z] 17:28:59.608 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$2032121285:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+ {"metadata":{"emulator":{"name":"database"},"message":"17:28:59.608 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$2032121285:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.\r\n"}}
+[debug] [2021-03-22T22:31:40.534Z] 17:31:40.533 [FirebaseWorkerPool-1-1:dimbybot-default-rtdb$-278444532:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+ {"metadata":{"emulator":{"name":"database"},"message":"17:31:40.533 [FirebaseWorkerPool-1-1:dimbybot-default-rtdb$-278444532:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.\r\n"}}
+[debug] [2021-03-22T22:32:32.457Z] 17:32:32.457 [FirebaseWorkerPool-1-2:dimbybot-default-rtdb$1843314488:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+ {"metadata":{"emulator":{"name":"database"},"message":"17:32:32.457 [FirebaseWorkerPool-1-2:dimbybot-default-rtdb$1843314488:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.\r\n"}}
+[debug] [2021-03-22T22:32:33.956Z] 17:32:33.956 [FirebaseWorkerPool-1-3:dimbybot-default-rtdb$-736723162:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+ {"metadata":{"emulator":{"name":"database"},"message":"17:32:33.956 [FirebaseWorkerPool-1-3:dimbybot-default-rtdb$-736723162:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.\r\n"}}
+[debug] [2021-03-22T22:32:33.962Z] 17:32:33.962 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$-1642550691:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+ {"metadata":{"emulator":{"name":"database"},"message":"17:32:33.962 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$-1642550691:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.\r\n"}}
+[debug] [2021-03-22T22:32:33.994Z] 17:32:33.994 [FirebaseWorkerPool-1-1:dimbybot-default-rtdb$-237176970:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+ {"metadata":{"emulator":{"name":"database"},"message":"17:32:33.994 [FirebaseWorkerPool-1-1:dimbybot-default-rtdb$-237176970:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.\r\n"}}
+[debug] [2021-03-22T22:33:02.961Z] 17:33:02.961 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$-1148108023:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+ {"metadata":{"emulator":{"name":"database"},"message":"17:33:02.961 [FirebaseWorkerPool-1-4:dimbybot-default-rtdb$-1148108023:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.\r\n"}}
+[debug] [2021-03-22T22:33:02.965Z] 17:33:02.965 [FirebaseWorkerPool-1-1:dimbybot-default-rtdb$1695581299:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+ {"metadata":{"emulator":{"name":"database"},"message":"17:33:02.965 [FirebaseWorkerPool-1-1:dimbybot-default-rtdb$1695581299:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.\r\n"}}
+[debug] [2021-03-22T22:33:05.811Z] 17:33:05.811 [FirebaseWorkerPool-1-2:dimbybot-default-rtdb$2025142297:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+ {"metadata":{"emulator":{"name":"database"},"message":"17:33:05.811 [FirebaseWorkerPool-1-2:dimbybot-default-rtdb$2025142297:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.\r\n"}}
+[debug] [2021-03-22T22:33:08.353Z] 17:33:08.353 [FirebaseWorkerPool-1-3:dimbybot-default-rtdb$-492495841:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.
+ {"metadata":{"emulator":{"name":"database"},"message":"17:33:08.353 [FirebaseWorkerPool-1-3:dimbybot-default-rtdb$-492495841:] WARN com.firebase.server.forge.App$ - Received service account token O65u...Hz5b, assuming ownership.\r\n"}}
