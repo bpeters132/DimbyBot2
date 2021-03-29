@@ -44,7 +44,7 @@ function updateCacheFile(payload, symbol) {
   return new Promise((resolve, reject) => {
     unirest(
       "PUT",
-      `${firebase_rtdb_url}stocks/${symbol}.json?${firebase_rtdb_url_dev_suffix}&access_token=${firebase_rtdb_auth}`
+      `${firebase_rtdb_url}stocks/${symbol}.json?${firebase_rtdb_url_dev_suffix}&access_token${firebase_rtdb_auth}`
     )
       .send(JSON.stringify(payload))
       .end(function (res) {
@@ -59,7 +59,7 @@ function cacheStock(stockData, symbol, cache) {
     var payload = {};
     unirest(
       "GET",
-      `${firebase_rtdb_url}stocks/${symbol}.json?${firebase_rtdb_url_dev_suffix}&access_token=${firebase_rtdb_auth}`
+      `${firebase_rtdb_url}stocks/${symbol}.json?${firebase_rtdb_url_dev_suffix}&access_token${firebase_rtdb_auth}`
     ).end(function (res) {
       switch (res.body) {
         case null:
@@ -106,7 +106,7 @@ function readCache(symbol) {
   return new Promise((resolve, reject) => {
     unirest(
       "GET",
-      `${firebase_rtdb_url}stocks/${symbol}.json?${firebase_rtdb_url_dev_suffix}&access_token=${firebase_rtdb_auth}`
+      `${firebase_rtdb_url}stocks/${symbol}.json?${firebase_rtdb_url_dev_suffix}&access_token${firebase_rtdb_auth}`
     ).end(function (res) {
       if (res.error) reject(res.error);
       resolve(res.body);

@@ -3,7 +3,7 @@ const { firebase_rtdb_url, firebase_rtdb_url_dev_suffix, firebase_rtdb_auth } = 
 
 function readUserData(authorID) {
     return new Promise((resolve, reject) => {
-        unirest('GET', `${firebase_rtdb_url}balances/${authorID}.json?${firebase_rtdb_url_dev_suffix}&access_token=${firebase_rtdb_auth}`)
+        unirest('GET', `${firebase_rtdb_url}balances/${authorID}.json?${firebase_rtdb_url_dev_suffix}&access_token${firebase_rtdb_auth}`)
             .headers({
                 'Content-Type': 'application/json'
             })
@@ -17,7 +17,7 @@ function readUserData(authorID) {
 
 function updateUserData(authorID, userData) {
     return new Promise((resolve, reject) => {
-        unirest('PUT', `${firebase_rtdb_url}balances/${authorID}.json?${firebase_rtdb_url_dev_suffix}&access_token=${firebase_rtdb_auth}`)
+        unirest('PUT', `${firebase_rtdb_url}balances/${authorID}.json?${firebase_rtdb_url_dev_suffix}&access_token${firebase_rtdb_auth}`)
             .headers({
                 'Content-Type': 'application/json'
             })
@@ -36,7 +36,7 @@ function createUser(authorID) {
             daily: 0,
             stocks: [0]
         };
-        unirest('PUT', `${firebase_rtdb_url}balances/${authorID}.json?${firebase_rtdb_url_dev_suffix}&access_token=${firebase_rtdb_auth}`)
+        unirest('PUT', `${firebase_rtdb_url}balances/${authorID}.json?${firebase_rtdb_url_dev_suffix}&access_token${firebase_rtdb_auth}`)
             .headers({
                 'Content-Type': 'application/json'
             })
