@@ -1,7 +1,6 @@
 const { CommandoClient } = require("discord.js-commando");
 const { prefix, token, owner_id, nlpCloudToken } = require("./config.json");
 const path = require("path");
-const unirest = require("unirest");
 const io = require("@pm2/io");
 const NLPCloudClient = require("nlpcloud");
 
