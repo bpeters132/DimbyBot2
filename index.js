@@ -52,7 +52,7 @@ client.once("ready", () => {
 });
 
 client.on("message", async (message) => {
-  if (message.channel.id === "669188919547396127") {
+  if (message.channel.id === "669188919547396127" || message.channel.id === "880179167965093929") {
 
     // Add context for bot's past responses
     if (message.author.bot) {
