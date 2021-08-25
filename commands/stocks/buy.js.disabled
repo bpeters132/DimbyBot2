@@ -3,7 +3,7 @@ const {
   createUser,
   readUserData,
   updateUserData,
-} = require("../../scripts/datafile");
+} = require("../../scripts/datafile.js");
 const { searchPrice, cacheStock, readCache } = require("../../scripts/stocks");
 
 module.exports = class Buystock extends Command {

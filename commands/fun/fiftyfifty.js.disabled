@@ -4,7 +4,7 @@ const {
   createUser,
   readUserData,
   updateUserData,
-} = require("../../scripts/datafile");
+} = require("../../scripts/datafile.js");
 
 module.exports = class FiftyFifty extends Command {
   constructor(client) {

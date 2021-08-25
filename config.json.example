@@ -1,7 +1,7 @@
 {
-  "token": "",
-  "owner_id": "",
-  "prefix": "",
-  "youtubeAPI":"",
-  "finnhubAPI":""
+    "token": "",
+    "owner_id": "",
+    "prefix": "",
+    "finnhubAPI":"",
+    "nlpCloudToken":""
 }
