@@ -4,7 +4,7 @@
   "description": "Orcs#0001's discord bot built for friends",
   "main": "index.js",
   "scripts": {
-    "test": "nodemon"
+    "test": "nodemon --ignore data/"
   },
   "repository": {
     "type": "git",

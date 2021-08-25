@@ -1,6 +1,7 @@
 const { CommandoClient } = require("discord.js-commando");
 const { prefix, token, owner_id, nlpCloudToken } = require("./config.json");
 const path = require("path");
+const fs = require("fs");
 const io = require("@pm2/io");
 const NLPCloudClient = require("nlpcloud");
 
@@ -10,20 +11,20 @@ const client = new CommandoClient({
   unknownCommandResponse: false,
 });
 
-const AIClient = new NLPCloudClient("gpt-j", nlpCloudToken, (gpu = true));
+const AIClient = new NLPCloudClient("gpt-neo-27b", nlpCloudToken, (gpu = true));
 
-function GenerateReponse(client, message) {
+function GenerateReponse(client, context) {
   return new Promise((resolve) => {
     response = client.generation(
-      message.content,
-      (minLength = 10),
-      (maxLength = 128),
+      context,
+      (minLength = 1),
+      (maxLength = 32),
       (lengthNoInput = true),
       (endSequence = "."),
       (removeInput = true),
       (topK = 0),
-      (topP = 0.9),
-      (temperature = 0.8),
+      (topP = 0.7),
+      (temperature = 0.9),
       (repetitionPenalty = 1.5),
       (lengthPenalty = 0.2)
     );
@@ -51,15 +52,52 @@ client.once("ready", () => {
 });
 
 client.on("message", async (message) => {
-  if (message.author.bot) return;
-
   if (message.channel.id === "669188919547396127") {
+
+    // Add context for bot's past responses
+    if (message.author.bot) {
+      rawdata = fs.readFileSync("./data/gptContext.json");
+      context = JSON.parse(rawdata);
+      context.messages.push((message.content + "."));
+
+      // Limit context list
+      if ((context.messages).length > 20){
+        (context.messages).shift()
+      }
+
+      // Push context to file
+      data = JSON.stringify(context, null, 2);
+      fs.writeFileSync("./data/gptContext.json", data);
+      return;
+    }
+
+    // Add new user context
+    rawdata = fs.readFileSync("./data/gptContext.json");
+    context = JSON.parse(rawdata);
+    context.messages.push((message.content + "."));
+
+    // Limit context list
+    if ((context.messages).length > 20){
+      (context.messages).shift()
+    }
+    // Pust context to file
+    data = JSON.stringify(context, null, 2);
+    fs.writeFileSync("./data/gptContext.json", data);
+
+    // Generate Response
     message.channel.startTyping();
-    response = await GenerateReponse(AIClient, message);
+    // Build payload to send to api
+    payload = (context.starting_context).concat(context.messages)
+    payload = payload.join("\n");
+
+    // Send payload to api
+    response = await GenerateReponse(AIClient, payload);
     reply = response.data.generated_text;
     message.channel.stopTyping();
-    message.reply(reply);
+    // console.log(payload);
+    message.channel.send(reply);
   }
+  if (message.author.bot) return;
 
   if (message.content.toLowerCase() === "no u") {
     message.channel.send("no u");
