@@ -4,6 +4,7 @@
   "description": "Orcs#0001's discord bot built for friends",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
     "test": "nodemon --ignore data/"
   },
   "repository": {
