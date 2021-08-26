@@ -11,7 +11,7 @@ const client = new CommandoClient({
   unknownCommandResponse: false,
 });
 
-const AIClient = new NLPCloudClient("gpt-neo-27b", nlpCloudToken, (gpu = true));
+const AIClient = new NLPCloudClient("gpt-j", nlpCloudToken, (gpu = true));
 
 function GenerateReponse(client, context) {
   return new Promise((resolve) => {
@@ -23,8 +23,8 @@ function GenerateReponse(client, context) {
       (endSequence = "."),
       (removeInput = true),
       (topK = 0),
-      (topP = 0.7),
-      (temperature = 0.9),
+      (topP = 1.0),
+      (temperature = 1.0),
       (repetitionPenalty = 1.5),
       (lengthPenalty = 0.2)
     );
@@ -52,17 +52,19 @@ client.once("ready", () => {
 });
 
 client.on("message", async (message) => {
-  if (message.channel.id === "669188919547396127" || message.channel.id === "880179167965093929") {
+  // Testing Condition, flip comments between two lines below to flip from testing/not testing.
+  if (message.channel.id === "880440145784999936") {
+    // if (message.channel.id === "669188919547396127" || message.channel.id === "880179167965093929") {
 
     // Add context for bot's past responses
     if (message.author.bot) {
       rawdata = fs.readFileSync("./data/gptContext.json");
       context = JSON.parse(rawdata);
-      context.messages.push((message.content + "."));
+      context.messages.push(message.content + ".");
 
       // Limit context list
-      if ((context.messages).length > 20){
-        (context.messages).shift()
+      if (context.messages.length > 20) {
+        context.messages.shift();
       }
 
       // Push context to file
@@ -74,11 +76,11 @@ client.on("message", async (message) => {
     // Add new user context
     rawdata = fs.readFileSync("./data/gptContext.json");
     context = JSON.parse(rawdata);
-    context.messages.push((message.content + "."));
+    context.messages.push(message.content + ".");
 
     // Limit context list
-    if ((context.messages).length > 20){
-      (context.messages).shift()
+    if (context.messages.length > 20) {
+      context.messages.shift();
     }
     // Pust context to file
     data = JSON.stringify(context, null, 2);
@@ -87,14 +89,19 @@ client.on("message", async (message) => {
     // Generate Response
     message.channel.startTyping();
     // Build payload to send to api
-    payload = (context.starting_context).concat(context.messages)
-    payload = payload.join("\n");
+    constant_context = context.constant_context;
+    dynamic_context = context.messages;
+    constant_context.unshift("Constant Context: \n");
+    dynamic_context.unshift("\nDynamic Context: \n");
+    payload = context.constant_context.concat(context.messages);
+    payload.push("\nGenerated Single Line Response: ")
+    payload = payload.join(" ");
 
     // Send payload to api
     response = await GenerateReponse(AIClient, payload);
     reply = response.data.generated_text;
     message.channel.stopTyping();
-    // console.log(payload);
+    console.log(payload);
     message.channel.send(reply);
   }
   if (message.author.bot) return;

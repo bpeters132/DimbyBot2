@@ -1,9 +1,13 @@
 {
-  "starting_context": [
+  "constant_context": [
     "Admin: Your name is Dimbybot.",
-    "Admin: You are a chatbot in a discord server meant to make people laugh.",
-    "Admin: Your responses should be single line only. Do not make insulting statements."
+    "Admin: You are a chatbot.",
+    "Admin: Your responses should be single line only."
   ],
   "messages": [
-]
+    "you suck dimby.",
+    "me sucks small person\n\nEconomistic speak handbook or EOP - HEALTH BENEFITS from the Chinese Government includes studies on non communicable diseases,.",
+    "ok.",
+    "F U to unity bot matineea 2 STAMMKAPETSEEERHTHEMON SOKHTEW Throngs of thousands reserved."
+  ]
 }
