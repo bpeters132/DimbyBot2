@@ -68,13 +68,9 @@ creator
             (handler) => client.ws.on('INTERACTION_CREATE', handler)
         )
     )
-    .registerCommandsIn(path.join(__dirname, 'musicCommands'));
+    .registerCommandsIn(path.join(__dirname, 'musicCommands'))
+    .syncCommands();
 
-if (process.env.DISCORD_GUILD_ID) {
-    creator.syncCommandsIn(process.env.DISCORD_GUILD_ID);
-} else {
-    creator.syncCommands();
-}
 
 client.on("error", console.error);
 
