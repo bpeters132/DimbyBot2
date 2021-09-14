@@ -17,7 +17,8 @@ module.exports = {
                     .join(", ")}\`\`\``
             );
             data.push(
-                `You can send \`${prefix}help [command name]\` to get info on a specific command!`
+                `You can send \`${prefix}help [command name]\` to get info on a specific command!\n`,
+                "I can also play music! Type `/` and look for me in the command window!"
             );
             response = data.join("\n");
             return message.reply(response);
