@@ -19,7 +19,8 @@
   },
   "homepage": "https://github.com/bpeters132/DimbyBot2#readme",
   "dependencies": {
+    "discord.js": "^13.1.0",
+    "dotenv": "^10.0.0"
   },
-  "devDependencies": {
-  }
+  "devDependencies": {}
 }

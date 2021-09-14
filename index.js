@@ -2,7 +2,7 @@ const fs = require("fs");
 const Discord = require("discord.js");
 require("dotenv").config();
 
-const prefix = process.env.PREFIX
+const prefix = process.env.PREFIX;
 
 const client = new Discord.Client({
     intents: [
