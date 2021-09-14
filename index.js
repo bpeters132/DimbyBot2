@@ -3,7 +3,6 @@ const Discord = require("discord.js");
 const { SlashCreator, GatewayServer } = require('slash-create');
 const { Player } = require('discord-player');
 const { registerPlayerEvents } = require('./playerEvents');
-const { generateDocs } = require('./docs');
 const path = require('path')
 
 require("dotenv").config();
@@ -57,9 +56,6 @@ const creator = new SlashCreator({
 client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}! (${client.user.id})`);
     client.user.setActivity(`${process.env.PREFIX}help | Serving the People`);
-
-    console.log('Generating docs...');
-    generateDocs(creator.commands);
 });
 
 creator
@@ -68,7 +64,7 @@ creator
             (handler) => client.ws.on('INTERACTION_CREATE', handler)
         )
     )
-    .registerCommandsIn(path.join(__dirname, 'musicCommands'))
+    .registerCommandsIn(path.join(__dirname, 'commands'))
     .syncCommands();
 
 
