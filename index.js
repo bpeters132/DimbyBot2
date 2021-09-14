@@ -64,7 +64,7 @@ creator
             (handler) => client.ws.on('INTERACTION_CREATE', handler)
         )
     )
-    .registerCommandsIn(path.join(__dirname, 'commands'))
+    .registerCommandsIn(path.join(__dirname, 'musicCommands'))
     .syncCommands();
 
 
