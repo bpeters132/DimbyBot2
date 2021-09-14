@@ -5,25 +5,29 @@ const NLPCloudClient = require("nlpcloud");
 
 const prefix = process.env.PREFIX;
 
-const AIClient = new NLPCloudClient("gpt-j", process.env.NLPCLOUDTOKEN, (gpu = true));
+const AIClient = new NLPCloudClient(
+    "gpt-j",
+    process.env.NLPCLOUDTOKEN,
+    (gpu = true)
+);
 
 function GenerateReponse(client, context) {
-  return new Promise((resolve) => {
-    response = client.generation(
-      context,
-      (minLength = 1),
-      (maxLength = 32),
-      (lengthNoInput = true),
-      (endSequence = "."),
-      (removeInput = true),
-      (topK = 0),
-      (topP = 1.0),
-      (temperature = 1.0),
-      (repetitionPenalty = 1.5),
-      (lengthPenalty = 0.2)
-    );
-    resolve(response);
-  });
+    return new Promise((resolve) => {
+        response = client.generation(
+            context,
+            (minLength = 1),
+            (maxLength = 32),
+            (lengthNoInput = true),
+            (endSequence = "."),
+            (removeInput = true),
+            (topK = 0),
+            (topP = 1.0),
+            (temperature = 1.0),
+            (repetitionPenalty = 1.5),
+            (lengthPenalty = 0.2)
+        );
+        resolve(response);
+    });
 }
 const client = new Discord.Client({
     intents: [
@@ -54,9 +58,11 @@ client.once("ready", () => {
 
 // On a message event
 client.on("messageCreate", async (message) => {
-    if (message.channel.id === "880440145784999936") {
-        // if (message.channel.id === "669188919547396127" || message.channel.id === "880179167965093929") {
-
+    // if (message.channel.id === "880440145784999936") {
+    if (
+        message.channel.id === "669188919547396127" ||
+        message.channel.id === "880179167965093929"
+    ) {
         // Add context for bot's past responses
         if (message.author.bot) {
             rawdata = fs.readFileSync("./data/gptContext.json");
