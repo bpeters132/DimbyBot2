@@ -6,7 +6,7 @@ module.exports = {
     permissions: "MANAGE_MESSAGES",
     usage: "[number of messages to clear]",
     args: true,
-    async execute(message, args) {
+    async execute(client, message, args) {
         if (args.length != 1) {
             return message.reply(
                 `Invalid arguments, please reference ${process.env.PREFIX}help`

@@ -70,8 +70,11 @@ creator
     )
     .registerCommandsIn(path.join(__dirname, 'musicCommands'));
 
-if (process.env.DISCORD_GUILD_ID) creator.syncCommandsIn(process.env.DISCORD_GUILD_ID);
-else creator.syncCommands();
+if (process.env.DISCORD_GUILD_ID) {
+    creator.syncCommandsIn(process.env.DISCORD_GUILD_ID);
+} else {
+    creator.syncCommands();
+}
 
 client.on("error", console.error);
 
