@@ -6,9 +6,9 @@ module.exports = {
     cooldown: 5,
     aliases: ["commands"],
     usage: "[command name]",
-    async execute(message, args) {
+    async execute(client, message, args) {
         const data = [];
-        const { commands } = message.client;
+        const { commands } = client;
         if (!args.length) {
             data.push("Here's a list of all my commands:");
             data.push(
