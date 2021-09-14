@@ -19,19 +19,7 @@
   },
   "homepage": "https://github.com/bpeters132/DimbyBot2#readme",
   "dependencies": {
-    "@pm2/io": "^4.3.5",
-    "auto-git-update": "^2.0.1",
-    "discord.js": "^12.5.1",
-    "discord.js-commando": "^0.12.0",
-    "eslint": "^7.20.0",
-    "finnhub": "^1.2.1",
-    "nlpcloud": "^1.0.12",
-    "nodemon": "^2.0.7",
-    "unirest": "^0.6.0"
   },
   "devDependencies": {
-    "eslint": "^7.6.0",
-    "eslint-config-google": "^0.14.0",
-    "firebase-functions-test": "^0.2.0"
   }
 }
