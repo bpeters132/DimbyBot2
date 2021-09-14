@@ -1,34 +1,35 @@
 const fs = require("fs");
 const Discord = require("discord.js");
 require("dotenv").config();
-const NLPCloudClient = require("nlpcloud");
+// const NLPCloudClient = require("nlpcloud");
 
 const prefix = process.env.PREFIX;
 
-const AIClient = new NLPCloudClient(
-    "gpt-j",
-    process.env.NLPCLOUDTOKEN,
-    (gpu = true)
-);
+// const AIClient = new NLPCloudClient(
+//     "gpt-j",
+//     process.env.NLPCLOUDTOKEN,
+//     (gpu = true)
+// );
 
-function GenerateReponse(client, context) {
-    return new Promise((resolve) => {
-        response = client.generation(
-            context,
-            (minLength = 1),
-            (maxLength = 32),
-            (lengthNoInput = true),
-            (endSequence = "."),
-            (removeInput = true),
-            (topK = 0),
-            (topP = 1.0),
-            (temperature = 1.0),
-            (repetitionPenalty = 1.5),
-            (lengthPenalty = 0.2)
-        );
-        resolve(response);
-    });
-}
+// function GenerateReponse(client, context) {
+//     return new Promise((resolve) => {
+//         response = client.generation(
+//             context,
+//             (minLength = 1),
+//             (maxLength = 32),
+//             (lengthNoInput = true),
+//             (endSequence = "."),
+//             (removeInput = true),
+//             (topK = 0),
+//             (topP = 1.0),
+//             (temperature = 1.0),
+//             (repetitionPenalty = 1.5),
+//             (lengthPenalty = 0.2)
+//         );
+//         resolve(response);
+//     });
+// }
+
 const client = new Discord.Client({
     intents: [
         Discord.Intents.FLAGS.GUILDS,
@@ -59,57 +60,57 @@ client.once("ready", () => {
 // On a message event
 client.on("messageCreate", async (message) => {
     // if (message.channel.id === "880440145784999936") {
-    if (
-        message.channel.id === "669188919547396127" ||
-        message.channel.id === "880179167965093929"
-    ) {
-        // Add context for bot's past responses
-        if (message.author.bot) {
-            rawdata = fs.readFileSync("./data/gptContext.json");
-            context = JSON.parse(rawdata);
-            context.messages.push(message.content + ".");
+    // if (
+    //     message.channel.id === "669188919547396127" ||
+    //     message.channel.id === "880179167965093929"
+    // ) {
+    //     // Add context for bot's past responses
+    //     if (message.author.bot) {
+    //         rawdata = fs.readFileSync("./data/gptContext.json");
+    //         context = JSON.parse(rawdata);
+    //         context.messages.push(message.content + ".");
 
-            // Limit context list
-            if (context.messages.length > 20) {
-                context.messages.shift();
-            }
+    //         // Limit context list
+    //         if (context.messages.length > 20) {
+    //             context.messages.shift();
+    //         }
 
-            // Push context to file
-            data = JSON.stringify(context, null, 2);
-            fs.writeFileSync("./data/gptContext.json", data);
-            return;
-        }
+    //         // Push context to file
+    //         data = JSON.stringify(context, null, 2);
+    //         fs.writeFileSync("./data/gptContext.json", data);
+    //         return;
+    //     }
 
-        // Add new user context
-        rawdata = fs.readFileSync("./data/gptContext.json");
-        context = JSON.parse(rawdata);
-        context.messages.push(message.content + ".");
+    //     // Add new user context
+    //     rawdata = fs.readFileSync("./data/gptContext.json");
+    //     context = JSON.parse(rawdata);
+    //     context.messages.push(message.content + ".");
 
-        // Limit context list
-        if (context.messages.length > 20) {
-            context.messages.shift();
-        }
-        // Pust context to file
-        data = JSON.stringify(context, null, 2);
-        fs.writeFileSync("./data/gptContext.json", data);
+    //     // Limit context list
+    //     if (context.messages.length > 20) {
+    //         context.messages.shift();
+    //     }
+    //     // Pust context to file
+    //     data = JSON.stringify(context, null, 2);
+    //     fs.writeFileSync("./data/gptContext.json", data);
 
-        // Generate Response
-        message.channel.sendTyping();
-        // Build payload to send to api
-        constant_context = context.constant_context;
-        dynamic_context = context.messages;
-        constant_context.unshift("Constant Context: \n");
-        dynamic_context.unshift("\nDynamic Context: \n");
-        payload = context.constant_context.concat(context.messages);
-        payload.push("\nGenerated Single Line Response: ");
-        payload = payload.join(" ");
+    //     // Generate Response
+    //     message.channel.sendTyping();
+    //     // Build payload to send to api
+    //     constant_context = context.constant_context;
+    //     dynamic_context = context.messages;
+    //     constant_context.unshift("Constant Context: \n");
+    //     dynamic_context.unshift("\nDynamic Context: \n");
+    //     payload = context.constant_context.concat(context.messages);
+    //     payload.push("\nGenerated Single Line Response: ");
+    //     payload = payload.join(" ");
 
-        // Send payload to api
-        response = await GenerateReponse(AIClient, payload);
-        reply = response.data.generated_text;
-        // console.log(payload);
-        message.channel.send(reply);
-    }
+    //     // Send payload to api
+    //     response = await GenerateReponse(AIClient, payload);
+    //     reply = response.data.generated_text;
+    //     // console.log(payload);
+    //     message.channel.send(reply);
+    // }
 
     // no u
     if (message.author.bot) return;
