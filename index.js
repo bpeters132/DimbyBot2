@@ -1,9 +1,30 @@
 const fs = require("fs");
 const Discord = require("discord.js");
 require("dotenv").config();
+const NLPCloudClient = require("nlpcloud");
 
 const prefix = process.env.PREFIX;
 
+const AIClient = new NLPCloudClient("gpt-j", process.env.NLPCLOUDTOKEN, (gpu = true));
+
+function GenerateReponse(client, context) {
+  return new Promise((resolve) => {
+    response = client.generation(
+      context,
+      (minLength = 1),
+      (maxLength = 32),
+      (lengthNoInput = true),
+      (endSequence = "."),
+      (removeInput = true),
+      (topK = 0),
+      (topP = 1.0),
+      (temperature = 1.0),
+      (repetitionPenalty = 1.5),
+      (lengthPenalty = 0.2)
+    );
+    resolve(response);
+  });
+}
 const client = new Discord.Client({
     intents: [
         Discord.Intents.FLAGS.GUILDS,
@@ -67,7 +88,7 @@ client.on("messageCreate", async (message) => {
         fs.writeFileSync("./data/gptContext.json", data);
 
         // Generate Response
-        message.channel.startTyping();
+        message.channel.sendTyping();
         // Build payload to send to api
         constant_context = context.constant_context;
         dynamic_context = context.messages;
@@ -80,8 +101,7 @@ client.on("messageCreate", async (message) => {
         // Send payload to api
         response = await GenerateReponse(AIClient, payload);
         reply = response.data.generated_text;
-        message.channel.stopTyping();
-        console.log(payload);
+        // console.log(payload);
         message.channel.send(reply);
     }
 
