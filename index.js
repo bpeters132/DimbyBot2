@@ -16,10 +16,6 @@ const client = new Discord.Client({
     disableMentions: 'everyone'
 });
 
-client.player = new Player(client)
-client.playerConfig = require('./config/bot')
-client.emotes = client.playerConfig.emojis
-client.filters = client.playerConfig.filters
 client.commands = new Discord.Collection();
 client.cooldowns = new Discord.Collection();
 const commandFolders = fs.readdirSync("./commands");
