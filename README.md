@@ -1,1 +1,1 @@
-Dimbybot rewritten in nodejs, cause F python's discord library
+DimbyBot rewritten in nodejs, cause F python's discord library
