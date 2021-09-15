@@ -58,6 +58,7 @@ client.on('ready', () => {
     client.user.setActivity(`${process.env.PREFIX}help | Serving the People`);
 });
 
+// Command Syncing
 creator
     .withServer(
         new GatewayServer(
@@ -65,7 +66,9 @@ creator
         )
     )
     .registerCommandsIn(path.join(__dirname, 'musicCommands'))
-    .syncCommands();
+
+if (process.env.DISCORD_GUILD_ID) creator.syncCommandsIn(process.env.DISCORD_GUILD_ID);
+else creator.syncCommands();
 
 
 client.on("error", console.error);
