@@ -6,3 +6,4 @@ data/balances.json
 data/stocks.json
 data/gptContext.json
 .env
+logs/
