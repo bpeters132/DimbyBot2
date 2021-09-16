@@ -1,3 +1,5 @@
+const logIt = require("../../scripts/logIt");
+
 module.exports = {
     name: "clear",
     description: `Used to clear messages, can clear up to 30 messages`,
@@ -26,7 +28,8 @@ module.exports = {
                 await message.reply(`Invalid arguments, please reference ${process.env.PREFIX}help clear`)
             }
         } catch (error) {
-            console.log(error);
+            message.reply(`An error occured, please contact <@${process.env.OWNER_ID}>`)
+            logIt("error", error)
         }
     },
 };

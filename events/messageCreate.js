@@ -1,14 +1,18 @@
 const Discord = require('discord.js')
+const logIt = require('../scripts/logIt')
 module.exports = async (client, message) => {
-    // no u
     if (message.author.bot || message.channel.type === "dm") return;
+
+    // no u
     content = await message.content.toLowerCase();
     if (content == "no u") {
         message.channel.send("no u");
     }
 
+    // Stop running script if message does not start with prefix
     if (!message.content.startsWith(process.env.PREFIX) || message.author.bot) return;
 
+    // Split arguments into array and specity commandName into it's own variable
     const args = message.content.slice(process.env.PREFIX.length).trim().split(/ +/);
     const commandName = args.shift().toLowerCase();
 
@@ -18,14 +22,14 @@ module.exports = async (client, message) => {
         return;
     }
 
-    // Alias Handling
+    // Grab the command class from either Alias reference or true name reference
     const command =
         client.commands.get(commandName) ||
         client.commands.find(
             (cmd) => cmd.aliases && cmd.aliases.includes(commandName)
         );
 
-    // Verify a alias referenced command exists
+    // Verify an alias referenced command exists
     if (!command) return;
 
     // Guild only handling
@@ -37,7 +41,7 @@ module.exports = async (client, message) => {
     if (command.permissions) {
         const authorPerms = message.channel.permissionsFor(message.author);
         if (!authorPerms || !authorPerms.has(command.permissions)) {
-            return message.reply("You can not do this!");
+            return message.reply("You do not have the permissions to run this command!");
         }
     }
 
@@ -85,7 +89,7 @@ module.exports = async (client, message) => {
     try {
         command.execute(client, message, args);
     } catch (error) {
-        console.error(error);
+        logIt("error", error)
         message.reply(
             `An error was encountered, please contact <@${process.env.OWNER_ID}>`
         );

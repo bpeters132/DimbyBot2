@@ -1,10 +1,13 @@
+const logIt = require('./scripts/logIt')
 module.exports.registerPlayerEvents = (player) => {
 
     player.on("error", (queue, error) => {
         console.log(`[${queue.guild.name}] Error emitted from the queue: ${error.message}`);
+        logIt("error", error)
     });
     player.on("connectionError", (queue, error) => {
         console.log(`[${queue.guild.name}] Error emitted from the connection: ${error.message}`);
+        logIt("error", error)
     });
 
     player.on("trackStart", (queue, track) => {

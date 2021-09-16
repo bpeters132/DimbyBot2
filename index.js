@@ -3,6 +3,7 @@ const Discord = require("discord.js");
 const { SlashCreator, GatewayServer } = require('slash-create');
 const { Player } = require('discord-player');
 const { registerPlayerEvents } = require('./playerEvents');
+const logIt = require('./scripts/logIt')
 const path = require('path')
 
 require("dotenv").config();
@@ -54,7 +55,7 @@ client.on('ready', () => {
     client.user.setActivity(`${process.env.PREFIX}help | Serving the People`);
 });
 
-// Command Syncing
+// Music Command Registering/Syncing
 creator
     .withServer(
         new GatewayServer(
@@ -69,7 +70,10 @@ else creator.syncCommands();
 
 client.on("error", console.error);
 
-client.login(process.env.TOKEN).catch((err) => console.log(err));
+client.login(process.env.TOKEN).catch((err) => {
+    console.log(err)
+    logIt("error", err)
+});
 
 module.exports.client = client;
 module.exports.creator = creator;
