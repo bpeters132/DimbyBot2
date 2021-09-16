@@ -3,12 +3,12 @@ module.exports.registerPlayerEvents = (player) => {
 
     player.on("error", (queue, error) => {
         console.log(`[${queue.guild.name}] Error emitted from the queue: ${error.message}`);
-        queue.metadata.send(`\`\`\` ${error} \n ${error.message} \`\`\` Contact <@${process.env.OWNER_ID}> for explanation`)
+        queue.metadata.send(`\`\`\`Error emitted from the queue: ${error} \n ${error.message} \`\`\` Contact <@${process.env.OWNER_ID}> for explanation`)
         logIt("error", error.message)
     });
     player.on("connectionError", (queue, error) => {
         console.log(`[${queue.guild.name}] Error emitted from the connection: ${error.message}`);
-        queue.metadata.send(`\`\`\` ${error} \n ${error.message} \`\`\` Contact <@${process.env.OWNER_ID}> for explanation`)
+        queue.metadata.send(`\`\`\`Error emitted from the connection: ${error} \n ${error.message} \`\`\` Contact <@${process.env.OWNER_ID}> for explanation`)
         logIt("error", error.message)
     });
 
