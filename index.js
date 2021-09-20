@@ -42,7 +42,15 @@ for (const file of events) {
 };
 
 // Music Handling
-client.player = new Player(client);
+client.player = new Player(client, {
+    ytdlOptions: {
+        requestOptions: {
+            headers: {
+                cookie: "AFmmF2swRgIhAMEiqwAZqb6eu3FIIeXeze0hA4FvTO3n7nJC2HXhXw9GAiEA0xWG4G-mcNULlvKOqzIgsU6r6ODVyZyZtO3vwUtlqMM:QUQ3MjNmeTFKeU9qb1o0WW53UDFsUWdrTFVxZDhwSk9KUDFJMnRtX1hWcWhIOWw5QUJuc0Q1dGxqSzM4Vy0zNlhta0pBdTFPeEtOTmVyUWNXY2kwejRxNFBGaEJ3elNzR3Rxd0pGdFdRUlRnSlZ2MXdRUXV2dm9rSDdQaGJpNDdzTUhPNG9FbkZxaGlGb2hmSmpiRXgtZV9yVEdoWldpaGRQclVPaW1wYjdCMGg5MG1mNUl0SGVsWW5HM1RSZ0FCUE1tS1E0cVpPNlUzOElYZ05ROFlKSVJtcXN4WHpfckRYQW5hR0xOWExCOV9oaDFPUnRMVllsclhMeGZITzlDRnBLUi1nVTV0Smtuaw=="
+            }
+        }
+    }
+});
 registerPlayerEvents(client.player);
 
 const creator = new SlashCreator({
