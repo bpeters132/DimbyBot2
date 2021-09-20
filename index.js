@@ -1,12 +1,12 @@
-const fs = require("fs");
-const Discord = require("discord.js");
+const fs = require('fs');
+const Discord = require('discord.js');
 const { SlashCreator, GatewayServer } = require('slash-create');
 const { Player } = require('discord-player');
 const { registerPlayerEvents } = require('./playerEvents');
-const logIt = require('./scripts/logIt')
-const path = require('path')
+const logIt = require('./scripts/logIt');
+const path = require('path');
 
-require("dotenv").config();
+require('dotenv').config();
 
 const client = new Discord.Client({
     intents: [
@@ -19,13 +19,13 @@ const client = new Discord.Client({
 
 client.commands = new Discord.Collection();
 client.cooldowns = new Discord.Collection();
-const commandFolders = fs.readdirSync("./commands");
+const commandFolders = fs.readdirSync('./commands');
 
 // Register Commands
 for (const folder of commandFolders) {
     const commandFiles = fs
         .readdirSync(`./commands/${folder}`)
-        .filter((file) => file.endsWith(".js"));
+        .filter((file) => file.endsWith('.js'));
     for (const file of commandFiles) {
         const command = require(`./commands/${folder}/${file}`);
         client.commands.set(command.name, command);
@@ -38,8 +38,8 @@ const events = fs.readdirSync('./events').filter(file => file.endsWith('.js'));
 for (const file of events) {
     console.log(`Loading discord.js event ${file}`);
     const event = require(`./events/${file}`);
-    client.on(file.split(".")[0], event.bind(null, client));
-};
+    client.on(file.split('.')[0], event.bind(null, client));
+}
 
 // Music Handling
 client.player = new Player(client);
@@ -62,17 +62,17 @@ creator
             (handler) => client.ws.on('INTERACTION_CREATE', handler)
         )
     )
-    .registerCommandsIn(path.join(__dirname, 'musicCommands'))
+    .registerCommandsIn(path.join(__dirname, 'musicCommands'));
 
 if (process.env.DISCORD_GUILD_ID) creator.syncCommandsIn(process.env.DISCORD_GUILD_ID);
 else creator.syncCommands();
 
 
-client.on("error", console.error);
+client.on('error', console.error);
 
 client.login(process.env.TOKEN).catch((err) => {
-    console.log(err)
-    logIt("error", err)
+    console.log(err);
+    logIt('error', err);
 });
 
 module.exports.client = client;

@@ -1,12 +1,12 @@
-const Discord = require('discord.js')
-const logIt = require('../scripts/logIt')
+const Discord = require('discord.js');
+const logIt = require('../scripts/logIt');
 module.exports = async (client, message) => {
-    if (message.author.bot || message.channel.type === "dm") return;
+    if (message.author.bot || message.channel.type === 'dm') return;
 
     // no u
-    content = await message.content.toLowerCase();
-    if (content == "no u") {
-        message.channel.send("no u");
+    const content = await message.content.toLowerCase();
+    if (content == 'no u') {
+        message.channel.send('no u');
     }
 
     // Stop running script if message does not start with prefix
@@ -18,7 +18,7 @@ module.exports = async (client, message) => {
 
     // Verify a command exists
     if (!client.commands.has(commandName)) {
-        message.reply("Command does not exist!");
+        message.reply('Command does not exist!');
         return;
     }
 
@@ -33,15 +33,15 @@ module.exports = async (client, message) => {
     if (!command) return;
 
     // Guild only handling
-    if (command.guildOnly && message.channel.type === "dm") {
-        return message.reply("I can't execute that command inside DMs!");
+    if (command.guildOnly && message.channel.type === 'dm') {
+        return message.reply('I can\'t execute that command inside DMs!');
     }
 
     // Permission handling
     if (command.permissions) {
         const authorPerms = message.channel.permissionsFor(message.author);
         if (!authorPerms || !authorPerms.has(command.permissions)) {
-            return message.reply("You do not have the permissions to run this command!");
+            return message.reply('You do not have the permissions to run this command!');
         }
     }
 
@@ -89,9 +89,9 @@ module.exports = async (client, message) => {
     try {
         command.execute(client, message, args);
     } catch (error) {
-        logIt("error", error)
+        logIt('error', error);
         message.reply(
             `An error was encountered, please contact <@${process.env.OWNER_ID}>`
         );
     }
-}
+};
