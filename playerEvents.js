@@ -1,10 +1,5 @@
-<<<<<<< HEAD:playerEvents.js
 const logIt = require('./scripts/logIt');
 module.exports.registerPlayerEvents = async (player) => {
-=======
-const logIt = require('../scripts/logIt');
-module.exports = async (player) => {
->>>>>>> 02876d40035bf66ceaa87482e84b8fe2a4e08aab:events/playerEvents.js
 
     player.on('error', (queue, error) => {
         console.log(`[${queue.guild.name}] Error emitted from the queue: ${error.message}`);
