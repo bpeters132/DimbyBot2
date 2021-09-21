@@ -2,7 +2,6 @@ const fs = require('fs');
 const Discord = require('discord.js');
 const { SlashCreator, GatewayServer } = require('slash-create');
 const { Player } = require('discord-player');
-const { registerPlayerEvents } = require('./playerEvents');
 const logIt = require('./scripts/logIt');
 const path = require('path');
 
@@ -16,6 +15,9 @@ const client = new Discord.Client({
     ],
     disableMentions: 'everyone'
 });
+
+// Create Music Player
+client.player = new Player(client);
 
 client.commands = new Discord.Collection();
 client.cooldowns = new Discord.Collection();
@@ -41,10 +43,6 @@ for (const file of events) {
     const event = require(`./events/${file}`);
     client.on(file.split('.')[0], event.bind(null, client));
 }
-
-// Music Handling
-client.player = new Player(client);
-registerPlayerEvents(client.player);
 
 const creator = new SlashCreator({
     applicationID: process.env.DISCORD_CLIENT_ID,
