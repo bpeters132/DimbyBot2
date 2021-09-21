@@ -1,5 +1,5 @@
 const prefix = process.env.PREFIX;
-
+const { MessageEmbed } = require('discord.js');
 module.exports = {
     name: 'help',
     description: 'List all of my commands or info about a specific command.',
@@ -7,21 +7,26 @@ module.exports = {
     aliases: ['commands'],
     usage: '[command name]',
     async execute(client, message, args) {
-        const data = [];
+
         const { commands } = client;
         if (!args.length) {
-            data.push('Here\'s a list of all my commands:');
-            data.push(
-                `\`\`\`${commands
-                    .map((command) => command.name)
-                    .join(', ')}\`\`\``
-            );
-            data.push(
-                `You can send \`${prefix}help [command name]\` to get info on a specific command!\n`,
-                'I can also play music! Type `/` and look for me in the command window!'
-            );
-            const response = data.join('\n');
-            return message.reply(response);
+            const response = new MessageEmbed()
+                .setTitle('Here\'s a list of all my commands:')
+                .setDescription(
+                    `You can send \`${prefix}help [command name]\` to get info on a specific command!\n`,
+
+                )
+                .addFields(
+                    {
+                        name: 'Commands', value: `${commands
+                            .map((command) => command.name)
+                            .join(', ')}`
+                    },
+                    {
+                        name: 'Music', value: 'I can also play music! Type `/` and look for me in the command window!'
+                    }
+                );
+            return message.channel.send({ embeds: [response] });
         }
         const name = args[0].toLowerCase();
         const command =
@@ -32,17 +37,18 @@ module.exports = {
             return message.reply('That\'s not a valid command!');
         }
 
-        data.push(`**Name:** ${command.name}`);
+        const response = new MessageEmbed().setTitle(command.name.charAt(0).toUpperCase() + command.name.slice(1));
+        if (command.aliases) {
+            response.addField('Aliases', command.aliases.join(', '));
+        }
+        if (command.description) {
+            response.addField('Description', command.description);
+        }
+        if (command.usage) {
+            response.addField('Usage', `${prefix}${command.name} ${command.usage}`);
+        }
+        response.addField('Cooldown', `${command.cooldown || 3} second(s)`);
 
-        if (command.aliases)
-            data.push(`**Aliases:** ${command.aliases.join(', ')}`);
-        if (command.description)
-            data.push(`**Description:** ${command.description}`);
-        if (command.usage)
-            data.push(`**Usage:** ${prefix}${command.name} ${command.usage}`);
-
-        data.push(`**Cooldown:** ${command.cooldown || 3} second(s)`);
-        const response = data.join('\n');
-        message.reply(response);
+        message.channel.send({ embeds: [response] });
     },
 };
