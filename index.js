@@ -1,5 +1,5 @@
 const fs = require('fs');
-const Discord = require('discord.js');
+const {Client, Intents, Collection} = require('discord.js');
 const { SlashCreator, GatewayServer } = require('slash-create');
 const { Player } = require('discord-player');
 const {registerPlayerEvents} = require('./playerEvents');
@@ -8,17 +8,17 @@ const path = require('path');
 
 require('dotenv').config();
 
-const client = new Discord.Client({
+const client = new Client({
     intents: [
-        Discord.Intents.FLAGS.GUILDS,
-        Discord.Intents.FLAGS.GUILD_MESSAGES,
-        Discord.Intents.FLAGS.GUILD_VOICE_STATES,
+        Intents.FLAGS.GUILDS,
+        Intents.FLAGS.GUILD_MESSAGES,
+        Intents.FLAGS.GUILD_VOICE_STATES,
     ],
     disableMentions: 'everyone'
 });
 
-client.commands = new Discord.Collection();
-client.cooldowns = new Discord.Collection();
+client.commands = new Collection();
+client.cooldowns = new Collection();
 const commandFolders = fs.readdirSync('./commands');
 
 // Register Commands
