@@ -32,9 +32,10 @@ for (const folder of commandFolders) {
     }
 }
 
+// Read Event Files
 const events = fs.readdirSync('./events').filter(file => file.endsWith('.js'));
 
-// Event Handling
+// Load Event Files
 for (const file of events) {
     console.log(`Loading discord.js event ${file}`);
     const event = require(`./events/${file}`);
@@ -50,11 +51,6 @@ const creator = new SlashCreator({
     token: process.env.TOKEN,
 });
 
-client.on('ready', () => {
-    console.log(`Logged in as ${client.user.tag}! (${client.user.id})`);
-    client.user.setActivity(`${process.env.PREFIX}help | Serving the People`);
-});
-
 // Music Command Registering/Syncing
 creator
     .withServer(
@@ -67,13 +63,8 @@ creator
 if (process.env.DISCORD_GUILD_ID) creator.syncCommandsIn(process.env.DISCORD_GUILD_ID);
 else creator.syncCommands();
 
-
-client.on('error', console.error);
-
+// Login
 client.login(process.env.TOKEN).catch((err) => {
     console.log(err);
     logIt('error', err);
 });
-
-module.exports.client = client;
-module.exports.creator = creator;
