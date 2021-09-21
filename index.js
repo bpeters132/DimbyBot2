@@ -17,10 +17,6 @@ const client = new Discord.Client({
     disableMentions: 'everyone'
 });
 
-// Create Music Player
-client.player = new Player(client);
-registerPlayerEvents(client.player);
-
 client.commands = new Discord.Collection();
 client.cooldowns = new Discord.Collection();
 const commandFolders = fs.readdirSync('./commands');
@@ -46,12 +42,16 @@ for (const file of events) {
     client.on(file.split('.')[0], event.bind(null, client));
 }
 
+// Create Music Player
+client.player = new Player(client);
+registerPlayerEvents(client.player);
+
 const creator = new SlashCreator({
-    applicationID: process.env.DISCORD_CLIENT_ID,
+    applicationID: process.env.BOT_APP_ID,
     token: process.env.TOKEN,
 });
 
-// Music Command Registering/Syncing
+//Command Registering/Syncing
 creator
     .withServer(
         new GatewayServer(
@@ -59,7 +59,7 @@ creator
         )
     )
     .registerCommandsIn(path.join(__dirname, 'musicCommands'));
-
+    
 if (process.env.DISCORD_GUILD_ID) creator.syncCommandsIn(process.env.DISCORD_GUILD_ID);
 else creator.syncCommands();
 
@@ -68,3 +68,6 @@ client.login(process.env.TOKEN).catch((err) => {
     console.log(err);
     logIt('error', err);
 });
+
+module.exports.client = client;
+module.exports.creator = creator;
