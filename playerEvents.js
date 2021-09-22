@@ -1,4 +1,5 @@
 const logIt = require('./scripts/logIt');
+const egenerator = require('./scripts/embedGenerator');
 module.exports.registerPlayerEvents = async (player) => {
 
     player.on('error', (queue, error) => {
@@ -12,24 +13,34 @@ module.exports.registerPlayerEvents = async (player) => {
         logIt('error', error.message);
     });
 
-    player.on('trackStart', (queue, track) => {
-        queue.metadata.send(`🎶 | Started playing: **${track.title}** in **${queue.connection.channel.name}**!`);
+    player.on('trackStart', async (queue, track) => {
+        const response = await egenerator.general('🎶 | Started playing:', `${track.title}`, ['In Channel:'], [`${queue.connection.channel.name}`]);
+        queue.metadata.send({ embeds: [response] });
+        // queue.metadata.send(`🎶 | Started playing: **${track.title}** in **${queue.connection.channel.name}**!`);
     });
 
-    player.on('trackAdd', (queue, track) => {
-        queue.metadata.send(`🎶 | Track **${track.title}** queued!`);
+    player.on('trackAdd', async (queue, track) => {
+        const response = await egenerator.general(`🎶 | Track ${track.title} queued!`, '/queue to see the queue');
+        queue.metadata.send({ embeds: [response] });
+        // queue.metadata.send(`🎶 | Track **${track.title}** queued!`);
     });
 
-    player.on('botDisconnect', (queue) => {
-        queue.metadata.send('❌ | I was manually disconnected from the voice channel, clearing queue!');
+    player.on('botDisconnect', async (queue) => {
+        const response = await egenerator.general('❌ | I was manually disconnected from the voice channel, clearing queue!', 'Why so mean?');
+        queue.metadata.send({ embeds: [response] });
+        // queue.metadata.send('❌ | I was manually disconnected from the voice channel, clearing queue!');
     });
 
-    player.on('channelEmpty', (queue) => {
-        queue.metadata.send('❌ | Nobody is in the voice channel, leaving...');
+    player.on('channelEmpty', async (queue) => {
+        const response = await egenerator.general('❌ | Nobody is in the voice channel, leaving...', 'So lonely');
+        queue.metadata.send({ embeds: [response] });
+        // queue.metadata.send('❌ | Nobody is in the voice channel, leaving...');
     });
 
-    player.on('queueEnd', (queue) => {
-        queue.metadata.send('✅ | Queue finished!');
+    player.on('queueEnd', async (queue) => {
+        const response = await egenerator.general('✅ | Queue finished!', 'Bye!');
+        queue.metadata.send({ embeds: [response] });
+        // queue.metadata.send('✅ | Queue finished!');
     });
 
 };
