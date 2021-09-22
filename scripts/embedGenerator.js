@@ -10,7 +10,6 @@ module.exports.general = (title, description, arrFieldNames, arrFieldValues) => 
                 for (let i = 0; i < arrFieldNames.length; i++) {
                     response.addField(arrFieldNames[i], arrFieldValues[i]);
                 }
-                console.log(response);
                 resolve(response);
             }
         } else {
