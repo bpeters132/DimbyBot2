@@ -38,9 +38,7 @@ module.exports.registerPlayerEvents = async (player) => {
     });
 
     player.on('queueEnd', async (queue) => {
-        const response = await egenerator.general('✅ | Queue finished!', 'Bye!');
-        queue.metadata.send({ embeds: [response] });
-        // queue.metadata.send('✅ | Queue finished!');
+        queue.metadata.send('✅ | Queue finished!');
     });
 
 };
