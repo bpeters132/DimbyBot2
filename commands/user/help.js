@@ -11,16 +11,16 @@ module.exports = {
         if (!args.length) {
             console.log('1');
             // Build Variables for response
-            let resTitle = 'Here\'s a list of all my commands:';
+            const resTitle = 'Here\'s a list of all my commands:';
             console.log('1');
-            let resDesc = `You can send \`${prefix}help [command name]\` to get info on a specific command!`;
+            const resDesc = `You can send \`${prefix}help [command name]\` to get info on a specific command!`;
             console.log('1');
-            let arrFieldNames = [
+            const arrFieldNames = [
                 'Commands',
                 'Music'
             ];
             console.log('1');
-            let arrFieldValues = [
+            const arrFieldValues = [
                 `${commands.map((command) => command.name).join(', ')}`,
                 'I can also play music! Type `/` and look for me in the command window!'
             ];
@@ -44,10 +44,10 @@ module.exports = {
         }
 
         // Build Variables for response
-        let resTitle = command.name.charAt(0).toUpperCase() + command.name.slice(1);
-        let resDesc = command.description;
-        let arrFieldNames = [];
-        let arrFieldValues = [];
+        const resTitle = command.name.charAt(0).toUpperCase() + command.name.slice(1);
+        const resDesc = command.description;
+        const arrFieldNames = [];
+        const arrFieldValues = [];
 
         if (command.aliases) {
             arrFieldNames.push('Aliases');

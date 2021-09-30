@@ -7,7 +7,7 @@ module.exports.general = (title, description, arrFieldNames, arrFieldValues) => 
                 const response = new MessageEmbed()
                     .setTitle(title)
                     .setDescription(description);
-                for (let i = 0; i < arrFieldNames.length; i++) {
+                for (var i = 0; i < arrFieldNames.length; i++) {
                     response.addField(arrFieldNames[i], arrFieldValues[i]);
                 }
                 resolve(response);

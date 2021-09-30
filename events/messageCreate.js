@@ -47,7 +47,7 @@ module.exports = async (client, message) => {
 
     // Verify argument requirements
     if (command.args && !args.length) {
-        let reply = `You didn't provide any arguments, ${message.author}!`;
+        var reply = `You didn't provide any arguments, ${message.author}!`;
 
         // If expected usage is defined in command
         if (command.usage) {
