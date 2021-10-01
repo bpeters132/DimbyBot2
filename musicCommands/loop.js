@@ -1,5 +1,8 @@
-const { SlashCommand, CommandOptionType } = require('slash-create');
-const { QueueRepeatMode } = require('discord-player');
+// const { SlashCommand, CommandOptionType } = require('slash-create');
+// const { QueueRepeatMode } = require('discord-player');
+import { SlashCommand, CommandOptionType } from 'slash-create';
+import QueueRepeatMode from 'discord-player';
+
 
 module.exports = class extends SlashCommand {
     constructor(creator) {
