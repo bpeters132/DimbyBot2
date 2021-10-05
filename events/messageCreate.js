@@ -1,7 +1,7 @@
-// const Discord = require('discord.js');
-// const logIt = require('../scripts/logIt');
-import Discord from 'discord.js';
-import logIt from '../scripts/logIt';
+const Discord = require('discord.js');
+const logIt = require('../scripts/logIt');
+// import Discord from 'discord.js';
+// import logIt from '../scripts/logIt';
 
 module.exports = async (client, message) => {
     if (message.author.bot || message.channel.type === 'dm') return;

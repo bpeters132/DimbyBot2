@@ -1,5 +1,5 @@
-// const logIt = require('../../scripts/logIt');
-import logIt from '../../lib/logIt';
+const logIt = require('../../scripts/logIt');
+// import logIt from '../../lib/logIt';
 
 module.exports = {
     name: 'clear',
