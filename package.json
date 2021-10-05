@@ -2,10 +2,10 @@
   "name": "DimbyBot2",
   "version": "1.0.0",
   "description": "Orcs#0001's discord bot built for friends",
-  "main": "index.js",
+  "main": "app.js",
   "scripts": {
-    "start": "node index.js",
-    "test": "nodemon --ignore logs/"
+    "start": "node app.js",
+    "test": "nodemon app.js --ignore logs/"
   },
   "repository": {
     "type": "git",
@@ -22,6 +22,7 @@
     "@discord-player/downloader": "^3.0.1",
     "@discord-player/extractor": "^3.0.2",
     "@discordjs/opus": "^0.6.0",
+    "ansi-regex": "^5.0.1",
     "discord-player": "^5.1.0",
     "discord.js": "^13.1.0",
     "dotenv": "^10.0.0",

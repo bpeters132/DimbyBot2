@@ -33,13 +33,16 @@ for (const folder of commandFolders) {
 }
 
 // Read Event Files
-const events = fs.readdirSync('./events').filter(file => file.endsWith('.js'));
+const eventFiles = fs.readdirSync('./events').filter(file => file.endsWith('.js'));
 
 // Load Event Files
-for (const file of events) {
-    console.log(`Loading discord.js event ${file}`);
+for (const file of eventFiles) {
+    console.log(`Loading discord.js event file ${file}`);
     const event = require(`./events/${file}`);
-    client.on(file.split('.')[0], event.bind(null, client));
+    const eventName = file.split('.')[0];
+    
+    // Bind client events to the respective code
+    client.on(eventName, event.bind(null, client));
 }
 
 // Create Music Player
