@@ -1,5 +1,5 @@
 const logIt = require('./lib/logIt');
-const egenerator = require('./scripts/embedGenerator');
+const egenerator = require('./lib/embedGenerator');
 
 module.exports.registerPlayerEvents = async (player) => {
 

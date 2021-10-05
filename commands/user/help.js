@@ -1,5 +1,5 @@
 const prefix = process.env.PREFIX;
-const egenerator = require('../../scripts/embedGenerator');
+const egenerator = require('../../lib/embedGenerator');
 // import egenerator from '../../lib/embedGenerator';
 
 module.exports = {

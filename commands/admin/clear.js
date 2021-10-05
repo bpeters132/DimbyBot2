@@ -1,4 +1,4 @@
-const logIt = require('../../scripts/logIt');
+const logIt = require('../../lib/logIt');
 // import logIt from '../../lib/logIt';
 
 module.exports = {

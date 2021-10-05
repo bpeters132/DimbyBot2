@@ -3,7 +3,7 @@ const {Client, Intents, Collection} = require('discord.js');
 const { SlashCreator, GatewayServer } = require('slash-create');
 const { Player } = require('discord-player');
 const {registerPlayerEvents} = require('./playerEvents');
-const logIt = require('./scripts/logIt');
+const logIt = require('./lib/logIt');
 const path = require('path');
 
 require('dotenv').config();

@@ -1,5 +1,5 @@
 const Discord = require('discord.js');
-const logIt = require('../scripts/logIt');
+const logIt = require('../lib/logIt');
 // import Discord from 'discord.js';
 // import logIt from '../scripts/logIt';
 
