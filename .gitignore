@@ -8,3 +8,4 @@ data/gptContext.json
 .env
 logs/
 yarn.lock
+yarn-error.log
