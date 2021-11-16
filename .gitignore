@@ -7,3 +7,4 @@ data/stocks.json
 data/gptContext.json
 .env
 logs/
+yarn.lock
