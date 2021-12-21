@@ -24,7 +24,7 @@ module.exports = class extends SlashCommand {
 
     async run(ctx) {
 
-        const { client } = require('..');
+        const { client } = require('../app.js');
         await ctx.defer();
         
         const guild = client.guilds.cache.get(ctx.guildID);
@@ -41,7 +41,7 @@ module.exports = class extends SlashCommand {
             });
         if (!searchResult || !searchResult.tracks.length) return void ctx.sendFollowUp({ content: 'No results were found!' });
         const queue = await client.player.createQueue(guild, {
-            metadata: channel
+            metadata: channel,
         });
         const member = guild.members.cache.get(ctx.user.id) ?? await guild.members.fetch(ctx.user.id);
         try {
