@@ -1,4 +1,3 @@
-const logIt = require('./lib/logIt');
 const egenerator = require('./lib/embedGenerator');
 
 module.exports.registerPlayerEvents = async (player) => {
@@ -6,11 +5,9 @@ module.exports.registerPlayerEvents = async (player) => {
     player.on('error', (queue, error) => {
         console.log(`[${queue.guild.name}] Error emitted from the queue: ${error.message}`);
         queue.metadata.send(`\`\`\`Error emitted from the queue: ${error} \n ${error.message} \`\`\` Contact <@${process.env.OWNER_ID}> for explanation, \nI'M VERY BUGGY LEAVE ME ALONE`);
-        logIt('error', error.message);
     });
     player.on('connectionError', (queue, error) => {
         console.log(`[${queue.guild.name}] Error emitted from the connection: ${error.message}`);
-        logIt('error', error.message);
     });
 
     player.on('trackStart', async (queue, track) => {

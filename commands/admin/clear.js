@@ -1,5 +1,3 @@
-const logIt = require('../../lib/logIt');
-// import logIt from '../../lib/logIt';
 
 module.exports = {
     name: 'clear',
@@ -30,7 +28,6 @@ module.exports = {
             }
         } catch (error) {
             message.reply(`An error occured, please contact <@${process.env.OWNER_ID}>`);
-            logIt('error', error);
         }
     },
 };

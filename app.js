@@ -3,7 +3,6 @@ const {Client, Intents, Collection} = require('discord.js');
 const { SlashCreator, GatewayServer } = require('slash-create');
 const { Player } = require('discord-player');
 const {registerPlayerEvents} = require('./playerEvents');
-const logIt = require('./lib/logIt');
 const path = require('path');
 
 require('dotenv').config();
@@ -69,7 +68,6 @@ else creator.syncCommands();
 // Login
 client.login(process.env.TOKEN).catch((err) => {
     console.log(err);
-    logIt('error', err);
 });
 
 module.exports.client = client;

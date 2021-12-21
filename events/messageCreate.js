@@ -1,7 +1,4 @@
 const Discord = require('discord.js');
-const logIt = require('../lib/logIt');
-// import Discord from 'discord.js';
-// import logIt from '../scripts/logIt';
 
 module.exports = async (client, message) => {
     if (message.author.bot || message.channel.type === 'dm') return;
@@ -92,7 +89,6 @@ module.exports = async (client, message) => {
     try {
         command.execute(client, message, args);
     } catch (error) {
-        logIt('error', error);
         message.reply(
             `An error was encountered, please contact <@${process.env.OWNER_ID}>`
         );
