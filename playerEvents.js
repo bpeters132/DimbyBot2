@@ -11,7 +11,7 @@ module.exports.registerPlayerEvents = async (player) => {
     });
 
     player.on('trackStart', async (queue, track) => {
-        const response = await egenerator.general('🎶 | Started playing:', `${track.title}`, ['In Channel:'], [`${queue.connection.channel.name}`]);
+        const response = await egenerator.general('🎶 | Started playing:', `${track.title}`);
         queue.metadata.send({ embeds: [response] });
         // queue.metadata.send(`🎶 | Started playing: **${track.title}** in **${queue.connection.channel.name}**!`);
     });
