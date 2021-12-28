@@ -53,7 +53,7 @@ module.exports = class extends SlashCommand {
         await ctx.sendFollowUp({ content: `⏱ | Loading your ${searchResult.playlist ? 'playlist' : 'track'}...` });
         switch(searchResult.playlist){
         case false:
-            queue.insert(searchResult.tracks[0], 0);
+            queue.insert(searchResult.tracks[0], 1);
             break;
         default:
             break;
