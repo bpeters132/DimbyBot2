@@ -53,7 +53,7 @@ module.exports = class extends SlashCommand {
         await ctx.sendFollowUp({ content: `⏱ | Loading your ${searchResult.playlist ? 'playlist' : 'track'}...` });
         if (searchResult.playlist){
             queue.addTracks(searchResult.tracks);
-            ctx.sendFollowUp({content: 'Playlist queued!'});
+            channel.send({content: 'Playlist queued!'});
         }else{
             queue.addTrack(searchResult.tracks[0]);
         }
