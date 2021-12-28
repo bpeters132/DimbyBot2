@@ -51,11 +51,7 @@ module.exports = class extends SlashCommand {
             return void ctx.sendFollowUp({ content: 'Could not join your voice channel!' });
         }
         await ctx.sendFollowUp({ content: `⏱ | Loading your ${searchResult.playlist ? 'playlist' : 'track'}...` });
-        console.log(searchResult.playlist);
-        console.log('1');
-        searchResult.playlist ? ctx.sendFollowUp({content: 'Can\'t playnext a playlist' }): queue.insert(searchResult.tracks[0]);
-        console.log(queue);
-        console.log('2');
+        searchResult.playlist ? ctx.sendFollowUp({content: 'Can\'t playnext a playlist!' }): queue.insert(searchResult.tracks[0]);
         if (!queue.playing) await queue.play();
     }
 };
