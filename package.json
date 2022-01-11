@@ -23,13 +23,13 @@
     "@discord-player/extractor": "^3.0.2",
     "@discordjs/opus": "^0.6.0",
     "ansi-regex": "^5.0.1",
-    "curl": "^0.1.4",
     "discord-player": "^5.1.0-dev.1636095464.54bb4b0",
     "discord.js": "^13.1.0",
     "dotenv": "^10.0.0",
     "ffmpeg-static": "^4.4.0",
     "mdtable": "^0.3.1",
     "nodemon": "^2.0.12",
+    "request": "^2.88.2",
     "slash-create": "^4.1.1"
   }
 }
