@@ -5,12 +5,12 @@ module.exports.registerPlayerEvents = async (player) => {
 
     player.on('error', (queue, error) => {
         console.log(`[${queue.guild.name}] Error emitted from the queue: ${error.message}`);
-        pingDat.ping('https://pingdat.io/dp1?t=8j027nMP7N6rJZvk&v=1');
+        pingDat.ping(process.env.PING_ERROR_URL);
     });
     
     player.on('connectionError', (queue, error) => {
         console.log(`[${queue.guild.name}] Error emitted from the connection: ${error.message}`);
-        pingDat.ping('https://pingdat.io/dp1?t=8j027nMP7N6rJZvk&v=1');
+        pingDat.ping(process.env.PING_ERROR_URL);
     });
 
     player.on('trackStart', async (queue, track) => {
