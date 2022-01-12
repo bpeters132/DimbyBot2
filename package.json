@@ -23,7 +23,7 @@
     "@discord-player/extractor": "^3.0.2",
     "@discordjs/opus": "^0.6.0",
     "ansi-regex": "^5.0.1",
-    "discord-player": "^5.1.0-dev.1636095464.54bb4b0",
+    "discord-player": "^5.2.0",
     "discord.js": "^13.1.0",
     "dotenv": "^10.0.0",
     "ffmpeg-static": "^4.4.0",
