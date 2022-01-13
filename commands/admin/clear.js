@@ -27,6 +27,7 @@ module.exports = {
                 await message.reply(`Invalid arguments, please reference ${process.env.PREFIX}help clear`);
             }
         } catch (error) {
+            console.log(error);
             message.reply(`An error occured, please contact <@${process.env.OWNER_ID}>`);
         }
     },
