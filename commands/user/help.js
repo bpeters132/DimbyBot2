@@ -2,7 +2,7 @@ const prefix = process.env.PREFIX;
 const egenerator = require('../../lib/embedGenerator');
 // import egenerator from '../../lib/embedGenerator';
 
-module.exports = {
+module.exports =  {
     name: 'help',
     description: 'List all of my commands or info about a specific command.',
     cooldown: 5,
