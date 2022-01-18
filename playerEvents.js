@@ -1,5 +1,5 @@
 const embedGenerator = require('./lib/embedGenerator');
-const pingDat = require('./lib/pingDat.js');
+const pingDat = require('./lib/pingdat.js');
 
 module.exports.registerPlayerEvents = async (player) => {
 

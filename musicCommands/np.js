@@ -1,4 +1,5 @@
 const { SlashCommand } = require('slash-create');
+const colors = require('../lib/colors.js');
 // import SlashCommand from 'slash-create';
 
 
@@ -8,11 +9,11 @@ module.exports = class extends SlashCommand {
             name: 'np',
             description: 'See what\'s currently being played',
 
-            guildIDs: process.env.DISCORD_GUILD_ID ? [ process.env.DISCORD_GUILD_ID ] : undefined
+            guildIDs: process.env.DISCORD_GUILD_ID ? [process.env.DISCORD_GUILD_ID] : undefined
         });
     }
 
-    async run (ctx) {
+    async run(ctx) {
 
         const { client } = require('..');
 
@@ -22,6 +23,7 @@ module.exports = class extends SlashCommand {
         if (!queue) return void ctx.sendFollowUp({ content: '❌ | No music is being played!' });
         const progress = queue.createProgressBar();
         const perc = queue.getPlayerTimestamp();
+        const source = queue.current.source;
 
         return void ctx.sendFollowUp({
             embeds: [
@@ -32,6 +34,9 @@ module.exports = class extends SlashCommand {
                         {
                             name: '\u200b',
                             value: progress
+                        }, {
+                            name: 'Source',
+                            value: source
                         }
                     ],
                     color: 0xffffff
