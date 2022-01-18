@@ -46,7 +46,7 @@ module.exports = class extends SlashCommand {
 
         await ctx.defer();
         const queue = client.player.getQueue(ctx.guildID);
-        if (!queue || !queue.playing) return void ctx.sendFollowUp({ content: '❌ | No music is being played!' });
+        if (!queue) return void ctx.sendFollowUp({ content: '❌ | No music is being played!' });
         const loopMode = ctx.options.mode;
         const success = queue.setRepeatMode(loopMode);
         const mode = loopMode === QueueRepeatMode.TRACK ? '🔂' : loopMode === QueueRepeatMode.QUEUE ? '🔁' : '▶';

@@ -17,7 +17,7 @@ module.exports = class extends SlashCommand {
         
         await ctx.defer();
         const queue = client.player.getQueue(ctx.guildID);
-        if (!queue || !queue.playing) return void ctx.sendFollowUp({ content: '❌ | No music is being played!' });
+        if (!queue) return void ctx.sendFollowUp({ content: '❌ | No music is being played!' });
         const currentTrack = queue.current;
         const tracks = queue.tracks.slice(0, 10).map((m, i) => {
             return `${i + 1}. **${m.title}** ([link](${m.url}))`;
