@@ -30,55 +30,55 @@ module.exports = class extends SlashCommand {
         const guild = client.guilds.cache.get(ctx.guildID);
         const channel = guild.channels.cache.get(ctx.channelID);
         const query = ctx.options.query;
-
-        console.log(`Searching for ${query}...`);
+        
+        console.log(`[DEBUG] Searching for ${query}...`);
         const searchResult = await client.player
             .search(query, {
                 requestedBy: ctx.user,
                 searchEngine: QueryType.AUTO
             })
             .catch((err) => {
-                console.log('Query Failed!');
+                console.log('[DEBUG] Query Failed!');
                 console.error(err);
             });
         if (!searchResult || !searchResult.tracks.length) {
-            console.log('No Search Results Found!');
+            console.log('[DEBUG] No Search Results Found!');
             return void ctx.sendFollowUp({ content: 'No results were found!' });
         }
-        console.log('Results found.');
-        console.log('Getting Queue...');
+        console.log('[DEBUG] Results found.');
+        console.log('[DEBUG] Getting Queue...');
         const queue = await client.player.createQueue(guild, {
             metadata: channel,
         });
-        console.log('Queue attained/created!');
+        console.log('[DEBUG] Queue attained/created!');
         const member = guild.members.cache.get(ctx.user.id) ?? await guild.members.fetch(ctx.user.id);
         try {
             if (!queue.connection) {
-                console.log('Connecting to member voice channel...');
+                console.log('[DEBUG] Connecting to member voice channel...');
                 await queue.connect(member.voice.channel);
-                console.log('Connected to voice channel');
+                console.log('[DEBUG] Connected to voice channel');
             }
         } catch {
-            console.log('Unable to join voice channel');
-            console.log('Destryoing queue');
+            console.log('[DEBUG] Unable to join voice channel');
+            console.log('[DEBUG] Destryoing queue');
             void client.player.deleteQueue(ctx.guildID);
-            console.log('Queue destroyed');
+            console.log('[DEBUG] Queue destroyed');
             return void ctx.sendFollowUp({ content: 'Could not join your voice channel!' });
         }
         await ctx.sendFollowUp({ content: `⏱ | Loading your ${searchResult.playlist ? 'playlist' : 'track'}...` });
         if (searchResult.playlist) {
-            console.log('Adding playlist to queue...');
+            console.log('[DEBUG] Adding playlist to queue...');
             queue.addTracks(searchResult.tracks);
             channel.send({ content: `<@${ctx.user.id}>, Playlist queued!` });
-            console.log('Playlist queued!');
+            console.log('[DEBUG] Playlist queued!');
         } else {
-            console.log('Adding track to queue...');
+            console.log('[DEBUG] Adding track to queue...');
             queue.addTrack(searchResult.tracks[0]);
-            console.log('Track added to queue!');
+            console.log('[DEBUG] Track added to queue!');
         }
         // searchResult.playlist ? queue.addTracks(searchResult.tracks) : queue.addTrack(searchResult.tracks[0]);
         if (!queue.playing) {
-            console.log('Telling queue to play...');
+            console.log('[DEBUG] Telling queue to play...');
             await queue.play();
         }
     }
