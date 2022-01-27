@@ -31,29 +31,42 @@ module.exports = class extends SlashCommand {
         const channel = guild.channels.cache.get(ctx.channelID);
         const query = ctx.options.query;
 
+        console.log(`Searching for ${query}`);
         const searchResult = await client.player
             .search(query, {
                 requestedBy: ctx.user,
                 searchEngine: QueryType.AUTO
             })
-            .catch(() => {
-                console.log('he');
+            .catch((err) => {
+                console.log('Query Failed!');
+                console.error(err);
             });
-        if (!searchResult || !searchResult.tracks.length) return void ctx.sendFollowUp({ content: 'No results were found!' });
+        if (!searchResult || !searchResult.tracks.length){
+            console.log('No Search Results Found!');
+            return void ctx.sendFollowUp({ content: 'No results were found!' });
+        }
+        console.log('Results found.');
+        console.log('Creating Queue...');
         const queue = await client.player.createQueue(guild, {
             metadata: channel,
         });
+        console.log('Queue created!');
         const member = guild.members.cache.get(ctx.user.id) ?? await guild.members.fetch(ctx.user.id);
         try {
+            console.log('Connecting to member voice channel...');
             if (!queue.connection) await queue.connect(member.voice.channel);
+            console.log('Connected to voice channel');
         } catch {
+            console.log('Unable to join voice channel');
             void client.player.deleteQueue(ctx.guildID);
             return void ctx.sendFollowUp({ content: 'Could not join your voice channel!' });
         }
         await ctx.sendFollowUp({ content: `⏱ | Loading your ${searchResult.playlist ? 'playlist' : 'track'}...` });
         if (searchResult.playlist){
+            console.log('Adding playlist to queue...');
             queue.addTracks(searchResult.tracks);
             channel.send({content: `<@${ctx.user.id}>, Playlist queued!`});
+            console.log('Playlist queued!');
         }else{
             queue.addTrack(searchResult.tracks[0]);
         }
