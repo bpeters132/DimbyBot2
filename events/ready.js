@@ -7,6 +7,7 @@ module.exports = async (client) => {
     setInterval((client) => {
         client.user.setActivity(`${process.env.PREFIX}help | Serving the People`);
     }, 21600*1000);
+    
     setInterval(() => {
         console.log('Doing a thing');
     });
