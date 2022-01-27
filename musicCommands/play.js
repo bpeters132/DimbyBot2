@@ -31,7 +31,7 @@ module.exports = class extends SlashCommand {
         const channel = guild.channels.cache.get(ctx.channelID);
         const query = ctx.options.query;
 
-        console.log(`Searching for ${query}`);
+        console.log(`Searching for ${query}...`);
         const searchResult = await client.player
             .search(query, {
                 requestedBy: ctx.user,
@@ -68,9 +68,15 @@ module.exports = class extends SlashCommand {
             channel.send({content: `<@${ctx.user.id}>, Playlist queued!`});
             console.log('Playlist queued!');
         }else{
+            console.log('Adding track to queue...');
             queue.addTrack(searchResult.tracks[0]);
+            console.log('Track added to queue!');
         }
         // searchResult.playlist ? queue.addTracks(searchResult.tracks) : queue.addTrack(searchResult.tracks[0]);
-        if (!queue.playing) await queue.play();
+        if (!queue.playing) {
+            console.log('Starting to play...');
+            await queue.play();
+            console.log('Playing!');
+        }
     }
 };
