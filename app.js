@@ -4,6 +4,12 @@ const { SlashCreator, GatewayServer } = require('slash-create');
 const { Player } = require('discord-player');
 const {registerPlayerEvents} = require('./playerEvents');
 const path = require('path');
+const io = require('@pm2/io');
+
+io.init({
+    transactions: true, // will enable the transaction tracing
+    http: true // will enable metrics about the http server (optional)
+});
 
 require('dotenv').config();
 
