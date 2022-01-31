@@ -2,6 +2,10 @@
 # https://hub.docker.com/r/library/node/tags/
 image: node:latest
 
+services:
+  - python:latest
+  - gcc:latest
+
 # This folder is cached between builds
 # https://docs.gitlab.com/ee/ci/yaml/index.html#cache
 cache:
@@ -17,9 +21,7 @@ build dependencies:
     OWNER_ID: ${OWNER_ID}
     PREFIX: ${PREFIX}
   script:
-    - apt install -y python3
-    - apt install -y gcc+
-    - ln /usr/bin/python /usr/bin/python*
+    - npm config set python '/usr/bin/python3*'
     - yarn install
 
 app:
