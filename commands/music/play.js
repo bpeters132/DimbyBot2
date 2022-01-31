@@ -3,26 +3,27 @@ const { shuffle } = require('../../lib/shuffle.js');
 
 module.exports = {
     name: 'play',
-    description: 'example command for code refernece',
+    description: 'Play a song',
     cooldown: 5,
     guildeOnly: true,
-    usage: '[query] [shuffle]',
+    aliases: ['p', 'pl'],
+    usage: '[query] [shuffle or no if playlist]',
     args: true,
-    guildIDs: process.env.DISCORD_GUILD_ID ? [process.env.DISCORD_GUILD_ID] : undefined,
 
     async execute(client, message, args) {
-        if (args.length > 2) message.reply('You can only have 3 args');
-
         const guild = client.guilds.cache.get(message.guildId);
         const channel = guild.channels.cache.get(message.channelId);
-        const query = args[0];
-        var doShuffle = args[1];
+        
+        var doShuffle = args.pop();
 
         if (doShuffle == 'shuffle') {
             doShuffle = true;
         } else {
+            args.push(doShuffle);
             doShuffle = false;
         }
+
+        const query = args.join(' ');
 
         console.log(`[DEBUG] Searching for ${query}...`);
         const searchResult = await client.player
@@ -54,7 +55,7 @@ module.exports = {
         } catch {
             console.log('[DEBUG] Unable to join voice channel');
             console.log('[DEBUG] Destryoing queue');
-            void client.player.deleteQueue(message.guildID);
+            void client.player.deleteQueue(message.guildId);
             console.log('[DEBUG] Queue destroyed');
             return void message.reply({ content: 'Could not join your voice channel!' });
         }

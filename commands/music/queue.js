@@ -1,7 +1,8 @@
 module.exports = {
     name: 'queue',
     description: 'Get current queue',
-    guildIDs: process.env.DISCORD_GUILD_ID ? [ process.env.DISCORD_GUILD_ID ] : undefined,
+    cooldown: 5,
+    guildeOnly: true,
 
     async execute(client, message) {
         const queue = client.player.getQueue(message.guildId);
