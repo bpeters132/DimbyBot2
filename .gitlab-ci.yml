@@ -22,11 +22,11 @@ build dependencies:
     PREFIX: ${PREFIX}
   script:
     - npm config set python '/usr/bin/python3'
-    - yarn install
+    - npm install
 
 app:
   stage: deploy
   environment: 
     name: Dev
   script:
-    - yarn run start
+    - npm run start
