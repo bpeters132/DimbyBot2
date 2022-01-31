@@ -15,6 +15,5 @@ cache:
 app:
   environment: Dev
   script:
-    - npm -g install yarn
     - yarn install
     - yarn run start
