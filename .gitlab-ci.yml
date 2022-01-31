@@ -11,6 +11,5 @@ cache:
 main:
   environment: Production
   script:
-    - npm -g install yarn
     - yarn install
     - yarn run start
