@@ -1,8 +1,8 @@
 const { SlashCommand, CommandOptionType } = require('slash-create');
 const { QueryType } = require('discord-player');
+const shuffle = require('../lib/shuffle.js');
 // import { SlashCommand, CommandOptionType } from 'slash-create';
 // import QueryType from 'discord-player';
-
 
 module.exports = class extends SlashCommand {
     constructor(creator) {
@@ -15,6 +15,12 @@ module.exports = class extends SlashCommand {
                     type: CommandOptionType.STRING,
                     description: 'The song you want to play',
                     required: true
+                },
+                {
+                    name: 'shuffle',
+                    type: CommandOptionType.STRING,
+                    description: 'If playlist, do you want to shuffle?',
+                    required: false
                 }
             ],
 
@@ -30,7 +36,14 @@ module.exports = class extends SlashCommand {
         const guild = client.guilds.cache.get(ctx.guildID);
         const channel = guild.channels.cache.get(ctx.channelID);
         const query = ctx.options.query;
-        
+        var doShuffle = ctx.options.shuffle;
+
+        if (doShuffle == 'shuffle') {
+            doShuffle = true;
+        } else {
+            doShuffle = false;
+        }
+
         console.log(`[DEBUG] Searching for ${query}...`);
         const searchResult = await client.player
             .search(query, {
@@ -69,7 +82,14 @@ module.exports = class extends SlashCommand {
         if (searchResult.playlist) {
             console.log('[DEBUG] Adding playlist to queue...');
             queue.addTracks(searchResult.tracks);
-            channel.send({ content: `<@${ctx.user.id}>, Playlist queued!` });
+            if (doShuffle) {
+                console.log('[DEBUG] Set to shuffle, shuffling queue...');
+                await shuffle(queue);
+                console.log('[DEBUG] Queue shuffled!');
+                channel.send({ content: `<@${ctx.user.id}>, Playlist queued and shuffled!` });
+            } else {
+                channel.send({ content: `<@${ctx.user.id}>, Playlist queued!` });
+            }
             console.log('[DEBUG] Playlist queued!');
         } else {
             console.log('[DEBUG] Adding track to queue...');
