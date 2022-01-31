@@ -21,7 +21,7 @@ module.exports.registerPlayerEvents = async (player) => {
     });
 
     player.on('trackAdd', async (queue, track) => {
-        const response = await embedGenerator.general(`🎶 | Track ${track.title} queued!`, '/queue to see the queue');
+        const response = await embedGenerator.general(`🎶 | Track ${track.title} queued!`, `${process.env.PREFIX}queue to see the queue`);
         console.log(`[DEBUG] Track ${track.title} added to ${queue.guild.name}`);
         queue.metadata.send({ embeds: [response] });
         // queue.metadata.send(`🎶 | Track **${track.title}** queued!`);
