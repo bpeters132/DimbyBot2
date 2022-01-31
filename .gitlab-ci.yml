@@ -14,7 +14,8 @@ services:
 
 build dependencies:
   stage: build
-  environment: Dev
+  environment: 
+    name: Dev
   variables: 
     TOKEN: ${TOKEN}
     OWNER_ID: ${OWNER_ID}
@@ -24,6 +25,7 @@ build dependencies:
 
 app:
   stage: deploy
-  environment: Dev
+  environment: 
+    name: Dev
   script:
     - yarn run start
