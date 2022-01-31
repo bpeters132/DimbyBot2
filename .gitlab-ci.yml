@@ -8,13 +8,6 @@ cache:
   paths:
     - node_modules/
 
-variables:
-    TOKEN: NjYzNjE2MjI4NTIyMTk3MDMw.XhLGxg.ck8tDbXdvV-zVd7m7aq5blm5N-8
-    OWNER_ID: 96419794525360128
-    PREFIX: .
-    PING_LOGIN_URL: 'https://pingdat.io/dp1?t=30227nMPhVCpz0GT&v=1'
-    PING_ERROR_URL: 'https://pingdat.io/dp1?t=B6J27nMP2J6jvGT7&v=1'
-
 main:
   script:
     - npm -g install yarn
