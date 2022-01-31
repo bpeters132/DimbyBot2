@@ -2,13 +2,17 @@
 # https://hub.docker.com/r/library/node/tags/
 image: node:latest
 
+services:
+  - python:latest
+  - gcc:latest
+
 # This folder is cached between builds
 # https://docs.gitlab.com/ee/ci/yaml/index.html#cache
 cache:
   paths:
     - node_modules/
 
-main:
+app:
   environment: Dev
   script:
     - npm -g install yarn
