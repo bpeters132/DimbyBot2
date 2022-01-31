@@ -31,7 +31,6 @@
     "nodemon": "^2.0.15",
     "opusscript": "^0.0.8",
     "request": "^2.88.2",
-    "slash-create": "^5.0.3",
     "ytdl-core": "^4.10.0"
   }
 }
