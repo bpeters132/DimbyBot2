@@ -72,13 +72,7 @@ module.exports = {
         // searchResult.playlist ? queue.addTracks(searchResult.tracks) : queue.addTrack(searchResult.tracks[0]);
         if (!queue.playing) {
             console.log('[DEBUG] Telling queue to play...');
-            if (doShuffle) {
-                console.log('[DEBUG] Set to shuffle, shuffling queue...');
-                await shuffle(queue);
-                console.log('[DEBUG] Queue shuffled!');
-                channel.send({ content: `<@${message.author.id}>, Playlist queued and shuffled!` });
-                await queue.play();
-            }else{
+            else{
                 await queue.play();
             }
             
