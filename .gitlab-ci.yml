@@ -9,6 +9,7 @@ cache:
     - node_modules/
 
 main:
+  environment: Dev
   script:
     - npm -g install yarn
     - yarn install
