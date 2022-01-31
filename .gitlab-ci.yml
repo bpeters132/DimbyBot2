@@ -21,7 +21,7 @@ build dependencies:
     OWNER_ID: ${OWNER_ID}
     PREFIX: ${PREFIX}
   script:
-    - npm config set python '/usr/bin/python3*'
+    - npm config set python '/usr/bin/python3'
     - yarn install
 
 app:
