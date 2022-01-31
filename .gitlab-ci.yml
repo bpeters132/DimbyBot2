@@ -8,10 +8,6 @@ cache:
   paths:
     - node_modules/
 
-services:
-  - python:latest
-  - gcc:latest
-
 build dependencies:
   stage: build
   environment: 
@@ -21,6 +17,9 @@ build dependencies:
     OWNER_ID: ${OWNER_ID}
     PREFIX: ${PREFIX}
   script:
+    - apt install -y python3
+    - apt install -y gcc+
+    - ln /usr/bin/python3* /usr/bin/python
     - yarn install
 
 app:
