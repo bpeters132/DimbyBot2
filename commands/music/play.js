@@ -1,12 +1,12 @@
 const { QueryType } = require('discord-player');
-const shuffle = require('../../lib/shuffle.js');
+const { shuffle } = require('../../lib/shuffle.js');
 
 module.exports = {
     name: 'play',
     description: 'example command for code refernece',
     cooldown: 5,
     guildeOnly: true,
-    usage: '[query] [shuffle yes/no]',
+    usage: '[query] [shuffle]',
     args: true,
     guildIDs: process.env.DISCORD_GUILD_ID ? [process.env.DISCORD_GUILD_ID] : undefined,
 
@@ -18,7 +18,7 @@ module.exports = {
         const query = args[0];
         var doShuffle = args[1];
 
-        if (doShuffle == 'yes') {
+        if (doShuffle == 'shuffle') {
             doShuffle = true;
         } else {
             doShuffle = false;
@@ -62,7 +62,14 @@ module.exports = {
         if (searchResult.playlist) {
             console.log('[DEBUG] Adding playlist to queue...');
             await queue.addTracks(searchResult.tracks);
-            channel.send({ content: `<@${message.author.id}>, Playlist queued!` });
+            if (doShuffle) {
+                console.log('[DEBUG] Told to shuffle, shuffling playlist...');
+                await shuffle(queue);
+                console.log('[DEBUG] Shuffling complete!');
+                channel.send({ content: `<@${message.author.id}>, Playlist shuffled and queued!` });
+            } else {
+                channel.send({ content: `<@${message.author.id}>, Playlist queued!` });
+            }
             console.log('[DEBUG] Playlist queued!');
         } else {
             console.log('[DEBUG] Adding track to queue...');
@@ -72,10 +79,7 @@ module.exports = {
         // searchResult.playlist ? queue.addTracks(searchResult.tracks) : queue.addTrack(searchResult.tracks[0]);
         if (!queue.playing) {
             console.log('[DEBUG] Telling queue to play...');
-            else{
-                await queue.play();
-            }
-            
+            await queue.play();
         }
     },
 };
