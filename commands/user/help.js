@@ -1,6 +1,6 @@
 const prefix = process.env.PREFIX;
+const fs = require('fs');
 const egenerator = require('../../lib/embedGenerator');
-// import egenerator from '../../lib/embedGenerator';
 
 module.exports =  {
     name: 'help',
@@ -11,26 +11,35 @@ module.exports =  {
     async execute(client, message, args) {
         const { commands } = client;
         if (!args.length) {
-            console.log('1');
             // Build Variables for response
             const resTitle = 'Here\'s a list of all my commands:';
-            console.log('1');
             const resDesc = `You can send \`${prefix}help [command name]\` to get info on a specific command!`;
-            console.log('1');
-            const arrFieldNames = [
-                'Commands',
-                'Music'
-            ];
-            console.log('1');
-            const arrFieldValues = [
-                `${commands.map((command) => command.name).join(', ')}`,
-                'I can also play music! Type `/` and look for me in the command window!'
-            ];
-            console.log('1');
-            
+            const arrFieldNames = [];
+            const arrFieldValues = [];
+            const arrFields = [];
+
+            const commandFolders = fs.readdirSync('./commands');
+            commandFolders.forEach(element => {
+                let commandFiles = fs.readdirSync(`./commands/${element}`);
+                let commandNames = [];
+                commandFiles.forEach(element => {
+                    commandNames.push(element.substring(0, element.length-3));
+                });
+
+                let currentField = {
+                    FieldName:(element.charAt(0).toUpperCase() + element.slice(1)),
+                    Commands: commandNames
+                };
+                arrFields.push(currentField);
+            });
+                
+            arrFields.forEach(element => {
+                arrFieldNames.push(element.FieldName);
+                arrFieldValues.push((element.Commands).join(', '));
+            });
+
             // Generate Embeded response with built variables
             const response = await egenerator.general(resTitle, resDesc, arrFieldNames, arrFieldValues);
-            console.log('1');
             // Send Response
             return message.channel.send({ embeds: [response] });
         }
