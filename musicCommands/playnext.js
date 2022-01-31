@@ -42,12 +42,16 @@ module.exports = class extends SlashCommand {
         if (!searchResult || !searchResult.tracks.length) return void ctx.sendFollowUp({ content: 'No results were found!' });
         const queue = await client.player.getQueue(guild);
         const member = guild.members.cache.get(ctx.user.id) ?? await guild.members.fetch(ctx.user.id);
-        try {
-            if (!queue.connection) await queue.connect(member.voice.channel);
-        } catch {
-            void client.player.deleteQueue(ctx.guildID);
-            return void ctx.sendFollowUp({ content: 'Could not join your voice channel!' });
-        }
+        if (typeof(queue) == 'undefined'){
+            return ctx.sendFollowUp({ content: `<@${ctx.user.id}> Cannot playnext when there is no music being played!`});
+        }else{
+            try {
+                if (!queue.connection) await queue.connect(member.voice.channel);
+            } catch {
+                void client.player.deleteQueue(ctx.guildID);
+                return void ctx.sendFollowUp({ content: 'Could not join your voice channel!' });
+            }
+        }       
         await ctx.sendFollowUp({ content: `⏱ | Loading your ${searchResult.playlist ? 'playlist' : 'track'}...` });
         searchResult.playlist ? channel.send({content: `<@${ctx.user.id}>, Can't playnext a playlist!` }): queue.insert(searchResult.tracks[0]);
         if (!queue.playing) await queue.play();

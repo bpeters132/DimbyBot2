@@ -7,7 +7,7 @@ module.exports = {
     aliases: ['example'],
     usage: '[example]',
     args: true,
-    execute(message, args) {
+    execute(client, message, args) {
         message.reply('This command does absolutely nothing.');
         message.channel.send('Here are your arguments, ' + args);
     },

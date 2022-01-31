@@ -43,9 +43,9 @@ module.exports.registerPlayerEvents = async (player) => {
         queue.metadata.send('✅ | Queue finished!');
     });
 
-    player.on('debug', async (queue, message) => {
-        console.log(`[DEBUG] ${queue}`);
-        console.log(`[DEBUG] ${message}`);
-    });
+    // player.on('debug', async (queue, message) => {
+    //     console.log(`[DEBUG] ${queue}`);
+    //     console.log(`[DEBUG] ${message}`);
+    // });
 
 };
