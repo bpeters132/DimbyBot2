@@ -1,5 +1,5 @@
 const { QueryType } = require('discord-player');
-const { shuffle } = require('../../lib/shuffle.js');
+const CustomPlayer = require('../../lib/customPlayer.js');
 
 module.exports = {
     name: 'play',
@@ -65,7 +65,7 @@ module.exports = {
             await queue.addTracks(searchResult.tracks);
             if (doShuffle) {
                 console.log('[DEBUG] Told to shuffle, shuffling playlist...');
-                await shuffle(queue);
+                await CustomPlayer.shuffle(queue);
                 console.log('[DEBUG] Shuffling complete!');
                 channel.send({ content: `<@${message.author.id}>, Playlist shuffled and queued!` });
             } else {

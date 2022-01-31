@@ -1,9 +1,9 @@
 module.exports = {
-    name: 'np',
+    name: 'nowplaying',
     description: 'Tells you what\'s currently playing',
     cooldown: 5,
     guildeOnly: true,
-    aliases: ['nowplaying'],
+    aliases: ['np'],
 
     async execute(client, message) {
         const queue = client.player.getQueue(message.guildId);

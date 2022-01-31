@@ -1,4 +1,4 @@
-const { shuffle } = require('../../lib/shuffle.js');
+const CustomPlayer = require('../../lib/customPlayer.js');
 module.exports = {
     name: 'shuffle',
     description: 'Shuffles the current queue',
@@ -10,7 +10,7 @@ module.exports = {
         if (!queue) return void message.reply({ content: '❌ | No music is being played!' });
 
         // await queue.shuffle();
-        shuffle(queue);
+        CustomPlayer.shuffle(queue);
 
         message.reply({ content: '✅ | Queue has been shuffled!' });
     },
