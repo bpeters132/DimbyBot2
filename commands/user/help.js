@@ -23,7 +23,7 @@ module.exports =  {
                 let commandFiles = fs.readdirSync(`./commands/${element}`);
                 let commandNames = [];
                 commandFiles.forEach(element => {
-                    commandNames.push(element.substring(0, element.length-3));
+                    commandNames.push(`\`${element.substring(0, element.length-3)}\``);
                 });
 
                 let currentField = {
@@ -35,7 +35,7 @@ module.exports =  {
                 
             arrFields.forEach(element => {
                 arrFieldNames.push(element.FieldName);
-                arrFieldValues.push((element.Commands).join(', '));
+                arrFieldValues.push((element.Commands).join(' '));
             });
 
             // Generate Embeded response with built variables
