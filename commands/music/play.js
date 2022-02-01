@@ -13,7 +13,7 @@ module.exports = {
     async execute(client, message, args) {
         const guild = client.guilds.cache.get(message.guildId);
         const channel = guild.channels.cache.get(message.channelId);
-        
+
         var doShuffle = args.pop();
 
         if (doShuffle == 'shuffle') {
