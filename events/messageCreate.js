@@ -17,21 +17,19 @@ module.exports = async (client, message) => {
     const commandName = args.shift().toLowerCase();
 
     // Verify a command exists
-    if (!client.commands.has(commandName)) {
-        message.reply('Command does not exist!');
-        return;
-    }
-
-    // Grab the command class from either Alias reference or true name reference
     const command =
         client.commands.get(commandName) ||
         client.commands.find(
             (cmd) => cmd.aliases && cmd.aliases.includes(commandName)
         );
 
-    // Verify an alias referenced command exists
-    if (!command) return;
-
+    if (typeof(command) == 'undefined'){
+        if (!client.commands.has(commandName)) {
+            message.reply('Command does not exist!');
+            return;
+        }
+    }
+    
     // Guild only handling
     if (command.guildOnly && message.channel.type === 'dm') {
         return message.reply('I can\'t execute that command inside DMs!');
