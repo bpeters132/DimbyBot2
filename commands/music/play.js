@@ -11,9 +11,13 @@ module.exports = {
     args: true,
 
     async execute(client, message, args) {
+        if (!message.member.voice.channel){
+            return message.reply('You have to be in a voice channel to do that!');
+        }
+        
         const guild = client.guilds.cache.get(message.guildId);
         const channel = guild.channels.cache.get(message.channelId);
-        
+
         var doShuffle = args.pop();
 
         if (doShuffle == 'shuffle') {
