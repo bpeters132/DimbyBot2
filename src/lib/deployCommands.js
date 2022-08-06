@@ -1,6 +1,6 @@
 import { Routes } from 'discord.js';
 import { REST } from '@discordjs/rest';
-import commands from './loadCommands.js';
+import { commands } from './loadCommands.js';
 
 export default async () => {
     const appID = process.env.APP_ID;

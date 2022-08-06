@@ -3,7 +3,7 @@ import { SlashCommandBuilder } from 'discord.js';
 class Queue extends SlashCommandBuilder {
     constructor() {
         super();
-        super.setName('qeue');
+        super.setName('queue');
         super.setDescription('Get current queue');
 
     }

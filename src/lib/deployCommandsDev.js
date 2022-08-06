@@ -9,10 +9,10 @@ export default async () => {
 
     const rest = new REST({ version: '10' }).setToken(token);
 
-    console.log('Started refreshing application commands');
+    console.log('Started refreshing dev application commands');
 
     await rest.put(Routes.applicationGuildCommands(appID, devGuildID), { body: commands })
-        .then(() => console.log('Successfully registered application commands.'))
+        .then(() => console.log('Successfully registered dev application commands.'))
         .catch(console.error);
 };
 
