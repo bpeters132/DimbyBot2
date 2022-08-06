@@ -1,11 +1,6 @@
-node_modules/*
-config.json
-data/balances.json
-.prettierrc
-.gitattributes
-data/stocks.json
-data/gptContext.json
+
 .env
-logs/
+node_modules/
 yarn.lock
 yarn-error.log
+.vscode/settings.json

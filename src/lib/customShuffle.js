@@ -1,5 +1,5 @@
-const shuffle = (queue) => {
-    return new Promise((resolve) =>{
+export default (queue) => {
+    return new Promise((resolve) => {
         if (!queue.tracks.length || queue.tracks.length < 3) return false;
         // const currentTrack = queue.tracks.shift();
         for (let i = queue.tracks.length - 1; i > 0; i--) {
@@ -9,7 +9,5 @@ const shuffle = (queue) => {
         // queue.tracks.unshift(currentTrack);
         resolve(true);
     });
-   
-};
 
-module.exports.shuffle = shuffle;
+};

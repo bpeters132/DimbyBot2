@@ -1,15 +1,11 @@
-const pingDat = require('./lib/pingDat.js');
-
-module.exports.registerPlayerEvents = async (player) => {
+export default async (player) => {
 
     player.on('error', (queue, error) => {
         console.log(`[DEBUG] [${queue.guild.name}] Error emitted from the queue: ${error.message}`);
-        pingDat.ping(process.env.PING_ERROR_URL);
     });
-    
+
     player.on('connectionError', (queue, error) => {
         console.log(`[DEBUG] [${queue.guild.name}] Error emitted from the connection: ${error.message}`);
-        pingDat.ping(process.env.PING_ERROR_URL);
     });
 
     player.on('trackStart', async (queue, track) => {
