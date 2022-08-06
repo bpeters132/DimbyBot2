@@ -1,9 +1,9 @@
-import eventError from '../events/eventError.js';
-import eventInteractionCreate from '../events/eventInteractionCreate.js';
-import eventReady from '../events/eventReady.js';
+import onError from '../events/onError.js';
+import onInteractionCreate from '../events/onInteractionCreate.js';
+import onReady from '../events/onReady.js';
 
 export default async (client) => {
-    eventReady(client);
-    eventError(client);
-    eventInteractionCreate(client);
+    onReady(client);
+    onError(client);
+    onInteractionCreate(client);
 };
