@@ -1,7 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { QueryType } from 'discord-player';
 
-
 class PlayNext extends SlashCommandBuilder {
     constructor() {
         super();

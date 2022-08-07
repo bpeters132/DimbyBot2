@@ -1,11 +1,11 @@
 export default async (player) => {
 
     player.on('error', (queue, error) => {
-        console.log(`[DEBUG] [${queue.guild.name}] Error emitted from the queue: ${error.message}`);
+        console.log(`[ERROR] [${queue.guild.name}] Error emitted from the queue: ${error.message}`);
     });
 
     player.on('connectionError', (queue, error) => {
-        console.log(`[DEBUG] [${queue.guild.name}] Error emitted from the connection: ${error.message}`);
+        console.log(`[ERROR] [${queue.guild.name}] Error emitted from the connection: ${error.message}`);
     });
 
     player.on('trackStart', async (queue, track) => {
@@ -31,7 +31,7 @@ export default async (player) => {
     });
 
     player.on('debug', async (queue, message) => {
-        console.log(`[DEBUG] ${queue}`);
+        // console.log(`[DEBUG] ${queue}`);
         console.log(`[DEBUG] ${message}`);
     });
 

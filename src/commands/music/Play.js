@@ -65,18 +65,18 @@ class Play extends SlashCommandBuilder {
 
         await message.reply({ content: `⏱ | Loading your ${searchResult.playlist ? 'playlist' : 'track'}...` });
         if (searchResult.playlist) {
-            console.log('[DEBUG] Adding playlist to queue...');
+            // console.log('[DEBUG] Adding playlist to queue...');
             await queue.addTracks(searchResult.tracks);
             if (doShuffle) {
-                console.log('[DEBUG] Told to shuffle, shuffling playlist...');
+                // console.log('[DEBUG] Told to shuffle, shuffling playlist...');
                 await customShuffle(queue);
-                console.log('[DEBUG] Shuffling complete!');
+                // console.log('[DEBUG] Shuffling complete!');
             }
-            console.log('[DEBUG] Playlist queued!');
+            // console.log('[DEBUG] Playlist queued!');
         } else {
-            console.log('[DEBUG] Adding track to queue...');
+            // console.log('[DEBUG] Adding track to queue...');
             queue.addTrack(searchResult.tracks[0]);
-            console.log('[DEBUG] Track added to queue!');
+            // console.log('[DEBUG] Track added to queue!');
         }
         // searchResult.playlist ? queue.addTracks(searchResult.tracks) : queue.addTrack(searchResult.tracks[0]);
 
