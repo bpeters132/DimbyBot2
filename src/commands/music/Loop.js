@@ -1,10 +1,10 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { QueueRepeatMode } from 'discord-player';
 
-class LoopTrack extends SlashCommandBuilder {
+class Loop extends SlashCommandBuilder {
     constructor() {
         super();
-        super.setName('looptrack');
+        super.setName('loop');
         super.setDescription('Loop the track');
     }
     async run(client, message) {
@@ -29,5 +29,5 @@ class LoopTrack extends SlashCommandBuilder {
 
 }
 
-const command = new LoopTrack();
+const command = new Loop();
 export default command;
