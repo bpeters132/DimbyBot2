@@ -1,11 +1,11 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { QueueRepeatMode } from 'discord-player';
 
-class Loop extends SlashCommandBuilder {
+class LoopQueue extends SlashCommandBuilder {
     constructor() {
         super();
-        super.setName('loop');
-        super.setDescription('Loop the track');
+        super.setName('loopqueue');
+        super.setDescription('Loop the queue');
     }
     async run(client, message) {
         if (!message.member.voice.channel) {
@@ -18,10 +18,10 @@ class Loop extends SlashCommandBuilder {
 
         if (currentMode == 1) {
             const success = queue.setRepeatMode(QueueRepeatMode.OFF);
-            return void message.reply({ content: success ? 'Track is no longer looping!' : '❌ | Could not update loop mode!' });
+            return void message.reply({ content: success ? 'Queue is no longer looping!' : '❌ | Could not update loop mode!' });
         } else {
-            const success = queue.setRepeatMode(QueueRepeatMode.TRACK);
-            return void message.reply({ content: success ? 'Track is looping!' : '❌ | Could not update loop mode!' });
+            const success = queue.setRepeatMode(QueueRepeatMode.QUEUE);
+            return void message.reply({ content: success ? 'Queue is looping!' : '❌ | Could not update loop mode!' });
         }
 
 
@@ -29,5 +29,5 @@ class Loop extends SlashCommandBuilder {
 
 }
 
-const command = new Loop();
+const command = new LoopQueue();
 export default command;
