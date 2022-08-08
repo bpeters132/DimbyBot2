@@ -17,9 +17,9 @@ class Seek extends SlashCommandBuilder {
         const queue = client.player.getQueue(interaction.guild.id);
         if (!queue) return void interaction.reply({ content: '❌ | No music is being played!' });
 
-        const time = interaction.options.getInteger('time');
+        const time = interaction.options.getInteger('time') * 1000;
 
-        await queue.Seek(time);
+        await queue.seek(time);
 
         interaction.reply(`✅ | Seeked to ${time / 1000} seconds`);
 
