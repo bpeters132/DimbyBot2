@@ -23,8 +23,6 @@ class Loop extends SlashCommandBuilder {
             const success = queue.setRepeatMode(QueueRepeatMode.TRACK);
             return void message.reply({ content: success ? 'Track is looping!' : '❌ | Could not update loop mode!' });
         }
-
-
     }
 
 }

@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { QueryType } from 'discord-player';
 import customShuffle from '../../lib/customShuffle.js';
+import { playdl } from 'play-dl';
 
 class Play extends SlashCommandBuilder {
     constructor() {
@@ -51,6 +52,14 @@ class Play extends SlashCommandBuilder {
                 filter: 'audioonly',
                 highWaterMark: 1 << 30,
                 dlChunkSize: 0,
+            },
+            async onBeforeCreateStream(track, source, _queue) {
+                // only trap youtube source
+                if (source === 'youtube') {
+                    // track here would be youtube track
+                    return (await playdl.stream(track.url, { discordPlayerCompatibility: true })).stream;
+                    // we must return readable stream or void (returning void means telling discord-player to look for default extractor)
+                }
             },
             metadata: channel
         });
