@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { QueryType } from 'discord-player';
 import customShuffle from '../../lib/customShuffle.js';
-import { playdl } from 'play-dl';
+import playdl from 'play-dl';
 
 class Play extends SlashCommandBuilder {
     constructor() {
