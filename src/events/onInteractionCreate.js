@@ -5,9 +5,9 @@ export default async (client) => {
     client.on('interactionCreate', async interaction => {
         if (!interaction.isChatInputCommand()) return;
 
-        interactions.forEach(element => {
-            if (interaction.commandName === element.name) {
-                element.run(client, interaction);
+        interactions.forEach(slashMessage => {
+            if (interaction.commandName === slashMessage.name) {
+                slashMessage.run(client, interaction);
                 return;
             }
         });

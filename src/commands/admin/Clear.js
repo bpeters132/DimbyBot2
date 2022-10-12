@@ -8,7 +8,7 @@ class Clear extends SlashCommandBuilder {
         super.addIntegerOption(option =>
             option.setName('count').setDescription('The amount of messages to clear').setRequired(true));
     }
-    async run(interaction) {
+    async run(client, interaction) {
         const clear_amount = interaction.options.getInteger('count');
         const channel = interaction.channel;
 
