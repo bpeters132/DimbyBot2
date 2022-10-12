@@ -8,20 +8,20 @@ class Clear extends SlashCommandBuilder {
         super.addIntegerOption(option =>
             option.setName('count').setDescription('The amount of messages to clear').setRequired(true));
     }
-    async run(message) {
-        const clear_amount = message.options.getInteger('count');
-        const channel = message.channel;
+    async run(interaction) {
+        const clear_amount = interaction.options.getInteger('count');
+        const channel = interaction.channel;
 
         if (clear_amount <= 30) {
             try {
                 await channel.bulkDelete(clear_amount + 1);
-                message.reply(`Cleared ${clear_amount} messages!`);
+                interaction.reply(`Cleared ${clear_amount} messages!`);
 
             } catch (error) {
-                message.reply('An error occured, likely a caching issue that isn\'t handled yet!');
+                interaction.reply('An error occured, likely a caching issue that isn\'t handled yet!');
             }
         } else {
-            message.reply('You can only clear up to 30 messages!');
+            interaction.reply('You can only clear up to 30 messages!');
         }
 
 
