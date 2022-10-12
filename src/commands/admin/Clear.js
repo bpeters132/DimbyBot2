@@ -18,7 +18,7 @@ class Clear extends SlashCommandBuilder {
                 interaction.reply(`Cleared ${clear_amount} messages!`);
 
             } catch (error) {
-                interaction.reply('An error occured, likely a caching issue that isn\'t handled yet!');
+                interaction.reply('An error occured, likely a caching issue that isn\'t handled yet! Try clearing less messages.');
             }
         } else {
             interaction.reply('You can only clear up to 30 messages!');
