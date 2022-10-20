@@ -42,8 +42,8 @@ class Play extends SlashCommandBuilder {
                 requestedBy: message.user,
                 searchEngine: QueryType.AUTO
             })
-            .catch(() => {
-                console.log('he');
+            .catch((err) => {
+                console.log(err);
             });
         // if (!searchResult || !searchResult.tracks.length) return void message.reply({ content: 'No results were found!' });
         if (!searchResult) {
@@ -57,21 +57,21 @@ class Play extends SlashCommandBuilder {
         }
 
         const queue = await client.player.createQueue(guild, {
-            ytdlOptions: {
-                filter: 'audioonly',
-                highWaterMark: 1 << 30,
-                dlChunkSize: 0,
-            },
+            // ytdlOptions: {
+            //     filter: 'audioonly',
+            //     highWaterMark: 1 << 30,
+            //     dlChunkSize: 0,
+            // },
             metadata: channel,
-            async onBeforeCreateStream(track, source, _queue) {
-                // only trap youtube source
-                if (source === 'youtube') {
-                    console.log(source);
-                    // track here would be youtube track
-                    return (await playdl.stream(track.url, { discordPlayerCompatibility: true })).stream;
-                    // we must return readable stream or void (returning void means telling discord-player to look for default extractor)
-                }
-            }
+            // async onBeforeCreateStream(track, source, _queue) {
+            //     // only trap youtube source
+            //     if (source === 'youtube') {
+            //         console.log(source);
+            //         // track here would be youtube track
+            //         return (await playdl.stream(track.url, { discordPlayerCompatibility: true })).stream;
+            //         // we must return readable stream or void (returning void means telling discord-player to look for default extractor)
+            //     }
+            // }
         });
 
         const member = guild.members.cache.get(memberId) ?? await guild.members.fetch(memberId);
