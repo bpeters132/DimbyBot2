@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { QueueRepeatMode } from 'discord-player';
+import secCheckChannel from '../../lib/secCheckChannel.js';
 
 class LoopQueue extends SlashCommandBuilder {
     constructor() {
@@ -8,11 +9,10 @@ class LoopQueue extends SlashCommandBuilder {
         super.setDescription('Loop the queue');
     }
     async run(client, message) {
-        if (!message.member.voice.channel) {
-            return message.reply('You have to be in a voice channel to do that!');
-        }
-
         const queue = client.player.getQueue(message.guild.id);
+        // if user asking command isn't in working channel, fail command
+        const memberInChannel = await secCheckChannel(client, message, message.guild.id);
+        if (!memberInChannel) return;
         if (!queue) return void message.reply({ content: '❌ | No music is being played!' });
         const currentMode = queue.repeatMode;
 

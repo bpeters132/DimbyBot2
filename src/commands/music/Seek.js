@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
+import secCheckChannel from '../../lib/secCheckChannel.js';
 
 
 class Seek extends SlashCommandBuilder {
@@ -9,19 +10,18 @@ class Seek extends SlashCommandBuilder {
         super.addIntegerOption(option =>
             option.setName('time').setDescription('time to seek in seconds').setRequired(true));
     }
-    async run(client, interaction) {
-        if (!interaction.member.voice.channel) {
-            return interaction.reply('You have to be in a voice channel to do that!');
-        }
+    async run(client, message) {
+        const queue = client.player.getQueue(message.guild.id);
+        // if user asking command isn't in working channel, fail command
+        const memberInChannel = await secCheckChannel(client, message, message.guild.id);
+        if (!memberInChannel) return;
+        if (!queue) return void message.reply({ content: '❌ | No music is being played!' });
 
-        const queue = client.player.getQueue(interaction.guild.id);
-        if (!queue) return void interaction.reply({ content: '❌ | No music is being played!' });
-
-        const time = interaction.options.getInteger('time') * 1000;
+        const time = message.options.getInteger('time') * 1000;
 
         await queue.seek(time);
 
-        interaction.reply(`✅ | Seeked to ${time / 1000} seconds`);
+        message.reply(`✅ | Seeked to ${time / 1000} seconds`);
 
 
     }

@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { QueryType } from 'discord-player';
+import secCheckChannel from '../../lib/secCheckChannel.js';
 
 class PlayNext extends SlashCommandBuilder {
     constructor() {
@@ -10,13 +11,12 @@ class PlayNext extends SlashCommandBuilder {
             option.setName('query').setDescription('query the song to play next').setRequired(true));
     }
     async run(client, message) {
-        if (!message.member.voice.channel) {
-            return message.reply('You have to be in a voice channel to do that!');
-        }
-
         const guild = client.guilds.cache.get(message.guild.id);
-
+        
         const queue = await client.player.getQueue(guild);
+        // if user asking command isn't in working channel, fail command
+        const memberInChannel = await secCheckChannel(client, message, guild);
+        if (!memberInChannel) return;
         if (!queue || !queue.playing) return void message.reply({ content: '❌ | No music is being played!' });
 
         const query = message.options.getString('query');

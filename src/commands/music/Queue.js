@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
+import secCheckChannel from '../../lib/secCheckChannel.js';
 
 class Queue extends SlashCommandBuilder {
     constructor() {
@@ -10,12 +11,12 @@ class Queue extends SlashCommandBuilder {
 
     }
     async run(client, message) {
-        if (!message.member.voice.channel) {
-            return message.reply('You have to be in a voice channel to do that!');
-        }
         let pageCount = message.options.getInteger('page');
 
         const queue = client.player.getQueue(message.guild.id);
+        // if user asking command isn't in working channel, fail command
+        const memberInChannel = await secCheckChannel(client, message, message.guild.id);
+        if (!memberInChannel) return;
         if (!queue || !queue.playing) return void message.reply({ content: '❌ | No music is being played!' });
         if (!pageCount) pageCount = 1;
         const pageStart = 10 * (pageCount - 1);

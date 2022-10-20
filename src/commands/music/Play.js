@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { QueryType } from 'discord-player';
 import customShuffle from '../../lib/customShuffle.js';
-import playdl from 'play-dl';
+import secCheckChannel from '../../lib/secCheckChannel.js';
 
 class Play extends SlashCommandBuilder {
     constructor() {
@@ -15,21 +15,21 @@ class Play extends SlashCommandBuilder {
 
     }
     async run(client, message) {
-        if (!message.member.voice.channel) {
-            return message.reply('You have to be in a voice channel to do that!');
-        }
-
         // console.log(client);
         // console.log(message.member.id);
         // console.log(message.guild.id);
-
+        
         const guildId = message.guild.id;
         const memberId = message.member.id;
-
+        
         const guild = client.guilds.cache.get(guildId);
         // console.log(guild);
         const channel = guild.channels.cache.get(message.channelId);
         // console.log('channel', channel);
+        
+        // if user asking command isn't in working channel, fail command
+        const memberInChannel = await secCheckChannel(client, message, guild);
+        if (!memberInChannel) return;
 
         const doShuffle = message.options.getBoolean('shuffle');
         // console.log(doShuffle);
