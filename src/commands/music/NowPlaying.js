@@ -12,7 +12,7 @@ class NowPlaying extends SlashCommandBuilder {
         }
 
         const queue = client.player.getQueue(message.guild.id);
-        if (!queue) return void message.reply({ content: '❌ | No music is being played!' });
+        if (!queue || !queue.playing) return void message.reply({ content: '❌ | No music is being played!' });
         const progress = queue.createProgressBar();
         const perc = queue.getPlayerTimestamp();
         const source = queue.current.source;
