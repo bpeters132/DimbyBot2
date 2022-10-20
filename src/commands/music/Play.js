@@ -57,11 +57,11 @@ class Play extends SlashCommandBuilder {
         }
 
         const queue = await client.player.createQueue(guild, {
-            // ytdlOptions: {
-            //     filter: 'audioonly',
-            //     highWaterMark: 1 << 30,
-            //     dlChunkSize: 0,
-            // },
+            ytdlOptions: {
+                filter: 'audioonly',
+                highWaterMark: 1 << 30,
+                dlChunkSize: 0,
+            },
             metadata: channel,
             // async onBeforeCreateStream(track, source, _queue) {
             //     // only trap youtube source
