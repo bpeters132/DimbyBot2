@@ -1,4 +1,4 @@
-export default async (client, message, guild) => {
+export default (client, message, guild) => {
     return new Promise((resolve) =>{
         // Check if the requesting member is in a voice channel
         if (!message.member.voice.channel) {
