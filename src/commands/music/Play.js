@@ -63,15 +63,15 @@ class Play extends SlashCommandBuilder {
                 dlChunkSize: 0,
             },
             metadata: channel,
-            async onBeforeCreateStream(track, source, _queue) {
-                // only trap youtube source
-                if (source === 'youtube') {
-                    console.log(source);
-                    // track here would be youtube track
-                    return (await playdl.stream(track.url, { discordPlayerCompatibility: true })).stream;
-                    // we must return readable stream or void (returning void means telling discord-player to look for default extractor)
-                }
-            }
+            // async onBeforeCreateStream(track, source, _queue) {
+            //     // only trap youtube source
+            //     if (source === 'youtube') {
+            //         console.log(source);
+            //         // track here would be youtube track
+            //         return (await playdl.stream(track.url, { discordPlayerCompatibility: true })).stream;
+            //         // we must return readable stream or void (returning void means telling discord-player to look for default extractor)
+            //     }
+            // }
         });
 
         const member = guild.members.cache.get(memberId) ?? await guild.members.fetch(memberId);
