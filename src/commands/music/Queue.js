@@ -21,16 +21,20 @@ class Queue extends SlashCommandBuilder {
         const pages = []
         const tracks = queue.tracks
 
-        // Build an embed for each page and push to pages array
+        // Build an embed for each page 10 songs long and push to pages array
         for (let i = 0; i < tracks.length; i += 10) {
+
+            // Configure nowPlaying song in field format
             const nowPlaying = {
                 name: 'Now Playing', value: `**${currentTrack.title}** ([link](${currentTrack.url}))`
             }
 
+            // Structure upcoming songs into array
             const elements = queue.tracks.slice(i, i + 10).map((m, t) => {
                 return `${t + i + 1}. **${m.title}** ([link](${m.url}))`
             });
 
+            // Build the actual embed
             const page = {
                 color: 0xff0000,
                 title: 'Server Queue',
