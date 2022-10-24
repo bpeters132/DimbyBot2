@@ -17,70 +17,57 @@ class Queue extends SlashCommandBuilder {
         if (!queue || !queue.playing) return void message.reply({ content: '❌ | No music is being played!' });
         const currentTrack = queue.current;
 
+        // Declare pages array
         const pages = []
         const tracks = queue.tracks
 
+        // Build an embed for each page and push to pages array
         for (let i = 0; i < tracks.length; i += 10) {
-            const fields = [
-                {
-                    name: 'Now Playing', value: `**${currentTrack.title}** ([link](${currentTrack.url}))`
-                }
-            ]
-            const elements = queue.tracks.slice(i, i + 10).map((m, t) => {
-                return { title: `${t + 1} `, value: `**${m.title}** ([link](${m.url}))` }
-            });
+            const nowPlaying = {
+                name: 'Now Playing', value: `**${currentTrack.title}** ([link](${currentTrack.url}))`
+            }
 
-            elements.forEach(element => {
-                fields.push(element)
+            const elements = queue.tracks.slice(i, i + 10).map((m, t) => {
+                return `${t + i + 1}. **${m.title}** ([link](${m.url}))`
             });
 
             const page = {
                 color: 0xff0000,
                 title: 'Server Queue',
-                fields: fields
+                fields: [nowPlaying, { name: 'Upcoming', value: elements.join('\r\n') }]
             }
-
-            // console.log(`Page: ${page}`)
 
             pages.push(page)
         }
 
-        // console.log(`Pages: ${pages}`)
-        try {
-            console.log(JSON.parse(pages))
-            // pages[0].toJSON()
-        } catch (error) {
-            console.log(error)
+
+        // Don't paginate if only one song is playing
+        if (pages.length == 0) {
+            message.reply({
+                embeds: [{
+                    title: 'Server Queue',
+                    color: 0xff0000,
+                    fields: [{ name: 'Now Playing', value: `**${currentTrack.title}** ([link](${currentTrack.url}))` }]
+                }
+                ]
+            })
+        } else {
+
+            // Create pagination by sending pages array to pagination()
+            new pagination().setInterface(message)
+                .createPages(pages)
+                .setButtonList([
+                    new ButtonBuilder()
+                        .setLabel(`Back`)
+                        .setStyle("Primary")
+                        .setCustomId(`1`),
+                    new ButtonBuilder()
+                        .setLabel(`Next`)
+                        .setStyle("Primary")
+                        .setCustomId(`2`)
+                ])
+                .paginate()
         }
-
-        new pagination().setInterface(message)
-            .createPages(JSON.stringify(pages))
-            .setButtonList([
-                new ButtonBuilder()
-                    .setLabel(`1`)
-                    .setStyle("Secondary")
-                    .setCustomId(`1`),
-                new ButtonBuilder()
-                    .setLabel(`2`)
-                    .setStyle("Secondary")
-                    .setCustomId(`2`)
-            ])
-            .paginate()
-
-
-        // return void message.reply('I did something! Look at the console!')
-
-
-
-        // return void message.reply({
-        //     embeds: [
-        //         {
-        //             title: 'Server Queue',
-        //             color: 0xff0000,
-        //             fields: [{ name: 'Now Playing', value: `🎶 | **${currentTrack.title}** ([link](${currentTrack.url}))` }]
-        //         }
-        //     ]
-        // });
 
 
     }
