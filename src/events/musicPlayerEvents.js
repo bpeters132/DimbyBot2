@@ -1,5 +1,5 @@
 export default async (player) => {
-
+    console.log('Loading Music Events');
     player.on('error', (queue, error) => {
         console.log(`[ERROR] [${queue.guild.name}] Error emitted from the queue: ${error.message}`);
     });

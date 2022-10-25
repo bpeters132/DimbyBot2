@@ -3,6 +3,7 @@ import { interactions } from '../lib/loadCommands.js';
 export default async (client) => {
     console.log('Loading event on interactionCreate');
     client.on('interactionCreate', async interaction => {
+        console.log('Starting interaction');
         if (!interaction.isChatInputCommand()) return;
 
         interactions.forEach(slashMessage => {

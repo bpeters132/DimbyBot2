@@ -17,6 +17,7 @@ async function main() {
     try {
         loadEvents(client);
         client.player = new Player(client);
+        client.player.options.smoothVolume = false;
         musicPlayerEvents(client.player);
         if (process.env.DEV_MODE == 'YES') {
             deployCommandsDev();

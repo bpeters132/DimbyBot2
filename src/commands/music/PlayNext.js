@@ -10,28 +10,28 @@ class PlayNext extends SlashCommandBuilder {
         super.addStringOption(option =>
             option.setName('query').setDescription('query the song to play next').setRequired(true));
     }
-    async run(client, message) {
-        const guild = client.guilds.cache.get(message.guild.id);
+    async run(client, interaction) {
+        const guild = client.guilds.cache.get(interaction.guild.id);
         
         const queue = await client.player.getQueue(guild);
         // if user asking command isn't in working channel, fail command
-        const memberInChannel = await secCheckChannel(client, message, guild);
+        const memberInChannel = await secCheckChannel(client, interaction, guild);
         if (!memberInChannel) return;
-        if (!queue || !queue.playing) return void message.reply({ content: '❌ | No music is being played!' });
+        if (!queue || !queue.playing) return void interaction.reply({ content: '❌ | No music is being played!' });
 
-        const query = message.options.getString('query');
+        const query = interaction.options.getString('query');
         const searchResult = await client.player
             .search(query, {
-                requestedBy: message.user,
+                requestedBy: interaction.user,
                 searchEngine: QueryType.AUTO
             })
             .catch(() => {
                 console.log('he');
             });
 
-        if (!searchResult || !searchResult.tracks.length) return void message.reply({ content: 'No results were found!' });
+        if (!searchResult || !searchResult.tracks.length) return void interaction.reply({ content: 'No results were found!' });
         queue.insert(searchResult.tracks[0]);
-        await message.reply({ content: '⏱ | Loading your track...' });
+        await interaction.reply({ content: '⏱ | Loading your track...' });
 
     }
 

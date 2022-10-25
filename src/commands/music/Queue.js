@@ -9,12 +9,12 @@ class Queue extends SlashCommandBuilder {
         super.setName('queue');
         super.setDescription('Get current queue');
     }
-    async run(client, message) {
-        const queue = client.player.getQueue(message.guild.id);
+    async run(client, interaction) {
+        const queue = client.player.getQueue(interaction.guild.id);
         // if user asking command isn't in working channel, fail command
-        const memberInChannel = await secCheckChannel(client, message, message.guild.id);
+        const memberInChannel = await secCheckChannel(client, interaction, interaction.guild.id);
         if (!memberInChannel) return;
-        if (!queue || !queue.playing) return void message.reply({ content: '❌ | No music is being played!' });
+        if (!queue || !queue.playing) return void interaction.reply({ content: '❌ | No music is being played!' });
         const currentTrack = queue.current;
 
         // Declare pages array
@@ -47,7 +47,7 @@ class Queue extends SlashCommandBuilder {
 
         // Don't paginate if only one song is playing
         if (pages.length == 0) {
-            message.reply({
+            interaction.reply({
                 embeds: [{
                     title: 'Server Queue',
                     color: 0xff0000,
@@ -58,7 +58,7 @@ class Queue extends SlashCommandBuilder {
         } else {
 
             // Create pagination by sending pages array to pagination()
-            new pagination().setInterface(message)
+            new pagination().setInterface(interaction)
                 .createPages(pages)
                 .setButtonList([
                     new ButtonBuilder()

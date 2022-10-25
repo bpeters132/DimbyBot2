@@ -14,43 +14,43 @@ class Play extends SlashCommandBuilder {
             option.setName('shuffle').setDescription('Shuffle playlist if link is playlist').setRequired(false));
 
     }
-    async run(client, message) {
+    async run(client, interaction) {
         // console.log(client);
-        // console.log(message.member.id);
-        // console.log(message.guild.id);
+        // console.log(interaction.member.id);
+        // console.log(interaction.guild.id);
         
-        const guildId = message.guild.id;
-        const memberId = message.member.id;
+        const guildId = interaction.guild.id;
+        const memberId = interaction.member.id;
         
         const guild = client.guilds.cache.get(guildId);
         // console.log(guild);
-        const channel = guild.channels.cache.get(message.channelId);
+        const channel = guild.channels.cache.get(interaction.channelId);
         // console.log('channel', channel);
         
         // if user asking command isn't in working channel, fail command
-        const memberInChannel = await secCheckChannel(client, message, guild);
+        const memberInChannel = await secCheckChannel(client, interaction, guild);
         if (!memberInChannel) return;
 
-        const doShuffle = message.options.getBoolean('shuffle');
+        const doShuffle = interaction.options.getBoolean('shuffle');
         // console.log(doShuffle);
 
-        const query = message.options.getString('query');
+        const query = interaction.options.getString('query');
         console.log(query);
 
         const searchResult = await client.player
             .search(query, {
-                requestedBy: message.user,
+                requestedBy: interaction.user,
                 searchEngine: QueryType.AUTO
             })
             .catch((err) => {
                 console.log(err);
             });
-        // if (!searchResult || !searchResult.tracks.length) return void message.reply({ content: 'No results were found!' });
+        // if (!searchResult || !searchResult.tracks.length) return void interaction.reply({ content: 'No results were found!' });
         if (!searchResult) {
-            message.reply('No results found!');
+            interaction.reply('No results found!');
             return console.log('1', searchResult);
         } else if (!searchResult.tracks.length) {
-            message.reply('No results found!');
+            interaction.reply('No results found!');
             return console.log('2', searchResult);
         } else {
             console.log(searchResult);
@@ -78,11 +78,11 @@ class Play extends SlashCommandBuilder {
         try {
             if (!queue.connection) await queue.connect(member.voice.channel);
         } catch {
-            void client.player.deleteQueue(message.guildID);
-            return void message.reply({ content: 'Could not join your voice channel!' });
+            void client.player.deleteQueue(interaction.guildID);
+            return void interaction.reply({ content: 'Could not join your voice channel!' });
         }
 
-        await message.reply({ content: `⏱ | Loading your ${searchResult.playlist ? 'playlist' : 'track'}...` });
+        await interaction.reply({ content: `⏱ | Loading your ${searchResult.playlist ? 'playlist' : 'track'}...` });
         if (searchResult.playlist) {
             // console.log('[DEBUG] Adding playlist to queue...');
             await queue.addTracks(searchResult.tracks);

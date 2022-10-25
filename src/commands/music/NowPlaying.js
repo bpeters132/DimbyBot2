@@ -7,18 +7,18 @@ class NowPlaying extends SlashCommandBuilder {
         super.setName('nowplaying');
         super.setDescription('Tells you what\'s currently playing');
     }
-    async run(client, message) {
+    async run(client, interaction) {
 
-        const queue = client.player.getQueue(message.guild.id);
+        const queue = client.player.getQueue(interaction.guild.id);
         // if user asking command isn't in working channel, fail command
-        const memberInChannel = await secCheckChannel(client, message, message.guild.id);
+        const memberInChannel = await secCheckChannel(client, interaction, interaction.guild.id);
         if (!memberInChannel) return;
-        if (!queue || !queue.playing) return void message.reply({ content: '❌ | No music is being played!' });
+        if (!queue || !queue.playing) return void interaction.reply({ content: '❌ | No music is being played!' });
         const progress = queue.createProgressBar();
         const perc = queue.getPlayerTimestamp();
         const source = queue.current.source;
 
-        return void message.reply({
+        return void interaction.reply({
             embeds: [
                 {
                     title: 'Now Playing',

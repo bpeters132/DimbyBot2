@@ -10,18 +10,18 @@ class Seek extends SlashCommandBuilder {
         super.addIntegerOption(option =>
             option.setName('time').setDescription('time to seek in seconds').setRequired(true));
     }
-    async run(client, message) {
-        const queue = client.player.getQueue(message.guild.id);
+    async run(client, interaction) {
+        const queue = client.player.getQueue(interaction.guild.id);
         // if user asking command isn't in working channel, fail command
-        const memberInChannel = await secCheckChannel(client, message, message.guild.id);
+        const memberInChannel = await secCheckChannel(client, interaction, interaction.guild.id);
         if (!memberInChannel) return;
-        if (!queue) return void message.reply({ content: '❌ | No music is being played!' });
+        if (!queue) return void interaction.reply({ content: '❌ | No music is being played!' });
 
-        const time = message.options.getInteger('time') * 1000;
+        const time = interaction.options.getInteger('time') * 1000;
 
         await queue.seek(time);
 
-        message.reply(`✅ | Seeked to ${time / 1000} seconds`);
+        interaction.reply(`✅ | Seeked to ${time / 1000} seconds`);
 
 
     }

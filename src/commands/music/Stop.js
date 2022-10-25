@@ -7,14 +7,14 @@ class Stop extends SlashCommandBuilder {
         super.setName('stop');
         super.setDescription('stop the music!');
     }
-    async run(client, message) {
-        const queue = client.player.getQueue(message.guild.id);
+    async run(client, interaction) {
+        const queue = client.player.getQueue(interaction.guild.id);
         // if user asking command isn't in working channel, fail command
-        const memberInChannel = await secCheckChannel(client, message, message.guild.id);
+        const memberInChannel = await secCheckChannel(client, interaction, interaction.guild.id);
         if (!memberInChannel) return;
-        if (!queue) return void message.reply({ content: '❌ | No music is being played!' });
+        if (!queue) return void interaction.reply({ content: '❌ | No music is being played!' });
         queue.destroy();
-        return void message.reply({ content: '🛑 | Stopped the player!' });
+        return void interaction.reply({ content: '🛑 | Stopped the player!' });
 
     }
 }

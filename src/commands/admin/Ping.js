@@ -5,9 +5,9 @@ class Ping extends SlashCommandBuilder {
         super.setName('ping');
         super.setDescription('Replies with pong!');
     }
-    async run(ctx) {
+    async run(interaction) {
         console.log('Pong!');
-        await ctx.reply('Pong!');
+        await interaction.reply('Pong!');
     };
 }
 const command = new Ping();
