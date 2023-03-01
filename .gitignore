@@ -123,3 +123,7 @@ yarn.lock
 .idea/
 .vscode/
 .history/
+
+# Custom
+config.js
+LavaLink Server/application.yml
