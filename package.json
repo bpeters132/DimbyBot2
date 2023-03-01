@@ -1,7 +1,7 @@
 {
-  "name": "discord-musicbot",
-  "version": "5.0.0-beta",
-  "description": "Very simple discord music bot with the discord.js with Song Name playing. It can able to play music with the song name",
+  "name": "Dimbybot2",
+  "version": "5.0.0",
+  "description": "Discord bot for friends",
   "main": "index.js",
   "scripts": {
     "start": "node index",
@@ -15,27 +15,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/SudhanPlayz/Discord-MusicBot.git"
+    "url": "git+https://gitlab.com/bpeters132/DimbyBot2"
   },
   "engines": {
     "node": ">=16.x"
   },
-  "keywords": [
-    "discord",
-    "discord-bot",
-    "discord-musicbot",
-    "music",
-    "discord-music"
-  ],
-  "authors": [
-    "SudhanPlayz",
-    "DarrenOfficial"
-  ],
   "license": "Apache-2.0",
-  "bugs": {
-    "url": "https://github.com/SudhanPlayz/Discord-MusicBot/issues"
-  },
-  "homepage": "https://github.com/SudhanPlayz/Discord-MusicBot#readme",
   "dependencies": {
     "@discordjs/builders": "^1.4.0",
     "@discordjs/rest": "^1.5.0",
