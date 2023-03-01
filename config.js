@@ -10,7 +10,7 @@ module.exports = {
 	serverDeafen: true, //- If you want bot to stay deafened
 	defaultVolume: 100, //- Sets the default volume of the bot, You can change this number anywhere from 1 to 100
 	supportServer: "https://discord.gg/SXag6PHJA5", //- Support Server Link
-	Issues: "https://github.com/SudhanPlayz/Discord-MusicBot/issues", //- Bug Report Link
+	Issues: "https://gitlab.com/bpeters132/DimbyBot2/-/issues", //- Bug Report Link
 	permissions: 277083450689, //- Bot Inviting Permissions
 	disconnectTime: 30000, //- How long should the bot wait before disconnecting from the voice channel (in miliseconds). Set to 1 for instant disconnect.
 	twentyFourSeven: false, //- When set to true, the bot will never disconnect from the voice channel
