@@ -8,7 +8,8 @@ export default async (client) => {
 
         interactions.forEach(slashMessage => {
             if (interaction.commandName === slashMessage.name) {
-                slashMessage.run(client, interaction);
+                interaction.reply('I apologize, but I am currently broken in every way imaginable, my creator is currently prioritizing a full feature update to fix common issues and slow performance. Please keep me around until that update is here! <3');
+                // slashMessage.run(client, interaction);
                 return;
             }
         });
