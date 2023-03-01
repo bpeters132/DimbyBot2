@@ -126,4 +126,5 @@ yarn.lock
 
 # Custom
 config.js
+./LavaLink Server/application.yml
 LavaLink Server/application.yml
