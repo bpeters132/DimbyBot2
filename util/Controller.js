@@ -15,9 +15,9 @@ module.exports = async (client, interaction) => {
 				client.Embed("❌ | **There is no player to control in this server.**"),
 			],
 		});
-		setTimeout(() => {
-			interaction.deleteReply();
-		}, 5000);
+		// setTimeout(() => {
+		// 	interaction.deleteReply();
+		// }, 5000);
 		return;
 	}
 	if (!interaction.member.voice.channel) {
