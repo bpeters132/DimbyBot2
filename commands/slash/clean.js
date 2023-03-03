@@ -38,9 +38,9 @@ const command = new SlashCommand()
 					}
 					
 					await interaction.editReply({ embeds: [client.Embed(`:white_check_mark: | Deleted ${ botMessages.length } bot messages`)] });
-					setTimeout(() => {
-						interaction.deleteReply();
-					}, 5000);
+					// setTimeout(() => {
+					// 	interaction.deleteReply();
+					// }, 5000);
 				})
 			
 		});
