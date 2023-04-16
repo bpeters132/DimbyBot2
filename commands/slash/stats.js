@@ -71,7 +71,7 @@ const command = new SlashCommand()
 					name: "Bot stats",
 					value: `\`\`\`yml\nGuilds: ${
 						client.guilds.cache.size
-					} \nNodeJS: ${ nodeVersion }\nDiscordMusicBot: v${
+					} \nNodeJS: ${ nodeVersion }\nDimbyBot2: v${
 						require("../../package.json").version
 					} \`\`\``,
 					inline: true,
