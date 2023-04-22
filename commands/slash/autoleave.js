@@ -3,8 +3,8 @@ const { MessageEmbed } = require("discord.js");
 const SlashCommand = require("../../lib/SlashCommand");
 
 const command = new SlashCommand()
-  .setName("autopause")
-  .setDescription("Automatically pause when everyone leaves the voice channel (toggle)")
+  .setName("autoleave")
+  .setDescription("Automatically leaves when everyone leaves the voice channel (toggle)")
   .setRun(async (client, interaction) => {
     let channel = await client.getChannel(client, interaction);
     if (!channel) return;
@@ -32,31 +32,31 @@ const command = new SlashCommand()
       });
     }
 
-    let autoPauseEmbed = new MessageEmbed().setColor(client.config.embedColor);
-    const autoPause = player.get("autoPause");
-    player.set("requester", interaction.guild.members.me);
+    let autoLeaveEmbed = new MessageEmbed().setColor(client.config.embedColor);
+    const autoLeave = player.get("autoLeave");
+    player.set("requester", interaction.guild.me);
 
-    if (!autoPause || autoPause === false) {
-      player.set("autoPause", true);
+    if (!autoLeave || autoLeave === false) {
+      player.set("autoLeave", true);
     } else {
-      player.set("autoPause", false);
+      player.set("autoLeave", false);
     }
-    autoPauseEmbed
-			.setDescription(`**Auto Pause is** \`${!autoPause ? "ON" : "OFF"}\``)
+    autoLeaveEmbed
+			.setDescription(`**Auto Leave is** \`${!autoLeave ? "ON" : "OFF"}\``)
 			.setFooter({
-			  text: `The player will ${!autoPause ? "now be automatically" : "no longer be"} paused when everyone leaves the voice channel.`
+			  text: `The player will ${!autoLeave ? "now automatically" : "not automatically"} leave when the voice channel is empty.`
 			});
     client.warn(
       `Player: ${player.options.guild} | [${colors.blue(
-        "AUTOPAUSE"
-      )}] has been [${colors.blue(!autoPause ? "ENABLED" : "DISABLED")}] in ${
+        "autoLeave"
+      )}] has been [${colors.blue(!autoLeave ? "ENABLED" : "DISABLED")}] in ${
         client.guilds.cache.get(player.options.guild)
           ? client.guilds.cache.get(player.options.guild).name
           : "a guild"
       }`
     );
 
-    return interaction.reply({ embeds: [autoPauseEmbed] });
+    return interaction.reply({ embeds: [autoLeaveEmbed] });
   });
 
 module.exports = command;
