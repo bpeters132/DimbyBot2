@@ -5,8 +5,6 @@ const command = new SlashCommand()
 	.setName("skip")
 	.setDescription("Skip the current song")
 	.setRun(async (client, interaction, options) => {
-
-		
 		let channel = await client.getChannel(client, interaction);
 		if (!channel) {
 			return;
