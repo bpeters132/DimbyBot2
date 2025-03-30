@@ -1,5 +1,6 @@
 // src/bot/bot.js
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const { Player } = require('discord-player');
 const path = require('path');
 const fs = require('fs');
 
@@ -8,28 +9,34 @@ function startBot() {
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildVoiceStates,
-      GatewayIntentBits.GuildMessages,
-      GatewayIntentBits.MessageContent // only needed if you support legacy message commands
+      GatewayIntentBits.GuildMessages
     ]
   });
 
-  // Load commands into a collection (for slash commands)
+  // Load slash commands
   client.commands = new Collection();
   const commandsPath = path.join(__dirname, 'commands');
   const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-
   for (const file of commandFiles) {
     const command = require(path.join(commandsPath, file));
     if (command.data && command.execute) {
-      // For slash commands, we require a "data" property and an "execute" method.
       client.commands.set(command.data.name, command);
     }
   }
 
-  // Load event files from the events folder
+  // Initialize discord-player with your Lavalink v3 node
+  client.player = new Player(client, {
+    nodes: [{
+      host: process.env.LAVALINK_HOST,
+      port: Number(process.env.LAVALINK_PORT),
+      password: process.env.LAVALINK_PASSWORD,
+      secure: false
+    }]
+  });
+
+  // Load other event handlers
   const eventsPath = path.join(__dirname, 'events');
   const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
-
   for (const file of eventFiles) {
     const event = require(path.join(eventsPath, file));
     if (event.once) {

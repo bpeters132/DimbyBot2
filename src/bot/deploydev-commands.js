@@ -18,10 +18,10 @@ for (const file of commandFiles) {
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
 if (!process.env.DEV_GUILD_ID) {
-  console.error("DEV_GUILD_ID is not defined in your .env file.");
+  console.error('DEV_GUILD_ID is not defined in your .env file.');
   process.exit(1);
 }
 
 rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.DEV_GUILD_ID), { body: commands })
-  .then(() => console.log('Successfully registered guild (slash) commands for rapid testing.'))
+  .then(() => console.log('Successfully registered guild commands for rapid testing.'))
   .catch(console.error);
