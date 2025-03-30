@@ -1,0 +1,50 @@
+2025-03-30T12:30:05.948-05:00  INFO 12248 --- [Lavalink] [main] lavalink.server.Launcher                 : Starting Launcher v4.0.8 using Java 17.0.6 with PID 12248 (C:\Users\bpete\OneDrive\Documents\GitHub\DimbyBot2\lavalink\Lavalink.jar started by bpete in C:\Users\bpete\OneDrive\Documents\GitHub\DimbyBot2\lavalink)
+2025-03-30T12:30:05.951-05:00  INFO 12248 --- [Lavalink] [main] lavalink.server.Launcher                 : No active profile set, falling back to 1 default profile: "default"
+2025-03-30T12:30:06.779-05:00  INFO 12248 --- [Lavalink] [main] lavalink.server.Launcher                 : Started Launcher in 1.187 seconds (process running for 1.611)
+2025-03-30T12:30:06.825-05:00  INFO 12248 --- [Lavalink] [main] lavalink.server.Launcher                 : 
+
+[32m       .  [31m _                  _ _       _    [32m__ _ _
+[32m      /\\ [31m| | __ ___   ____ _| (_)_ __ | | __[32m\ \ \ \
+[32m     ( ( )[31m| |/ _` \ \ / / _` | | | '_ \| |/ /[32m \ \ \ \
+[32m      \\/ [31m| | (_| |\ V / (_| | | | | | |   < [32m  ) ) ) )
+[32m       '  [31m|_|\__,_| \_/ \__,_|_|_|_| |_|_|\_\[32m / / / /
+[0m    =========================================[32m/_/_/_/[0m
+
+	Version:        4.0.8
+	Build time:     20.09.2024 20:20:10 UTC
+	Branch          HEAD
+	Commit:         2946608
+	Commit time:    20.09.2024 20:17:58 UTC
+	JVM:            17.0.6
+	Lavaplayer      2.2.2
+
+2025-03-30T12:30:06.833-05:00  INFO 12248 --- [Lavalink] [main] lavalink.server.Launcher                 : No active profile set, falling back to 1 default profile: "default"
+2025-03-30T12:30:07.376-05:00  WARN 12248 --- [Lavalink] [main] io.undertow.websockets.jsr               : UT026010: Buffer pool was not set on WebSocketDeploymentInfo, the default pool will be used
+2025-03-30T12:30:07.394-05:00  INFO 12248 --- [Lavalink] [main] io.undertow.servlet                      : Initializing Spring embedded WebApplicationContext
+2025-03-30T12:30:07.394-05:00  INFO 12248 --- [Lavalink] [main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 558 ms
+2025-03-30T12:30:07.485-05:00  INFO 12248 --- [Lavalink] [main] c.s.d.l.tools.GarbageCollectionMonitor   : GC monitoring enabled, reporting results every 2 minutes.
+2025-03-30T12:30:08.056-05:00  INFO 12248 --- [Lavalink] [main] l.server.config.KoeConfiguration         : OS: WINDOWS, Arch: X86_64
+2025-03-30T12:30:08.056-05:00  INFO 12248 --- [Lavalink] [main] l.server.config.KoeConfiguration         : Enabling JDA-NAS
+2025-03-30T12:30:08.059-05:00  INFO 12248 --- [Lavalink] [main] c.s.l.c.natives.NativeLibraryLoader      : Native library udpqueue: loading with filter null
+2025-03-30T12:30:08.063-05:00  INFO 12248 --- [Lavalink] [main] c.s.l.c.natives.NativeLibraryLoader      : Native library udpqueue: successfully loaded.
+2025-03-30T12:30:08.087-05:00  WARN 12248 --- [Lavalink] [main] l.server.config.SentryConfiguration      : Turning off sentry
+2025-03-30T12:30:08.297-05:00  INFO 12248 --- [Lavalink] [main] io.undertow                              : starting server: Undertow - 2.3.13.Final
+2025-03-30T12:30:08.304-05:00  INFO 12248 --- [Lavalink] [main] org.xnio                                 : XNIO version 3.8.8.Final
+2025-03-30T12:30:08.311-05:00  INFO 12248 --- [Lavalink] [main] org.xnio.nio                             : XNIO NIO Implementation Version 3.8.8.Final
+2025-03-30T12:30:08.354-05:00  INFO 12248 --- [Lavalink] [main] org.jboss.threads                        : JBoss Threads version 3.5.0.Final
+2025-03-30T12:30:08.415-05:00  INFO 12248 --- [Lavalink] [main] o.s.b.w.e.undertow.UndertowWebServer     : Undertow started on port 2333 (http) with context path '/'
+2025-03-30T12:30:08.419-05:00  INFO 12248 --- [Lavalink] [main] lavalink.server.Launcher                 : Started Launcher in 1.634 seconds (process running for 3.251)
+2025-03-30T12:30:08.420-05:00  INFO 12248 --- [Lavalink] [main] lavalink.server.Launcher                 : Lavalink is ready to accept connections.
+2025-03-30T12:30:16.311-05:00  INFO 12248 --- [Lavalink] [XNIO-1 task-2] io.undertow.servlet                      : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-03-30T12:30:16.312-05:00  INFO 12248 --- [Lavalink] [XNIO-1 task-2] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2025-03-30T12:30:16.313-05:00  INFO 12248 --- [Lavalink] [XNIO-1 task-2] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2025-03-30T12:30:16.369-05:00  WARN 12248 --- [Lavalink] [XNIO-1 task-2] lavalink.server.config.WebsocketConfig   : This is the old Lavalink websocket endpoint. Please use /v4/websocket instead. If you are using a client library, please update it to a Lavalink v4 compatible version or use Lavalink v3 instead.
+2025-03-30T12:30:16.383-05:00  INFO 12248 --- [Lavalink] [XNIO-1 task-2] l.server.io.RequestLoggingFilter         : GET /, client=127.0.0.1
+2025-03-30T12:30:17.400-05:00  WARN 12248 --- [Lavalink] [XNIO-1 task-2] lavalink.server.config.WebsocketConfig   : This is the old Lavalink websocket endpoint. Please use /v4/websocket instead. If you are using a client library, please update it to a Lavalink v4 compatible version or use Lavalink v3 instead.
+2025-03-30T12:30:17.401-05:00  INFO 12248 --- [Lavalink] [XNIO-1 task-2] l.server.io.RequestLoggingFilter         : GET /, client=127.0.0.1
+2025-03-30T12:30:18.408-05:00  WARN 12248 --- [Lavalink] [XNIO-1 task-2] lavalink.server.config.WebsocketConfig   : This is the old Lavalink websocket endpoint. Please use /v4/websocket instead. If you are using a client library, please update it to a Lavalink v4 compatible version or use Lavalink v3 instead.
+2025-03-30T12:30:18.409-05:00  INFO 12248 --- [Lavalink] [XNIO-1 task-2] l.server.io.RequestLoggingFilter         : GET /, client=127.0.0.1
+2025-03-30T12:30:19.415-05:00  WARN 12248 --- [Lavalink] [XNIO-1 task-2] lavalink.server.config.WebsocketConfig   : This is the old Lavalink websocket endpoint. Please use /v4/websocket instead. If you are using a client library, please update it to a Lavalink v4 compatible version or use Lavalink v3 instead.
+2025-03-30T12:30:19.416-05:00  INFO 12248 --- [Lavalink] [XNIO-1 task-2] l.server.io.RequestLoggingFilter         : GET /, client=127.0.0.1
+2025-03-30T12:30:20.425-05:00  WARN 12248 --- [Lavalink] [XNIO-1 task-2] lavalink.server.config.WebsocketConfig   : This is the old Lavalink websocket endpoint. Please use /v4/websocket instead. If you are using a client library, please update it to a Lavalink v4 compatible version or use Lavalink v3 instead.
+2025-03-30T12:30:20.425-05:00  INFO 12248 --- [Lavalink] [XNIO-1 task-2] l.server.io.RequestLoggingFilter         : GET /, client=127.0.0.1
