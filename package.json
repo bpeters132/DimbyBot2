@@ -1,23 +1,28 @@
 {
   "name": "dimbybot2",
   "version": "4.0.0",
-  "main": "index.js",
-  "repository": "https://gitlab.com/bpeters132/DimbyBot2.git",
-  "author": "Brandt <b.peters132@gmail.com>",
-  "license": "MIT",
+  "type": "module",
+  "description": "A discord bot for friends!",
+  "main": "./src/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "deploy": "node src/bot/deploy-commands.js",
-    "deploydev": "node src/bot/deploydev-commands.js"
+    "start": "node ./src/index.js",
+    "dev": "nodemon ./src/index.js",
+    "deployGlobal": "node ./src/deploy/deployGlobal.js",
+    "destroyGlobal": "node ./src/deploy/destroyGlobal.js",
+    "deployGuild": "node ./src/deploy/deployGuild.js",
+    "destroyGuild": "node ./src/deploy/destroyGuild.js"
   },
+  "license": "MIT",
   "dependencies": {
-    "@discord-player/extractor": "^7.1.0",
-    "discord-player": "^7.1.0",
-    "discord.js": "^14.18.0",
-    "dotenv": "^16.4.7"
+    "colors": "^1.4.0",
+    "discord.js": "^14.6.0",
+    "dotenv": "^16.0.3",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
-    "nodemon": "^2.0.20"
+    "eslint": "^8.28.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "prettier": "^2.8.0"
   }
 }

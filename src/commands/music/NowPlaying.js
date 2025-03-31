@@ -1,0 +1,45 @@
+import { SlashCommandBuilder } from 'discord.js';
+import secCheckChannel from '../../lib/secCheckChannel.js';
+
+class NowPlaying extends SlashCommandBuilder {
+    constructor() {
+        super();
+        super.setName('nowplaying');
+        super.setDescription('Tells you what\'s currently playing');
+    }
+    async run(client, interaction) {
+
+        const queue = client.player.getQueue(interaction.guild.id);
+        // if user asking command isn't in working channel, fail command
+        const memberInChannel = await secCheckChannel(client, interaction, interaction.guild.id);
+        if (!memberInChannel) return;
+        if (!queue || !queue.playing) return void interaction.reply({ content: '❌ | No music is being played!' });
+        const progress = queue.createProgressBar();
+        const perc = queue.getPlayerTimestamp();
+        const source = queue.current.source;
+
+        return void interaction.reply({
+            embeds: [
+                {
+                    title: 'Now Playing',
+                    description: `🎶 | **${queue.current.title}**! (\`${perc.progress}%\`)`,
+                    fields: [
+                        {
+                            name: '\u200b',
+                            value: progress
+                        }, {
+                            name: 'Source',
+                            value: source
+                        }
+                    ],
+                    color: 0xffffff
+                }
+            ]
+        });
+
+    }
+
+}
+
+const command = new NowPlaying();
+export default command;
