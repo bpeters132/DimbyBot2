@@ -1,8 +1,8 @@
 ignorethis/
 .env
 node_modules/
-yarn.lock
 yarn-error.log
 .vscode/settings.json
 logs.log
 /Lavalink
+
