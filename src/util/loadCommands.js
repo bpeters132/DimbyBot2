@@ -3,7 +3,7 @@ import Ping from '../commands/admin/Ping.js';
 // import Loop from '../commands/music/Loop.js';
 // import LoopQueue from '../commands/music/LoopQueue.js';
 // import NowPlaying from '../commands/music/NowPlaying.js';
-// import Play from '../commands/music/Play.js';
+import Play from '../commands/music/Play.js';
 // import PlayNext from '../commands/music/PlayNext.js';
 // import Queue from '../commands/music/Queue.js';
 // import Seek from '../commands/music/Seek.js';
@@ -13,11 +13,11 @@ import Ping from '../commands/admin/Ping.js';
 
 const interactions = [
     Clear,
-    Ping
+    Ping,
     // Loop,
     // LoopQueue,
     // NowPlaying,
-    // Play,
+    Play,
     // PlayNext,
     // Queue,
     // Seek,
@@ -26,5 +26,5 @@ const interactions = [
     // Stop
 ];
 
-const commands = interactions.map((command) => command.toJSON());
+const commands = interactions.map((command) => command.data.toJSON());
 export { interactions, commands };

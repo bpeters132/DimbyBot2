@@ -1,19 +1,14 @@
 import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 
-/**
- * A slash command that clears a specified number of messages from the executed channel
- * @extends (SlashCommandBuilder)
- * 
- */
-class Clear extends SlashCommandBuilder {
-    constructor() {
-        super();
-        super.setName('clear');
-        super.setDescription('Used to clear messages, can clear up to 30 messages');
-        super.setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages);
-        super.addIntegerOption(option =>
-            option.setName('count').setDescription('The amount of messages to clear').setRequired(true));
-    }
+
+export default{
+    data: new SlashCommandBuilder()
+        .setName('clear')
+        .setDescription('Used to clear messages, can clear up to 30 messages')
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+        .addIntegerOption(option =>
+            option.setName('count').setDescription('The amount of messages to clear').setRequired(true)),
+
     /**
      * 
      * @param {import('discord.js').Client} client 
@@ -36,9 +31,5 @@ class Clear extends SlashCommandBuilder {
         } else {
             interaction.reply('You can only clear up to 30 messages at once!');
         }
-
-
-    };
-}
-const command = new Clear();
-export default command;
+    }
+};
