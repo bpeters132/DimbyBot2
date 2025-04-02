@@ -1,0 +1,13 @@
+const nodes = [
+    {
+        id: '1',
+        host: 'localhost',
+        port: 2333,
+        password: 'youshallnotpass'
+    }
+];
+
+
+export {
+    nodes
+};
