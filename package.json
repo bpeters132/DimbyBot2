@@ -17,6 +17,7 @@
     "colors": "^1.4.0",
     "discord.js": "^14.6.0",
     "dotenv": "^16.0.3",
+    "lavacord": "^2.2.0",
     "winston": "^3.17.0"
   },
   "devDependencies": {

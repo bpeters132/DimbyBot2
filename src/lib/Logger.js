@@ -34,7 +34,7 @@ class Logger {
         );
     }
 
-    error(Text) {
+    error(Text, ...args) {
         let d = new Date();
         this.logger.log({
             level: 'error',
@@ -43,7 +43,7 @@ class Logger {
         console.log(
             colors.gray(
                 `[${d.getDate()}:${d.getMonth()}:${d.getFullYear()} - ${d.getHours()}:${d.getMinutes()}]`,
-            ) + colors.red(' | ' + Text),
+            ) + colors.red(' | ' + Text + ': ' + args),
         );
     }
 }

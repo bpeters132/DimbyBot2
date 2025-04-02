@@ -1,5 +1,6 @@
 import Clear from '../commands/admin/Clear.js';
 import Ping from '../commands/admin/Ping.js';
+import Leave from '../commands/music/Leave.js';
 // import Loop from '../commands/music/Loop.js';
 // import LoopQueue from '../commands/music/LoopQueue.js';
 // import NowPlaying from '../commands/music/NowPlaying.js';
@@ -14,6 +15,7 @@ import Play from '../commands/music/Play.js';
 const interactions = [
     Clear,
     Ping,
+    Leave,
     // Loop,
     // LoopQueue,
     // NowPlaying,

@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
+import { Rest } from 'lavacord';
 
 export default {
     data: new SlashCommandBuilder()
@@ -11,7 +12,7 @@ export default {
         ),
     /**
      * 
-     * @param {import('discord.js').Client} client 
+     * @param {import('../../lib/BotClient.js').default} client 
      * @param {import('discord.js').CommandInteraction} interaction 
      * 
      */
@@ -29,5 +30,43 @@ export default {
         await interaction.deferReply();
 
         // TODO: Music Searh and Play function
+
+        let player = client.manager.players.get(guild.id);
+
+        if (!player) {
+            console.log('joining channel');
+            console.dir(voiceChannel.id);
+            console.log(client.manager.idealNodes[0].id);
+            player = await client.manager.join({
+                guild: guild.id,
+                channel: voiceChannel.id,
+                node: '1'
+            });
+
+        } else if (player.channelId !== voiceChannel.id) {
+            await player.switchChannel(voiceChannel.id);
+        }
+
+        // try {
+        const node = client.manager.idealNodes[0];
+        const result = await Rest.load(node, `scsearch:${query}`);
+
+        if (result.loadType === 'LOAD_FAILED' || result.loadType === 'NO_MATCHES') {
+            return interaction.editReply('No results found for that query');
+        }
+
+        const track = result.data[0];
+
+        player.play(track.encoded);
+
+        return interaction.editReply(`Now Playing: ${track.info.title}`);
+
+        // } catch (err) {
+        //     client.logger.error('Error loading or playing the track', err);
+        //     return interaction.editReply('An error occurred while trying to play the track');
+        // }
+
+        // interaction.editReply('I did my thinking.. now time to do yours! Have a browse at the console!');
+
     }
 };
