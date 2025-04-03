@@ -20,7 +20,7 @@ export default {
             return interaction.reply({ content: 'Join a voice channel first!' });
         }
 
-        const player = client.lavalink.players.get(guild.id)
+        const player = client.lavalink.players.get(guild.id);
 
         if (!player || (!player.queue.current && player.queue.length === 0)) {
             return interaction.reply('Nothing is playing.');
