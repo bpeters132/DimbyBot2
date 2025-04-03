@@ -1,38 +1,34 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { QueueRepeatMode } from 'discord-player';
-import secCheckChannel from '../../lib/secCheckChannel.js';
 
-class Skip extends SlashCommandBuilder {
-    constructor() {
-        super();
-        super.setName('skip');
-        super.setDescription('Skip to the next song');
-    }
+export default {
+    data: new SlashCommandBuilder()
+        .setName('skip')
+        .setDescription('Skip the song'),
+    /**
+     * 
+     * @param {import('../../lib/BotClient.js').default} client 
+     * @param {import('discord.js').CommandInteraction} interaction 
+     * 
+     */
     async run(client, interaction) {
-        const queue = client.player.getQueue(interaction.guild.id);
-        // if user asking command isn't in working channel, fail command
-        const memberInChannel = await secCheckChannel(client, interaction, interaction.guild.id);
-        if (!memberInChannel) return;
-        if (!queue) return void interaction.reply({ content: '❌ | No music is being played!' });
+        const guild = interaction.guild;
+        const member = interaction.member;
 
-        const currentTrack = queue.current;
-        const currentRepeatMode = queue.repeatMode;
-        if (currentRepeatMode == 1) {
-            queue.setRepeatMode(QueueRepeatMode.OFF);
-            const success = queue.skip();
-            return void interaction.reply({
-                content: success ? `✅ | Skipped **${currentTrack}! Track Looping Off!**` : '❌ | Something went wrong!'
-            });
-        } else {
-            const success = queue.skip();
-            return void interaction.reply({
-                content: success ? `✅ | Skipped **${currentTrack}**!` : '❌ | Something went wrong!'
-            });
-        };
+        // Check if user is in a voice channel
+        const voiceChannel = member.voice.channel;
+        if (!voiceChannel) {
+            return interaction.reply({ content: 'Join a voice channel first!' });
+        }
 
+        const player = client.lavalink.players.get(guild.id);
+
+        if (!player || (!player.queue.current && player.queue.tracks.length === 0)) {
+            return interaction.reply('Nothing is playing.');
+        }else if(player.queue.current && player.queue.tracks.length === 0){
+            return interaction.reply('The last song of the queue is already playing!');
+        }
+
+        player.skip();
+        interaction.reply('SKIPPED!');
     }
-
-}
-
-const command = new Skip();
-export default command;
+};

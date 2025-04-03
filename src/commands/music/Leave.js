@@ -22,7 +22,13 @@ export default {
 
         await interaction.deferReply();
 
-        client.manager.leave(guild.id);
+        const player = client.lavalink.players.get(guild.id);
+
+        if (!player || (!player.queue.current && player.queue.length === 0)) {
+            return interaction.reply('Nothing is playing. If I am in a channel, I likely crashed last time. Try playing something and then telling me to leave!');
+        }
+
+        player.destroy();
         await interaction.editReply('BYE!');
     }
 };

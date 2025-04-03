@@ -1,7 +1,10 @@
 import { interactions } from '../util/loadCommands.js';
 
+/**
+ * @param {import('../lib/BotClient.js').default} client
+ */
 export default async (client) => {
-    console.log('Loading event on interactionCreate');
+    client.logger.log('Loaded event on interactionCreate');
 
     client.on('interactionCreate', async interaction => {
         console.log('Starting interaction');
@@ -16,9 +19,9 @@ export default async (client) => {
         } catch (error) {
             console.error(`Error running command ${interaction.commandName}:`, error);
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ content: 'There was an error executing this command.', ephemeral: true });
+                await interaction.followUp({ content: 'There was an error executing this command.'});
             } else {
-                await interaction.reply({ content: 'There was an error executing this command.', ephemeral: true });
+                await interaction.reply({ content: 'There was an error executing this command.'});
             }
         }
     });

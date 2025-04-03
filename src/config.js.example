@@ -1,9 +1,9 @@
 const nodes = [
     {
-        id: '1',
+        authorization: 'your lavalink password here',
         host: 'localhost',
         port: 2333,
-        password: 'youshallnotpass'
+        id: 'testnode',
     }
 ];
 

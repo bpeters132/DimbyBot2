@@ -1,45 +1,55 @@
 import { SlashCommandBuilder } from 'discord.js';
-import secCheckChannel from '../../lib/secCheckChannel.js';
 
-class NowPlaying extends SlashCommandBuilder {
-    constructor() {
-        super();
-        super.setName('nowplaying');
-        super.setDescription('Tells you what\'s currently playing');
-    }
+export default {
+    data: new SlashCommandBuilder()
+        .setName('nowplaying')
+        .setDescription('View current playing song'),
+    /**
+     * 
+     * @param {import('../../lib/BotClient.js').default} client 
+     * @param {import('discord.js').CommandInteraction} interaction 
+     * 
+     */
     async run(client, interaction) {
+        const guild = interaction.guild;
+        const member = interaction.member;
 
-        const queue = client.player.getQueue(interaction.guild.id);
-        // if user asking command isn't in working channel, fail command
-        const memberInChannel = await secCheckChannel(client, interaction, interaction.guild.id);
-        if (!memberInChannel) return;
-        if (!queue || !queue.playing) return void interaction.reply({ content: '❌ | No music is being played!' });
-        const progress = queue.createProgressBar();
-        const perc = queue.getPlayerTimestamp();
-        const source = queue.current.source;
+        // Check if user is in a voice channel
+        const voiceChannel = member.voice.channel;
+        if (!voiceChannel) {
+            return interaction.reply({ content: 'Join a voice channel first!' });
+        }
 
-        return void interaction.reply({
-            embeds: [
-                {
-                    title: 'Now Playing',
-                    description: `🎶 | **${queue.current.title}**! (\`${perc.progress}%\`)`,
-                    fields: [
-                        {
-                            name: '\u200b',
-                            value: progress
-                        }, {
-                            name: 'Source',
-                            value: source
-                        }
-                    ],
-                    color: 0xffffff
-                }
-            ]
-        });
+        const player = client.lavalink.players.get(guild.id)
 
+        if (!player || (!player.queue.current && player.queue.length === 0)) {
+            return interaction.reply('Nothing is playing.');
+        }
+
+        const track = player.queue.current;
+
+        // Optional: format time
+        const formatTime = (ms) => {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        };
+
+        const position = formatTime(player.position);
+        const duration = formatTime(track.info.duration);
+
+        const embed = {
+            title: '🎵 Now Playing',
+            description: `[${track.info.title}](${track.info.uri})\nBy: \`${track.info.author}\``,
+            fields: [
+                { name: 'Time', value: `\`${position} / ${duration}\`` }
+            ],
+            thumbnail: { url: track.info.artworkUrl || '' },
+            color: 0x00FFAA
+        };
+
+        // console.dir(track)
+        return interaction.reply({ embeds: [embed] });
     }
-
-}
-
-const command = new NowPlaying();
-export default command;
+};

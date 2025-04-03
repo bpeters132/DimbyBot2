@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { Rest } from 'lavacord';
+
 
 export default {
     data: new SlashCommandBuilder()
@@ -24,49 +24,29 @@ export default {
         // Check if user is in a voice channel
         const voiceChannel = member.voice.channel;
         if (!voiceChannel) {
-            return interaction.reply({ content: 'Join a voice channel first!', ephemeral: true });
+            return interaction.reply({ content: 'Join a voice channel first!' });
         }
 
-        await interaction.deferReply();
+        const player = await client.lavalink.createPlayer({
+            guildId: guild.id,
+            voiceChannelId: voiceChannel.id,
+            textChannelId: interaction.channelId,
+            selfDeaf: true,
+            selfMute: false
+        });
 
-        // TODO: Music Searh and Play function
+        player.connect();
 
-        let player = client.manager.players.get(guild.id);
+        const res = await player.search(query);
+        
+        if (!res.tracks.length) return interaction.reply('No tracks found!');
 
-        if (!player) {
-            console.log('joining channel');
-            console.dir(voiceChannel.id);
-            console.log(client.manager.idealNodes[0].id);
-            player = await client.manager.join({
-                guild: guild.id,
-                channel: voiceChannel.id,
-                node: '1'
-            });
+        player.queue.add(res.tracks[0]);
+        interaction.reply(`Added **${res.tracks[0].info.title}** to the queue.`);
 
-        } else if (player.channelId !== voiceChannel.id) {
-            await player.switchChannel(voiceChannel.id);
+        if (!player.playing && !player.paused) {
+            player.play();
         }
-
-        // try {
-        const node = client.manager.idealNodes[0];
-        const result = await Rest.load(node, `scsearch:${query}`);
-
-        if (result.loadType === 'LOAD_FAILED' || result.loadType === 'NO_MATCHES') {
-            return interaction.editReply('No results found for that query');
-        }
-
-        const track = result.data[0];
-
-        player.play(track.encoded);
-
-        return interaction.editReply(`Now Playing: ${track.info.title}`);
-
-        // } catch (err) {
-        //     client.logger.error('Error loading or playing the track', err);
-        //     return interaction.editReply('An error occurred while trying to play the track');
-        // }
-
-        // interaction.editReply('I did my thinking.. now time to do yours! Have a browse at the console!');
 
     }
 };

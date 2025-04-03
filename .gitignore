@@ -4,6 +4,6 @@ node_modules/
 yarn-error.log
 .vscode/settings.json
 logs.log
-/Lavalink
 yarn.lock
 src/config.js
+lavalink/application.yml

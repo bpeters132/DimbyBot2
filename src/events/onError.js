@@ -1,6 +1,10 @@
+
+/**
+ * @param {import('../lib/BotClient').default} client
+ */
 export default async (client) => {
-    console.log('Loading event on error');
+    client.logger.log('Loaded event error');
     client.on('error', (err) => {
-        console.error(err);
+        client.logger.log(err);
     });
 };

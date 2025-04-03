@@ -1,28 +1,34 @@
 import { SlashCommandBuilder } from 'discord.js';
-import customShuffle from '../../lib/customShuffle.js';
-import secCheckChannel from '../../lib/secCheckChannel.js';
 
-class Shuffle extends SlashCommandBuilder {
-    constructor() {
-        super();
-        super.setName('shuffle');
-        super.setDescription('Shuffles the current queue');
-    }
+export default {
+    data: new SlashCommandBuilder()
+        .setName('shuffle')
+        .setDescription('Shuffle the current queue'),
+    /**
+     * 
+     * @param {import('../../lib/BotClient.js').default} client 
+     * @param {import('discord.js').CommandInteraction} interaction 
+     * 
+     */
     async run(client, interaction) {
-        const queue = client.player.getQueue(interaction.guild.id);
-        // if user asking command isn't in working channel, fail command
-        const memberInChannel = await secCheckChannel(client, interaction, interaction.guild.id);
-        if (!memberInChannel) return;
-        if (!queue) return void interaction.reply({ content: '❌ | No music is being played!' });
+        const guild = interaction.guild;
+        const member = interaction.member;
 
-        // await queue.shuffle();
-        customShuffle(queue);
+        // Check if user is in a voice channel
+        const voiceChannel = member.voice.channel;
+        if (!voiceChannel) {
+            return interaction.reply({ content: 'Join a voice channel first!' });
+        }
 
-        interaction.reply({ content: '✅ | Queue has been shuffled!' });
+        const player = client.lavalink.players.get(guild.id);
 
+        if (!player || (!player.queue.current && player.queue.tracks.length === 0)) {
+            return interaction.reply('Nothing is playing.');
+        }else if(player.queue.current && player.queue.tracks.length === 0){
+            return interaction.reply('The last song of the queue is already playing!');
+        }
+
+        await player.queue.shuffle();
+        interaction.reply('Queue Shuffled!');
     }
-
-}
-
-const command = new Shuffle();
-export default command;
+};

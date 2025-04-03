@@ -1,82 +1,39 @@
-import { SlashCommandBuilder, ButtonBuilder } from 'discord.js';
-import secCheckChannel from '../../lib/secCheckChannel.js';
-import pagination from '@acegoal07/discordjs-pagination'
+import { SlashCommandBuilder } from 'discord.js';
 
-
-class Queue extends SlashCommandBuilder {
-    constructor() {
-        super();
-        super.setName('queue');
-        super.setDescription('Get current queue');
-    }
+export default {
+    data: new SlashCommandBuilder()
+        .setName('queue')
+        .setDescription('Get the current queue'),
+    /**
+     * 
+     * @param {import('../../lib/BotClient.js').default} client 
+     * @param {import('discord.js').CommandInteraction} interaction 
+     * 
+     */
     async run(client, interaction) {
-        const queue = client.player.getQueue(interaction.guild.id);
-        // if user asking command isn't in working channel, fail command
-        const memberInChannel = await secCheckChannel(client, interaction, interaction.guild.id);
-        if (!memberInChannel) return;
-        if (!queue || !queue.playing) return void interaction.reply({ content: '❌ | No music is being played!' });
-        const currentTrack = queue.current;
+        const guild = interaction.guild;
+        const member = interaction.member;
 
-        // Declare pages array
-        const pages = []
-        const tracks = queue.tracks
-
-        // Build an embed for each page 10 songs long and push to pages array
-        for (let i = 0; i < tracks.length; i += 10) {
-
-            // Configure nowPlaying song in field format
-            const nowPlaying = {
-                name: 'Now Playing', value: `**${currentTrack.title}** ([link](${currentTrack.url}))`
-            }
-
-            // Structure upcoming songs into array
-            const elements = queue.tracks.slice(i, i + 10).map((m, t) => {
-                return `${t + i + 1}. **${m.title}** ([link](${m.url}))`
-            });
-
-            // Build the actual embed
-            const page = {
-                color: 0xff0000,
-                title: 'Server Queue',
-                fields: [nowPlaying, { name: 'Upcoming', value: elements.join('\r\n') }]
-            }
-
-            pages.push(page)
+        // Check if user is in a voice channel
+        const voiceChannel = member.voice.channel;
+        if (!voiceChannel) {
+            return interaction.reply({ content: 'Join a voice channel first!' });
         }
 
+        const player = client.lavalink.players.get(guild.id)
 
-        // Don't paginate if only one song is playing
-        if (pages.length == 0) {
-            interaction.reply({
-                embeds: [{
-                    title: 'Server Queue',
-                    color: 0xff0000,
-                    fields: [{ name: 'Now Playing', value: `**${currentTrack.title}** ([link](${currentTrack.url}))` }]
-                }
-                ]
-            })
+        if (!player || (!player.queue.current && player.queue.tracks.length === 0)) {
+            return interaction.reply('Nothing is playing.');
+        }
+
+        let response = `Now Playing: **${player.queue.current.info.title}**\n\n`;
+        if (player.queue.tracks.length > 0) {
+            const tracks = player.queue.tracks.slice(0, 10);
+            response += 'Up Next:\n' + tracks.map((t, i) => `${i + 1}. ${t.info.title}`).join('\n');
         } else {
-
-            // Create pagination by sending pages array to pagination()
-            new pagination().setInterface(interaction)
-                .createPages(pages)
-                .setButtonList([
-                    new ButtonBuilder()
-                        .setLabel(`Back`)
-                        .setStyle("Primary")
-                        .setCustomId(`1`),
-                    new ButtonBuilder()
-                        .setLabel(`Next`)
-                        .setStyle("Primary")
-                        .setCustomId(`2`)
-                ])
-                .paginate()
+            response += '_Queue is empty._';
         }
 
-
+        interaction.reply(response);
     }
-
-}
-
-const command = new Queue();
-export default command;
+};
