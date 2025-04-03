@@ -4,7 +4,7 @@ import Logger from './Logger.js';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import createLavalinkManager from './LavaLinkManager.js';
+import createLavalinkManager from './LavalinkManager.js';
 
 dotenv.config();
 
