@@ -1,0 +1,13 @@
+const nodes = [
+    {
+        authorization: 'your lavalink password here',
+        host: 'localhost',
+        port: 2333,
+        id: 'testnode',
+    }
+];
+
+
+export {
+    nodes
+};
