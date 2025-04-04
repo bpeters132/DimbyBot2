@@ -7,3 +7,4 @@ logs.log
 yarn.lock
 src/config.js
 lavalink/application.yml
+lavaNodesConfig.js
