@@ -100,14 +100,10 @@ deploy_stack:
       ssh -i ~/.ssh/id_rsa_tmp -p $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new $DEPLOY_SERVER 
       "/bin/bash -c \"
       cd /home/bot && \\
-      echo 'Logging into GitLab Registry on server...' && \\
       docker login -u \\\"\$CI_REGISTRY_USER\\\" -p \\\"\$CI_REGISTRY_PASSWORD\\\" \\\"\$CI_REGISTRY\\\" && \\
-      echo 'Updating docker-compose.yml image tags...' && \\
       sed -i \\\"s|image: .*bot.*|image: $BOT_IMAGE_LATEST|\\\" docker-compose.yml && \\
       sed -i \\\"s|image: .*lavalink.*|image: $LAVALINK_IMAGE_LATEST|\\\" docker-compose.yml && \\
-      echo 'Stopping existing containers (if any)..' && \\
       docker compose down && \\
-      echo 'Starting new containers (using .env file)...' && \\
       docker compose up -d
       \""
       
