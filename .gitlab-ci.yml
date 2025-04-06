@@ -91,8 +91,14 @@ deploy_stack:
       EOF
     - echo "Copying .env file to server $DEPLOY_SERVER..."
     - >
-      scp -i ~/.ssh/id_rsa_tmp -P $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new
+      scp -i ~/.ssh/id_rsa_tmp -P $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new \
       ci_generated.env $DEPLOY_SERVER:/home/bot/.env
+
+    # ADD THIS STEP: Copy docker-compose.yml to the server
+    - echo "Copying docker-compose.yml to server $DEPLOY_SERVER..."
+    - >
+      scp -i ~/.ssh/id_rsa_tmp -P $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new \
+      docker-compose.yml $DEPLOY_SERVER:/home/bot/docker-compose.yml
 
     - echo "Generating deployment script..."
     # Use 'EOS' to prevent local expansion of variables like $BOT_IMAGE inside the script definition
