@@ -51,34 +51,31 @@ deploy_stack:
   variables:
     DEPLOY_SERVER_SSH_PORT: 22
   before_script:
-    # Install SSH client and sed
-    - apt-get update && apt-get install -y --no-install-recommends openssh-client sed
+    # Install SSH client, ssh-agent, and sed using apt-get
+    - apt-get update && apt-get install -y --no-install-recommends openssh-client sshpass sed
+    # Start ssh-agent
+    - eval $(ssh-agent -s)
     # Create SSH directory
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
     # Write SSH key to a temporary file using printf and clean line endings
     - printf "%s\n" "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa_tmp
-    # Ensure correct permissions for the key file
+    # Ensure correct permissions for the key file (ssh-add is often strict)
     - chmod 600 ~/.ssh/id_rsa_tmp
-    # -- Diagnostic Steps for ssh-keyscan --
-    - echo "Attempting to add server host key..."
-    - echo "DEPLOY_SERVER variable: '$DEPLOY_SERVER'"
-    - echo "DEPLOY_SERVER_SSH_PORT variable: '$DEPLOY_SERVER_SSH_PORT'"
-    - SERVER_HOST=${DEPLOY_SERVER#*@} # Extract hostname using parameter expansion
-    - echo "Extracted SERVER_HOST: '$SERVER_HOST'"
-    # Check if variables are set (single-line version)
-    - '[ -z "$SERVER_HOST" ] || [ -z "$DEPLOY_SERVER_SSH_PORT" ] && echo "ERROR: DEPLOY_SERVER ($DEPLOY_SERVER) or DEPLOY_SERVER_SSH_PORT ($DEPLOY_SERVER_SSH_PORT) is empty or invalid." && echo "Please ensure DEPLOY_SERVER is set to 'user@hostname' and DEPLOY_SERVER_SSH_PORT is a valid port number in GitLab CI/CD Variables." && exit 1 || echo "Variable check passed."'
-
+    # Add the key from the file
+    - ssh-add ~/.ssh/id_rsa_tmp
+    # Clean up the temporary key file (optional but good practice)
+    # - rm ~/.ssh/id_rsa_tmp 
     # Add server host key to known hosts
+    - SERVER_HOST=$(echo $DEPLOY_SERVER | cut -d '@' -f 2)
     - ssh-keyscan -p $DEPLOY_SERVER_SSH_PORT $SERVER_HOST >> ~/.ssh/known_hosts
-    - echo "ssh-keyscan completed."
     - chmod 644 ~/.ssh/known_hosts
 
   script:
-    - echo "Deploying to server $DEPLOY_SERVER on port $DEPLOY_SERVER_SSH_PORT using identity file..."
-    # SSH into the server using the identity file directly
-    - >
-      ssh -i ~/.ssh/id_rsa_tmp -p $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new $DEPLOY_SERVER 
+    - echo "Deploying to server $DEPLOY_SERVER on port $DEPLOY_SERVER_SSH_PORT..."
+    # SSH into the server and execute deployment commands
+    - |
+      ssh -p $DEPLOY_SERVER_SSH_PORT $DEPLOY_SERVER \
       "cd /path/to/your/deployment/directory && \
       echo 'Logging into GitLab Registry on server...' && \
       docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY && \
