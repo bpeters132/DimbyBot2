@@ -45,9 +45,10 @@ build_images:
     - main # Adjust if your default branch is different
     - tags
 
+# Ensure a blank line separates jobs
 deploy_stack:
   stage: deploy
-  image: debian:stable-slim 
+  image: debian:stable-slim
   variables:
     DEPLOY_SERVER_SSH_PORT: 22
   before_script:
