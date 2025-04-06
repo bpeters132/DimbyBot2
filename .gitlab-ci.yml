@@ -52,14 +52,21 @@ deploy_stack:
     DEPLOY_SERVER_SSH_PORT: 22
   before_script:
     # Install SSH client and ssh-agent
-    - apk update && apk add openssh-client sshpass
-    # Start ssh-agent and add SSH key
+    - apk update && apk add --no-cache openssh-client sshpass # Use --no-cache
+    # Start ssh-agent
     - eval $(ssh-agent -s)
-    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
-    # Add server host key to known hosts (replace your.server.com with actual hostname/IP)
-    # Make sure $DEPLOY_SERVER variable is set in GitLab CI/CD Variables (e.g., user@your.server.com)
+    # Create SSH directory
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
+    # Write SSH key to a temporary file
+    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa_tmp
+    # Ensure correct permissions for the key file (ssh-add is often strict)
+    - chmod 600 ~/.ssh/id_rsa_tmp
+    # Add the key from the file
+    - ssh-add ~/.ssh/id_rsa_tmp
+    # Clean up the temporary key file (optional but good practice)
+    # - rm ~/.ssh/id_rsa_tmp 
+    # Add server host key to known hosts
     - SERVER_HOST=$(echo $DEPLOY_SERVER | cut -d '@' -f 2)
     - ssh-keyscan -p $DEPLOY_SERVER_SSH_PORT $SERVER_HOST >> ~/.ssh/known_hosts
     - chmod 644 ~/.ssh/known_hosts
