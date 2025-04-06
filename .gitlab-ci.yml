@@ -56,18 +56,12 @@ deploy_stack:
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
 
-    - echo $SSH_PRIVATE_KEY
-
-    # Write SSH key CONTENT from the FILE PATH specified by the variable
-    - echo "Writing key content from file path $SSH_PRIVATE_KEY to ~/.ssh/id_rsa_tmp..."
-    - cat "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa_tmp
-    
+    # Write SSH key CONTENT directly from the variable
+    - echo "Writing key content from variable to ~/.ssh/id_rsa_tmp..."
+    - printf "%s\n" "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa_tmp
+    - cat ~/.ssh/id_rsa_tmp
     # Ensure correct permissions for the key file (ssh-add is often strict)
     - chmod 600 ~/.ssh/id_rsa_tmp
-    
-    # Verify content written to temporary file (should be masked if original variable is masked)
-    - echo "Verifying content written to ~/.ssh/id_rsa_tmp:"
-    - cat ~/.ssh/id_rsa_tmp 
     
     # Add the key from the file
     - echo "Attempting to add key to agent..."
@@ -128,5 +122,4 @@ deploy_stack:
     url: http://your.server.com 
     
   only:
-    - master 
-    - tags 
+    - master
