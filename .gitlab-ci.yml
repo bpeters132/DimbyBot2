@@ -85,28 +85,67 @@ deploy_stack:
       EMAIL_USER="$EMAIL_USER"
       EMAIL_PASS="$EMAIL_PASS"
       GITLAB_EMAIL="$GITLAB_EMAIL"
-      # Add image tags needed by compose if not using latest explicitly
+      # Add image tags needed by compose
       BOT_IMAGE=$BOT_IMAGE_LATEST
       LAVALINK_IMAGE=$LAVALINK_IMAGE_LATEST
       EOF
     - echo "Copying .env file to server $DEPLOY_SERVER..."
     - >
-      scp -i ~/.ssh/id_rsa_tmp -P $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new 
+      scp -i ~/.ssh/id_rsa_tmp -P $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new
       ci_generated.env $DEPLOY_SERVER:/home/bot/.env
 
-    - echo "Deploying stack on server $DEPLOY_SERVER..."
-    # SSH into the server and run simplified commands using /bin/bash -c
+    - echo "Generating deployment script..."
+    # Use 'EOS' to prevent local expansion of variables like $BOT_IMAGE inside the script definition
+    - |
+      cat << 'EOS' > ci_deploy.sh
+      #!/bin/bash
+      set -e # Exit immediately if a command exits with a non-zero status.
+
+      echo "Changing to deployment directory..."
+      cd /home/bot
+
+      # Source the .env file to load image tags and potentially other config
+      echo "Sourcing .env file..."
+      if [ -f .env ]; then
+        # Export variables from .env file for use in this script
+        export $(grep -v '^#' .env | xargs)
+      else
+        echo "Error: .env file not found in /home/bot"
+        exit 1
+      fi
+
+      # Note: Docker login is omitted here. Ensure the server has credentials
+      # configured to pull from $CI_REGISTRY (e.g., via docker login run manually once,
+      # credential helper, or adding credentials to the .env file - less recommended).
+
+      echo "Updating docker-compose.yml image tags..."
+      # Use variables sourced from .env. Assumes 'bot:'/'lavalink:' are unique identifiers.
+      # Adjust the sed patterns if your image lines are structured differently.
+      sed -i "s|image: .*bot.*|image: $BOT_IMAGE|" docker-compose.yml
+      sed -i "s|image: .*lavalink.*|image: $LAVALINK_IMAGE|" docker-compose.yml
+
+      echo "Restarting Docker Compose stack..."
+      /usr/bin/docker compose down
+      echo "Pulling latest images specified in compose file..."
+      /usr/bin/docker compose pull # Pull new images explicitly based on updated compose file
+      echo "Starting docker compose stack..."
+      /usr/bin/docker compose up -d
+
+      echo "Deployment script finished successfully."
+      EOS
+    - chmod +x ci_deploy.sh # Make the script executable before copying
+
+    - echo "Copying deployment script to server $DEPLOY_SERVER..."
     - >
-      ssh -i ~/.ssh/id_rsa_tmp -p $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new $DEPLOY_SERVER 
-      "/bin/bash -c \"
-      cd /home/bot && \\
-      docker login -u \\\"\$CI_REGISTRY_USER\\\" -p \\\"\$CI_REGISTRY_PASSWORD\\\" \\\"\$CI_REGISTRY\\\" && \\
-      sed -i \\\"s|image: .*bot.*|image: $BOT_IMAGE_LATEST|\\\" docker-compose.yml && \\
-      sed -i \\\"s|image: .*lavalink.*|image: $LAVALINK_IMAGE_LATEST|\\\" docker-compose.yml && \\
-      docker compose down && \\
-      docker compose up -d
-      \""
-      
+      scp -i ~/.ssh/id_rsa_tmp -P $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new
+      ci_deploy.sh $DEPLOY_SERVER:/home/bot/ci_deploy.sh
+
+    - echo "Executing deployment script on server $DEPLOY_SERVER..."
+    # Execute the script using bash
+    - >
+      ssh -i ~/.ssh/id_rsa_tmp -p $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new $DEPLOY_SERVER
+      "/bin/bash /home/bot/ci_deploy.sh"
+
   environment:
     name: Production # Define an environment name
     url: http://your.server.com # Optional: Add the URL of your deployment
