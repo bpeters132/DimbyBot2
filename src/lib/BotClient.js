@@ -43,7 +43,7 @@ class BotClient extends Client {
    * Starts the bot, loading events and logging in to Discord
    * @param {string} token - Discord bot token (default from .env)
    */
-  async start(token = process.env.TOKEN) {
+  async start(token = process.env.BOT_TOKEN) {
     try {
       // Log into Discord
       await this.login(token)

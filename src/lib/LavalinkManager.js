@@ -11,7 +11,7 @@ export default function createLavalinkManager(client) {
     sendToShard: (guildId, payload) => client.guilds.cache.get(guildId)?.shard?.send(payload),
     autoSkip: true,
     client: {
-      id: process.env.APP_ID,
+      id: process.env.CLIENT_ID,
       username: "DimbyBot", // TODO: add this to ENV
     },
   })

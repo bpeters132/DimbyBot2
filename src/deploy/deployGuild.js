@@ -5,13 +5,13 @@ import dotenv from "dotenv"
 dotenv.config()
 
 ;(async () => {
-  const appID = process.env.APP_ID
-  const devGuildID = process.env.DEV_SERVER_ID
+  const appID = process.env.CLIENT_ID
+  const devGuildID = process.env.GUID_ID
   const token = process.env.TOKEN
 
   if (!devGuildID) {
     console.error(
-      "DEV_SERVER_ID is not set in the environment variables. Cannot deploy guild commands.",
+      "GUID_ID is not set in the environment variables. Cannot deploy guild commands.",
     )
     return
   }

@@ -5,7 +5,7 @@ import dotenv from "dotenv"
 dotenv.config()
 
 ;(async () => {
-  const appID = process.env.APP_ID
+  const appID = process.env.CLIENT_ID
   const token = process.env.TOKEN
 
   const rest = new REST({ version: "10" }).setToken(token)

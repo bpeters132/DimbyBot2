@@ -1,10 +1,16 @@
-ignorethis/
-.env
+# Dependency directories
 node_modules/
+
+# Logs
+logs
+*.log
 yarn-error.log
-.vscode/settings.json
-logs.log
+
+# Optional config files (use .example)
+.env
 yarn.lock
 src/config.js
-lavalink/application.yml
+
+# Generated config files
+Lavalink/application.yml
 lavaNodesConfig.js

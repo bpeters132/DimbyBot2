@@ -1,0 +1,123 @@
+# Define stages
+stages:
+  - build
+  - deploy
+
+variables:
+  # Use Docker-in-Docker driver
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+  # Define image names using GitLab pre-defined variables
+  # $CI_REGISTRY_IMAGE is typically <registry>/<user>/<project>
+  BOT_IMAGE: $CI_REGISTRY_IMAGE/bot:$CI_COMMIT_SHORT_SHA
+  LAVALINK_IMAGE: $CI_REGISTRY_IMAGE/lavalink:$CI_COMMIT_SHORT_SHA
+  BOT_IMAGE_LATEST: $CI_REGISTRY_IMAGE/bot:latest
+  LAVALINK_IMAGE_LATEST: $CI_REGISTRY_IMAGE/lavalink:latest
+
+# Use Docker-in-Docker service
+services:
+  - docker:dind
+
+before_script:
+  # Login to GitLab Container Registry
+  - echo "Logging in to GitLab Container Registry..."
+  - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
+build_images:
+  stage: build
+  image: docker:latest # Use the official Docker image
+  script:
+    # Build images using Dockerfiles (not compose build, for clearer tagging)
+    - echo "Building Bot image..."
+    - docker build -t $BOT_IMAGE -t $BOT_IMAGE_LATEST -f Dockerfile .
+    - echo "Building Lavalink image..."
+    - docker build -t $LAVALINK_IMAGE -t $LAVALINK_IMAGE_LATEST -f Lavalink/Dockerfile ./Lavalink
+
+    # Push images to GitLab Container Registry
+    - echo "Pushing images to registry..."
+    - docker push $BOT_IMAGE
+    - docker push $BOT_IMAGE_LATEST
+    - docker push $LAVALINK_IMAGE
+    - docker push $LAVALINK_IMAGE_LATEST
+  # Only run on default branch (e.g., main) or tags
+  only:
+    - main # Adjust if your default branch is different
+    - tags
+
+deploy_stack:
+  stage: deploy
+  image: alpine:latest # Use a lightweight image with SSH client
+  variables:
+    # Default SSH port if not set in GitLab CI/CD Variables
+    DEPLOY_SERVER_SSH_PORT: 22
+  before_script:
+    # Install SSH client and ssh-agent
+    - apk update && apk add openssh-client sshpass
+    # Start ssh-agent and add SSH key
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    # Add server host key to known hosts (replace your.server.com with actual hostname/IP)
+    # Make sure $DEPLOY_SERVER variable is set in GitLab CI/CD Variables (e.g., user@your.server.com)
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - SERVER_HOST=$(echo $DEPLOY_SERVER | cut -d '@' -f 2)
+    - ssh-keyscan -p $DEPLOY_SERVER_SSH_PORT $SERVER_HOST >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+
+  script:
+    - echo "Deploying to server $DEPLOY_SERVER on port $DEPLOY_SERVER_SSH_PORT..."
+    # SSH into the server and execute deployment commands
+    # Assumes docker-compose.yml is present on the server in the deployment directory
+    # Assumes the user has permissions to run docker/docker-compose
+    # Define secrets as environment variables before running compose
+    - |
+      ssh -p $DEPLOY_SERVER_SSH_PORT $DEPLOY_SERVER \
+      "cd /path/to/your/deployment/directory && \
+      echo 'Logging into GitLab Registry on server...' && \
+      docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY && \
+      echo 'Pulling latest images...' && \
+      export BOT_IMAGE=$BOT_IMAGE_LATEST && \
+      export LAVALINK_IMAGE=$LAVALINK_IMAGE_LATEST && \
+      
+      # Export necessary secrets from GitLab CI/CD Variables
+      export BOT_TOKEN='$BOT_TOKEN' && \
+      export CLIENT_ID='$CLIENT_ID' && \
+      export GUILD_ID='$GUILD_ID' && \
+      export OWNER_ID='$OWNER_ID' && \
+      export DEV_MODE='$DEV_MODE' && \
+      export LAVALINK_HOST='$LAVALINK_HOST' && \
+      export LAVALINK_PORT='$LAVALINK_PORT' && \
+      export LAVALINK_PASSWORD='$LAVALINK_PASSWORD' && \
+      export LAVALINK_NODE_ID='$LAVALINK_NODE_ID' && \
+      export LAVALINK_SECURE='$LAVALINK_SECURE' && \
+      export LAVALINK_YOUTUBE_POT_TOKEN='$LAVALINK_YOUTUBE_POT_TOKEN' && \
+      export LAVALINK_YOUTUBE_POT_VISITORDATA='$LAVALINK_YOUTUBE_POT_VISITORDATA' && \
+      export LAVALINK_SPOTIFY_ENABLED='$LAVALINK_SPOTIFY_ENABLED' && \
+      export LAVALINK_SPOTIFY_CLIENT_ID='$LAVALINK_SPOTIFY_CLIENT_ID' && \
+      export LAVALINK_SPOTIFY_CLIENT_SECRET='$LAVALINK_SPOTIFY_CLIENT_SECRET' && \
+      export LAVALINK_SPOTIFY_COUNTRY_CODE='$LAVALINK_SPOTIFY_COUNTRY_CODE' && \
+      export EMAIL_USER='$EMAIL_USER' && \
+      export EMAIL_PASS='$EMAIL_PASS' && \
+      export GITLAB_EMAIL='$GITLAB_EMAIL' && \
+      
+      # Update docker-compose.yml on the server to use the specific image tags
+      # This ensures the correct images defined in variables are used
+      # (Alternatively, manage docker-compose.yml via git on the server)
+      echo 'Updating docker-compose.yml image tags...' && \
+      sed -i \"s|image: .*bot.*|image: $BOT_IMAGE|\" docker-compose.yml && \
+      sed -i \"s|image: .*lavalink.*|image: $LAVALINK_IMAGE|\" docker-compose.yml && \
+
+      # Use docker compose V2 syntax (docker compose)
+      echo 'Stopping existing containers (if any)..' && \
+      docker compose down && \
+      echo 'Starting new containers...' && \
+      docker compose up -d"
+      
+  environment:
+    name: production # Define an environment name
+    url: http://your.server.com # Optional: Add the URL of your deployment
+    
+  # Only run on default branch or tags
+  only:
+    - main # Adjust if your default branch is different
+    - tags 

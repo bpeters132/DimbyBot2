@@ -1,0 +1,33 @@
+# Git specific
+.git
+.gitignore
+
+# Node specific
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker specific
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Logs
+logs.log
+*.log
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Env files (should be passed through compose)
+.env
+.env.*
+
+# Generated config files
+Lavalink/application.yml
+lavaNodesConfig.js
+
+# Don't include Lavalink build context in bot build context
+Lavalink/ 
