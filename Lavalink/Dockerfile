@@ -9,7 +9,10 @@ COPY plugins ./plugins
 
 # Copy the entrypoint script
 COPY entrypoint.sh entrypoint.sh
-RUN chmod +x entrypoint.sh
+# Ensure script has correct line endings (LF) and is executable
+RUN apk add --no-cache dos2unix \
+    && dos2unix entrypoint.sh \
+    && chmod +x entrypoint.sh
 
 # Default port Lavalink runs on
 EXPOSE 2333
