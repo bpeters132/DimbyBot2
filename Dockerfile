@@ -18,4 +18,5 @@ RUN apk add --no-cache dos2unix \
     && chmod +x entrypoint.sh
 
 # Run the entrypoint script which generates lavaNodesConfig.js and starts the bot
-ENTRYPOINT ["./entrypoint.sh"] 
+# Use absolute path for clarity
+ENTRYPOINT ["/usr/src/app/entrypoint.sh"] 

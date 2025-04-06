@@ -18,4 +18,5 @@ RUN apk add --no-cache dos2unix \
 EXPOSE 2333
 
 # Run the entrypoint script which generates application.yml and starts Lavalink
-ENTRYPOINT ["./entrypoint.sh"] 
+# Use absolute path for clarity
+ENTRYPOINT ["/opt/Lavalink/entrypoint.sh"] 
