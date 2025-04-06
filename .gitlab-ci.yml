@@ -39,8 +39,9 @@ build_images:
     - docker push $BOT_IMAGE_LATEST
     - docker push $LAVALINK_IMAGE
     - docker push $LAVALINK_IMAGE_LATEST
+  
   # Only run on default branch (e.g., main) or tags
-  only:
+  only: 
     - main # Adjust if your default branch is different
     - tags
 
@@ -65,13 +66,9 @@ deploy_stack:
     - echo "DEPLOY_SERVER_SSH_PORT variable: '$DEPLOY_SERVER_SSH_PORT'"
     - SERVER_HOST=${DEPLOY_SERVER#*@} # Extract hostname using parameter expansion
     - echo "Extracted SERVER_HOST: '$SERVER_HOST'"
-    # Check if variables are set
-    - |
-      if [ -z "$SERVER_HOST" ] || [ -z "$DEPLOY_SERVER_SSH_PORT" ]; then
-        echo "ERROR: DEPLOY_SERVER ($DEPLOY_SERVER) or DEPLOY_SERVER_SSH_PORT ($DEPLOY_SERVER_SSH_PORT) is empty or invalid."
-        echo "Please ensure DEPLOY_SERVER is set to 'user@hostname' and DEPLOY_SERVER_SSH_PORT is a valid port number in GitLab CI/CD Variables."
-        exit 1
-      fi
+    # Check if variables are set (single-line version)
+    - '[ -z "$SERVER_HOST" ] || [ -z "$DEPLOY_SERVER_SSH_PORT" ] && echo "ERROR: DEPLOY_SERVER ($DEPLOY_SERVER) or DEPLOY_SERVER_SSH_PORT ($DEPLOY_SERVER_SSH_PORT) is empty or invalid." && echo "Please ensure DEPLOY_SERVER is set to 'user@hostname' and DEPLOY_SERVER_SSH_PORT is a valid port number in GitLab CI/CD Variables." && exit 1 || echo "Variable check passed."'
+
     # Add server host key to known hosts
     - ssh-keyscan -p $DEPLOY_SERVER_SSH_PORT $SERVER_HOST >> ~/.ssh/known_hosts
     - echo "ssh-keyscan completed."
