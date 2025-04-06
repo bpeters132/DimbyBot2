@@ -48,38 +48,36 @@ deploy_stack:
   variables:
     DEPLOY_SERVER_SSH_PORT: 22
   before_script:
-    # Install SSH client, ssh-agent, and sed using apt-get
-    - apt-get update && apt-get install -y --no-install-recommends openssh-client sshpass sed
-    # Start ssh-agent
-    - eval $(ssh-agent -s)
+    # Install SSH client and sed
+    - apt-get update && apt-get install -y --no-install-recommends openssh-client sed
     # Create SSH directory
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
 
-    - echo $SSH_PRIVATE_KEY
+    # -- Handling File Variable --
+    - echo "Checking SSH_PRIVATE_KEY (should be a path for File type variable): \"$SSH_PRIVATE_KEY\""
+    # Check if path exists and is a file
+    - '[ ! -f "$SSH_PRIVATE_KEY" ] && { echo "ERROR: File variable path \"$SSH_PRIVATE_KEY\" does not exist or is not a file!"; echo "Ensure the variable type is set to 'File' in GitLab CI/CD settings."; exit 1; } || echo "File variable path \"$SSH_PRIVATE_KEY\" exists."'
 
-    # Write SSH key CONTENT directly from the variable
-    - echo "Writing key content from variable to ~/.ssh/id_rsa_tmp..."
-    - printf "%s\n" "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa_tmp
-    - cat ~/.ssh/id_rsa_tmp
-    # Ensure correct permissions for the key file (ssh-add is often strict)
+    # Copy SSH key CONTENT from the FILE PATH specified by the variable to our standard location
+    - echo "Copying key content from path $SSH_PRIVATE_KEY to ~/.ssh/id_rsa_tmp..."
+    - cp "$SSH_PRIVATE_KEY" ~/.ssh/id_rsa_tmp
+
+    # Ensure correct permissions for the key file
     - chmod 600 ~/.ssh/id_rsa_tmp
-    
-    # Add the key from the file
-    - echo "Attempting to add key to agent..."
-    - ssh-add ~/.ssh/id_rsa_tmp
-    # Clean up the temporary key file (optional but good practice)
-    # - rm ~/.ssh/id_rsa_tmp 
+
     # Add server host key to known hosts
     - SERVER_HOST=$(echo $DEPLOY_SERVER | cut -d '@' -f 2)
+    # Check if variables are set before keyscan
+    - '[ -z "$SERVER_HOST" ] || [ -z "$DEPLOY_SERVER_SSH_PORT" ] && echo "ERROR: DEPLOY_SERVER ($DEPLOY_SERVER) or DEPLOY_SERVER_SSH_PORT ($DEPLOY_SERVER_SSH_PORT) is empty or invalid for ssh-keyscan." && exit 1 || echo "Variables for keyscan seem okay."'
     - ssh-keyscan -p $DEPLOY_SERVER_SSH_PORT $SERVER_HOST >> ~/.ssh/known_hosts
     - chmod 644 ~/.ssh/known_hosts
 
   script:
-    - echo "Deploying to server $DEPLOY_SERVER on port $DEPLOY_SERVER_SSH_PORT..."
-    # SSH into the server and execute deployment commands
-    - |
-      ssh -p $DEPLOY_SERVER_SSH_PORT $DEPLOY_SERVER \
+    - echo "Deploying to server $DEPLOY_SERVER on port $DEPLOY_SERVER_SSH_PORT using identity file..."
+    # SSH into the server using the identity file directly
+    - >
+      ssh -i ~/.ssh/id_rsa_tmp -p $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new $DEPLOY_SERVER 
       "cd /home/bot && \
       echo 'Logging into GitLab Registry on server...' && \
       docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY && \
@@ -120,7 +118,7 @@ deploy_stack:
       docker compose up -d"
       
   environment:
-    name: production 
+    name: Production 
     url: http://your.server.com 
     
   only:
