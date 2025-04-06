@@ -46,49 +46,29 @@ build_images:
 
 deploy_stack:
   stage: deploy
-  # Use Debian stable-slim instead of Alpine
   image: debian:stable-slim 
   variables:
-    # Default SSH port if not set in GitLab CI/CD Variables
     DEPLOY_SERVER_SSH_PORT: 22
   before_script:
-    # Install SSH client, ssh-agent, and sed using apt-get
-    - apt-get update && apt-get install -y --no-install-recommends openssh-client sshpass sed
-    # Start ssh-agent
-    - eval $(ssh-agent -s)
+    # Install SSH client and sed
+    - apt-get update && apt-get install -y --no-install-recommends openssh-client sed
     # Create SSH directory
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
     # Write SSH key to a temporary file using printf and clean line endings
     - printf "%s\n" "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa_tmp
-    # Ensure correct permissions for the key file (ssh-add is often strict)
+    # Ensure correct permissions for the key file
     - chmod 600 ~/.ssh/id_rsa_tmp
-    
-    # --- DEBUG STEP --- 
-    # Validate the key format using ssh-keygen before adding
-    - echo "Attempting to validate key file format..."
-    - ssh-keygen -l -f ~/.ssh/id_rsa_tmp || echo "ssh-keygen validation failed! Key data in file is likely corrupt or malformed."
-    # --- END DEBUG STEP ---
-
-    # Add the key from the file
-    - echo "Attempting to add key to agent..."
-    - ssh-add ~/.ssh/id_rsa_tmp
-    
-    # Clean up the temporary key file (optional but good practice)
-    # - rm ~/.ssh/id_rsa_tmp 
     # Add server host key to known hosts
     - SERVER_HOST=$(echo $DEPLOY_SERVER | cut -d '@' -f 2)
     - ssh-keyscan -p $DEPLOY_SERVER_SSH_PORT $SERVER_HOST >> ~/.ssh/known_hosts
     - chmod 644 ~/.ssh/known_hosts
 
   script:
-    - echo "Deploying to server $DEPLOY_SERVER on port $DEPLOY_SERVER_SSH_PORT..."
-    # SSH into the server and execute deployment commands
-    # Assumes docker-compose.yml is present on the server in the deployment directory
-    # Assumes the user has permissions to run docker/docker-compose
-    # Define secrets as environment variables before running compose
-    - |
-      ssh -p $DEPLOY_SERVER_SSH_PORT $DEPLOY_SERVER \
+    - echo "Deploying to server $DEPLOY_SERVER on port $DEPLOY_SERVER_SSH_PORT using identity file..."
+    # SSH into the server using the identity file directly
+    - >
+      ssh -i ~/.ssh/id_rsa_tmp -p $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new $DEPLOY_SERVER 
       "cd /path/to/your/deployment/directory && \
       echo 'Logging into GitLab Registry on server...' && \
       docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY && \
@@ -118,8 +98,6 @@ deploy_stack:
       export GITLAB_EMAIL='$GITLAB_EMAIL' && \
       
       # Update docker-compose.yml on the server to use the specific image tags
-      # This ensures the correct images defined in variables are used
-      # (Alternatively, manage docker-compose.yml via git on the server)
       echo 'Updating docker-compose.yml image tags...' && \
       sed -i \"s|image: .*bot.*|image: $BOT_IMAGE|\" docker-compose.yml && \
       sed -i \"s|image: .*lavalink.*|image: $LAVALINK_IMAGE|\" docker-compose.yml && \
@@ -131,10 +109,9 @@ deploy_stack:
       docker compose up -d"
       
   environment:
-    name: production # Define an environment name
-    url: http://your.server.com # Optional: Add the URL of your deployment
+    name: production 
+    url: http://your.server.com 
     
-  # Only run on default branch or tags
   only:
-    - master # Adjust if your default branch is different
+    - master 
     - tags 
