@@ -56,6 +56,8 @@ deploy_stack:
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
 
+    - echo $SSH_PRIVATE_KEY
+
     # Write SSH key CONTENT directly from the variable
     - echo "Writing key content from variable to ~/.ssh/id_rsa_tmp..."
     - printf "%s\n" "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa_tmp
