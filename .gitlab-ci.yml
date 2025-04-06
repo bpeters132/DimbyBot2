@@ -46,13 +46,14 @@ build_images:
 
 deploy_stack:
   stage: deploy
-  image: alpine:latest # Use a lightweight image with SSH client
+  # Use Debian stable-slim instead of Alpine
+  image: debian:stable-slim 
   variables:
     # Default SSH port if not set in GitLab CI/CD Variables
     DEPLOY_SERVER_SSH_PORT: 22
   before_script:
-    # Install SSH client, ssh-agent, and sed
-    - apk update && apk add --no-cache openssh-client sshpass sed # Use --no-cache
+    # Install SSH client, ssh-agent, and sed using apt-get
+    - apt-get update && apt-get install -y --no-install-recommends openssh-client sshpass sed
     # Start ssh-agent
     - eval $(ssh-agent -s)
     # Create SSH directory
