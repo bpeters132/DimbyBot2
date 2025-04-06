@@ -62,6 +62,7 @@ deploy_stack:
     - printf "%s\n" "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa_tmp
     # Ensure correct permissions for the key file (ssh-add is often strict)
     - chmod 600 ~/.ssh/id_rsa_tmp
+    - cat ~/.ssh/id_rsa_tmp
     # Add the key from the file
     - ssh-add ~/.ssh/id_rsa_tmp
     # Clean up the temporary key file (optional but good practice)
