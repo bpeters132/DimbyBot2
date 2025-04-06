@@ -59,9 +59,22 @@ deploy_stack:
     - printf "%s\n" "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa_tmp
     # Ensure correct permissions for the key file
     - chmod 600 ~/.ssh/id_rsa_tmp
+    # -- Diagnostic Steps for ssh-keyscan --
+    - echo "Attempting to add server host key..."
+    - echo "DEPLOY_SERVER variable: '$DEPLOY_SERVER'"
+    - echo "DEPLOY_SERVER_SSH_PORT variable: '$DEPLOY_SERVER_SSH_PORT'"
+    - SERVER_HOST=${DEPLOY_SERVER#*@} # Extract hostname using parameter expansion
+    - echo "Extracted SERVER_HOST: '$SERVER_HOST'"
+    # Check if variables are set
+    - |
+      if [ -z "$SERVER_HOST" ] || [ -z "$DEPLOY_SERVER_SSH_PORT" ]; then
+        echo "ERROR: DEPLOY_SERVER ($DEPLOY_SERVER) or DEPLOY_SERVER_SSH_PORT ($DEPLOY_SERVER_SSH_PORT) is empty or invalid."
+        echo "Please ensure DEPLOY_SERVER is set to 'user@hostname' and DEPLOY_SERVER_SSH_PORT is a valid port number in GitLab CI/CD Variables."
+        exit 1
+      fi
     # Add server host key to known hosts
-    - SERVER_HOST=$(echo $DEPLOY_SERVER | cut -d '@' -f 2)
     - ssh-keyscan -p $DEPLOY_SERVER_SSH_PORT $SERVER_HOST >> ~/.ssh/known_hosts
+    - echo "ssh-keyscan completed."
     - chmod 644 ~/.ssh/known_hosts
 
   script:
