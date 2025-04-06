@@ -22,7 +22,10 @@ build_images:
   stage: build
   image: docker:latest # Use the official Docker image
   script:
-    # Build images using Dockerfiles (not compose build, for clearer tagging)
+    # Login required for pushing
+    - echo "Logging in to GitLab Container Registry..."
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    # Build images using Dockerfiles
     - echo "Building Bot image..."
     - docker build -t $BOT_IMAGE -t $BOT_IMAGE_LATEST -f Dockerfile .
     - echo "Building Lavalink image..."
@@ -45,11 +48,16 @@ deploy_stack:
   variables:
     DEPLOY_SERVER_SSH_PORT: 22
   before_script:
+    # Install SSH client and sed
     - apt-get update && apt-get install -y --no-install-recommends openssh-client sed
+    # Create SSH directory
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
-    - cp "$SSH_PRIVATE_KEY" ~/.ssh/id_rsa_tmp
+    # Copy SSH key CONTENT from the FILE PATH specified by the variable to our standard location
+    - cp "$SSH_PRIVATE_KEY" ~/.ssh/id_rsa_tmp # Assumes $SSH_PRIVATE_KEY is File variable path
+    # Ensure correct permissions for the key file
     - chmod 600 ~/.ssh/id_rsa_tmp
+    # Add server host key to known hosts
     - SERVER_HOST=$(echo $DEPLOY_SERVER | cut -d '@' -f 2)
     - ssh-keyscan -p $DEPLOY_SERVER_SSH_PORT $SERVER_HOST >> ~/.ssh/known_hosts
     - chmod 644 ~/.ssh/known_hosts
@@ -100,6 +108,7 @@ deploy_stack:
       
   environment:
     name: Production # Define an environment name
+    url: http://your.server.com # Optional: Add the URL of your deployment
     
   # Only run on master branch
   only:
