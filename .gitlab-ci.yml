@@ -90,15 +90,11 @@ deploy_stack:
       LAVALINK_IMAGE=$LAVALINK_IMAGE_LATEST
       EOF
     - echo "Copying .env file to server $DEPLOY_SERVER..."
-    - >
-      scp -i ~/.ssh/id_rsa_tmp -P $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new \
-      ci_generated.env $DEPLOY_SERVER:/home/bot/.env
+    - scp -i ~/.ssh/id_rsa_tmp -P $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new ci_generated.env $DEPLOY_SERVER:/home/bot/.env
 
     # ADD THIS STEP: Copy docker-compose.yml to the server
     - echo "Copying docker-compose.yml to server $DEPLOY_SERVER..."
-    - >
-      scp -i ~/.ssh/id_rsa_tmp -P $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new \
-      docker-compose.yml $DEPLOY_SERVER:/home/bot/docker-compose.yml
+    - scp -i ~/.ssh/id_rsa_tmp -P $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new docker-compose.yml $DEPLOY_SERVER:/home/bot/docker-compose.yml
 
     - echo "Generating deployment script..."
     # Use 'EOS' to prevent local expansion of variables like $BOT_IMAGE inside the script definition
@@ -142,15 +138,11 @@ deploy_stack:
     - chmod +x ci_deploy.sh # Make the script executable before copying
 
     - echo "Copying deployment script to server $DEPLOY_SERVER..."
-    - >
-      scp -i ~/.ssh/id_rsa_tmp -P $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new
-      ci_deploy.sh $DEPLOY_SERVER:/home/bot/ci_deploy.sh
+    - scp -i ~/.ssh/id_rsa_tmp -P $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new ci_deploy.sh $DEPLOY_SERVER:/home/bot/ci_deploy.sh
 
     - echo "Executing deployment script on server $DEPLOY_SERVER..."
     # Execute the script using bash
-    - >
-      ssh -i ~/.ssh/id_rsa_tmp -p $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new $DEPLOY_SERVER
-      "/bin/bash /home/bot/ci_deploy.sh"
+    - ssh -i ~/.ssh/id_rsa_tmp -p $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new $DEPLOY_SERVER "/bin/bash /home/bot/ci_deploy.sh"
 
   environment:
     name: Production # Define an environment name

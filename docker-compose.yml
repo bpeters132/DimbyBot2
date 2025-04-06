@@ -2,8 +2,7 @@ version: '3.8'
 
 services:
   lavalink:
-    build:
-      context: ./Lavalink
+    image: placeholder-lavalink # This will be replaced by the deploy script
     container_name: lavalink
     restart: unless-stopped
     environment:
@@ -24,8 +23,7 @@ services:
       - internal
 
   bot:
-    build:
-      context: .
+    image: placeholder-bot # This will be replaced by the deploy script
     container_name: discord-bot
     restart: unless-stopped
     depends_on:
