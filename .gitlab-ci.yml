@@ -45,14 +45,15 @@ build_images:
     - main # Adjust if your default branch is different
     - tags
 
-# Ensure a blank line separates jobs
+# Job definition must start at column 1
 deploy_stack:
+  # Keys under the job name must be indented (e.g., 2 spaces)
   stage: deploy
   image: debian:stable-slim
   variables:
     DEPLOY_SERVER_SSH_PORT: 22
   before_script:
-    # Install SSH client, ssh-agent, and sed using apt-get
+    # Script lines indented further (e.g., 4 spaces total, 2 under before_script)
     - apt-get update && apt-get install -y --no-install-recommends openssh-client sshpass sed
     # Start ssh-agent
     - eval $(ssh-agent -s)
