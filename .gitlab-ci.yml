@@ -18,6 +18,11 @@ variables:
 services:
   - docker:dind
 
+before_script:
+  # Login to GitLab Container Registry
+  - echo "Logging in to GitLab Container Registry..."
+  - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
 build_images:
   stage: build
   image: docker:latest # Use the official Docker image
@@ -34,50 +39,39 @@ build_images:
     - docker push $BOT_IMAGE_LATEST
     - docker push $LAVALINK_IMAGE
     - docker push $LAVALINK_IMAGE_LATEST
-  
   # Only run on default branch (e.g., main) or tags
-  only: 
+  only:
     - main # Adjust if your default branch is different
     - tags
 
-# Job definition must start at column 1
 deploy_stack:
-  # Keys under the job name must be indented (e.g., 2 spaces)
   stage: deploy
-  image: debian:stable-slim
+  image: alpine:latest # Use a lightweight image with SSH client
   variables:
+    # Default SSH port if not set in GitLab CI/CD Variables
     DEPLOY_SERVER_SSH_PORT: 22
   before_script:
-    # Install SSH client and sed
-    - apt-get update && apt-get install -y --no-install-recommends openssh-client sed
-    # Create SSH directory
+    # Install SSH client and ssh-agent
+    - apk update && apk add openssh-client sshpass
+    # Start ssh-agent and add SSH key
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    # Add server host key to known hosts (replace your.server.com with actual hostname/IP)
+    # Make sure $DEPLOY_SERVER variable is set in GitLab CI/CD Variables (e.g., user@your.server.com)
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
-
-    # -- Handling File Variable --
-    - echo "Checking SSH_PRIVATE_KEY (should be a path for File type variable): \"$SSH_PRIVATE_KEY\""
-    # Check if path exists and is a file
-    - '[ ! -f "$SSH_PRIVATE_KEY" ] && { echo "ERROR: File variable path \"$SSH_PRIVATE_KEY\" does not exist or is not a file!"; echo "Ensure the variable type is set to 'File' in GitLab CI/CD settings."; exit 1; } || echo "File variable path \"$SSH_PRIVATE_KEY\" exists."'
-
-    # Copy SSH key CONTENT from the FILE PATH specified by the variable to our standard location
-    - echo "Copying key content from path $SSH_PRIVATE_KEY to ~/.ssh/id_rsa_tmp..."
-    - cp "$SSH_PRIVATE_KEY" ~/.ssh/id_rsa_tmp
-
-    # Ensure correct permissions for the key file
-    - chmod 600 ~/.ssh/id_rsa_tmp
-
-    # Add server host key to known hosts
     - SERVER_HOST=$(echo $DEPLOY_SERVER | cut -d '@' -f 2)
-    # Check if variables are set before keyscan
-    - '[ -z "$SERVER_HOST" ] || [ -z "$DEPLOY_SERVER_SSH_PORT" ] && echo "ERROR: DEPLOY_SERVER ($DEPLOY_SERVER) or DEPLOY_SERVER_SSH_PORT ($DEPLOY_SERVER_SSH_PORT) is empty or invalid for ssh-keyscan." && exit 1 || echo "Variables for keyscan seem okay."'
     - ssh-keyscan -p $DEPLOY_SERVER_SSH_PORT $SERVER_HOST >> ~/.ssh/known_hosts
     - chmod 644 ~/.ssh/known_hosts
 
   script:
-    - echo "Deploying to server $DEPLOY_SERVER on port $DEPLOY_SERVER_SSH_PORT using identity file..."
-    # SSH into the server using the identity file directly
-    - >
-      ssh -i ~/.ssh/id_rsa_tmp -p $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new $DEPLOY_SERVER 
+    - echo "Deploying to server $DEPLOY_SERVER on port $DEPLOY_SERVER_SSH_PORT..."
+    # SSH into the server and execute deployment commands
+    # Assumes docker-compose.yml is present on the server in the deployment directory
+    # Assumes the user has permissions to run docker/docker-compose
+    # Define secrets as environment variables before running compose
+    - |
+      ssh -p $DEPLOY_SERVER_SSH_PORT $DEPLOY_SERVER \
       "cd /home/bot && \
       echo 'Logging into GitLab Registry on server...' && \
       docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY && \
@@ -107,6 +101,8 @@ deploy_stack:
       export GITLAB_EMAIL='$GITLAB_EMAIL' && \
       
       # Update docker-compose.yml on the server to use the specific image tags
+      # This ensures the correct images defined in variables are used
+      # (Alternatively, manage docker-compose.yml via git on the server)
       echo 'Updating docker-compose.yml image tags...' && \
       sed -i \"s|image: .*bot.*|image: $BOT_IMAGE|\" docker-compose.yml && \
       sed -i \"s|image: .*lavalink.*|image: $LAVALINK_IMAGE|\" docker-compose.yml && \
@@ -118,8 +114,9 @@ deploy_stack:
       docker compose up -d"
       
   environment:
-    name: Production 
-    url: http://your.server.com 
+    name: Production # Define an environment name
+    url: http://your.server.com # Optional: Add the URL of your deployment
     
+  # Only run on default branch or tags
   only:
-    - master
+    - master # Adjust if your default branch is different
