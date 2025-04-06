@@ -119,5 +119,5 @@ deploy_stack:
     
   # Only run on default branch or tags
   only:
-    - main # Adjust if your default branch is different
+    - master # Adjust if your default branch is different
     - tags 
