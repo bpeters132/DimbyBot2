@@ -51,15 +51,15 @@ deploy_stack:
     # Default SSH port if not set in GitLab CI/CD Variables
     DEPLOY_SERVER_SSH_PORT: 22
   before_script:
-    # Install SSH client and ssh-agent
-    - apk update && apk add --no-cache openssh-client sshpass # Use --no-cache
+    # Install SSH client, ssh-agent, and sed
+    - apk update && apk add --no-cache openssh-client sshpass sed # Use --no-cache
     # Start ssh-agent
     - eval $(ssh-agent -s)
     # Create SSH directory
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
-    # Write SSH key to a temporary file
-    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa_tmp
+    # Write SSH key to a temporary file using printf and clean line endings
+    - printf "%s\n" "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa_tmp
     # Ensure correct permissions for the key file (ssh-add is often strict)
     - chmod 600 ~/.ssh/id_rsa_tmp
     # Add the key from the file
