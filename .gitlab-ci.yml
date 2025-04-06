@@ -63,8 +63,17 @@ deploy_stack:
     - printf "%s\n" "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa_tmp
     # Ensure correct permissions for the key file (ssh-add is often strict)
     - chmod 600 ~/.ssh/id_rsa_tmp
+    
+    # --- DEBUG STEP --- 
+    # Validate the key format using ssh-keygen before adding
+    - echo "Attempting to validate key file format..."
+    - ssh-keygen -l -f ~/.ssh/id_rsa_tmp || echo "ssh-keygen validation failed! Key data in file is likely corrupt or malformed."
+    # --- END DEBUG STEP ---
+
     # Add the key from the file
+    - echo "Attempting to add key to agent..."
     - ssh-add ~/.ssh/id_rsa_tmp
+    
     # Clean up the temporary key file (optional but good practice)
     # - rm ~/.ssh/id_rsa_tmp 
     # Add server host key to known hosts
