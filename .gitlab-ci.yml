@@ -74,26 +74,26 @@ deploy_stack:
       export BOT_IMAGE=$BOT_IMAGE_LATEST && \
       export LAVALINK_IMAGE=$LAVALINK_IMAGE_LATEST && \
       
-      # Export necessary secrets from GitLab CI/CD Variables
-      export BOT_TOKEN='$BOT_TOKEN' && \
-      export CLIENT_ID='$CLIENT_ID' && \
-      export GUILD_ID='$GUILD_ID' && \
-      export OWNER_ID='$OWNER_ID' && \
-      export DEV_MODE='$DEV_MODE' && \
-      export LAVALINK_HOST='$LAVALINK_HOST' && \
-      export LAVALINK_PORT='$LAVALINK_PORT' && \
-      export LAVALINK_PASSWORD='$LAVALINK_PASSWORD' && \
-      export LAVALINK_NODE_ID='$LAVALINK_NODE_ID' && \
-      export LAVALINK_SECURE='$LAVALINK_SECURE' && \
-      export LAVALINK_YOUTUBE_POT_TOKEN='$LAVALINK_YOUTUBE_POT_TOKEN' && \
-      export LAVALINK_YOUTUBE_POT_VISITORDATA='$LAVALINK_YOUTUBE_POT_VISITORDATA' && \
-      export LAVALINK_SPOTIFY_ENABLED='$LAVALINK_SPOTIFY_ENABLED' && \
-      export LAVALINK_SPOTIFY_CLIENT_ID='$LAVALINK_SPOTIFY_CLIENT_ID' && \
-      export LAVALINK_SPOTIFY_CLIENT_SECRET='$LAVALINK_SPOTIFY_CLIENT_SECRET' && \
-      export LAVALINK_SPOTIFY_COUNTRY_CODE='$LAVALINK_SPOTIFY_COUNTRY_CODE' && \
-      export EMAIL_USER='$EMAIL_USER' && \
-      export EMAIL_PASS='$EMAIL_PASS' && \
-      export GITLAB_EMAIL='$GITLAB_EMAIL' && \
+      # Export necessary secrets from GitLab CI/CD Variables (using escaped double quotes)
+      export BOT_TOKEN=\"$BOT_TOKEN\" && \
+      export CLIENT_ID=\"$CLIENT_ID\" && \
+      export GUILD_ID=\"$GUILD_ID\" && \
+      export OWNER_ID=\"$OWNER_ID\" && \
+      export DEV_MODE=\"$DEV_MODE\" && \
+      export LAVALINK_HOST=\"$LAVALINK_HOST\" && \
+      export LAVALINK_PORT=\"$LAVALINK_PORT\" && \
+      export LAVALINK_PASSWORD=\"$LAVALINK_PASSWORD\" && \
+      export LAVALINK_NODE_ID=\"$LAVALINK_NODE_ID\" && \
+      export LAVALINK_SECURE=\"$LAVALINK_SECURE\" && \
+      export LAVALINK_YOUTUBE_POT_TOKEN=\"$LAVALINK_YOUTUBE_POT_TOKEN\" && \
+      export LAVALINK_YOUTUBE_POT_VISITORDATA=\"$LAVALINK_YOUTUBE_POT_VISITORDATA\" && \
+      export LAVALINK_SPOTIFY_ENABLED=\"$LAVALINK_SPOTIFY_ENABLED\" && \
+      export LAVALINK_SPOTIFY_CLIENT_ID=\"$LAVALINK_SPOTIFY_CLIENT_ID\" && \
+      export LAVALINK_SPOTIFY_CLIENT_SECRET=\"$LAVALINK_SPOTIFY_CLIENT_SECRET\" && \
+      export LAVALINK_SPOTIFY_COUNTRY_CODE=\"$LAVALINK_SPOTIFY_COUNTRY_CODE\" && \
+      export EMAIL_USER=\"$EMAIL_USER\" && \
+      export EMAIL_PASS=\"$EMAIL_PASS\" && \
+      export GITLAB_EMAIL=\"$GITLAB_EMAIL\" && \
       
       # Update docker-compose.yml on the server to use the specific image tags
       echo 'Updating docker-compose.yml image tags...' && \
