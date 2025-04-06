@@ -61,18 +61,10 @@ deploy_stack:
     
     # -- Debugging File Variable --
     - echo "Checking SSH_PRIVATE_KEY (should be a path for File type variable): \"$SSH_PRIVATE_KEY\""
-    - echo "Checking if path exists..."
-    - | 
-      if [ -z "$SSH_PRIVATE_KEY" ]; then
-          echo "ERROR: SSH_PRIVATE_KEY variable is empty! Ensure it is set in GitLab CI/CD Variables."
-          exit 1
-      elif [ ! -f "$SSH_PRIVATE_KEY" ]; then
-          echo "ERROR: File variable path \"$SSH_PRIVATE_KEY\" does not exist or is not a file!"
-          echo "Ensure the variable type is set to 'File' in GitLab CI/CD settings."
-          exit 1
-      else
-          echo "File variable path \"$SSH_PRIVATE_KEY\" exists."
-      fi
+    # Check if variable is empty
+    - '[ -z "$SSH_PRIVATE_KEY" ] && { echo "ERROR: SSH_PRIVATE_KEY variable is empty! Ensure it is set in GitLab CI/CD Variables."; exit 1; } || echo "Variable not empty."'
+    # Check if path exists and is a file
+    - '[ ! -f "$SSH_PRIVATE_KEY" ] && { echo "ERROR: File variable path \"$SSH_PRIVATE_KEY\" does not exist or is not a file!"; echo "Ensure the variable type is set to 'File' in GitLab CI/CD settings."; exit 1; } || echo "File variable path \"$SSH_PRIVATE_KEY\" exists."'
     # -- End Debugging --
     
     # Write SSH key CONTENT from the FILE PATH specified by the variable
