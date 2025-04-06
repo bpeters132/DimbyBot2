@@ -76,7 +76,7 @@ deploy_stack:
     # SSH into the server and execute deployment commands
     - |
       ssh -p $DEPLOY_SERVER_SSH_PORT $DEPLOY_SERVER \
-      "cd /path/to/your/deployment/directory && \
+      "cd /home/bot && \
       echo 'Logging into GitLab Registry on server...' && \
       docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY && \
       echo 'Pulling latest images...' && \
