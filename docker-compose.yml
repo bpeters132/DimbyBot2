@@ -17,8 +17,6 @@ services:
       - LAVALINK_SPOTIFY_COUNTRY_CODE=\${LAVALINK_SPOTIFY_COUNTRY_CODE:-US}
     ports:
       - "${LAVALINK_PORT:-2333}:${LAVALINK_PORT:-2333}" # Map host port to container port
-    volumes:
-      - ./Lavalink/plugins:/opt/Lavalink/plugins # Optional: If plugins need persistent storage or updates
     networks:
       - internal
 
