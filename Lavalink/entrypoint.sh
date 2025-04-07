@@ -23,41 +23,35 @@ plugins:
     allowDirectVideoIds: true
     allowDirectPlaylistIds: true
     pot:
-      token: \"${LAVALINK_YOUTUBE_POT_TOKEN:-your token here}\"
-      visitorData: \"${LAVALINK_YOUTUBE_POT_VISITORDATA:-your visitor data here}\"
+      token: ${LAVALINK_YOUTUBE_POT_TOKEN:-your token here}
+      visitorData: ${LAVALINK_YOUTUBE_POT_VISITORDATA:-your visitor data here}
     clients:
       - WEB
       - WEBEMBEDDED
   lavasrc:
     providers:
-      # Define search providers for LavaSrc plugin
       - "ytsearch:\"%ISRC%\""
       - "ytsearch:%QUERY%"
     sources:
-      # Enable/disable specific sources for LavaSrc
       spotify: ${LAVALINK_SPOTIFY_ENABLED:-true}
-      youtube: true # YouTube source for LavaSrc (distinct from base YouTube support)
+      youtube: true
     spotify:
-      # Spotify API credentials for LavaSrc
-      clientId: \"${LAVALINK_SPOTIFY_CLIENT_ID:-spotify client id here}\"
-      clientSecret: \"${LAVALINK_SPOTIFY_CLIENT_SECRET:-spotify client secret here}\"
-      countryCode: \"${LAVALINK_SPOTIFY_COUNTRY_CODE:-US}\"
+      clientId: ${LAVALINK_SPOTIFY_CLIENT_ID:-spotify client id here}
+      clientSecret: ${LAVALINK_SPOTIFY_CLIENT_SECRET:-spotify client secret here}
+      countryCode: ${LAVALINK_SPOTIFY_COUNTRY_CODE:-US}
       playlistLoadLimit: ${LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT:-6}
       albumLoadLimit: ${LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT:-6}
       resolveArtistsInSearch: true
       localFiles: false
 lavalink:
-  # Load external Lavalink plugins
   plugins:
     - dependency: "dev.lavalink.youtube:youtube-plugin:1.12.0"
       snapshot: false
     - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.4.2"
       snapshot: false
-  # Core Lavalink server settings
   server:
-    password: \"${LAVALINK_PASSWORD:-your lavalink password here}\"
+    password: ${LAVALINK_PASSWORD:-your lavalink password here}
     sources:
-      # Enable/disable base Lavalink sources (LavaSrc handles these if enabled above)
       youtube: false
       spotify: false
 EOF
