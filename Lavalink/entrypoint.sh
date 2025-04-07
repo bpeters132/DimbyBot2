@@ -39,8 +39,8 @@ plugins:
       clientId: ${LAVALINK_SPOTIFY_CLIENT_ID}
       clientSecret: ${LAVALINK_SPOTIFY_CLIENT_SECRET}
       countryCode: ${LAVALINK_SPOTIFY_COUNTRY_CODE}
-      playlistLoadLimit: ${LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT:-6}
-      albumLoadLimit: ${LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT:-6}
+      playlistLoadLimit: ${LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT}
+      albumLoadLimit: ${LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT}
       resolveArtistsInSearch: true
       localFiles: false
 lavalink:
