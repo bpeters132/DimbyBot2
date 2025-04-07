@@ -1,7 +1,5 @@
-version: '3.8'
-
 services:
-  bot:
+  dimbybot:
     build:
       context: .
       dockerfile: Dockerfile.dev # Use the development Dockerfile
@@ -17,6 +15,14 @@ services:
     environment:
       # Ensure NODE_ENV is set for development if needed by any libs
       - NODE_ENV=development
+      # Force color output for libraries like 'colors' or 'chalk'
+      - FORCE_COLOR=true
+
+  lavalink: # Add the lavalink service definition for development
+    build:
+      context: ./Lavalink # Point to the Lavalink directory
+      dockerfile: Dockerfile # Assuming the Dockerfile is named 'Dockerfile'
+    image: lavalink-dev # Optional: Give the dev image a distinct name
 
   # Define other services ONLY if you need to override something specific
   # for them in development (e.g., different ports, debug flags).

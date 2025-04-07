@@ -7,18 +7,24 @@ cd "$(dirname "$0")"
 
 # Function to display usage
 usage() {
-  echo "Usage: $0 {up|down|build|logs|restart [service]|exec <service> [command]}"
+  echo "Usage: $0 {up|down|build|rebuild|logs|restart [service]|exec <service> [command]}"
   echo "  up: Build (if needed) and start all services in detached mode."
   echo "  down: Stop and remove containers, networks, and volumes."
   echo "  build: Force build/rebuild images for services."
+  echo "  rebuild: Stop, force build/rebuild, and start all services."
   echo "  logs: Follow logs for all services (or specific service)."
   echo "  restart [service]: Restart a specific service (e.g., 'bot')."
   echo "  exec <service> [command]: Execute a command in a running service (default: sh)."
   exit 1
 }
 
+# Check if any command was provided
+if [ "$#" -eq 0 ]; then
+  usage
+fi
+
 # Command aliases for docker-compose using dev overrides
-DC="docker-compose -f docker-compose.yml -f docker-compose.dev.yml"
+DC="docker compose -f docker-compose.yml -f docker-compose.dev.yml"
 
 # Parse command
 COMMAND=$1
@@ -36,6 +42,15 @@ case $COMMAND in
   build)
     echo "Building development images..."
     $DC build "$@"
+    ;;
+  rebuild)
+    echo "Rebuilding development environment (down, build, up)..."
+    echo "Stopping..."
+    $DC down -v # Stop and remove volumes
+    echo "Building..."
+    $DC build "$@" # Build images, pass any extra args
+    echo "Starting..."
+    $DC up -d # Start detached, build already done
     ;;
   logs)
     echo "Following logs..."

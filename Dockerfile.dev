@@ -19,7 +19,7 @@ RUN apk add --no-cache dos2unix \
 
 # The command will be overridden in docker-compose.dev.yml to use nodemon
 # Keep the ENTRYPOINT if entrypoint.sh does necessary setup before execing the main process
-ENTRYPOINT ["/bin/sh", "/usr/src/app/entrypoint.sh"] 
+# ENTRYPOINT ["/bin/sh", "/usr/src/app/entrypoint.sh"] 
 
 # Default command if ENTRYPOINT wasn't used or if entrypoint.sh expects one (might need adjustment)
-# CMD ["yarn", "dev"] 
+CMD ["yarn", "dev"] 
