@@ -36,10 +36,8 @@ services:
       # Pass other bot-specific env vars from .env
       - BOT_TOKEN=${BOT_TOKEN}
       - CLIENT_ID=${CLIENT_ID}
-      - GUILD_ID=${GUILD_ID}
-      - EMAIL_PASS=${EMAIL_PASS}
-      - EMAIL_USER=${EMAIL_USER}
-      - GITLAB_EMAIL=${GITLAB_EMAIL}
+      - GUILD_ID=${GUILD_ID} # Optional: If needed for guild-specific commands
+      # Add any other environment variables your bot needs
     volumes:
       - ./logs.log:/usr/src/app/logs.log # Mount log file
     networks:
