@@ -9,7 +9,6 @@ echo "Bot Entrypoint: Starting..."
 # ==============================================================================
 # This uses environment variables passed into the container (e.g., from docker-compose)
 # to create the configuration file needed by the bot to connect to Lavalink.
-# Default values are provided using :- syntax in case the environment variables are not set.
 
 echo "Bot Entrypoint: Generating lavaNodesConfig.js..."
 cat > lavaNodesConfig.js << EOF

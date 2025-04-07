@@ -25,6 +25,6 @@ export default async (client) => {
         client.log(`Set status to I have been reborn 🙏`)
       }
       showGuildCount = !showGuildCount
-    }, 30 * 60 * 1000) // Change status every 30 minutes
+    }, 10 * 60 * 1000) // Change status every 10 minutes
   })
 }

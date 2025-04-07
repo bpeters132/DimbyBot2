@@ -23,7 +23,7 @@ export default (client) => {
       try {
         // Inform the user the command doesn't exist (or wasn't loaded)
         await interaction.reply({
-          content: `❌ Error: Command "${commandName}" not found!`,
+          content: `Error: Command "${commandName}" not found!`,
           ephemeral: true,
         })
       } catch (replyError) {
@@ -49,12 +49,12 @@ export default (client) => {
         // Check if we already replied or deferred the reply
         if (interaction.replied || interaction.deferred) {
           await interaction.followUp({
-            content: "❌ There was an error while executing this command!",
+            content: "There was an error while executing this command!",
             ephemeral: true,
           })
         } else {
           await interaction.reply({
-            content: "❌ There was an error while executing this command!",
+            content: "There was an error while executing this command!",
             ephemeral: true,
           })
         }

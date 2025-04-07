@@ -8,7 +8,6 @@ yarn-error.log
 
 # Optional config files (use .example)
 .env
-src/config.js
 
 # Generated config files
 Lavalink/application.yml
