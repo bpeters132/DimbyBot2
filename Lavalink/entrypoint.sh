@@ -9,7 +9,6 @@ echo "Lavalink Entrypoint: Starting..."
 # ==============================================================================
 # This uses environment variables passed into the container (e.g., from docker-compose)
 # to create the application.yml configuration file needed by Lavalink.
-# Default values are provided using :- syntax in case the environment variables are not set.
 
 echo "Lavalink Entrypoint: Generating application.yml..."
 cat > application.yml << EOF
