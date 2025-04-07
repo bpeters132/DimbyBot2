@@ -146,7 +146,6 @@ deploy_stack:
 
   environment:
     name: Production # Define an environment name
-    url: http://your.server.com # Optional: Add the URL of your deployment
     
   # Only run on master branch
   only:

@@ -6,12 +6,12 @@ dotenv.config()
 
 ;(async () => {
   const appID = process.env.CLIENT_ID
-  const devGuildID = process.env.GUID_ID
+  const devGuildID = process.env.GUILD_ID
   const token = process.env.BOT_TOKEN
 
   if (!devGuildID) {
     console.error(
-      "GUID_ID is not set in the environment variables. Cannot deploy guild commands.",
+      "GUILD_ID is not set in the environment variables. Cannot deploy guild commands.",
     )
     return
   }
