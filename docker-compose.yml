@@ -2,30 +2,26 @@ version: '3.8'
 
 services:
   lavalink:
-    build:
-      context: ./Lavalink
+    image: placeholder-lavalink # This will be replaced by the deploy script
     container_name: lavalink
     restart: unless-stopped
     environment:
       # These will be picked up by Lavalink/entrypoint.sh
-      - LAVALINK_PORT=\${LAVALINK_PORT:-2333}
-      - LAVALINK_PASSWORD=\${LAVALINK_PASSWORD:-youshallnotpass}
-      - LAVALINK_YOUTUBE_POT_TOKEN=\${LAVALINK_YOUTUBE_POT_TOKEN}
-      - LAVALINK_YOUTUBE_POT_VISITORDATA=\${LAVALINK_YOUTUBE_POT_VISITORDATA}
-      - LAVALINK_SPOTIFY_ENABLED=\${LAVALINK_SPOTIFY_ENABLED:-true}
-      - LAVALINK_SPOTIFY_CLIENT_ID=\${LAVALINK_SPOTIFY_CLIENT_ID}
-      - LAVALINK_SPOTIFY_CLIENT_SECRET=\${LAVALINK_SPOTIFY_CLIENT_SECRET}
-      - LAVALINK_SPOTIFY_COUNTRY_CODE=\${LAVALINK_SPOTIFY_COUNTRY_CODE:-US}
+      - LAVALINK_PORT=${LAVALINK_PORT:-2333}
+      - LAVALINK_PASSWORD=${LAVALINK_PASSWORD:-youshallnotpass}
+      - LAVALINK_YOUTUBE_POT_TOKEN=${LAVALINK_YOUTUBE_POT_TOKEN}
+      - LAVALINK_YOUTUBE_POT_VISITORDATA=${LAVALINK_YOUTUBE_POT_VISITORDATA}
+      - LAVALINK_SPOTIFY_ENABLED=${LAVALINK_SPOTIFY_ENABLED:-true}
+      - LAVALINK_SPOTIFY_CLIENT_ID=${LAVALINK_SPOTIFY_CLIENT_ID}
+      - LAVALINK_SPOTIFY_CLIENT_SECRET=${LAVALINK_SPOTIFY_CLIENT_SECRET}
+      - LAVALINK_SPOTIFY_COUNTRY_CODE=${LAVALINK_SPOTIFY_COUNTRY_CODE:-US}
     ports:
       - "${LAVALINK_PORT:-2333}:${LAVALINK_PORT:-2333}" # Map host port to container port
-    volumes:
-      - ./Lavalink/plugins:/opt/Lavalink/plugins # Optional: If plugins need persistent storage or updates
     networks:
       - internal
 
   bot:
-    build:
-      context: .
+    image: placeholder-bot # This will be replaced by the deploy script
     container_name: discord-bot
     restart: unless-stopped
     depends_on:
@@ -33,14 +29,14 @@ services:
     environment:
       # These will be picked up by entrypoint.sh for lavaNodesConfig.js
       - LAVALINK_HOST=lavalink # Service name in this compose file
-      - LAVALINK_PORT=\${LAVALINK_PORT:-2333}
-      - LAVALINK_PASSWORD=\${LAVALINK_PASSWORD:-youshallnotpass}
-      - LAVALINK_NODE_ID=\${LAVALINK_NODE_ID:-mainNode}
-      - LAVALINK_SECURE=\${LAVALINK_SECURE:-false}
+      - LAVALINK_PORT=${LAVALINK_PORT:-2333}
+      - LAVALINK_PASSWORD=${LAVALINK_PASSWORD:-youshallnotpass}
+      - LAVALINK_NODE_ID=${LAVALINK_NODE_ID:-mainNode}
+      - LAVALINK_SECURE=${LAVALINK_SECURE:-false}
       # Pass other bot-specific env vars from .env
-      - BOT_TOKEN=\${BOT_TOKEN}
-      - CLIENT_ID=\${CLIENT_ID}
-      - GUILD_ID=\${GUILD_ID} # Optional: If needed for guild-specific commands
+      - BOT_TOKEN=${BOT_TOKEN}
+      - CLIENT_ID=${CLIENT_ID}
+      - GUILD_ID=${GUILD_ID} # Optional: If needed for guild-specific commands
       # Add any other environment variables your bot needs
     volumes:
       - ./logs.log:/usr/src/app/logs.log # Mount log file

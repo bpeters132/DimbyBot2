@@ -5,7 +5,7 @@ dotenv.config()
 
 const appID = process.env.CLIENT_ID
 const devServerID = process.env.GUID_ID
-const token = process.env.TOKEN
+const token = process.env.BOT_TOKEN
 const rest = new REST({ version: "10" }).setToken(token)
 
 // for guild-based commands

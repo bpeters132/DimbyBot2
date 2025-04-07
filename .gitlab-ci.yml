@@ -18,16 +18,14 @@ variables:
 services:
   - docker:dind
 
-before_script:
-  # Login to GitLab Container Registry
-  - echo "Logging in to GitLab Container Registry..."
-  - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-
 build_images:
   stage: build
   image: docker:latest # Use the official Docker image
   script:
-    # Build images using Dockerfiles (not compose build, for clearer tagging)
+    # Login required for pushing
+    - echo "Logging in to GitLab Container Registry..."
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    # Build images using Dockerfiles
     - echo "Building Bot image..."
     - docker build -t $BOT_IMAGE -t $BOT_IMAGE_LATEST -f Dockerfile .
     - echo "Building Lavalink image..."
@@ -39,105 +37,117 @@ build_images:
     - docker push $BOT_IMAGE_LATEST
     - docker push $LAVALINK_IMAGE
     - docker push $LAVALINK_IMAGE_LATEST
-  
-  # Only run on default branch (e.g., main) or tags
-  only: 
-    - main # Adjust if your default branch is different
-    - tags
+  # Only run on master branch
+  only:
+    - master
 
-# Job definition must start at column 1
 deploy_stack:
-  # Keys under the job name must be indented (e.g., 2 spaces)
   stage: deploy
-  image: debian:stable-slim
+  # Use Debian image for potentially better SSH key handling
+  image: debian:stable-slim 
   variables:
     DEPLOY_SERVER_SSH_PORT: 22
   before_script:
-    # Script lines indented further (e.g., 4 spaces total, 2 under before_script)
-    - apt-get update && apt-get install -y --no-install-recommends openssh-client sshpass sed
-    # Start ssh-agent
-    - eval $(ssh-agent -s)
+    # Install SSH client (includes scp) and sed
+    - apt-get update && apt-get install -y --no-install-recommends openssh-client sed
     # Create SSH directory
     - mkdir -p ~/.ssh
-    - chmod 700 ~/.ssh
-    
-    # -- Debugging File Variable --
-    - echo "Checking SSH_PRIVATE_KEY (should be a path for File type variable): \"$SSH_PRIVATE_KEY\""
-    # Check if variable is empty
-    - '[ -z "$SSH_PRIVATE_KEY" ] && { echo "ERROR: SSH_PRIVATE_KEY variable is empty! Ensure it is set in GitLab CI/CD Variables."; exit 1; } || echo "Variable not empty."'
-    # Check if path exists and is a file
-    - '[ ! -f "$SSH_PRIVATE_KEY" ] && { echo "ERROR: File variable path \"$SSH_PRIVATE_KEY\" does not exist or is not a file!"; echo "Ensure the variable type is set to 'File' in GitLab CI/CD settings."; exit 1; } || echo "File variable path \"$SSH_PRIVATE_KEY\" exists."'
-    # -- End Debugging --
-    
-    # Write SSH key CONTENT from the FILE PATH specified by the variable
-    - echo "Writing key content from file path $SSH_PRIVATE_KEY to ~/.ssh/id_rsa_tmp..."
-    - cat "$SSH_PRIVATE_KEY" | sed 's/\r$//' > ~/.ssh/id_rsa_tmp
-    
-    # Ensure correct permissions for the key file (ssh-add is often strict)
+    # Copy SSH key CONTENT from the FILE PATH specified by the variable to our standard location
+    - cp "$SSH_PRIVATE_KEY" ~/.ssh/id_rsa_tmp # Assumes $SSH_PRIVATE_KEY is File variable path
+    # Ensure correct permissions for the key file
     - chmod 600 ~/.ssh/id_rsa_tmp
-    
-    # Verify content written to temporary file (should be masked if original variable is masked)
-    - echo "Verifying content written to ~/.ssh/id_rsa_tmp:"
-    - cat ~/.ssh/id_rsa_tmp 
-    
-    # Add the key from the file
-    - echo "Attempting to add key to agent..."
-    - ssh-add ~/.ssh/id_rsa_tmp
-    # Clean up the temporary key file (optional but good practice)
-    # - rm ~/.ssh/id_rsa_tmp 
     # Add server host key to known hosts
     - SERVER_HOST=$(echo $DEPLOY_SERVER | cut -d '@' -f 2)
     - ssh-keyscan -p $DEPLOY_SERVER_SSH_PORT $SERVER_HOST >> ~/.ssh/known_hosts
     - chmod 644 ~/.ssh/known_hosts
 
   script:
-    - echo "Deploying to server $DEPLOY_SERVER on port $DEPLOY_SERVER_SSH_PORT..."
-    # SSH into the server and execute deployment commands
+    - echo "Generating .env file for deployment..."
     - |
-      ssh -p $DEPLOY_SERVER_SSH_PORT $DEPLOY_SERVER \
-      "cd /home/bot && \
-      echo 'Logging into GitLab Registry on server...' && \
-      docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY && \
-      echo 'Pulling latest images...' && \
-      export BOT_IMAGE=$BOT_IMAGE_LATEST && \
-      export LAVALINK_IMAGE=$LAVALINK_IMAGE_LATEST && \
-      
-      # Export necessary secrets from GitLab CI/CD Variables
-      export BOT_TOKEN='$BOT_TOKEN' && \
-      export CLIENT_ID='$CLIENT_ID' && \
-      export GUILD_ID='$GUILD_ID' && \
-      export OWNER_ID='$OWNER_ID' && \
-      export DEV_MODE='$DEV_MODE' && \
-      export LAVALINK_HOST='$LAVALINK_HOST' && \
-      export LAVALINK_PORT='$LAVALINK_PORT' && \
-      export LAVALINK_PASSWORD='$LAVALINK_PASSWORD' && \
-      export LAVALINK_NODE_ID='$LAVALINK_NODE_ID' && \
-      export LAVALINK_SECURE='$LAVALINK_SECURE' && \
-      export LAVALINK_YOUTUBE_POT_TOKEN='$LAVALINK_YOUTUBE_POT_TOKEN' && \
-      export LAVALINK_YOUTUBE_POT_VISITORDATA='$LAVALINK_YOUTUBE_POT_VISITORDATA' && \
-      export LAVALINK_SPOTIFY_ENABLED='$LAVALINK_SPOTIFY_ENABLED' && \
-      export LAVALINK_SPOTIFY_CLIENT_ID='$LAVALINK_SPOTIFY_CLIENT_ID' && \
-      export LAVALINK_SPOTIFY_CLIENT_SECRET='$LAVALINK_SPOTIFY_CLIENT_SECRET' && \
-      export LAVALINK_SPOTIFY_COUNTRY_CODE='$LAVALINK_SPOTIFY_COUNTRY_CODE' && \
-      export EMAIL_USER='$EMAIL_USER' && \
-      export EMAIL_PASS='$EMAIL_PASS' && \
-      export GITLAB_EMAIL='$GITLAB_EMAIL' && \
-      
-      # Update docker-compose.yml on the server to use the specific image tags
-      echo 'Updating docker-compose.yml image tags...' && \
-      sed -i \"s|image: .*bot.*|image: $BOT_IMAGE|\" docker-compose.yml && \
-      sed -i \"s|image: .*lavalink.*|image: $LAVALINK_IMAGE|\" docker-compose.yml && \
+      cat << EOF > ci_generated.env
+      # Generated by GitLab CI
+      BOT_TOKEN="$BOT_TOKEN"
+      CLIENT_ID="$CLIENT_ID"
+      GUILD_ID="$GUILD_ID"
+      OWNER_ID="$OWNER_ID"
+      DEV_MODE="$DEV_MODE"
+      LAVALINK_HOST="$LAVALINK_HOST"
+      LAVALINK_PORT="$LAVALINK_PORT"
+      LAVALINK_PASSWORD="$LAVALINK_PASSWORD"
+      LAVALINK_NODE_ID="$LAVALINK_NODE_ID"
+      LAVALINK_SECURE="$LAVALINK_SECURE"
+      LAVALINK_YOUTUBE_POT_TOKEN="$LAVALINK_YOUTUBE_POT_TOKEN"
+      LAVALINK_YOUTUBE_POT_VISITORDATA="$LAVALINK_YOUTUBE_POT_VISITORDATA"
+      LAVALINK_SPOTIFY_ENABLED="$LAVALINK_SPOTIFY_ENABLED"
+      LAVALINK_SPOTIFY_CLIENT_ID="$LAVALINK_SPOTIFY_CLIENT_ID"
+      LAVALINK_SPOTIFY_CLIENT_SECRET="$LAVALINK_SPOTIFY_CLIENT_SECRET"
+      LAVALINK_SPOTIFY_COUNTRY_CODE="$LAVALINK_SPOTIFY_COUNTRY_CODE"
+      EMAIL_USER="$EMAIL_USER"
+      EMAIL_PASS="$EMAIL_PASS"
+      GITLAB_EMAIL="$GITLAB_EMAIL"
+      # Add image tags needed by compose
+      BOT_IMAGE=$BOT_IMAGE_LATEST
+      LAVALINK_IMAGE=$LAVALINK_IMAGE_LATEST
+      EOF
+    - echo "Copying .env file to server $DEPLOY_SERVER..."
+    - scp -i ~/.ssh/id_rsa_tmp -P $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new ci_generated.env $DEPLOY_SERVER:/home/bot/.env
 
-      # Use docker compose V2 syntax (docker compose)
-      echo 'Stopping existing containers (if any)..' && \
-      docker compose down && \
-      echo 'Starting new containers...' && \
-      docker compose up -d"
-      
+    # ADD THIS STEP: Copy docker-compose.yml to the server
+    - echo "Copying docker-compose.yml to server $DEPLOY_SERVER..."
+    - scp -i ~/.ssh/id_rsa_tmp -P $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new docker-compose.yml $DEPLOY_SERVER:/home/bot/docker-compose.yml
+
+    - echo "Generating deployment script..."
+    # Use 'EOS' to prevent local expansion of variables like $BOT_IMAGE inside the script definition
+    - |
+      cat << 'EOS' > ci_deploy.sh
+      #!/bin/bash
+      set -e # Exit immediately if a command exits with a non-zero status.
+
+      echo "Changing to deployment directory..."
+      cd /home/bot
+
+      # Source the .env file to load image tags and potentially other config
+      echo "Sourcing .env file..."
+      if [ -f .env ]; then
+        # Export variables from .env file for use in this script
+        export $(grep -v '^#' .env | xargs)
+      else
+        echo "Error: .env file not found in /home/bot"
+        exit 1
+      fi
+
+      # Note: Docker login is omitted here. Ensure the server has credentials
+      # configured to pull from $CI_REGISTRY (e.g., via docker login run manually once,
+      # credential helper, or adding credentials to the .env file - less recommended).
+
+      echo "Updating docker-compose.yml image tags..."
+      # Use variables sourced from .env. Assumes 'bot:'/'lavalink:' are unique identifiers.
+      # Adjust the sed patterns if your image lines are structured differently.
+      sed -i "s|image: .*bot.*|image: $BOT_IMAGE|" docker-compose.yml
+      sed -i "s|image: .*lavalink.*|image: $LAVALINK_IMAGE|" docker-compose.yml
+
+      echo "Restarting Docker Compose stack..."
+      /usr/bin/docker compose down
+      echo "Pulling latest images specified in compose file..."
+      /usr/bin/docker compose pull # Pull new images explicitly based on updated compose file
+      echo "Starting docker compose stack..."
+      /usr/bin/docker compose up -d
+
+      echo "Deployment script finished successfully."
+      EOS
+    - chmod +x ci_deploy.sh # Make the script executable before copying
+
+    - echo "Copying deployment script to server $DEPLOY_SERVER..."
+    - scp -i ~/.ssh/id_rsa_tmp -P $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new ci_deploy.sh $DEPLOY_SERVER:/home/bot/ci_deploy.sh
+
+    - echo "Executing deployment script on server $DEPLOY_SERVER..."
+    # Execute the script using bash
+    - ssh -i ~/.ssh/id_rsa_tmp -p $DEPLOY_SERVER_SSH_PORT -o StrictHostKeyChecking=accept-new $DEPLOY_SERVER "/bin/bash /home/bot/ci_deploy.sh"
+
   environment:
-    name: production 
-    url: http://your.server.com 
+    name: Production # Define an environment name
+    url: http://your.server.com # Optional: Add the URL of your deployment
     
+  # Only run on master branch
   only:
-    - master 
-    - tags 
+    - master
