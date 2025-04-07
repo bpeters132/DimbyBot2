@@ -7,7 +7,7 @@ dotenv.config()
 ;(async () => {
   const appID = process.env.CLIENT_ID
   const devGuildID = process.env.GUID_ID
-  const token = process.env.TOKEN
+  const token = process.env.BOT_TOKEN
 
   if (!devGuildID) {
     console.error(

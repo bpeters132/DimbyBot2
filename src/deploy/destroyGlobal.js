@@ -4,7 +4,7 @@ import dotenv from "dotenv"
 dotenv.config()
 
 const appID = process.env.CLIENT_ID
-const token = process.env.TOKEN
+const token = process.env.BOT_TOKEN
 const rest = new REST({ version: "10" }).setToken(token)
 
 // for global commands
