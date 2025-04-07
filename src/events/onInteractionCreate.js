@@ -6,7 +6,7 @@ export default (client) => {
   client.on("interactionCreate", async (interaction) => {
     // 1. Check if it's a Chat Input Command (Slash Command)
     if (!interaction.isChatInputCommand()) {
-      // logger.debug(`Ignoring non-chat-input interaction: ${interaction.type}`);
+      client.debug(`Ignoring non-chat-input interaction: ${interaction.type}`)
       return
     }
 

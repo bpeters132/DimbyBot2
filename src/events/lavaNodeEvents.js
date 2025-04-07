@@ -4,7 +4,7 @@
 export default async (client) => {
   client.lavalink.nodeManager
     .on("raw", (node, payload) => {
-      // console.debug(`${node.id}, RAW: ${console.dir(payload)}`);
+      // client.debug(`${node.id}, RAW: ${console.dir(payload)}`)
     })
     .on("disconnect", (node, reason) => {
       client.warn(`${node.id} DISCONNECT: ${console.dir(reason)}`)

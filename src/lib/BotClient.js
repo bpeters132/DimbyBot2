@@ -1,21 +1,16 @@
 import { Client, GatewayIntentBits } from "discord.js"
+import { fileURLToPath } from "url"
+import path from "path"
 import loadEvents from "../util/loadEvents.js"
 import loadCommands from "../util/loadCommands.js"
 import Logger from "./Logger.js"
-import dotenv from "dotenv"
-import { fileURLToPath } from "url"
-import path from "path"
 import createLavalinkManager from "./LavalinkManager.js"
-
-dotenv.config()
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-// Custom BotClient class that extends the base Discord Client
 class BotClient extends Client {
   constructor() {
-    // Initialize the Discord Client with required gateway intents
     super({
       intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
     })
@@ -28,11 +23,17 @@ class BotClient extends Client {
 
     // Load all event listeners
     loadEvents(this)
+      .then(() => {
+        this.warn("Loaded all events")
+      })
+      .catch((err) => {
+        this.error("Error loading events:", err)
+      })
 
     // Load all commands
     loadCommands(this)
       .then(() => {
-        this.log("Loaded all commands")
+        this.warn("Loaded all commands")
       })
       .catch((err) => {
         this.error("Error loading commands:", err)
@@ -56,13 +57,14 @@ class BotClient extends Client {
   log(Text, ...args) {
     this.logger.log(Text, ...args)
   }
-
   error(Text, ...args) {
     this.logger.error(Text, ...args)
   }
-
   warn(Text, ...args) {
     this.logger.warn(Text, ...args)
+  }
+  debug(Text, ...args) {
+    this.logger.debug(Text, ...args)
   }
 }
 

@@ -1,0 +1,25 @@
+# Use a recent Node.js LTS version
+FROM node:20-alpine
+
+WORKDIR /usr/src/app
+
+# Copy package files and install ALL dependencies (including dev)
+COPY package.json yarn.lock ./
+RUN yarn install
+
+# Copy the rest of the application code (will be overridden by mounts in dev)
+COPY . .
+
+# Copy the entrypoint script
+COPY entrypoint.sh entrypoint.sh
+# Ensure script has correct line endings (LF) and is executable
+RUN apk add --no-cache dos2unix \
+    && dos2unix entrypoint.sh \
+    && chmod +x entrypoint.sh
+
+# The command will be overridden in docker-compose.dev.yml to use nodemon
+# Keep the ENTRYPOINT if entrypoint.sh does necessary setup before execing the main process
+ENTRYPOINT ["/bin/sh", "/usr/src/app/entrypoint.sh"] 
+
+# Default command if ENTRYPOINT wasn't used or if entrypoint.sh expects one (might need adjustment)
+# CMD ["yarn", "dev"] 
