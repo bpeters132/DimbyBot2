@@ -15,7 +15,7 @@ export default {
     // Check if user is in a voice channel
     const voiceChannel = member.voice.channel
     if (!voiceChannel) {
-      return interaction.reply({ content: "Join a voice channel first!", ephemeral: true })
+      return interaction.reply({ content: "Join a voice channel first!"})
     }
 
     await interaction.deferReply()
