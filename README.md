@@ -9,11 +9,13 @@ Author is just a dude that can barely code but can figure things out.
 
 ## Features
 
-*(Add a brief description of the bot's key features here)*
+* Music
+* Single simple clear command
+* More to come
 
 ## Prerequisites
 
-*   Node.js (Check `package.json` for specific version requirements if any)
+*   Node.js - current LTS
 *   npm or yarn
 
 ## Installation
@@ -48,7 +50,7 @@ For optimal deployment to a destination server, this project uses GitLab CI/CD.
     # GUILD_ID=... (Required for deployGuild/destroyGuild scripts)
     ```
     **Note:** The `.env` file itself is **not** used during CI/CD deployment. The variables listed above (or in a potential `.env.example` file) serve as a reference and **must** be defined 1:1 within your GitLab repository's **Settings > CI/CD > Variables**.
-    The CI/CD pipeline configured in `.gitlab-ci.yml` (or similar) will use these GitLab variables when deploying the bot.
+    The CI/CD pipeline configured in `.gitlab-ci.yml` will use these GitLab variables when deploying the bot.
 
 ## Local Development Setup
 
@@ -59,26 +61,24 @@ If you want to run the bot locally for development or testing:
 3.  **Lavalink Configuration:** Create a `lavaNodesConfig.js` file in the root directory. This file defines the connection details for your local Lavalink server. *(You may need to refer to existing examples or documentation for the required structure of this file).*
 4.  **Build & Run Docker Environment:** Execute the development environment script:
     ```bash
-    ./dev-env.sh
+    ./dev-env.sh build
     ```
-    This script should build the necessary Docker images (including the bot and potentially Lavalink) and start the containers.
+    This script should build the necessary Docker images (including the bot and Lavalink) and start the containers.
 
 ## Usage
 
 *   **Run locally (using Docker setup):**
     ```bash
-    ./dev-env.sh
-    ```
-*   **Start the bot (within deployment environment):** The `npm start` command is typically used by the deployment process (e.g., inside the Docker container managed by CI/CD or the `dev-env.sh` script).
-    ```bash
-    npm start
+    ./dev-env.sh up
     ```
 *   **Deploy Slash Commands (run locally or via CI/CD):**
     *   Globally: `npm run deployGlobal`
     *   To a specific guild: `npm run deployGuild` (requires `GUILD_ID` environment variable)
+    *   Can be run in your local terminal
 *   **Remove Slash Commands (run locally or via CI/CD):**
     *   Globally: `npm run destroyGlobal`
     *   From a specific guild: `npm run destroyGuild` (requires `GUILD_ID` environment variable)
+    *   Can be run in your local terminal
 
 ## Project Structure
 
@@ -96,7 +96,6 @@ src/
 
 *   [discord.js](https://discord.js.org/): The primary library for interacting with the Discord API.
 *   [lavalink-client](https://github.com/freyacodes/lavalink-client): Client for interacting with a Lavalink server.
-*   [dotenv](https://github.com/motdotla/dotenv): Loads environment variables from a `.env` file.
 *   [nodemailer](https://nodemailer.com/): For sending emails.
 
 ## License
