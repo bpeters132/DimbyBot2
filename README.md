@@ -95,15 +95,9 @@ src/
 ## Key Dependencies
 
 *   [discord.js](https://discord.js.org/): The primary library for interacting with the Discord API.
+*   [lavalink-client](https://github.com/freyacodes/lavalink-client): Client for interacting with a Lavalink server.
 *   [dotenv](https://github.com/motdotla/dotenv): Loads environment variables from a `.env` file.
-*   [winston](https://github.com/winstonjs/winston): A logger for Node.js.
-*   [lavalink-client](https://github.com/freyacodes/lavalink-client): Client for interacting with a Lavalink server (likely for music functionality).
-*   [nodemailer](https://nodemailer.com/): For sending emails (purpose within the bot might need clarification).
-*   [colors](https://github.com/Marak/colors.js): Adds colors to console output.
-
-## Contributing
-
-*(Add contribution guidelines if applicable)*
+*   [nodemailer](https://nodemailer.com/): For sending emails.
 
 ## License
 
