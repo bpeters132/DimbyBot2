@@ -34,12 +34,29 @@ export default {
 
     player.connect()
 
-    const res = await player.search(query)
+    const res = await player.search(query, { requester: interaction.user })
 
-    if (!res.tracks.length) return interaction.reply("No tracks found!")
+    if (!res || !res.tracks?.length) {
+      return interaction.reply({ content: "No tracks found or an error occurred.", ephemeral: true })
+    }
 
-    player.queue.add(res.tracks[0])
-    interaction.reply(`Added **${res.tracks[0].info.title}** to the queue.`)
+    if (res.loadType === "playlist") {
+      player.queue.add(res.tracks)
+      const playlistTitle = res.playlist?.title ?? "Unknown Playlist"
+      const playlistUri = res.playlist?.uri
+      const trackCount = res.tracks.length
+
+      let replyMessage = `Added **playlist** ${playlistTitle} (${trackCount} tracks) to the queue.`
+      if (playlistUri) {
+        replyMessage = `Added **playlist** [${playlistTitle}](${playlistUri}) (${trackCount} tracks) to the queue.`
+      }
+      await interaction.reply(replyMessage)
+
+    } else {
+      const track = res.tracks[0]
+      player.queue.add(track)
+      await interaction.reply(`Added [${track.info.title}](${track.info.uri}) to the queue.`)
+    }
 
     if (!player.playing && !player.paused) {
       player.play()

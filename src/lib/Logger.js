@@ -46,6 +46,19 @@ class Logger {
       ) + colors.red(" | " + Text + ": " + args)
     )
   }
+
+  debug(Text, ...args) {
+    let d = new Date()
+    this.logger.log({
+      level: "debug",
+      message: "debug: " + Text + args,
+    })
+    console.log(
+      colors.gray(
+        `[${d.getDate()}:${d.getMonth()}:${d.getFullYear()} - ${d.getHours()}:${d.getMinutes()}]`
+      ) + colors.magenta(" | " + Text + args)
+    )
+  }
 }
 
 export default Logger
