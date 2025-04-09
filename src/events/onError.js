@@ -3,6 +3,6 @@
  */
 export default async (client) => {
   client.on("error", (err) => {
-    client.log(`Error event triggered: ${err}`)
+    client.info(`Error event triggered: ${err}`)
   })
 }

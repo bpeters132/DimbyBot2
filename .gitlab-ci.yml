@@ -41,12 +41,10 @@ build_images:
   only:
     - master
 
-deploy_stack:
+deploy_production:
   stage: deploy
   # Use Debian image for potentially better SSH key handling
   image: debian:stable-slim 
-  variables:
-    DEPLOY_SERVER_SSH_PORT: 22
   before_script:
     # Install SSH client (includes scp) and sed
     - apt-get update && apt-get install -y --no-install-recommends openssh-client sed
@@ -71,6 +69,7 @@ deploy_stack:
       GUILD_ID="$GUILD_ID"
       OWNER_ID="$OWNER_ID"
       DEV_MODE="$DEV_MODE"
+      LOG_LEVEL="$LOG_LEVEL"
       LAVALINK_HOST="$LAVALINK_HOST"
       LAVALINK_PORT="$LAVALINK_PORT"
       LAVALINK_PASSWORD="$LAVALINK_PASSWORD"

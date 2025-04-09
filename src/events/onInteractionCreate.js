@@ -34,7 +34,7 @@ export default (client) => {
 
     // 5. Execute the Command
     try {
-      client.log(
+      client.info(
         `Executing command "${commandName}" for user ${interaction.user.tag} (${interaction.user.id}) in guild ${interaction.guild?.name ?? "DM"} (${interaction.guild?.id ?? "N/A"})`
       )
       // Call the execute function stored in the command object

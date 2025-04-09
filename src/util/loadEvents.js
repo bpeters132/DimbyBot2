@@ -13,14 +13,14 @@ const __dirname = path.dirname(__filename)
 export default async (client) => {
   const eventsPath = path.join(__dirname, "../events")
 
-  client.log(`Loading events from: ${eventsPath}`)
+  client.info(`Loading events from: ${eventsPath}`)
 
   try {
     const eventFiles = fs
       .readdirSync(eventsPath)
       .filter((file) => file.endsWith(".js"))
 
-    client.log(`Found ${eventFiles.length} event files.`) 
+    client.info(`Found ${eventFiles.length} event files.`) 
 
     let loadedCount = 0
     for (const file of eventFiles) {
@@ -33,7 +33,7 @@ export default async (client) => {
 
         if (typeof setupEvent === "function") {
           setupEvent(client) // Execute the function to attach the listener(s)
-          client.log(`Loaded event handler: ${file}`)
+          client.info(`Loaded event handler: ${file}`)
           loadedCount++
         } else {
           client.warn(
@@ -44,7 +44,7 @@ export default async (client) => {
         client.error(`Error loading event handler ${filePath}:`, error)
       }
     }
-    client.log(`Successfully loaded ${loadedCount} event handlers.`)
+    client.info(`Successfully loaded ${loadedCount} event handlers.`)
   } catch (error) {
     client.error(`Error reading events directory ${eventsPath}:`, error)
   }
