@@ -24,7 +24,6 @@ export default (client) => {
         // Inform the user the command doesn't exist (or wasn't loaded)
         await interaction.reply({
           content: `Error: Command "${commandName}" not found!`,
-          ephemeral: true,
         })
       } catch (replyError) {
         // Log if we can't even send the error reply
@@ -35,7 +34,7 @@ export default (client) => {
 
     // 5. Execute the Command
     try {
-      client.log(
+      client.info(
         `Executing command "${commandName}" for user ${interaction.user.tag} (${interaction.user.id}) in guild ${interaction.guild?.name ?? "DM"} (${interaction.guild?.id ?? "N/A"})`
       )
       // Call the execute function stored in the command object
@@ -50,12 +49,10 @@ export default (client) => {
         if (interaction.replied || interaction.deferred) {
           await interaction.followUp({
             content: "There was an error while executing this command!",
-            ephemeral: true,
           })
         } else {
           await interaction.reply({
             content: "There was an error while executing this command!",
-            ephemeral: true,
           })
         }
       } catch (replyError) {

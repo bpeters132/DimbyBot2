@@ -10,18 +10,18 @@ export default async (client) => {
       client.warn(`${node.id} DISCONNECT: ${console.dir(reason)}`)
     })
     .on("connect", (node) => {
-      client.log(`${node.id} CONNECTED`)
+      client.info(`${node.id} CONNECTED`)
     })
     .on("reconnecting", (node) => {
       client.warn(`${node.id} RECONNECTING`)
     })
     .on("create", (node) => {
-      client.log(`${node.id} CREATED`)
+      client.info(`${node.id} CREATED`)
     })
     .on("destroy", (node) => {
       client.warn(`${node.id} DESTROYED`)
     })
     .on("error", (node, error, payload) => {
-      client.client.error(`${node.id} ERRORED: ${error}, PAYLOAD: ${console.dir(payload)}`)
+      client.error(`${node.id} ERRORED: ${error}, PAYLOAD: ${console.dir(payload)}`)
     })
 }

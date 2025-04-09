@@ -37,7 +37,7 @@ export default {
     const res = await player.search(query, { requester: interaction.user })
 
     if (!res || !res.tracks?.length) {
-      return interaction.reply({ content: "No tracks found or an error occurred.", ephemeral: true })
+      return interaction.reply({ content: "No tracks found or an error occurred."})
     }
 
     if (res.loadType === "playlist") {
