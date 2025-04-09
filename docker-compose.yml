@@ -59,8 +59,6 @@ services:
       - GITLAB_EMAIL=${GITLAB_EMAIL}
       # Database connection URL (uses service name 'postgres-db' as host)
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-db:5432/${POSTGRES_DB}
-    volumes:
-      - ./logs.log:/usr/src/app/logs.log # Mount log file
     networks:
       - internal
 

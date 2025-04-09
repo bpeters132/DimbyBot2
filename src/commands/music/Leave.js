@@ -8,7 +8,7 @@ export default {
    * @param {import('discord.js').CommandInteraction} interaction
    *
    */
-  async execute(client, interaction) {
+  async execute(interaction, client) {
     client.debug(`Leave command invoked by ${interaction.user.tag} in guild ${interaction.guild.id}`)
     const guild = interaction.guild
     const member = interaction.member

@@ -9,7 +9,12 @@ class BotClient extends Client {
    */
   constructor(loggerInstance) {
     super({
-      intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
+      intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+      ],
     })
 
     // Attach the provided logger instance
@@ -60,7 +65,6 @@ class BotClient extends Client {
   debug(Text, ...args) {
     this.logger.debug(Text, ...args)
   }
-
 
   /**
    * Starts the bot, logging in to Discord.

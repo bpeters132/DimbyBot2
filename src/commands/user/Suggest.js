@@ -27,7 +27,7 @@ export default {
    * @param {import('../../lib/BotClient.js').default} client The bot client instance.
    * @param {import('discord.js').ChatInputCommandInteraction} interaction The interaction object.
    */
-  async execute(client, interaction) {
+  async execute(interaction, client) {
     client.debug(
       `Suggest command invoked by ${interaction.user.tag} in guild ${interaction.guild?.id ?? "DM"}`
     )

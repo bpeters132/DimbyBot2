@@ -2,63 +2,86 @@
  * @param {import('../lib/BotClient.js').default} client
  * @param {import('discord.js').Interaction} interaction
  */
+
+// Import utility functions using ESM
+// Removed unused imports: import { getGuildSettings, updateControlMessage } from "../util/guildSettings.js"
+import { handleControlButtonInteraction } from "./handlers/handleControlButtonInteraction.js"
+
 export default (client) => {
   client.on("interactionCreate", async (interaction) => {
-    // 1. Check if it's a Chat Input Command (Slash Command)
-    if (!interaction.isChatInputCommand()) {
-      client.debug(`Ignoring non-chat-input interaction: ${interaction.type}`)
+    // --- Button Interaction Handling ---
+    if (interaction.isButton()) {
+      const { customId, user, guildId } = interaction
+      client.debug(
+        `[InteractionCreate] Received button interaction: ${customId} in guild ${guildId} from user ${user.id}`
+      )
+
+      if (customId.startsWith("control_")) {
+        await handleControlButtonInteraction(interaction, client)
+        return
+      }
+
+      client.debug(
+        `[InteractionCreate] Ignoring button interaction with non-control customId: ${customId}`
+      )
       return
     }
 
-    // 2. Get the command name
-    const commandName = interaction.commandName
-
-    // 3. Retrieve the command object from the client's collection
-    // This relies on loadCommands having populated client.commands
-    const command = client.commands.get(commandName)
-
-    // 4. Handle Command Not Found
-    if (!command) {
-      client.error(`No command matching "${commandName}" was found in client.commands.`)
-      try {
-        // Inform the user the command doesn't exist (or wasn't loaded)
-        await interaction.reply({
-          content: `Error: Command "${commandName}" not found!`,
-        })
-      } catch (replyError) {
-        // Log if we can't even send the error reply
-        client.error(`Failed to send 'command not found' reply for ${commandName}:`, replyError)
-      }
-      return // Stop execution if command not found
-    }
-
-    // 5. Execute the Command
-    try {
-      client.info(
-        `Executing command "${commandName}" for user ${interaction.user.tag} (${interaction.user.id}) in guild ${interaction.guild?.name ?? "DM"} (${interaction.guild?.id ?? "N/A"})`
+    // --- Chat Input Command Handling ---
+    if (interaction.isChatInputCommand()) {
+      const commandName = interaction.commandName
+      client.debug(
+        `[InteractionCreate] Received chat input command: /${commandName} in guild ${interaction.guildId}`
       )
-      // Call the execute function stored in the command object
-      // Pass the client and interaction to the command
-      await command.execute(client, interaction)
-    } catch (error) {
-      client.error(`Error executing command "${commandName}":`, error)
+      const command = client.commands.get(commandName)
 
-      // Attempt to inform the user about the error
-      try {
-        // Check if we already replied or deferred the reply
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp({
-            content: "There was an error while executing this command!",
-          })
-        } else {
+      if (!command) {
+        client.error(`[InteractionCreate] No command matching "${commandName}" was found.`) // Simplified log
+        try {
           await interaction.reply({
-            content: "There was an error while executing this command!",
+            content: `Error: Command "${commandName}" not found!`,
+            ephemeral: true,
           })
+        } catch (replyError) {
+          client.error(
+            `[InteractionCreate] Failed to send 'command not found' reply for ${commandName}:`,
+            replyError
+          )
         }
-      } catch (replyError) {
-        // Log if sending the error notification fails
-        client.error(`Failed to send execution error reply for ${commandName}:`, replyError)
+        return
       }
+
+      try {
+        client.info(
+          `[InteractionCreate] Executing command "${commandName}" for user ${interaction.user.tag} (${interaction.user.id}) in guild ${interaction.guild?.name ?? "DM"} (${interaction.guild?.id ?? "N/A"})`
+        )
+        await command.execute(interaction, client)
+        client.debug(`[InteractionCreate] Successfully executed command "${commandName}".`)
+      } catch (error) {
+        client.error(`[InteractionCreate] Error executing command "${commandName}":`, error)
+        try {
+          if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({
+              content: "There was an error while executing this command!",
+              ephemeral: true,
+            })
+          } else {
+            await interaction.reply({
+              content: "There was an error while executing this command!",
+              ephemeral: true,
+            })
+          }
+        } catch (replyError) {
+          client.error(
+            `[InteractionCreate] Failed to send execution error reply for ${commandName}:`,
+            replyError
+          )
+        }
+      }
+      return // Handled chat input command
     }
+
+    // --- Other Interaction Types ---
+    client.debug(`[InteractionCreate] Ignoring unhandled interaction type: ${interaction.type}`)
   })
 }
