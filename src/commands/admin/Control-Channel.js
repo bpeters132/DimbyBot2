@@ -51,7 +51,6 @@ export default {
         )
         return interaction.reply({
           content: "Control channel must be a text channel.",
-          ephemeral: true,
         })
       }
 
@@ -71,7 +70,6 @@ export default {
         return interaction.reply({
           content:
             "I need permissions to View Channel, Send Messages, Embed Links, and Manage Messages in the designated control channel.",
-          ephemeral: true,
         })
       }
       client.debug(`[Control-Channel] Bot has required permissions in channel ${targetChannel.id}.`)
@@ -136,7 +134,6 @@ export default {
 
         return interaction.reply({
           content: `Set ${targetChannel} as the music control channel. The control message has been created.`,
-          ephemeral: true,
         })
       } catch (error) {
         client.error(
@@ -145,7 +142,6 @@ export default {
         return interaction.reply({
           content:
             "Failed to create the control message. Please check my permissions in this channel.",
-          ephemeral: true,
         })
       }
     } else if (subcommand === "unset") {
@@ -157,7 +153,6 @@ export default {
         )
         return interaction.reply({
           content: "No control channel is currently set for this guild.",
-          ephemeral: true,
         })
       }
 
@@ -210,7 +205,6 @@ export default {
 
       return interaction.reply({
         content: "Music control channel configuration removed.",
-        ephemeral: true,
       })
     }
   },

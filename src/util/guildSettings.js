@@ -2,6 +2,8 @@ import fs from "fs"
 import path from "path"
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField } from "discord.js"
 import { fileURLToPath } from "url"
+import { setTimeout } from 'timers/promises'
+import formatDuration from './formatDuration.js' // Import the external function
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -65,23 +67,15 @@ export function saveGuildSettings(settings) {
   }
 }
 
-function formatDuration(milliseconds) {
-  if (milliseconds === undefined || milliseconds === null) return "00:00"
-  const seconds = Math.floor(milliseconds / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-
-  const displaySeconds = String(seconds % 60).padStart(2, "0")
-  const displayMinutes = String(minutes % 60).padStart(2, "0")
-
-  if (hours > 0) {
-    return `${hours}:${displayMinutes}:${displaySeconds}`
-  }
-  return `${displayMinutes}:${displaySeconds}`
-}
-
 // Pass client for logging
-export function createControlEmbed(player) {
+/**
+ * Creates a control embed for the player
+ * @param {import('lavalink-client').Player} player
+ * @returns {import('discord.js').EmbedBuilder}
+ * 
+ */
+
+ export function createControlEmbed(player) {
   console.debug(
     `[guildSettings] Creating control embed. Player state: ${player ? `Playing: ${player.playing}, Current: ${!!player.queue?.current}, Queue Size: ${player.queue?.size}` : "null"}`
   )
@@ -94,15 +88,16 @@ export function createControlEmbed(player) {
   if (player && player.queue && player.queue.current) {
     const currentTrack = player.queue.current
     embed
-      .setDescription(`**Now Playing:** [${currentTrack.title}](${currentTrack.uri})`)
+      .setDescription(`**Now Playing:** [${currentTrack.info.title}](${currentTrack.info.uri})`)
       .addFields(
         {
           name: "Duration",
-          value: currentTrack.isStream ? "LIVE" : `${formatDuration(currentTrack.duration)}`,
+          value: currentTrack.info.isStream ? "LIVE" : `${formatDuration(currentTrack.info.duration)}`,
           inline: true,
         },
-        { name: "Queue", value: `${player.queue.size} songs`, inline: true },
-        { name: "Status", value: player.playing ? "Playing" : "Paused", inline: true }
+        { name: "Queue", value: `${player.queue.tracks.length} songs`, inline: true },
+        { name: "Status", value: player.playing ? "Playing" : "Paused", inline: true },
+        { name: "Loop", value: player.loop ? player.loop.toUpperCase() : 'NONE', inline: true }
       )
     if (currentTrack.requester) {
       embed.addFields({
@@ -111,14 +106,15 @@ export function createControlEmbed(player) {
         inline: true,
       })
     }
-    if (currentTrack.thumbnail) {
-      embed.setThumbnail(currentTrack.thumbnail)
+    if (currentTrack.info.thumbnail) {
+      embed.setThumbnail(currentTrack.info.thumbnail)
     }
   } else {
     embed.setDescription("Nothing playing. Add a song!")
     embed.addFields(
       { name: "Queue", value: "Empty", inline: true },
-      { name: "Status", value: "Idle", inline: true }
+      { name: "Status", value: "Idle", inline: true },
+      { name: "Loop", value: "Off", inline: true }
     )
   }
   console.debug(
@@ -134,6 +130,7 @@ export function createControlButtons(player) {
   )
   const isPlaying = player && player.playing
   const hasCurrent = player && player.queue && player.queue.current
+  const hasQueue = player && player.queue && player.queue.size > 0
 
   const playPauseButton = new ButtonBuilder()
     .setCustomId("control_play_pause")
@@ -153,7 +150,21 @@ export function createControlButtons(player) {
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(!hasCurrent)
 
-  const row = new ActionRowBuilder().addComponents(playPauseButton, stopButton, skipButton)
+  const shuffleButton = new ButtonBuilder()
+    .setCustomId("control_shuffle")
+    .setLabel("Shuffle")
+    .setStyle(ButtonStyle.Secondary)
+    .setEmoji("🔀")
+    .setDisabled(!hasCurrent && !hasQueue)
+
+  const loopButton = new ButtonBuilder()
+    .setCustomId("control_loop")
+    .setLabel("Loop")
+    .setStyle(ButtonStyle.Secondary)
+    .setEmoji("🔁")
+    .setDisabled(!hasCurrent && !hasQueue)
+
+  const row = new ActionRowBuilder().addComponents(playPauseButton, stopButton, skipButton, shuffleButton, loopButton)
   console.debug(
     `[guildSettings] Control buttons created. Button labels: ${row.components.map((c) => c.data.label).join(", ")}`
   )
@@ -190,6 +201,8 @@ async function cleanupControlChannel(channel, controlMessageId, client) {
 
         if (messagesToDelete.size > 0) {
             client.debug(`[ControlCleanup] Found ${messagesToDelete.size} messages to delete in channel ${channel.id}.`)
+            client.debug('[ControlCleanup] Waiting 5 seconds before deleting...')
+            await setTimeout(5000) // Add 5-second delay
             // Bulk delete messages. discord.js handles filtering out messages older than 14 days automatically.
             await channel.bulkDelete(messagesToDelete, true) // true ignores messages older than 14 days
             client.debug(`[ControlCleanup] Successfully deleted ${messagesToDelete.size} messages in channel ${channel.id}.`)
@@ -251,7 +264,11 @@ export async function updateControlMessage(client, guildId) {
         // --- Run Cleanup --- 
         // Optional delay using setTimeout if needed, but running immediately after edit is usually fine
         // setTimeout(() => cleanupControlChannel(controlChannel, controlMessage.id, client), 1000) // Example 1s delay
-        await cleanupControlChannel(controlChannel, controlMessage.id, client)
+        // Run cleanup asynchronously (fire and forget) without blocking updateControlMessage
+        cleanupControlChannel(controlChannel, controlMessage.id, client).catch(cleanupError => {
+            // Log any unhandled error from the cleanup promise itself
+            client.error(`[guildSettings] Unhandled error in background cleanupControlChannel for guild ${guildId}:`, cleanupError)
+        })
         // --- End Cleanup ---
 
     } catch (error) {

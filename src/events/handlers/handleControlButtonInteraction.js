@@ -22,7 +22,6 @@ export async function handleControlButtonInteraction(interaction, client) {
     try {
       await interaction.reply({
         content: "Please use player controls in the designated channel.",
-        ephemeral: true,
       })
     } catch {
       /* Ignore */
@@ -41,7 +40,6 @@ export async function handleControlButtonInteraction(interaction, client) {
     try {
       await interaction.reply({
         content: "This control message seems outdated. Try running /control-channel set again.",
-        ephemeral: true,
       })
     } catch {
       /* Ignore */
@@ -63,7 +61,6 @@ export async function handleControlButtonInteraction(interaction, client) {
     try {
       await interaction.reply({
         content: "Player not found. It might have been stopped or disconnected.",
-        ephemeral: true,
       })
     } catch {
       /* Ignore */
@@ -106,7 +103,9 @@ export async function handleControlButtonInteraction(interaction, client) {
           } catch (pauseError) {
             // Handle specific error potentially thrown even when trying to pause
             if (pauseError.message === "Player is already paused - not able to pause.") {
-              client.warn(`[ControlButtonHandler] Caught '${pauseError.message}' when trying to pause. Assuming already paused.`)
+              client.warn(
+                `[ControlButtonHandler] Caught '${pauseError.message}' when trying to pause. Assuming already paused.`
+              )
               // Even if it errored, the state is likely 'paused', so consider the action taken
               actionTaken = true
             } else {
@@ -119,19 +118,21 @@ export async function handleControlButtonInteraction(interaction, client) {
           if (player.paused) {
             client.debug("[ControlButtonHandler] Player is paused. Attempting to resume.")
             try {
-                await player.resume()
-                client.debug("[ControlButtonHandler] Player resumed.")
-                actionTaken = true
+              await player.resume()
+              client.debug("[ControlButtonHandler] Player resumed.")
+              actionTaken = true
             } catch (resumeError) {
-                // It's less likely the 'already paused' error occurs with resume(), but keep check just in case
-                if (resumeError.message === "Player is already paused - not able to pause.") {
-                    client.warn(`[ControlButtonHandler] Caught '${resumeError.message}' when trying to resume. Assuming already playing or command had no effect.`)
-                    // Consider the action taken even if this error occurs, as the intent was to resume
-                    actionTaken = true
-                } else {
-                    client.error("[ControlButtonHandler] Error resuming player:", resumeError)
-                    throw resumeError // Re-throw unexpected errors
-                }
+              // It's less likely the 'already paused' error occurs with resume(), but keep check just in case
+              if (resumeError.message === "Player is already paused - not able to pause.") {
+                client.warn(
+                  `[ControlButtonHandler] Caught '${resumeError.message}' when trying to resume. Assuming already playing or command had no effect.`
+                )
+                // Consider the action taken even if this error occurs, as the intent was to resume
+                actionTaken = true
+              } else {
+                client.error("[ControlButtonHandler] Error resuming player:", resumeError)
+                throw resumeError // Re-throw unexpected errors
+              }
             }
           } else {
             // Player is stopped/idle, try to play the current track
@@ -157,7 +158,6 @@ export async function handleControlButtonInteraction(interaction, client) {
                   await interaction.followUp({
                     content:
                       "I seem to be disconnected or you're not in my channel. Please try adding a song again or use /join.",
-                    ephemeral: true,
                   })
                   break // Don't try to play
                 }
@@ -177,19 +177,128 @@ export async function handleControlButtonInteraction(interaction, client) {
         break
       }
       case "control_stop": {
-        await player.stop()
+        await player.destroy()
+        await interaction.followUp('BYE!')
         client.debug("[ControlButtonHandler] Player stopped")
         actionTaken = true
         break
       }
       case "control_skip": {
-        if (!player.queue.current) {
-          client.warn("[ControlButtonHandler] Skip clicked but no current track.")
-          break
+        const hadCurrentTrack = !!player.queue.current // Check if there *was* a track before skipping
+        if (!hadCurrentTrack) {
+          client.warn("[ControlButtonHandler] Skip clicked but no current track was playing.")
+          await interaction.followUp({
+            content: "Nothing is currently playing to skip.",
+          })
+          break // Don't set actionTaken, nothing changed
         }
-        await player.skip()
-        client.debug("[ControlButtonHandler] Track skipped")
-        actionTaken = true
+
+        try {
+          client.debug("[ControlButtonHandler] Attempting player.skip().")
+          await player.skip() // Execute the skip
+          client.debug("[ControlButtonHandler] player.skip() completed successfully.")
+          actionTaken = true // Skip succeeded without error (more tracks were in queue)
+        } catch (skipError) {
+          // Check if the error is the specific RangeError expected when skipping the last track
+          const isLastTrackSkipError =
+            skipError instanceof RangeError &&
+            skipError.message === "Can't skip more than the queue size"
+
+          if (isLastTrackSkipError) {
+            client.warn(
+              `[ControlButtonHandler] player.skip() threw expected RangeError for last track: ${skipError.message}. Treating as stop.`
+            )
+            // The skip effectively stopped the player by trying to skip the last track.
+            // The player state should now reflect 'stopped', and queue.current should be null/undefined.
+            await interaction.followUp({
+              content: "Skipped the track. The queue is now empty.",
+            })
+
+            player.destroy()
+            actionTaken = true // Mark action as taken because the desired outcome (stopping) occurred.
+            
+          } else {
+            // This is an unexpected error during skip
+            client.error("[ControlButtonHandler] Unexpected error during player.skip():", skipError)
+            // Re-throw the error to be caught by the outer try-catch block that sends a generic error message.
+            throw skipError
+          }
+        }
+
+        // This block now executes if skip() succeeded OR threw the caught error
+        if (actionTaken) {
+          // Check the player's state *after* the skip attempt.
+          // If skip() succeeded or threw the caught error, player.queue.current should be null/undefined.
+          if (!player.queue.current) {
+            client.debug("[ControlButtonHandler] Queue is empty after skip action.")
+            // Send a specific message indicating the queue ended
+            try {
+              // Use interaction.followUp since we deferred earlier
+              // This message is now sent within the isLastTrackSkipError block if applicable
+              // If skip succeeded normally, the control message update is enough
+            } catch (followUpError) {
+              client.error(
+                '[ControlButtonHandler] Failed to send "queue empty after skip" follow-up:',
+                followUpError
+              )
+            }
+          } else {
+            // This case should ideally not happen if skip() worked correctly on the last track
+            // or if the specific error was caught, but log just in case.
+            client.debug(
+              `[ControlButtonHandler] Next track exists after skip: ${player.queue.current?.info?.title ?? "N/A"}`
+            )
+          }
+        }
+        // If an unexpected error was thrown, actionTaken remains false, and the outer catch handles the reply.
+
+        break
+      }
+      case "control_shuffle": {
+        // player.queue.size is the number of tracks *upcoming*, doesn't include current
+        if (!player.queue || player.queue.size < 1) {
+          client.debug("[ControlButtonHandler] Shuffle clicked but not enough tracks in queue.")
+          await interaction.followUp({ content: "Not enough songs in the queue to shuffle." })
+          break // Don't set actionTaken
+        }
+        try {
+          player.queue.shuffle()
+          client.debug("[ControlButtonHandler] Queue shuffled.")
+          await interaction.followUp({ content: "🔀 Queue shuffled." })
+          actionTaken = true
+        } catch (shuffleError) {
+          client.error("[ControlButtonHandler] Error shuffling queue:", shuffleError)
+          // Optionally, inform the user about the error
+          await interaction.followUp({ content: "An error occurred while trying to shuffle." }).catch(() => {})
+          // Don't re-throw here unless it's critical, let the control message update attempt happen
+        }
+        break
+      }
+      case "control_loop": {
+        const currentLoop = player.loop || 'none' // 'none', 'track', 'queue'
+        let newMode = 'none'
+        let feedback = ''
+
+        if (currentLoop === 'none') {
+          newMode = 'track'
+          feedback = 'Track loop 🔁 enabled.'
+        } else if (currentLoop === 'track') {
+          newMode = 'queue'
+          feedback = 'Queue loop 🔁 enabled.'
+        } else { // currentLoop === 'queue'
+          newMode = 'none'
+          feedback = 'Loop disabled.'
+        }
+
+        try {
+          player.loop = newMode
+          client.debug(`[ControlButtonHandler] Loop mode set to ${newMode}.`)
+          await interaction.followUp({ content: feedback })
+          actionTaken = true
+        } catch (loopError) {
+          client.error("[ControlButtonHandler] Error setting loop mode:", loopError)
+          await interaction.followUp({ content: "An error occurred while setting loop mode." }).catch(() => {})
+        }
         break
       }
       default: {
@@ -220,7 +329,6 @@ export async function handleControlButtonInteraction(interaction, client) {
       // Attempt to notify user about the error
       await interaction.followUp({
         content: "An error occurred while controlling the player.",
-        ephemeral: true,
       })
     } catch (followUpError) {
       client.error(`[ControlButtonHandler] Failed to send player error follow-up:`, followUpError)

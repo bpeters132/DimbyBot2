@@ -1,4 +1,4 @@
-import { PermissionsBitField } from "discord.js"
+import { PermissionsBitField, MessageType } from "discord.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js" // Import the new handler
 
 /**
@@ -7,6 +7,17 @@ import { handleQueryAndPlay } from "../../util/musicManager.js" // Import the ne
  * @param {import('discord.js').Message} message The message received in the control channel.
  */
 export default async function handleControlMessages(client, message) {
+  // Ignore non-default message types (e.g., slash commands, replies without content)
+  if (message.type !== MessageType.Default && message.type !== MessageType.Reply) {
+      // Silently ignore interactions or system messages in this handler
+      // Slash commands are handled by interactionCreate
+      return
+  }
+  if (message.type === MessageType.Reply && !message.content) {
+    // Ignore replies that only quote and don't add new content
+    return
+  }
+
   // Renamed function
   const { channel, member, content, guildId } = message
   let feedbackMessage = null

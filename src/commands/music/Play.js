@@ -1,8 +1,6 @@
 import { SlashCommandBuilder } from "discord.js"
 // Import the centralized handler
 import { handleQueryAndPlay } from "../../util/musicManager.js"
-// updateControlMessage is called within handleQueryAndPlay now
-// import { updateControlMessage } from "../../util/guildSettings.js"
 
 export default {
   data: new SlashCommandBuilder()
@@ -68,46 +66,5 @@ export default {
 
     // Edit the deferred reply with the result
     await interaction.editReply(result.feedbackText || "Something went wrong.")
-
-    // Original logic replaced by handleQueryAndPlay:
-    /*
-    const res = await player.search({ query: query }, interaction.user) // Pass query obj and requester
-
-    if (!res || res.loadType === 'NO_MATCHES' || res.loadType === 'LOAD_FAILED') {
-      let errorMsg = "No tracks found or an error occurred."
-      if (res?.loadType === 'LOAD_FAILED') {
-          errorMsg = `Failed to load tracks: ${res.exception?.message || 'Unknown reason'}`
-          client.error(`[PlayCommand] Lavalink load failed: ${res.exception?.message}`, res.exception)
-      }
-      return interaction.reply({ content: errorMsg, ephemeral: true })
-    }
-
-    // Add tracks to queue
-    if (res.loadType === "playlist") {
-      player.queue.add(res.tracks)
-      const playlistTitle = res.playlist?.name ?? "Unknown Playlist"
-      const playlistUri = res.playlist?.uri
-      const trackCount = res.tracks.length
-
-      let replyMessage = `Added **playlist** "${playlistTitle}" (${trackCount} tracks) to the queue.`
-      if (playlistUri) {
-        replyMessage = `Added **playlist** [${playlistTitle}](${playlistUri}) (${trackCount} tracks) to the queue.`
-      }
-      await interaction.reply(replyMessage)
-
-    } else { // TRACK_LOADED or SEARCH_RESULT
-      const track = res.tracks[0]
-      player.queue.add(track)
-      await interaction.reply(`Added [${track.info.title}](${track.info.uri}) to the queue.`)
-    }
-
-    // Start playback if not already playing
-    if (!player.playing && !player.paused) {
-      await player.play()
-    }
-
-    // Use imported function
-    await updateControlMessage(client, guild.id)
-    */
   },
 }
