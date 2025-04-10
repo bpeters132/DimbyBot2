@@ -56,18 +56,5 @@ export default (client) => {
       // Optionally send a generic error message back to the control channel if the handler failed catastrophically
       // message.channel.send(`${message.member}, A critical error occurred.`).catch(() => {});
     })
-
-    /*
-    // --- MOVED TO src/handlers/controlChannelHandler.js ---
-    let feedbackMessage = null
-    try {
-      // ... (steps 1-8)
-    } catch (error) {
-      // ... (error handling)
-    } finally {
-      // ... (steps 9-10: cleanup)
-    }
-    // --- END MOVED SECTION ---
-    */
   })
 }

@@ -62,12 +62,13 @@ export async function handleQueryAndPlay(
     }
 
     // 5. Search
+    const isUrl = query.startsWith("http://") || query.startsWith("https://") // Basic URL check for logging
     client.debug(
-      `[MusicManager] Searching Lavalink for query "${query}" requested by ${requester.id} in guild ${guildId}.`
+      `[MusicManager] Searching Lavalink for ${isUrl ? 'URL' : 'query'} "${query}" requested by ${requester.id} in guild ${guildId}.` // Log if it looks like a URL
     )
     const searchResult = await player.search({ query: query }, requester)
     client.debug(
-      `[MusicManager] Lavalink search completed for guild ${guildId}. LoadType: ${searchResult.loadType}`
+      `[MusicManager] Lavalink search completed for guild ${guildId}. Query: "${query}", LoadType: ${searchResult.loadType}` // Include query in result log
     )
 
     // 6. Handle results
@@ -83,25 +84,27 @@ export async function handleQueryAndPlay(
         client.debug(`[MusicManager] No matches found for query "${query}" in guild ${guildId}.`)
         feedbackText = `${requester}, I couldn't find any tracks for "${query}".`
         break
+      case "track": // Handle lowercase variant from plugins like LavaSrc
       case "TRACK_LOADED":
         trackToAdd = searchResult.tracks[0]
         client.debug(
-          `[MusicManager] Loaded single track: ${trackToAdd.title} in guild ${guildId}. Adding to queue.`
+          `[MusicManager] Loaded single track: ${trackToAdd.info.title} in guild ${guildId}. Adding to queue.`
         )
         player.queue.add(trackToAdd)
-        feedbackText = `Added **${trackToAdd.title}** to the queue.`
+        feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`
         success = true
         break
       case "SEARCH_RESULT":
       case "search": // Handle lowercase variant
         trackToAdd = searchResult.tracks[0] // Add the first result
         client.debug(
-          `[MusicManager] Found search result: ${trackToAdd.title} in guild ${guildId}. Adding first track to queue.`
+          `[MusicManager] Found search result: ${trackToAdd.info.title} in guild ${guildId}. Adding first track to queue.`
         )
         player.queue.add(trackToAdd)
-        feedbackText = `Added **${trackToAdd.title}** to the queue.`
+        feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`
         success = true
         break
+      case "playlist": // Handle lowercase variant
       case "PLAYLIST_LOADED":
         client.debug(
           `[MusicManager] Loaded playlist: ${searchResult.playlist?.name} (${searchResult.tracks.length} tracks) in guild ${guildId}. Adding to queue.`

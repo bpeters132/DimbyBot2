@@ -45,7 +45,6 @@ export default {
       color: 0x00ffaa,
     }
 
-    // console.dir(track)
     return interaction.reply({ embeds: [embed] })
   },
 }

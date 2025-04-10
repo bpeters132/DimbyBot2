@@ -59,6 +59,8 @@ services:
       - GITLAB_EMAIL=${GITLAB_EMAIL}
       # Database connection URL (uses service name 'postgres-db' as host)
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-db:5432/${POSTGRES_DB}
+    volumes:
+      - dimbybot-storage:/app/storage
     networks:
       - internal
 
@@ -67,4 +69,4 @@ networks:
     driver: bridge 
 
 volumes:
-  postgres-data: # Define the named volume for database persistence 
+  dimbybot-storage: {} # Define the new named volume for bot storage 

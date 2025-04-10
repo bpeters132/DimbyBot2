@@ -24,7 +24,7 @@ export default {
         await channel.bulkDelete(clear_amount + 1)
         interaction.reply(`Cleared ${clear_amount} messages!`)
       } catch (error) {
-        client.info(error)
+        client.error(error)
         interaction.reply(
           "An error occured, verify you're only clearning messages that are under 14 days old!"
         )

@@ -1,4 +1,3 @@
-// TODO: Implement Loop Command
 import { SlashCommandBuilder } from 'discord.js'
 
 export default {
