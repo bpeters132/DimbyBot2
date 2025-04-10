@@ -6,6 +6,7 @@
 // Import utility functions using ESM
 import { getGuildSettings } from "../util/saveControlChannel.js"
 import { handleControlButtonInteraction } from "./handlers/handleControlButtonInteraction.js"
+import { cleanupControlChannel } from "./handlers/handleControlChannel.js"
 
 export default (client) => {
   client.on("interactionCreate", async (interaction) => {
@@ -52,6 +53,7 @@ export default (client) => {
             await interaction.reply({
               content: "Commands cannot be used in the control channel.",
             })
+            await cleanupControlChannel(interaction.channel, guildSettings.controlMessageId, client)
             return
           }
         } catch (error) {
