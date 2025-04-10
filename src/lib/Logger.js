@@ -30,7 +30,6 @@ export default class Logger {
              new winston.transports.File({
                  filename: file,
                  // Optionally set level specifically for file transport if needed
-                 // level: 'debug' // Uncomment if you always want debug in file regardless of LOG_LEVEL check for console
              })
           ],
         })
