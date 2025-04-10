@@ -85,20 +85,25 @@ export default {
 
       // Add the list of upcoming tracks for the current page
       if (currentTracks.length > 0) {
-        const fieldValue = currentTracks
+        let fieldValue = currentTracks // Make fieldValue mutable
           .map(
             (track, index) =>
               `**${start + index + 1}.** [${track.info.title}](${track.info.uri}) - \`${formatDuration(track.info.duration)}\``
           )
           .join("\n") || "_No tracks on this page._" // Ensure value is never empty
 
-        embed.addFields({
+        // Ensure the field value does not exceed Discord's limit (1024 chars)
+        if (fieldValue.length > 1024) {
+          fieldValue = fieldValue.substring(0, 1021) + "..." // Truncate and add ellipsis
+        }
+
+        embed.addFields([{
           name: "Up Next",
           value: fieldValue,
-        })
+        }])
       } else if (page === 1) {
         // Special case: If it's the first page and the queue (excluding now playing) is empty
-        embed.addFields({ name: "Up Next", value: "_Queue is empty._" })
+        embed.addFields([{ name: "Up Next", value: "_Queue is empty._" }])
       }
 
       return embed
