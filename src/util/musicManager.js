@@ -1,4 +1,5 @@
-import { updateControlMessage } from "./guildSettings.js"
+import { updateControlMessage } from "../events/handlers/handleControlChannel.js"
+
 
 /**
  * Handles searching, queueing, and starting playback for a music query.

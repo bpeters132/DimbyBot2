@@ -4,7 +4,7 @@
  */
 
 // Import utility functions using ESM
-import { getGuildSettings } from "../util/guildSettings.js"
+import { getGuildSettings } from "../util/saveControlChannel.js"
 import { handleControlButtonInteraction } from "./handlers/handleControlButtonInteraction.js"
 
 export default (client) => {

@@ -6,7 +6,9 @@
  */
 
 // Import utility functions
-import { updateControlMessage, getGuildSettings } from '../util/guildSettings.js'
+import { getGuildSettings } from '../util/saveControlChannel.js'
+import { updateControlMessage } from '../events/handlers/handleControlChannel.js'
+
 
 /**
  * Sets up event listeners for the Lavalink Manager.
@@ -144,15 +146,14 @@ export default async (client) => {
         client.debug(
           `[LavaMgrEvents] Executing queue end timeout check for player ${player.guildId}.`
         )
-        const currentPlayer = client.lavalink?.getPlayer(player.guildId)
-        if (currentPlayer && currentPlayer.queue.size === 0 && !currentPlayer.queue.current) {
+        if (player && player.queue.tracks.length === 0 && !player.queue.current) {
           client.debug(
             `[LavaMgrEvents] Player ${player.guildId} is idle, destroying after queue end timeout.`
           )
-          currentPlayer.destroy()
+          player.destroy()
         } else {
           client.debug(
-            `[LavaMgrEvents] Player ${player.guildId} has new tracks or state changed, not destroying after queue end timeout. Player: ${!!currentPlayer}, Queue Size: ${currentPlayer?.queue.size}, Current: ${!!currentPlayer?.queue.current}`
+            `[LavaMgrEvents] Player ${player.guildId} has new tracks or state changed, not destroying after queue end timeout. Player: ${!!player}, Queue Size: ${player?.queue.tracks.length}, Current: ${!!player?.queue.current}`
           ) // More detail
         }
       }, 5000)
