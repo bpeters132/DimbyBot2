@@ -1,5 +1,4 @@
 import { SlashCommandBuilder } from "discord.js"
-// Import the centralized handler
 import { handleQueryAndPlay } from "../../util/musicManager.js"
 
 export default {
@@ -9,6 +8,8 @@ export default {
     .addStringOption((option) =>
       option.setName("query").setDescription("The song name or URL").setRequired(true)
     ),
+
+
   /**
    *
    * @param {import('discord.js').CommandInteraction} interaction
