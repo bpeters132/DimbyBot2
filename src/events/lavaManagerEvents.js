@@ -151,7 +151,7 @@ export default async (client) => {
           player.destroy()
         } else {
           client.debug(
-            `[LavaMgrEvents] Player ${player.guildId} has new tracks or state changed, not destroying after queue end timeout. Player: ${!!player}, Queue Size: ${player?.queue.tracks.length}, Current: ${!!currentPlayer?.queue.current}`
+            `[LavaMgrEvents] Player ${player.guildId} has new tracks or state changed, not destroying after queue end timeout. Player: ${!!player}, Queue Size: ${player?.queue.tracks.length}, Current: ${!!player?.queue.current}`
           ) // More detail
         }
       }, 5000)
