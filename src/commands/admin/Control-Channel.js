@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, PermissionFlagsBits, ChannelType } from "discord.js"
 // Import functions from the utility file using ESM
-import { getGuildSettings, saveGuildSettings } from "../../util/guildSettings.js" // Adjusted path
+import { getGuildSettings, saveGuildSettings } from "../../util/saveControlChannel.js" // Adjusted path
 import {
   createControlEmbed,
   createControlButtons,

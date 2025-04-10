@@ -1,4 +1,4 @@
-import { getGuildSettings } from "../../util/guildSettings.js"
+import { getGuildSettings } from "../../util/saveControlChannel.js"
 import { updateControlMessage } from "./handleControlChannel.js"
 /**
  * Handles button interactions originating from the control message.

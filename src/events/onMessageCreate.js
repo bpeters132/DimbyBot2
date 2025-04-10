@@ -1,4 +1,4 @@
-import { getGuildSettings } from "../util/guildSettings.js"
+import { getGuildSettings } from "../util/saveControlChannel.js"
 import handleControlMessages from "./handlers/handleControlMessages.js"
 
 /**

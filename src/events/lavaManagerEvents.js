@@ -6,7 +6,7 @@
  */
 
 // Import utility functions
-import { getGuildSettings } from '../util/guildSettings.js'
+import { getGuildSettings } from '../util/saveControlChannel.js'
 import { updateControlMessage } from '../events/handlers/handleControlChannel.js'
 
 
