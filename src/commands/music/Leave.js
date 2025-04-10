@@ -8,7 +8,7 @@ export default {
    * @param {import('discord.js').CommandInteraction} interaction
    *
    */
-  async execute(client, interaction) {
+  async execute(interaction, client) {
     client.debug(`Leave command invoked by ${interaction.user.tag} in guild ${interaction.guild.id}`)
     const guild = interaction.guild
     const member = interaction.member
@@ -49,14 +49,6 @@ export default {
     }
 
     client.debug(`Found player for guild ${guild.id}. State: ${player.state}, Playing: ${player.playing}`)
-
-    // No need to check queue if we just want to leave
-    // if (!player.queue.current && player.queue.length === 0) {
-    //   client.debug("Leave command failed: Player exists but queue is empty")
-    //   return interaction.editReply(
-    //     "Nothing is playing or queued. If I am stuck, try playing something first, then leave."
-    //   )
-    // }
 
     client.debug(`Destroying player for guild ${guild.id}`)
     try {

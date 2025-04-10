@@ -1,4 +1,3 @@
-// TODO: Implement Loop Command
 import { SlashCommandBuilder } from 'discord.js'
 
 export default {
@@ -19,7 +18,7 @@ export default {
      * @param {import('../../lib/BotClient.js').default} client
      * @param {import('discord.js').CommandInteraction} interaction
      */
-    async execute(client, interaction) {
+    async execute(interaction, client) {
         const guild = interaction.guild
         const member = interaction.member
 

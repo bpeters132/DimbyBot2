@@ -10,8 +10,6 @@ services:
       # Note: Exclude node_modules to use the ones installed in the container
       - ./:/usr/src/app
       - /usr/src/app/node_modules # Anonymous volume to prevent local node_modules overwrite
-      # Keep the log mount if you want it separate
-      - ./logs.log:/usr/src/app/logs.log
     environment:
       # Ensure NODE_ENV is set for development if needed by any libs
       - NODE_ENV=development

@@ -101,7 +101,7 @@ export default class Logger {
         this.logger.error(fullMessage)
     }
     // Log to console using custom timestamp and colors
-    console.log(colors.gray(this._getTimestamp()) + colors.red(` | ERROR| ${fullMessage}`))
+    console.log(colors.gray(this._getTimestamp()) + colors.red(` | ERROR | ${fullMessage}`))
   }
 
   debug(text, ...args) {
@@ -114,6 +114,6 @@ export default class Logger {
     // Log to file using Winston (will use Winston timestamp format)
     this.logger.debug(fullMessage)
     // Log to console using custom timestamp and colors
-    console.log(colors.gray(this._getTimestamp()) + colors.magenta(` | DEBUG| ${fullMessage}`))
+    console.log(colors.gray(this._getTimestamp()) + colors.magenta(` | DEBUG | ${fullMessage}`))
   }
 }

@@ -8,7 +8,7 @@ export default {
    * @param {import('discord.js').CommandInteraction} interaction
    *
    */
-  async execute(client, interaction) {
+  async execute(interaction, client) {
     const guild = interaction.guild
     const member = interaction.member
 
@@ -45,7 +45,6 @@ export default {
       color: 0x00ffaa,
     }
 
-    // console.dir(track)
     return interaction.reply({ embeds: [embed] })
   },
 }

@@ -21,7 +21,7 @@ export default {
    * @param {import('../../lib/BotClient.js').default} client The bot client instance.
    * @param {import('discord.js').CommandInteraction} interaction The interaction object.
    */
-  async execute(client, interaction) {
+  async execute(interaction, client) {
     const guild = interaction.guild
     const member = interaction.member
 
@@ -85,14 +85,16 @@ export default {
 
       // Add the list of upcoming tracks for the current page
       if (currentTracks.length > 0) {
+        const fieldValue = currentTracks
+          .map(
+            (track, index) =>
+              `**${start + index + 1}.** [${track.info.title}](${track.info.uri}) - \`${formatDuration(track.info.duration)}\``
+          )
+          .join("\n") || "_No tracks on this page._" // Ensure value is never empty
+
         embed.addFields({
           name: "Up Next",
-          value: currentTracks
-            .map(
-              (track, index) =>
-                `**${start + index + 1}.** [${track.info.title}](${track.info.uri}) - \`${formatDuration(track.info.duration)}\``
-            )
-            .join("\n"),
+          value: fieldValue,
         })
       } else if (page === 1) {
         // Special case: If it's the first page and the queue (excluding now playing) is empty
