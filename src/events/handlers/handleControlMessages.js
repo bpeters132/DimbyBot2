@@ -182,7 +182,7 @@ export default async function handleControlMessages(client, message) {
           `[ControlHandler] Failed to delete query message ${message.id} in guild ${guildId}: ${deleteError.message} (Code: ${deleteError.code})`
         )
       } else {
-        client.debug(`[ControlHandler] Attempted to delete already deleted message ${message.id}.`)
+        client.warn(`[ControlHandler] Attempted to delete already deleted message ${message.id}.`)
       }
     }
 
