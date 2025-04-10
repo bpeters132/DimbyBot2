@@ -6,7 +6,9 @@
  */
 
 // Import utility functions
-import { updateControlMessage, getGuildSettings } from '../util/guildSettings.js'
+import { getGuildSettings } from '../util/guildSettings.js'
+import { updateControlMessage } from '../events/handlers/handleControlChannel.js'
+
 
 /**
  * Sets up event listeners for the Lavalink Manager.

@@ -1,11 +1,10 @@
 import { SlashCommandBuilder, PermissionFlagsBits, ChannelType } from "discord.js"
 // Import functions from the utility file using ESM
+import { getGuildSettings, saveGuildSettings } from "../../util/guildSettings.js" // Adjusted path
 import {
-  getGuildSettings,
-  saveGuildSettings,
   createControlEmbed,
   createControlButtons,
-} from "../../util/guildSettings.js" // Adjusted path
+} from "../../events/handlers/handleControlChannel.js"
 
 // Command definition using ES Module export
 export default {
@@ -27,8 +26,8 @@ export default {
   category: "admin",
   aliases: ["cc"],
 
-  async execute(interaction) {
-    const { client, guild, channel, options } = interaction
+  async execute(interaction, client) {
+    const { guild, channel, options } = interaction
     const subcommand = options.getSubcommand()
     client.debug(`[Control-Channel] Executing subcommand: ${subcommand} in guild ${guild.id}`)
 
@@ -113,8 +112,8 @@ export default {
         const player = client.lavalink?.getPlayer(guild.id)
 
         client.debug(`[Control-Channel] Creating initial embed and buttons for guild ${guild.id}.`)
-        const controlEmbed = createControlEmbed(player)
-        const controlButtons = createControlButtons(player)
+        const controlEmbed = createControlEmbed(client, player)
+        const controlButtons = createControlButtons(client, player)
 
         client.debug(
           `[Control-Channel] Sending new control message to channel ${targetChannel.id} in guild ${guild.id}.`
