@@ -71,3 +71,4 @@ networks:
 
 volumes:
   dimbybot-storage: {} # Define the new named volume for bot storage 
+  dimbybot-logs: {} # Define the new named volume for bot logs
