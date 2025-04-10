@@ -149,7 +149,7 @@ export function createControlButtons(client, player) {
  * @param {string} controlMessageId The ID of the message that should NOT be deleted.
  * @param {import('../lib/BotClient.js').default} client The bot client for logging.
  */
-async function cleanupControlChannel(channel, controlMessageId, client) {
+export async function cleanupControlChannel(channel, controlMessageId, client) {
   if (!channel) return
   client.debug(`[ControlCleanup] Starting cleanup for channel ${channel.id}`)
 

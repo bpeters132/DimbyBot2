@@ -129,7 +129,7 @@ export default {
       )
       return row
     }
-
+    
     // Generate initial embed and buttons for the first page
     const initialEmbed = generateEmbed(currentPage)
     const initialButtons = generateButtons(currentPage)
