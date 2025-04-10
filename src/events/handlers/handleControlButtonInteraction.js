@@ -334,7 +334,7 @@ export async function handleControlButtonInteraction(interaction, client) {
       client.error(`[ControlButtonHandler] Failed to send player error follow-up:`, followUpError)
     }
     // Attempt to update the control message even after an error
-    client.debug(
+    client.warn(
       `[ControlButtonHandler] Updating control message after player error for ${customId}.`
     )
     updateControlMessage(client, guildId).catch((err) =>

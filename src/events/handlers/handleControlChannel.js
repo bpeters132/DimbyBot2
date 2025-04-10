@@ -5,6 +5,7 @@ import {
   ButtonStyle,
   PermissionsBitField,
 } from "discord.js"
+import { setTimeout as sleep } from "node:timers/promises"
 import { getGuildSettings, ensureStorageDir } from "../../util/saveControlChannel.js"
 
 /**
@@ -179,7 +180,7 @@ async function cleanupControlChannel(channel, controlMessageId, client) {
         `[ControlCleanup] Found ${messagesToDelete.size} messages to delete in channel ${channel.id}.`
       )
       client.debug("[ControlCleanup] Waiting 5 seconds before deleting...")
-      await setTimeout(5000) // Add 5-second delay
+      await sleep(5000)
       // Bulk delete messages. discord.js handles filtering out messages older than 14 days automatically.
       await channel.bulkDelete(messagesToDelete, true) // true ignores messages older than 14 days
       client.debug(
@@ -191,13 +192,21 @@ async function cleanupControlChannel(channel, controlMessageId, client) {
       )
     }
   } catch (error) {
-    // Log errors, potentially common if messages are very old or other issues occur
-    client.error(
-      `[ControlCleanup] Error during control channel cleanup for channel ${channel.id}:`,
-      error
-    )
+    // Ignore "Unknown Message" errors (10008) as they are expected if messages were deleted during the delay
+    if (error.code === 10008) {
+      client.warn(
+        `[ControlCleanup] Encountered known issue (10008: Unknown Message) during cleanup for channel ${channel.id}. Likely due to race condition. Ignoring.`
+      )
+    } else {
+      // Log other errors as actual errors
+      client.error(
+        `[ControlCleanup] Error during control channel cleanup for channel ${channel.id}:`,
+        error
+      )
+    }
   }
 }
+
 
 /**
  * Updates the persistent control message for a guild and cleans up the channel.
@@ -261,7 +270,10 @@ export async function updateControlMessage(client, guildId) {
       `[ControlHandler] Successfully edited control message ${controlMessage.id} in guild ${guildId}`
     )
 
-    await cleanupControlChannel(controlChannel, controlMessage.id, client)
+    // Don't await cleanup; let it run in the background after a delay.
+    cleanupControlChannel(controlChannel, controlMessage.id, client).catch(err => {
+        client.error(`[ControlHandler] Background cleanup failed for channel ${controlChannel.id}:`, err)
+    })
   } catch (error) {
     if (error.code === 50001 || error.code === 10008 || error.code === 50013) {
       client.warn(
