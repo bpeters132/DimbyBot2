@@ -6,7 +6,7 @@ import {
   ButtonStyle,
   ComponentType,
 } from "discord.js"
-import formatDuration from "../../util/formatDuration.js"
+import { formatDuration } from "../../util/formatDuration.js"
 
 /**
  * @type {import('../../lib/types').SlashCommand}

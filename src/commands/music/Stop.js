@@ -24,6 +24,18 @@ export default {
 
     player.destroy()
 
-    interaction.reply("BYE!")
+    // Use fetchReply to get the message object
+    const msg = await interaction.reply({ content: "BYE!", fetchReply: true })
+    // Delete after delay with retry
+    setTimeout(() => {
+      msg.delete().catch((e) => {
+        client.error("[StopCmd] Failed to delete reply (attempt 1):", e)
+        if (e.code === 'EAI_AGAIN' || e.message.includes('ECONNRESET')) {
+          setTimeout(() => {
+            msg.delete().catch((e2) => client.error("[StopCmd] Failed to delete reply (attempt 2):", e2))
+          }, 2000) // Retry after 2 seconds
+        }
+      })
+    }, 1000 * 10) // 10 seconds initial delay
   },
 }

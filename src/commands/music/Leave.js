@@ -35,8 +35,20 @@ export default {
             client.debug(`Bot is in voice channel ${botVoiceState.channel.id}. Attempting to leave.`)
             try {
                 client.lavalink.destroyPlayer(guild.id) // Use Lavalink's destroy method
-                await interaction.editReply("Left the voice channel.")
+                // Use fetchReply to get the message object
+                const msg = await interaction.editReply({ content: "Left the voice channel.", fetchReply: true })
                 client.debug("Successfully left voice channel via destroyPlayer.")
+                // Delete after delay with retry
+                setTimeout(() => {
+                  msg.delete().catch((e) => {
+                    client.error("[LeaveCmd] Failed to delete reply (attempt 1):", e)
+                    if (e.code === 'EAI_AGAIN' || e.message.includes('ECONNRESET')) {
+                      setTimeout(() => {
+                        msg.delete().catch((e2) => client.error("[LeaveCmd] Failed to delete reply (attempt 2):", e2))
+                      }, 2000) // Retry after 2 seconds
+                    }
+                  })
+                }, 1000 * 10) // 10 seconds initial delay
             } catch (error) {
                 client.error("Error trying to leave voice channel without active player:", error)
                 await interaction.editReply("Couldn't leave the channel cleanly. Please disconnect me manually.")
@@ -54,8 +66,20 @@ export default {
     try {
         await player.destroy()
         client.debug(`Player destroyed for guild ${guild.id}`)
-        await interaction.editReply("BYE!")
+        // Use fetchReply to get the message object
+        const msg = await interaction.editReply({ content: "BYE!", fetchReply: true })
         client.debug("Leave command successfully executed")
+        // Delete after delay with retry
+        setTimeout(() => {
+          msg.delete().catch((e) => {
+            client.error("[LeaveCmd] Failed to delete reply (attempt 1):", e)
+            if (e.code === 'EAI_AGAIN' || e.message.includes('ECONNRESET')) {
+              setTimeout(() => {
+                msg.delete().catch((e2) => client.error("[LeaveCmd] Failed to delete reply (attempt 2):", e2))
+              }, 2000) // Retry after 2 seconds
+            }
+          })
+        }, 1000 * 10) // 10 seconds initial delay
     } catch(error) {
         client.error(`Error destroying player for guild ${guild.id}:`, error)
         await interaction.editReply("An error occurred while trying to leave.")
