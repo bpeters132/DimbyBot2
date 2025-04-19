@@ -6,9 +6,8 @@
  */
 
 // Import utility functions
-import { getGuildSettings } from '../util/saveControlChannel.js'
-import { updateControlMessage } from '../events/handlers/handleControlChannel.js'
-
+import { getGuildSettings } from "../util/saveControlChannel.js"
+import { updateControlMessage } from "../events/handlers/handleControlChannel.js"
 
 /**
  * Sets up event listeners for the Lavalink Manager.
@@ -60,6 +59,20 @@ export default async (client) => {
         )
         channel
           .send(`▶️ Now playing: **${track.info.title}**`)
+          .then((msg) => {
+            // Delete the message after 10 seconds, with a retry on network error
+            setTimeout(() => {
+              msg.delete().catch((e) => {
+                client.error("[LavaMgrEvents] Failed to delete trackStart message (attempt 1):", e)
+                // Retry once after a short delay if it's a likely network issue
+                if (e.code === 'EAI_AGAIN' || e.message.includes('ECONNRESET')) {
+                  setTimeout(() => {
+                    msg.delete().catch((e2) => client.error("[LavaMgrEvents] Failed to delete trackStart message (attempt 2):", e2))
+                  }, 2000) // Retry after 2 seconds
+                }
+              })
+            }, 1000 * 10) // 10 seconds initial delay
+          })
           .catch((e) => client.error("[LavaMgrEvents] Failed to send trackStart message:", e))
       } else {
         client.debug(
