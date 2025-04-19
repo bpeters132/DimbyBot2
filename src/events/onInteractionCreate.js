@@ -85,22 +85,30 @@ export default (client) => {
         await command.execute(interaction, client)
         client.debug(`[InteractionCreate] Successfully executed command "${commandName}".`)
       } catch (error) {
+        // Log the core error regardless
         client.error(`[InteractionCreate] Error executing command "${commandName}":`, error)
-        try {
-          if (interaction.replied || interaction.deferred) {
-            await interaction.followUp({
-              content: "There was an error while executing this command!",
-            })
-          } else {
+
+        // Attempt to send a generic error reply ONLY if the interaction is still valid
+        // and hasn't already been replied to or deferred by the command itself.
+        // Commands like eval might handle their own specific error feedback.
+        if (!interaction.replied && !interaction.deferred) {
+          try {
+            // Use reply if no response has been attempted yet
             await interaction.reply({
-              content: "There was an error while executing this command!",
+              content: `There was an error executing \`/${commandName}\`. Please check the logs or contact the developer.`,
+              ephemeral: true // Keep generic errors ephemeral
             })
+          } catch (replyError) {
+            // Log if even the initial reply fails (e.g., interaction truly invalid for some reason)
+            client.error(
+              `[InteractionCreate] Failed to send generic error reply for ${commandName} (Interaction likely invalid):`,
+              replyError
+            )
           }
-        } catch (replyError) {
-          client.error(
-            `[InteractionCreate] Failed to send execution error reply for ${commandName}:`,
-            replyError
-          )
+        } else {
+           // If replied or deferred, the command likely tried to handle its own response/error.
+           // We just log the error above and don't try to interact further to avoid conflicts or Unknown Interaction errors.
+           client.debug(`[InteractionCreate] Interaction for ${commandName} was already replied/deferred. Skipping generic error reply.`)
         }
       }
       return
