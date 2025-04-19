@@ -54,6 +54,9 @@ services:
       - BOT_TOKEN=${BOT_TOKEN}
       - CLIENT_ID=${CLIENT_ID}
       - GUILD_ID=${GUILD_ID}
+      - OWNER_ID=${OWNER_ID}
+      - DEV_MODE=${DEV_MODE}
+      - LOG_LEVEL=${LOG_LEVEL}
       - EMAIL_PASS=${EMAIL_PASS}
       - EMAIL_USER=${EMAIL_USER}
       - GITLAB_EMAIL=${GITLAB_EMAIL}
