@@ -84,7 +84,6 @@ export default async (client) => {
       client.debug(
         `[LavaMgrEvents] Track ended in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "N/A"}, Reason: ${payload.reason}`
       )
-      // Update should happen even if auto-play starts next track
       updateControlMessage(client, player.guildId)
     })
     .on("trackStuck", (player, track, payload) => {
@@ -138,8 +137,9 @@ export default async (client) => {
      */
     .on("queueEnd", (player) => {
       client.debug(`[LavaMgrEvents] Queue ended for Guild: ${player.guildId}`)
-      updateControlMessage(client, player.guildId)
+      updateControlMessage(client, player.guildId) // Update control message immediately
 
+      // Send message to non-control channel
       const channel = client.channels.cache.get(player.textChannelId)
       const currentGuildSettings = getGuildSettings() // Use imported function
       const controlChannelId = currentGuildSettings[player.guildId]?.controlChannelId
@@ -152,12 +152,13 @@ export default async (client) => {
           .catch((e) => client.error("[LavaMgrEvents] Failed to send queueEnd message:", e))
       }
 
+      // Standard player destroy timeout
       client.debug(
-        `[LavaMgrEvents] Setting timeout to destroy player ${player.guildId} after queue end.`
-      ) // Log timeout set
+        `[LavaMgrEvents] Setting standard timeout to destroy player ${player.guildId} after queue end.`
+      ) 
       setTimeout(() => {
         client.debug(
-          `[LavaMgrEvents] Executing queue end timeout check for player ${player.guildId}.`
+          `[LavaMgrEvents] Executing standard queue end timeout check for player ${player.guildId}.`
         )
         if (player && player.queue.tracks.length === 0 && !player.queue.current) {
           client.debug(
@@ -166,10 +167,11 @@ export default async (client) => {
           player.destroy()
         } else {
           client.debug(
-            `[LavaMgrEvents] Player ${player.guildId} has new tracks or state changed, not destroying after queue end timeout. Player: ${!!player}, Queue Size: ${player?.queue.tracks.length}, Current: ${!!player?.queue.current}`
-          ) // More detail
+            `[LavaMgrEvents] Player ${player.guildId} has new tracks or state changed, not destroying after standard timeout. Player: ${!!player}, Queue Size: ${player?.queue.tracks.length}, Current: ${!!player?.queue.current}`
+          )
         }
       }, 5000)
+      
     })
 
     /**

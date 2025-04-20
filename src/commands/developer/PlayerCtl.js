@@ -34,11 +34,11 @@ export default {
     const ownerId = process.env.OWNER_ID
     if (!ownerId) {
       client.error("[PlayerCtl] Developer ID is not configured as OWNER_ID in environment variables!")
-      return interaction.reply({ content: "Command configuration error: Developer ID not set.", ephemeral: true })
+      return interaction.reply({ content: "Command configuration error: Developer ID not set.", ephemeral: true})
     }
     if (interaction.user.id !== ownerId) {
       client.debug(`[PlayerCtl] Denied access to user ${interaction.user.tag} (${interaction.user.id})`)
-      return interaction.reply({ content: "Sorry, this command can only be used by the bot developer.", ephemeral: true })
+      return interaction.reply({ content: "Sorry, this command can only be used by the bot developer.", ephemeral: true})
     }
     // --- End Developer Check ---
 
@@ -49,7 +49,7 @@ export default {
     client.debug(`[PlayerCtl] Developer ${interaction.user.tag} executing '${subcommand}' for guild ${guildId}`)
 
     if (!player) {
-      return interaction.reply({ content: `❌ No active player found for Guild ID: ${guildId}`, ephemeral: true })
+      return interaction.reply({ content: `❌ No active player found for Guild ID: ${guildId}`})
     }
 
     await interaction.deferReply({ ephemeral: true })
@@ -97,7 +97,7 @@ export default {
         }
         case "skip": {
           if (!player.queue.current) {
-              await interaction.editReply({ content: "❌ Nothing is currently playing in that guild.", ephemeral: true })
+              await interaction.editReply({ content: "❌ Nothing is currently playing in that guild."})
               return
           }
           await player.skip()
