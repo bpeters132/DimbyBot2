@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, REST, Routes } from "discord.js"
-import fs from "node:fs"
-import path from "node:path"
+import fs from "fs"
+import path from "path"
 
 // Helper function to recursively load command files
 // Adjust this if your command loading logic is different!

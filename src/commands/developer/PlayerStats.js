@@ -54,7 +54,7 @@ export default {
       embed.setDescription(description)
     }
 
-    await interaction.reply({ embeds: [embed], ephemeral: true })
+    await interaction.reply({ embeds: [embed] })
     client.debug(`[PlayerStatsCmd] Replied with player stats embed. Count: ${playerCount}`)
   },
 } 

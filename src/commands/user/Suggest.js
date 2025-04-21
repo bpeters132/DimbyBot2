@@ -50,6 +50,7 @@ export default {
       return interaction.editReply({
         content:
           "Suggestion submission is not configured correctly on the bot's end. Please notify the administrator.",
+        ephemeral: true
       })
     }
     client.debug("Email environment variables seem present.")
@@ -79,6 +80,7 @@ export default {
       return interaction.editReply({
         content:
           "There was an error setting up the suggestion submission service. Please try again later.",
+        ephemeral: true
       })
     }
 
@@ -87,7 +89,7 @@ export default {
       from: process.env.EMAIL_USER, // Sender address (must match Mailgun sending domain/user)
       to: process.env.GITLAB_EMAIL, // Recipient address (e.g., GitLab service desk email)
       subject: title, // Use the user-provided title as the email subject
-      // Construct the email body with user and suggestion details
+      // Construct the email body with user and suggestion detailsF
       text: `
 Suggestion from Discord user: ${user.tag} (${user.id})
 
@@ -113,6 +115,7 @@ Submitted at: ${new Date().toISOString()}
       // Inform the user of success
       await interaction.editReply({
         content: "Your suggestion has been submitted successfully!",
+        ephemeral: true
       })
       client.debug(`Suggest command finished successfully for ${user.tag}.`)
     } catch (error) {
@@ -126,6 +129,7 @@ Submitted at: ${new Date().toISOString()}
       await interaction.editReply({
         content:
           "There was an error submitting your suggestion. Please try again later or contact an admin if the issue persists.",
+        ephemeral: true
       })
     }
   },

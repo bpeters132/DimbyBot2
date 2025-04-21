@@ -71,7 +71,33 @@ export async function handleControlButtonInteraction(interaction, client) {
     `[ControlButtonHandler] Found player for guild ${guildId}. State: ${player.state}, Playing: ${player.playing}`
   )
 
-  // 4. Defer Interaction
+  // 4. Voice Channel Check
+  const member = interaction.member
+  if (!member?.voice?.channel) {
+    client.debug(`[ControlButtonHandler] User ${interaction.user.id} not in a voice channel.`)
+    try {
+      await interaction.reply({ content: "You must be in a voice channel to use the controls!", ephemeral: true })
+    } catch (e) { client.error("Error replying to VC check fail:", e) }
+    return
+  }
+  if (!player.voiceChannelId) {
+    client.warn(`[ControlButtonHandler] Player for guild ${guildId} exists but has no voiceChannelId. Cannot verify user channel.`)
+    // Allow control anyway? Or deny? Let's deny for now for consistency.
+    try {
+      await interaction.reply({ content: "Cannot verify player's voice channel. Controls unavailable.", ephemeral: true })
+    } catch (e) { client.error("Error replying to player VC check fail:", e) }
+    return
+  }
+  if (member.voice.channel.id !== player.voiceChannelId) {
+    client.debug(`[ControlButtonHandler] User ${interaction.user.id} in different VC (${member.voice.channel.id}) than player (${player.voiceChannelId}).`)
+    try {
+      await interaction.reply({ content: "You must be in the same voice channel as the bot to use the controls!", ephemeral: true })
+    } catch (e) { client.error("Error replying to mismatched VC check fail:", e) }
+    return
+  }
+  client.debug(`[ControlButtonHandler] User ${interaction.user.id} is in the correct voice channel (${player.voiceChannelId}).`)
+
+  // 5. Defer Interaction
   try {
     await interaction.deferUpdate()
     client.debug(`[ControlButtonHandler] Interaction ${customId} deferred successfully.`)
@@ -84,7 +110,7 @@ export async function handleControlButtonInteraction(interaction, client) {
     return
   }
 
-  // 5. Execute Action & Update Control Message
+  // 6. Execute Action & Update Control Message
   let actionTaken = false
   try {
     client.debug(`[ControlButtonHandler] Executing action for ${customId}`)
@@ -307,7 +333,7 @@ export async function handleControlButtonInteraction(interaction, client) {
       }
     }
 
-    // 6. Update Control Message if action was taken
+    // 7. Update Control Message if action was taken
     if (actionTaken) {
       client.debug(`[ControlButtonHandler] Action ${customId} completed, updating control message.`)
       // No need to await this, let it run in the background
