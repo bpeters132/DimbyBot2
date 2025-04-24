@@ -10,9 +10,12 @@ COPY plugins ./plugins
 # Copy the entrypoint script
 COPY entrypoint.sh entrypoint.sh
 # Ensure script has correct line endings (LF) and is executable
+# Ensure /tmp exists and has correct permissions
 RUN apk add --no-cache dos2unix curl \
     && dos2unix entrypoint.sh \
     && chmod +x entrypoint.sh \
+    && mkdir -p /tmp \
+    && chmod 1777 /tmp \
     # Add debugging steps:
     && echo "--- Listing /app contents:" \
     && ls -la /app/ \
