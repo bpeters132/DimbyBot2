@@ -1,10 +1,11 @@
 # Use an appropriate base image with Java (e.g., OpenJDK JRE)
 FROM eclipse-temurin:17-jre-alpine
 
-WORKDIR /app
+WORKDIR /app/Lavalink
 
 # Copy the Lavalink jar and plugins
 COPY Lavalink.jar Lavalink.jar
+COPY plugins ./plugins
 
 # Copy the entrypoint script
 COPY entrypoint.sh entrypoint.sh
@@ -13,8 +14,8 @@ RUN apk add --no-cache dos2unix curl \
     && dos2unix entrypoint.sh \
     && chmod +x entrypoint.sh \
     # Add debugging steps:
-    && echo "--- Listing /app contents:" \
-    && ls -la /app/ \
+    && echo "--- Listing /app/Lavalink contents:" \
+    && ls -la /app/Lavalink/ \
     && echo "--- Checking for /bin/sh:" \
     && which sh
 
@@ -28,4 +29,4 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=5 \
 
 # Run the entrypoint script which generates application.yml and starts Lavalink
 # Use absolute path and explicitly invoke sh to bypass shebang issues
-ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"] 
+ENTRYPOINT ["/bin/sh", "/app/Lavalink/entrypoint.sh"] 
