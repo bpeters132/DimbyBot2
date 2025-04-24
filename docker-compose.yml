@@ -17,8 +17,11 @@ services:
       - LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT=${LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT}
     ports:
       - "${LAVALINK_PORT}:${LAVALINK_PORT}" # Map host port to container port
+    volumes:
+      - lavalink-plugins:/app/plugins
     networks:
       - internal
+    
 
   # postgres-db:
   #   image: postgres:15 # Or your preferred version
@@ -75,3 +78,4 @@ networks:
 volumes:
   dimbybot-storage: {} # Define the new named volume for bot storage 
   dimbybot-logs: {} # Define the new named volume for bot logs
+  lavalink-plugins: {} # Define the new named volume for lavalink plugins
