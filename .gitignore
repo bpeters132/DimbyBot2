@@ -15,3 +15,9 @@ lavaNodesConfig.js
 
 # Data storage (e.g., guild settings)
 storage/
+
+# Cursor
+.cursor/
+
+# VSCode
+.vscode/

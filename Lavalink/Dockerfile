@@ -3,6 +3,13 @@ FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
+# Install required system libraries and utilities
+RUN apk add --no-cache \
+    libgcc \
+    gcompat \
+    dos2unix \
+    curl
+
 # Copy the Lavalink jar and plugins
 COPY Lavalink.jar Lavalink.jar
 COPY plugins ./plugins
@@ -11,8 +18,7 @@ COPY plugins ./plugins
 COPY entrypoint.sh entrypoint.sh
 # Ensure script has correct line endings (LF) and is executable
 # Ensure /tmp exists and has correct permissions
-RUN apk add --no-cache dos2unix curl \
-    && dos2unix entrypoint.sh \
+RUN dos2unix entrypoint.sh \
     && chmod +x entrypoint.sh \
     && mkdir -p /tmp \
     && chmod 1777 /tmp \
