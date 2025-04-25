@@ -65,9 +65,16 @@ export default async (client) => {
               msg.delete().catch((e) => {
                 client.error("[LavaMgrEvents] Failed to delete trackStart message (attempt 1):", e)
                 // Retry once after a short delay if it's a likely network issue
-                if (e.code === 'EAI_AGAIN' || e.message.includes('ECONNRESET')) {
+                if (e.code === "EAI_AGAIN" || e.message.includes("ECONNRESET")) {
                   setTimeout(() => {
-                    msg.delete().catch((e2) => client.error("[LavaMgrEvents] Failed to delete trackStart message (attempt 2):", e2))
+                    msg
+                      .delete()
+                      .catch((e2) =>
+                        client.error(
+                          "[LavaMgrEvents] Failed to delete trackStart message (attempt 2):",
+                          e2
+                        )
+                      )
                   }, 2000) // Retry after 2 seconds
                 }
               })
@@ -129,7 +136,16 @@ export default async (client) => {
       client.debug(
         `[LavaMgrEvents] Attempting to skip track after error in guild ${player.guildId}.`
       )
-      player.skip()
+      // Only skip if there are tracks left in the queue
+      if (player.queue.tracks.length > 0) {
+        player.skip()
+      } else {
+        client.debug(
+          `[LavaMgrEvents] Queue is empty, not skipping after error in guild ${player.guildId}.`
+        )
+        // Optionally, you might want to destroy the player here if the queue is empty and an error occurred
+        player.destroy() // Example: uncomment if you want to destroy on error + empty queue
+      }
     })
 
     /**
@@ -155,7 +171,7 @@ export default async (client) => {
       // Standard player destroy timeout
       client.debug(
         `[LavaMgrEvents] Setting standard timeout to destroy player ${player.guildId} after queue end.`
-      ) 
+      )
       setTimeout(() => {
         client.debug(
           `[LavaMgrEvents] Executing standard queue end timeout check for player ${player.guildId}.`
@@ -171,7 +187,6 @@ export default async (client) => {
           )
         }
       }, 5000)
-      
     })
 
     /**
