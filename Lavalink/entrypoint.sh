@@ -41,8 +41,8 @@ plugins:
       localFiles: false
 lavalink:
   plugins:
-    - dependency: "dev.lavalink.youtube:youtube-plugin:130561e2d2f76605eb08b2c9cc4facbf400caccb"
-      snapshot: true
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.13.0"
+      snapshot: false
     - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.4.2"
       snapshot: false
   server:
