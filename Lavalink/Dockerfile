@@ -12,7 +12,6 @@ RUN apk add --no-cache \
 
 # Copy the Lavalink jar and plugins
 COPY Lavalink.jar Lavalink.jar
-COPY plugins ./plugins
 
 # Copy the entrypoint script
 COPY entrypoint.sh entrypoint.sh
