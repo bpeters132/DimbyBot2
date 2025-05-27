@@ -15,6 +15,17 @@ export default function createLavalinkManager(client) {
       id: process.env.CLIENT_ID,
       username: "DimbyBot", // TODO: add this to ENV
     },
+    sources: {
+      youtube: true,
+      spotify: true,
+      soundcloud: true,
+      local: true
+    },
+    defaultSearchPlatform: "local",
+    searchOptions: {
+      searchEngine: "local",
+      fallbackSearchEngine: "youtube"
+    }
   })
   client.debug("LavalinkManager instance created successfully.") // Debug log
   return manager

@@ -1,4 +1,6 @@
 import { updateControlMessage } from "../events/handlers/handleControlChannel.js"
+import path from "path"
+import fs from "fs"
 
 
 /**
@@ -66,10 +68,164 @@ export async function handleQueryAndPlay(
     client.debug(
       `[MusicManager] Searching Lavalink for ${isUrl ? 'URL' : 'query'} "${query}" requested by ${requester.id} in guild ${guildId}.` // Log if it looks like a URL
     )
-    const searchResult = await player.search({ query: query }, requester)
-    client.debug(
-      `[MusicManager] Lavalink search completed for guild ${guildId}. Query: "${query}", LoadType: ${searchResult.loadType}` // Include query in result log
-    )
+
+    // Try different search strategies
+    let searchResult = null
+    let searchError = null
+    let searchAttempts = []
+
+    // First, check if this is a local file
+    const downloadsDir = path.join(process.cwd(), "downloads")
+    if (fs.existsSync(downloadsDir)) {
+        const files = fs.readdirSync(downloadsDir)
+            .filter(file => file.endsWith(".wav"))
+            .map(file => ({
+                name: file,
+                path: path.join(downloadsDir, file),
+                title: file.replace(".wav", "").toLowerCase()
+            }))
+
+        // Try to find a matching file using fuzzy matching
+        const queryLower = query.toLowerCase()
+        const matchingFile = files.find(file => {
+            // Check if query is contained in the title
+            if (file.title.includes(queryLower)) return true
+            
+            // Check if title is contained in the query
+            if (queryLower.includes(file.title)) return true
+            
+            // Check for word matches
+            const queryWords = queryLower.split(/\s+/)
+            const titleWords = file.title.split(/\s+/)
+            return queryWords.some(word => 
+                titleWords.some(titleWord => 
+                    titleWord.includes(word) || word.includes(titleWord)
+                )
+            )
+        })
+
+        if (matchingFile) {
+            client.debug(`[MusicManager] Found matching local file: ${matchingFile.title}`)
+            try {
+                // Create a direct file URI for the local file using absolute path
+                const absolutePath = path.resolve(matchingFile.path)
+                const fileUri = `file://${absolutePath}`
+                client.debug(`[MusicManager] Using file URI: ${fileUri}`)
+                
+                // Create a track object directly
+                const track = {
+                    info: {
+                        title: matchingFile.title,
+                        uri: fileUri,
+                        sourceName: "local",
+                        length: 0,
+                        identifier: fileUri,
+                        isStream: false,
+                        author: "Local File",
+                        isSeekable: true
+                    },
+                    track: fileUri,
+                    requester: requester
+                }
+
+                // Create a search result object
+                searchResult = {
+                    loadType: "TRACK_LOADED",
+                    tracks: [track],
+                    playlistInfo: {}
+                }
+
+                searchAttempts.push({ source: 'local', success: true, loadType: searchResult.loadType })
+                client.debug(
+                    `[MusicManager] Local file loaded for guild ${guildId}. File: "${matchingFile.title}", LoadType: ${searchResult.loadType}`
+                )
+            } catch (error) {
+                searchError = error
+                searchAttempts.push({ source: 'local', success: false, error: error.message })
+                client.warn(
+                    `[MusicManager] Local file load failed for file "${matchingFile.title}" in guild ${guildId}. Error: ${error.message}`
+                )
+            }
+        }
+    }
+
+    // If no local file found or local file search failed, try other sources
+    if (!searchResult || searchResult.loadType === "LOAD_FAILED" || searchResult.loadType === "NO_MATCHES") {
+        // For non-URLs, try direct search first
+        if (!isUrl) {
+            try {
+                // Format the search query properly
+                const searchQuery = query.trim().replace(/\s+/g, ' ')
+                // Use direct search without any source specification
+                searchResult = await player.search(searchQuery, requester)
+                searchAttempts.push({ source: 'direct', success: true, loadType: searchResult.loadType })
+                client.debug(
+                    `[MusicManager] Direct search completed for guild ${guildId}. Query: "${searchQuery}", LoadType: ${searchResult.loadType}`
+                )
+            } catch (error) {
+                searchError = error
+                searchAttempts.push({ source: 'direct', success: false, error: error.message })
+                client.warn(
+                    `[MusicManager] Direct search failed for query "${query}" in guild ${guildId}. Error: ${error.message}`
+                )
+            }
+        } else {
+            // For URLs, try direct search
+            try {
+                searchResult = await player.search(query, requester)
+                searchAttempts.push({ source: 'direct', success: true, loadType: searchResult.loadType })
+                client.debug(
+                    `[MusicManager] Direct search completed for guild ${guildId}. Query: "${query}", LoadType: ${searchResult.loadType}`
+                )
+            } catch (error) {
+                searchError = error
+                searchAttempts.push({ source: 'direct', success: false, error: error.message })
+                client.warn(
+                    `[MusicManager] Direct search failed for query "${query}" in guild ${guildId}. Error: ${error.message}`
+                )
+            }
+        }
+    }
+
+    // If search failed, try Spotify as last resort
+    if (!searchResult || searchResult.loadType === "LOAD_FAILED" || searchResult.loadType === "NO_MATCHES") {
+      try {
+        searchResult = await player.search(query, requester)
+        searchAttempts.push({ source: 'spotify', success: true, loadType: searchResult.loadType })
+        client.debug(
+          `[MusicManager] Spotify search completed for guild ${guildId}. Query: "${query}", LoadType: ${searchResult.loadType}`
+        )
+      } catch (error) {
+        searchAttempts.push({ source: 'spotify', success: false, error: error.message })
+        client.warn(
+          `[MusicManager] Spotify search failed for query "${query}" in guild ${guildId}. Error: ${error.message}`
+        )
+      }
+    }
+
+    // If all searches failed, return detailed error
+    if (!searchResult || searchResult.loadType === "LOAD_FAILED" || searchResult.loadType === "NO_MATCHES") {
+      client.warn(
+        `[MusicManager] All search attempts failed for query "${query}" in guild ${guildId}. Attempts: ${JSON.stringify(searchAttempts)}`
+      )
+      
+      // Build detailed error message
+      let errorDetails = "Search attempts:\n"
+      searchAttempts.forEach((attempt, index) => {
+        errorDetails += `${index + 1}. ${attempt.source}: ${attempt.success ? 'Success' : 'Failed'}`
+        if (!attempt.success && attempt.error) {
+          errorDetails += ` (${attempt.error})`
+        }
+        if (attempt.loadType) {
+          errorDetails += ` [${attempt.loadType}]`
+        }
+        errorDetails += "\n"
+      })
+
+      feedbackText = `${requester}, I couldn't find any playable tracks for "${query}".\n${errorDetails}`
+      errorResult = searchError || new Error("All search attempts failed")
+      return { success: false, feedbackText, error: errorResult }
+    }
 
     // 6. Handle results
     switch (searchResult.loadType) {
@@ -77,12 +233,12 @@ export async function handleQueryAndPlay(
         client.warn(
           `[MusicManager] Lavalink search failed for query "${query}" in guild ${guildId}. Error: ${searchResult.exception?.message}`
         )
-        feedbackText = `${requester}, I couldn't load results for "${query}". Error: ${searchResult.exception?.message ?? "Unknown error"}`
+        feedbackText = `${requester}, I couldn't load results for "${query}".\nError: ${searchResult.exception?.message ?? "Unknown error"}\nSource: ${searchResult.tracks[0]?.info?.sourceName ?? "Unknown"}`
         errorResult = new Error(searchResult.exception?.message ?? "LOAD_FAILED")
         break
       case "NO_MATCHES":
         client.debug(`[MusicManager] No matches found for query "${query}" in guild ${guildId}.`)
-        feedbackText = `${requester}, I couldn't find any tracks for "${query}".`
+        feedbackText = `${requester}, I couldn't find any tracks for "${query}".\nTried sources: ${searchAttempts.map(a => a.source).join(", ")}`
         break
       case "track": // Handle lowercase variant from plugins like LavaSrc
       case "TRACK_LOADED":
@@ -90,6 +246,10 @@ export async function handleQueryAndPlay(
         client.debug(
           `[MusicManager] Loaded single track: ${trackToAdd.info.title} in guild ${guildId}. Adding to queue.`
         )
+        // Ensure the track has the correct format
+        if (!trackToAdd.track) {
+            trackToAdd.track = trackToAdd.info.uri
+        }
         player.queue.add(trackToAdd)
         feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`
         success = true
@@ -131,14 +291,26 @@ export async function handleQueryAndPlay(
         `[MusicManager] Player not playing/paused and track added. Starting playback for guild ${guildId}.`
       )
       try {
-        await player.play()
+        // Pass the track to play() to ensure it's used
+        await player.play({ track: trackToAdd })
         client.debug(`[MusicManager] Player successfully started playing in guild ${guildId}.`)
         // Feedback already set by queue add
       } catch (playError) {
         client.error(`[MusicManager] Error starting player in guild ${guildId}:`, playError)
-        // Modify existing feedback or create new if necessary
-        feedbackText = `${feedbackText} But failed to start playback. Error: ${playError.message}`
-        success = false // Playback failed, so overall success is false?
+        
+        // Check for specific error cases
+        if (playError.message?.includes("No supported audio streams available")) {
+          feedbackText = `${requester}, I couldn't play this video because it has no supported audio streams.\n\nPossible reasons:\n- Video is age-restricted\n- Video is region-locked\n- Video has been removed or made private\n- Video's audio format is not supported\n\nTrack info:\nTitle: ${trackToAdd.info.title}\nSource: ${trackToAdd.info.sourceName}\nURI: ${trackToAdd.info.uri}`
+          // Don't destroy the player, just skip the track
+          if (player.queue.tracks.length > 0) {
+            player.skip()
+            feedbackText += "\n\nSkipping to next track in queue..."
+          }
+        } else {
+          // For other errors, provide detailed feedback
+          feedbackText = `${requester}, Failed to start playback.\n\nError: ${playError.message}\nTrack: ${trackToAdd.info.title}\nSource: ${trackToAdd.info.sourceName}\nURI: ${trackToAdd.info.uri}`
+        }
+        success = false
         errorResult = playError
       }
     }

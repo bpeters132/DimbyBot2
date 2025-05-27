@@ -3,6 +3,10 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Install yt-dlp and its dependencies (always latest from pip)
+RUN apk add --no-cache python3 py3-pip ffmpeg \
+    && pip3 install --no-cache-dir -U yt-dlp
+
 # Copy package files and install dependencies
 COPY package.json yarn.lock ./
 RUN yarn install --production

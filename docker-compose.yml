@@ -19,6 +19,7 @@ services:
       - "${LAVALINK_PORT}:${LAVALINK_PORT}" # Map host port to container port
     volumes:
       - lavalink-plugins:/app/plugins
+      - dimbybot-downloads:/app/downloads
     networks:
       - internal
 
@@ -67,6 +68,7 @@ services:
     volumes:
       - dimbybot-storage:/app/storage
       - dimbybot-logs:/app/logs
+      - dimbybot-downloads:/app/downloads
     networks:
       - internal
 
@@ -77,4 +79,5 @@ networks:
 volumes:
   dimbybot-storage: {} # Define the new named volume for bot storage 
   dimbybot-logs: {} # Define the new named volume for bot logs
+  dimbybot-downloads: {} # Define the new named volume for downloaded music files
   lavalink-plugins: {} # Define the new named volume for lavalink plugins
