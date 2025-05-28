@@ -19,60 +19,37 @@ plugins:
     allowDirectVideoIds: true
     allowDirectPlaylistIds: true
     pot:
-      token: ${LAVALINK_YOUTUBE_POT_TOKEN:-}
-      visitorData: ${LAVALINK_YOUTUBE_POT_VISITORDATA:-}
+      token: ${LAVALINK_YOUTUBE_POT_TOKEN}
+      visitorData: ${LAVALINK_YOUTUBE_POT_VISITORDATA}
     clients:
       - WEB
       - WEBEMBEDDED
   lavasrc:
     providers:
-      - "local:%QUERY%"
+      - "ytsearch:\"%ISRC%\""
       - "ytsearch:%QUERY%"
-      - "scsearch:%QUERY%"
     sources:
-      spotify: ${LAVALINK_SPOTIFY_ENABLED:-false}
+      spotify: ${LAVALINK_SPOTIFY_ENABLED}
       youtube: true
-      soundcloud: true
     spotify:
-      clientId: ${LAVALINK_SPOTIFY_CLIENT_ID:-}
-      clientSecret: ${LAVALINK_SPOTIFY_CLIENT_SECRET:-}
-      countryCode: ${LAVALINK_SPOTIFY_COUNTRY_CODE:-US}
-      playlistLoadLimit: ${LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT:-100}
-      albumLoadLimit: ${LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT:-100}
+      clientId: ${LAVALINK_SPOTIFY_CLIENT_ID}
+      clientSecret: ${LAVALINK_SPOTIFY_CLIENT_SECRET}
+      countryCode: ${LAVALINK_SPOTIFY_COUNTRY_CODE}
+      playlistLoadLimit: ${LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT}
+      albumLoadLimit: ${LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT}
       resolveArtistsInSearch: true
-      localFiles: true
+      localFiles: false
 lavalink:
   plugins:
-    - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.7.0"
-      snapshot: false
     - dependency: "dev.lavalink.youtube:youtube-plugin:1.13.2"
+      snapshot: false
+    - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.7.0"
       snapshot: false
   server:
     password: ${LAVALINK_PASSWORD}
     sources:
-      youtube: true
-      spotify: ${LAVALINK_SPOTIFY_ENABLED:-false}
-      soundcloud: true
-      local: true
-    local:
-      enabled: true
-      directory: /app/downloads
-      allowedExtensions:
-        - mp3
-        - wav
-        - ogg
-        - flac
-    bufferDurationMs: 400
-    frameBufferDurationMs: 1000
-    youtubePlaylistLoadLimit: 100
-    playerUpdateInterval: 5
-    youtubeSearchEnabled: true
-    soundcloudSearchEnabled: true
-    gc-warnings: true
-    search:
-      enabled: true
-      defaultSearchEngine: local
-      fallbackSearchEngine: youtube
+      youtube: false
+      spotify: false
 EOF
 echo "Lavalink Entrypoint: application.yml generated successfully."
 

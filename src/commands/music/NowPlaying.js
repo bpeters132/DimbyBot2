@@ -1,6 +1,6 @@
-import { SlashCommandBuilder } from "discord.js"
-import path from "path"
-import fs from "fs"
+import { SlashCommandBuilder, EmbedBuilder } from "discord.js"
+import { getLocalPlayerState } from "../../util/localPlayer.js"
+import { formatDuration } from "../../util/formatDuration.js"
 
 export default {
   data: new SlashCommandBuilder().setName("nowplaying").setDescription("View current playing song"),
@@ -20,62 +20,63 @@ export default {
       return interaction.reply({ content: "Join a voice channel first!" })
     }
 
-    const player = client.lavalink.players.get(guild.id)
+    // 1. Check local player state first
+    const localPlayerState = getLocalPlayerState(guild.id)
 
-    if (!player || (!player.queue.current && player.queue.length === 0)) {
-      return interaction.reply("Nothing is playing.")
+    if (localPlayerState && localPlayerState.isPlaying && localPlayerState.trackTitle) {
+      const embed = new EmbedBuilder()
+        .setColor(0x00AAFF) // Blue for local player
+        .setTitle("🎵 Now Playing (Local)")
+        .setDescription(`**${localPlayerState.trackTitle}**`)
+        .addFields(
+          { name: "Source", value: "Local File", inline: true },
+          // @discordjs/voice doesn't easily provide current playback position without more complex tracking
+          // So we'll omit position/duration for local files for now, or show "N/A"
+          { name: "Time", value: "N/A (Live Stream)", inline: true }
+        )
+        .setFooter({ text: "Playing via local file stream." })
+        .setTimestamp()
+
+      return interaction.reply({ embeds: [embed] })
     }
 
-    const track = player.queue.current
+    // 2. If no local track, check Lavalink player
+    const lavalinkPlayer = client.lavalink.players.get(guild.id)
 
-    // Optional: format time
-    const formatTime = (ms) => {
-      const totalSeconds = Math.floor(ms / 1000)
-      const minutes = Math.floor(totalSeconds / 60)
-      const seconds = totalSeconds % 60
-      return `${minutes}:${seconds.toString().padStart(2, "0")}`
+    if (!lavalinkPlayer || !lavalinkPlayer.queue.current) { // Simplified check
+      return interaction.reply({ content: "Nothing is playing.", ephemeral: true })
     }
 
-    const position = formatTime(player.position)
-    const duration = formatTime(track.info.duration)
+    const track = lavalinkPlayer.queue.current
 
-    // Check if this is a local file
-    const downloadsDir = path.join(process.cwd(), "downloads")
-    const isLocalFile = fs.existsSync(downloadsDir) && 
-                       track.info.uri.startsWith('file://') && 
-                       fs.existsSync(track.info.uri.replace('file://', ''))
+    // Use your existing formatDuration or a new one if needed
+    const position = formatDuration(lavalinkPlayer.position)
+    const duration = formatDuration(track.info.duration)
 
-    // Get source info
     let sourceInfo = "Stream"
-    if (isLocalFile) {
-      sourceInfo = "Local File"
-      // Try to get metadata
-      const metadataPath = path.join(downloadsDir, '.metadata.json')
-      if (fs.existsSync(metadataPath)) {
-        try {
-          const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'))
-          const fileName = path.basename(track.info.uri.replace('file://', ''))
-          if (metadata[fileName]?.originalUrl) {
-            sourceInfo = `Local File (from ${metadata[fileName].originalUrl})`
-          }
-        } catch (error) {
-          client.error(`[NowPlaying] Error reading metadata:`, error)
-        }
-      }
-    } else if (track.info.sourceName) {
+    if (track.info.sourceName) {
       sourceInfo = track.info.sourceName.charAt(0).toUpperCase() + track.info.sourceName.slice(1)
+      if (sourceInfo.toLowerCase() === "youtube") {
+        sourceInfo = "YouTube"
+      }
     }
+    // Removed the old local file check via URI as it's now handled by localPlayerState
 
-    const embed = {
-      title: "🎵 Now Playing",
-      description: `[${track.info.title}](${track.info.uri})\nBy: \`${track.info.author}\``,
-      fields: [
+    const embed = new EmbedBuilder()
+      .setColor(0x00FFAA) // Green for Lavalink
+      .setTitle("🎵 Now Playing (Lavalink)")
+      .setDescription(`[${track.info.title}](${track.info.uri})`)
+      .addFields(
+        { name: "Artist", value: track.info.author || "Unknown Artist", inline: true },
         { name: "Time", value: `\`${position} / ${duration}\``, inline: true },
-        { name: "Source", value: sourceInfo, inline: true }
-      ],
-      thumbnail: { url: track.info.artworkUrl || "" },
-      color: 0x00ffaa,
-    }
+        { name: "Source", value: sourceInfo, inline: true },
+        { name: "Requester", value: track.requester ? `<@${track.requester.id}>` : "N/A", inline: true }
+      )
+      // .setThumbnail(track.info.artworkUrl || track.info.thumbnail || null) // artworkUrl is often preferred
+      // Updated to use artworkUrl or thumbnail based on common Lavalink track info
+      .setThumbnail(track.info.artworkUrl || (track.info.identifier && track.info.sourceName === "youtube" ? `https://img.youtube.com/vi/${track.info.identifier}/hqdefault.jpg` : null))
+      .setFooter({ text: `Playing via Lavalink node: ${lavalinkPlayer.node?.id ?? 'Unknown'}` })
+      .setTimestamp()
 
     return interaction.reply({ embeds: [embed] })
   },
