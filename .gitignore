@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 # Dependency directories
 node_modules/
 
@@ -21,3 +22,22 @@ storage/
 
 # VSCode
 .vscode/
+=======
+# Dependency directories
+node_modules/
+
+# Logs
+logs
+*.log
+yarn-error.log
+
+# Optional config files (use .example)
+.env
+
+# Generated config files
+Lavalink/application.yml
+lavaNodesConfig.js
+.cursor/rules/code-style.mdc
+.vscode/settings.json
+storage/guild_settings.json
+>>>>>>> Stashed changes
