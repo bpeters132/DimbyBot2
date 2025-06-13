@@ -130,7 +130,7 @@ export async function handleQueryAndPlay(
         new ButtonBuilder()
           .setCustomId("play_local_confirmed")
           .setLabel(
-            `Play Local: ${matchingFile.title.substring(0, 70)}${matchingFile.title.length > 70 ? "..." : ""}`
+            `Play Local: ${matchingFile.title.substring(0, 60)}${matchingFile.title.length > 60 ? "..." : ""}`
           )
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()

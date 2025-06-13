@@ -6,8 +6,10 @@ WORKDIR /app
 # Install yt-dlp and its dependencies (always latest from pip)
 # Also install build tools needed for native Node.js modules
 RUN apk add --no-cache python3 py3-pip ffmpeg build-base autoconf automake libtool g++ \
+    && python3 -m venv /opt/venv \
+    && . /opt/venv/bin/activate \
     && pip3 install --no-cache-dir yt-dlp \
-    && ln -sf /usr/local/bin/yt-dlp /usr/bin/yt-dlp
+    && ln -sf /opt/venv/bin/yt-dlp /usr/bin/yt-dlp
 
 # Copy package files and install dependencies
 COPY package.json yarn.lock ./
