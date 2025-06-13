@@ -10,8 +10,8 @@ RUN apk add --no-cache \
     dos2unix \
     curl
 
-# Copy the Lavalink jar and plugins
-COPY Lavalink.jar Lavalink.jar
+# Download the latest Lavalink.jar
+RUN curl -L https://github.com/lavalink-devs/Lavalink/releases/latest/download/Lavalink.jar -o Lavalink.jar
 
 # Copy the entrypoint script
 COPY entrypoint.sh entrypoint.sh
