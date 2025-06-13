@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, REST, Routes } from "discord.js"
+import { SlashCommandBuilder, REST, Routes, MessageFlags } from "discord.js"
 import fs from "fs"
 import path from "path"
 
@@ -41,16 +41,24 @@ export default {
     const ownerId = process.env.OWNER_ID
     if (!ownerId) {
       client.error("[DeployCmd] Developer ID is not configured as OWNER_ID in environment variables!")
-      return interaction.reply({ content: "Command configuration error: Developer ID not set.", ephemeral: true })
+      return interaction.reply({ 
+        content: "Command configuration error: Developer ID not set.", 
+        flags: [MessageFlags.Ephemeral] 
+      })
     }
     if (interaction.user.id !== ownerId) {
       client.debug(`[DeployCmd] Denied access to user ${interaction.user.tag} (${interaction.user.id})`)
-      return interaction.reply({ content: "Sorry, this command can only be used by the bot developer.", ephemeral: true })
+      return interaction.reply({ 
+        content: "Sorry, this command can only be used by the bot developer.", 
+        flags: [MessageFlags.Ephemeral] 
+      })
     }
     // --- End Developer Check ---
 
     client.debug(`[DeployCmd] Command invoked by developer ${interaction.user.tag}`)
-    await interaction.deferReply({ ephemeral: true })
+    await interaction.deferReply({ 
+      flags: [MessageFlags.Ephemeral] 
+    })
 
     try {
       const commands = []

@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from "discord.js"
+import { SlashCommandBuilder, MessageFlags } from "discord.js"
 import { stopLocalPlayer, getLocalPlayerState } from "../../util/localPlayer.js"
 
 export default {
@@ -52,7 +52,11 @@ export default {
     }
 
     // Use fetchReply to get the message object for potential deletion
-    const msg = await interaction.reply({ content: replyContent, fetchReply: true, ephemeral: (replyContent === "Nothing was playing.") })
+    const msg = await interaction.reply({ 
+      content: replyContent, 
+      fetchReply: true, 
+      flags: (replyContent === "Nothing was playing.") ? [MessageFlags.Ephemeral] : [] 
+    })
 
     // Auto-delete reply only if something was actually stopped
     if (stoppedLocal || stoppedLavalink) {

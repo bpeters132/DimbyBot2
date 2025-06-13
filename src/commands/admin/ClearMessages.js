@@ -1,4 +1,4 @@
-import { PermissionFlagsBits, SlashCommandBuilder } from "discord.js"
+import { PermissionFlagsBits, SlashCommandBuilder, MessageFlags } from "discord.js"
 
 export default {
   data: new SlashCommandBuilder()
@@ -28,16 +28,25 @@ export default {
         if (deletableMessages.size > 0) {
             await channel.bulkDelete(deletableMessages, true) // Pass true to filter messages older than 14 days automatically
             // Reply ephemerally after potentially deleting the interaction reply itself
-            await interaction.reply({ content: `Cleared ${deletableMessages.size - 1} messages!`, ephemeral: true }) 
+            await interaction.reply({ 
+              content: `Cleared ${deletableMessages.size - 1} messages!`, 
+              flags: [MessageFlags.Ephemeral] 
+            }) 
         } else {
             // Handle case where only the command interaction message was fetched (or none)
-            await interaction.reply({ content: "No deletable messages found (or only the command itself). Messages older than 14 days or other interaction replies cannot be bulk deleted.", ephemeral: true })
+            await interaction.reply({ 
+              content: "No deletable messages found (or only the command itself). Messages older than 14 days or other interaction replies cannot be bulk deleted.", 
+              flags: [MessageFlags.Ephemeral] 
+            })
         }
         
       } catch (error) {
         client.error("Error during bulk delete in clearmessages command:", error)
         // Try to reply ephemerally if possible
-        const replyOptions = { content: "An error occurred while clearing messages. Ensure the bot has Manage Messages permission and messages are not older than 14 days.", ephemeral: true }
+        const replyOptions = { 
+          content: "An error occurred while clearing messages. Ensure the bot has Manage Messages permission and messages are not older than 14 days.", 
+          flags: [MessageFlags.Ephemeral] 
+        }
         if (interaction.replied || interaction.deferred) {
           await interaction.followUp(replyOptions).catch(e => client.error("Failed to follow up error reply for clearmessages:", e))
         } else {
@@ -45,7 +54,10 @@ export default {
         }
       }
     } else {
-      await interaction.reply({ content: "You can only clear up to 30 messages at once!", ephemeral: true })
+      await interaction.reply({ 
+        content: "You can only clear up to 30 messages at once!", 
+        flags: [MessageFlags.Ephemeral] 
+      })
     }
   },
 } 
