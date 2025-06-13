@@ -100,7 +100,7 @@ jobs:
           /usr/bin/docker compose pull
           /usr/bin/docker compose up -d
           EOS
-          scp -i ${{ secrets.SSH_PRIVATE_KEY_PATH }} -P ${{ secrets.DEPLOY_SERVER_SSH_PORT }} -o StrictHostKeyChecking=accept-new ci_deploy.sh ${{ secrets.DEPLOY_SERVER_USER }}@${{ secrets.DEPLOY_SERVER_HOST }}:/home/bot/ci_deploy.sh
+          scp -i <(echo "${{ secrets.SSH_PRIVATE_KEY }}") -P ${{ secrets.DEPLOY_SERVER_SSH_PORT }} -o StrictHostKeyChecking=accept-new ci_deploy.sh ${{ secrets.DEPLOY_SERVER_USER }}@${{ secrets.DEPLOY_SERVER_HOST }}:/home/bot/ci_deploy.sh
 
       - name: Run deployment script on server
         uses: appleboy/ssh-action@v1.0.3
