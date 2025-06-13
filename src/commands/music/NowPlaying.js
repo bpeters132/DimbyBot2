@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js"
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js"
 import { getLocalPlayerState } from "../../util/localPlayer.js"
 import { formatDuration } from "../../util/formatDuration.js"
 
@@ -44,7 +44,10 @@ export default {
     const lavalinkPlayer = client.lavalink.players.get(guild.id)
 
     if (!lavalinkPlayer || !lavalinkPlayer.queue.current) { // Simplified check
-      return interaction.reply({ content: "Nothing is playing.", ephemeral: true })
+      return interaction.reply({ 
+        content: "Nothing is playing.", 
+        flags: [MessageFlags.Ephemeral] 
+      })
     }
 
     const track = lavalinkPlayer.queue.current

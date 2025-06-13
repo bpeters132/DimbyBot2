@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js"
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js"
 
 export default {
   data: new SlashCommandBuilder()
@@ -14,12 +14,18 @@ export default {
 
     if (!ownerId) {
         client.error("[PlayerStatsCmd] Developer ID is not configured as OWNER_ID in environment variables!")
-        return interaction.reply({ content: "Command configuration error: Developer ID not set.", ephemeral: true })
+        return interaction.reply({ 
+          content: "Command configuration error: Developer ID not set.", 
+          flags: [MessageFlags.Ephemeral] 
+        })
     }
 
     if (interaction.user.id !== ownerId) {
       client.debug(`[PlayerStatsCmd] Denied access to user ${interaction.user.tag} (${interaction.user.id})`)
-      return interaction.reply({ content: "Sorry, this command can only be used by the bot developer.", ephemeral: true })
+      return interaction.reply({ 
+        content: "Sorry, this command can only be used by the bot developer.", 
+        flags: [MessageFlags.Ephemeral] 
+      })
     }
     // --- End Developer Check ---
 

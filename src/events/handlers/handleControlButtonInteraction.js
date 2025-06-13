@@ -1,5 +1,6 @@
 import { getGuildSettings } from "../../util/saveControlChannel.js"
 import { updateControlMessage } from "./handleControlChannel.js"
+import { MessageFlags } from 'discord.js'
 /**
  * Handles button interactions originating from the control message.
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -76,7 +77,10 @@ export async function handleControlButtonInteraction(interaction, client) {
   if (!member?.voice?.channel) {
     client.debug(`[ControlButtonHandler] User ${interaction.user.id} not in a voice channel.`)
     try {
-      await interaction.reply({ content: "You must be in a voice channel to use the controls!", ephemeral: true })
+      await interaction.reply({ 
+        content: "You must be in a voice channel to use the controls!", 
+        flags: [MessageFlags.Ephemeral] 
+      })
     } catch (e) { client.error("Error replying to VC check fail:", e) }
     return
   }
@@ -84,14 +88,20 @@ export async function handleControlButtonInteraction(interaction, client) {
     client.warn(`[ControlButtonHandler] Player for guild ${guildId} exists but has no voiceChannelId. Cannot verify user channel.`)
     // Allow control anyway? Or deny? Let's deny for now for consistency.
     try {
-      await interaction.reply({ content: "Cannot verify player's voice channel. Controls unavailable.", ephemeral: true })
+      await interaction.reply({ 
+        content: "Cannot verify player's voice channel. Controls unavailable.", 
+        flags: [MessageFlags.Ephemeral] 
+      })
     } catch (e) { client.error("Error replying to player VC check fail:", e) }
     return
   }
   if (member.voice.channel.id !== player.voiceChannelId) {
     client.debug(`[ControlButtonHandler] User ${interaction.user.id} in different VC (${member.voice.channel.id}) than player (${player.voiceChannelId}).`)
     try {
-      await interaction.reply({ content: "You must be in the same voice channel as the bot to use the controls!", ephemeral: true })
+      await interaction.reply({ 
+        content: "You must be in the same voice channel as the bot to use the controls!", 
+        flags: [MessageFlags.Ephemeral] 
+      })
     } catch (e) { client.error("Error replying to mismatched VC check fail:", e) }
     return
   }

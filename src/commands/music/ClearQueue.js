@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from "discord.js"
+import { SlashCommandBuilder, MessageFlags } from "discord.js"
 
 export default {
   data: new SlashCommandBuilder()
@@ -16,32 +16,47 @@ export default {
     const voiceChannel = member.voice.channel
     if (!voiceChannel) {
       client.debug("[ClearQueue] User not in a voice channel.")
-      return interaction.reply({ content: "Join a voice channel first!", ephemeral: true })
+      return interaction.reply({ 
+        content: "Join a voice channel first!", 
+        flags: [MessageFlags.Ephemeral] 
+      })
     }
 
     // Check if bot is in a voice channel
     const botMember = await interaction.guild.members.fetchMe()
     if (!botMember.voice.channel) {
       client.debug("[ClearQueue] Bot not in a voice channel.")
-      return interaction.reply({ content: "I'm not in a voice channel!", ephemeral: true })
+      return interaction.reply({ 
+        content: "I'm not in a voice channel!", 
+        flags: [MessageFlags.Ephemeral] 
+      })
     }
 
     // Check if user is in the same voice channel as the bot
     if (botMember.voice.channel.id !== voiceChannel.id) {
       client.debug("[ClearQueue] User not in the same voice channel as the bot.")
-      return interaction.reply({ content: "You must be in the same voice channel as me!", ephemeral: true })
+      return interaction.reply({ 
+        content: "You must be in the same voice channel as me!", 
+        flags: [MessageFlags.Ephemeral] 
+      })
     }
 
     const player = client.lavalink.players.get(guild.id)
 
     if (!player) {
       client.debug("[ClearQueue] No player found for this guild.")
-      return interaction.reply({ content: "Nothing is playing right now.", ephemeral: true })
+      return interaction.reply({ 
+        content: "Nothing is playing right now.", 
+        flags: [MessageFlags.Ephemeral] 
+      })
     }
 
     if (player.queue.tracks.length === 0) {
       client.debug("[ClearQueue] Queue is already empty.")
-      return interaction.reply({ content: "The queue is already empty.", ephemeral: true })
+      return interaction.reply({ 
+        content: "The queue is already empty.", 
+        flags: [MessageFlags.Ephemeral] 
+      })
     }
 
     try {
@@ -56,7 +71,10 @@ export default {
     
     } catch (error) {
       client.error("[ClearQueue] Error clearing the queue:", error)
-      await interaction.reply({ content: "An error occurred while trying to clear the queue.", ephemeral: true })
+      await interaction.reply({ 
+        content: "An error occurred while trying to clear the queue.", 
+        flags: [MessageFlags.Ephemeral] 
+      })
     }
   },
 } 
