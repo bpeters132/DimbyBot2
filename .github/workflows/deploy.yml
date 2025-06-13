@@ -4,9 +4,17 @@ on:
   push:
     branches:
       - master
+  workflow_dispatch:
+    inputs:
+      skip_build:
+        description: 'Skip building images (use existing ones)'
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   build-and-push:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.skip_build }}
     runs-on: ubuntu-latest
     env:
       REGISTRY: ghcr.io
@@ -41,7 +49,12 @@ jobs:
 
   deploy:
     needs: build-and-push
+    if: always() && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
     runs-on: ubuntu-latest
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_BOT: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:latest
+      IMAGE_LAVALINK: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -100,7 +113,16 @@ jobs:
           /usr/bin/docker compose pull
           /usr/bin/docker compose up -d
           EOS
-          scp -i <(echo "${{ secrets.SSH_PRIVATE_KEY }}") -P ${{ secrets.DEPLOY_SERVER_SSH_PORT }} -o StrictHostKeyChecking=accept-new ci_deploy.sh ${{ secrets.DEPLOY_SERVER_USER }}@${{ secrets.DEPLOY_SERVER_HOST }}:/home/bot/ci_deploy.sh
+          
+          # Create SSH key file with proper permissions
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > deploy_key
+          chmod 600 deploy_key
+          
+          # Use the key file for SCP
+          scp -i deploy_key -P ${{ secrets.DEPLOY_SERVER_SSH_PORT }} -o StrictHostKeyChecking=accept-new ci_deploy.sh ${{ secrets.DEPLOY_SERVER_USER }}@${{ secrets.DEPLOY_SERVER_HOST }}:/home/bot/ci_deploy.sh
+          
+          # Clean up the key file
+          rm -f deploy_key
 
       - name: Run deployment script on server
         uses: appleboy/ssh-action@v1.0.3
