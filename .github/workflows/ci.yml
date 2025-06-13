@@ -10,8 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       REGISTRY: ghcr.io
-      IMAGE_BOT: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:latest
-      IMAGE_LAVALINK: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:latest
+      IMAGE_BOT: ghcr.io/${{ github.repository }}/bot:latest
+      IMAGE_LAVALINK: ghcr.io/${{ github.repository }}/lavalink:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
