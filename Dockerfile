@@ -5,16 +5,9 @@ WORKDIR /app
 
 # Install yt-dlp and its dependencies (always latest from pip)
 # Also install build tools needed for native Node.js modules
-# Use pipx to install yt-dlp to avoid PEP 668 issues
-RUN apk add --no-cache python3 py3-pip ffmpeg build-base autoconf automake libtool g++ pipx \
-    && pipx install yt-dlp \
-    && pipx ensurepath \
-    # Optionally, create a symlink if yt-dlp installed by pipx isn't automatically in the default PATH 
-    # for subsequent RUN commands or the ENTRYPOINT. The pipx ensurepath might handle this for the user
-    # running the command, but for system-wide access or other users, a symlink is safer.
-    # Check common pipx bin locations:
-    && (if [ -f /root/.local/bin/yt-dlp ]; then ln -s /root/.local/bin/yt-dlp /usr/local/bin/yt-dlp; fi || \
-        if [ -f /usr/local/bin/yt-dlp ]; then echo "yt-dlp already in /usr/local/bin"; else echo "yt-dlp not found in common pipx paths"; exit 1; fi)
+RUN apk add --no-cache python3 py3-pip ffmpeg build-base autoconf automake libtool g++ \
+    && pip3 install --no-cache-dir yt-dlp \
+    && ln -sf /usr/local/bin/yt-dlp /usr/bin/yt-dlp
 
 # Copy package files and install dependencies
 COPY package.json yarn.lock ./
