@@ -12,3 +12,15 @@ yarn-error.log
 # Generated config files
 Lavalink/application.yml
 lavaNodesConfig.js
+
+# Data storage (e.g., guild settings)
+storage/
+storage/guild_settings.json
+
+# Cursor
+.cursor/
+.cursor/rules/code-style.mdc
+
+# VSCode
+.vscode/
+.vscode/settings.json

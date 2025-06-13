@@ -8,7 +8,7 @@ export default {
    * @param {import('discord.js').CommandInteraction} interaction
    *
    */
-  async execute(client, interaction) {
+  async execute(interaction, client) {
     const guild = interaction.guild
     const member = interaction.member
 
@@ -27,6 +27,18 @@ export default {
     }
 
     player.skip()
-    interaction.reply("SKIPPED!")
+    // Use fetchReply to get the message object
+    const msg = await interaction.reply({ content: "SKIPPED!", fetchReply: true })
+    // Delete after delay with retry
+    setTimeout(() => {
+      msg.delete().catch((e) => {
+        client.error("[SkipCmd] Failed to delete reply (attempt 1):", e)
+        if (e.code === 'EAI_AGAIN' || e.message.includes('ECONNRESET')) {
+          setTimeout(() => {
+            msg.delete().catch((e2) => client.error("[SkipCmd] Failed to delete reply (attempt 2):", e2))
+          }, 2000) // Retry after 2 seconds
+        }
+      })
+    }, 1000 * 10) // 10 seconds initial delay
   },
 }

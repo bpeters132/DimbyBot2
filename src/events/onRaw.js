@@ -3,7 +3,7 @@
  */
 export default async (client) => {
   client.on("raw", (data) => {
-    client.log(`Raw event triggered`)
+    // client.info(`Raw event triggered`)
     client.lavalink.sendRawData(data)
   })
 }

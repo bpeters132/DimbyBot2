@@ -8,7 +8,7 @@ export default {
    * @param {import('discord.js').CommandInteraction} interaction
    *
    */
-  async execute(client, interaction) {
+  async execute(interaction, client) {
     const guild = interaction.guild
     const member = interaction.member
 

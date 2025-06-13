@@ -1,0 +1,38 @@
+# Use a recent Node.js LTS version
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install yt-dlp and its dependencies (always latest from pip)
+# Also install build tools needed for native Node.js modules
+# Use pipx to install yt-dlp to avoid PEP 668 issues
+RUN apk add --no-cache python3 py3-pip ffmpeg build-base autoconf automake libtool g++ pipx \
+    && pipx install yt-dlp \
+    && (pipx ensurepath || true) \
+    # Optionally, create a symlink if yt-dlp installed by pipx isn't automatically in the default PATH 
+    # for subsequent RUN commands or the ENTRYPOINT. The pipx ensurepath might handle this for the user
+    # running the command, but for system-wide access or other users, a symlink is safer.
+    # Check common pipx bin locations:
+    && (if [ -f /root/.local/bin/yt-dlp ]; then ln -s /root/.local/bin/yt-dlp /usr/local/bin/yt-dlp; fi || \
+        if [ -f /usr/local/bin/yt-dlp ]; then echo "yt-dlp already in /usr/local/bin"; else echo "yt-dlp not found in common pipx paths"; exit 1; fi)
+
+# Copy package files and install ALL dependencies (including dev)
+COPY package.json yarn.lock ./
+RUN yarn install
+
+# Copy the rest of the application code (will be overridden by mounts in dev)
+COPY . .
+
+# Copy the entrypoint script
+COPY entrypoint.sh entrypoint.sh
+# Ensure script has correct line endings (LF) and is executable
+RUN apk add --no-cache dos2unix \
+    && dos2unix entrypoint.sh \
+    && chmod +x entrypoint.sh
+
+# The command will be overridden in docker-compose.dev.yml to use nodemon
+# Keep the ENTRYPOINT if entrypoint.sh does necessary setup before execing the main process
+# ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"] 
+
+# Default command if ENTRYPOINT wasn't used or if entrypoint.sh expects one (might need adjustment)
+CMD ["yarn", "dev"] 

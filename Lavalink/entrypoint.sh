@@ -1,7 +1,4 @@
 #!/bin/sh
-# Exit immediately if a command exits with a non-zero status.
-set -e
-
 echo "Lavalink Entrypoint: Starting..."
 
 # ==============================================================================
@@ -44,9 +41,9 @@ plugins:
       localFiles: false
 lavalink:
   plugins:
-    - dependency: "dev.lavalink.youtube:youtube-plugin:1.12.0"
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.13.2"
       snapshot: false
-    - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.4.2"
+    - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.7.0"
       snapshot: false
   server:
     password: ${LAVALINK_PASSWORD}

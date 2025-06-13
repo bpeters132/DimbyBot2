@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from "discord.js"
+import { handleQueryAndPlay } from "../../util/musicManager.js"
 
 export default {
   data: new SlashCommandBuilder()
@@ -7,13 +8,15 @@ export default {
     .addStringOption((option) =>
       option.setName("query").setDescription("The song name or URL").setRequired(true)
     ),
+
+
   /**
    *
-   * @param {import('../../lib/BotClient.js').default} client
    * @param {import('discord.js').CommandInteraction} interaction
+   * @param {import('../../lib/BotClient.js').default} client
    *
    */
-  async execute(client, interaction) {
+  async execute(interaction, client) {
     const query = interaction.options.getString("query")
     const guild = interaction.guild
     const member = interaction.member
@@ -24,25 +27,45 @@ export default {
       return interaction.reply({ content: "Join a voice channel first!" })
     }
 
-    const player = await client.lavalink.createPlayer({
-      guildId: guild.id,
-      voiceChannelId: voiceChannel.id,
-      textChannelId: interaction.channelId,
-      selfDeaf: true,
-      selfMute: false,
-    })
+    // Use getPlayer first to potentially reuse existing player
+    let player = client.lavalink?.getPlayer(guild.id)
 
-    player.connect()
-
-    const res = await player.search(query)
-
-    if (!res.tracks.length) return interaction.reply("No tracks found!")
-
-    player.queue.add(res.tracks[0])
-    interaction.reply(`Added **${res.tracks[0].info.title}** to the queue.`)
-
-    if (!player.playing && !player.paused) {
-      player.play()
+    if (!player) {
+        player = await client.lavalink.createPlayer({
+            guildId: guild.id,
+            voiceChannelId: voiceChannel.id,
+            textChannelId: interaction.channelId, // Bind player to interaction channel initially
+            selfDeaf: true,
+            // selfMute: false, // Default is false
+            volume: 100 // Default volume
+        })
     }
+
+    // Ensure connected, connecting if necessary
+    if (!player.connected) {
+        if (player.state !== 'CONNECTING') {
+             await player.connect()
+        }
+    } else if (player.voiceChannelId !== voiceChannel.id) {
+        // Optional: Handle user being in a different channel than the bot
+        return interaction.reply({ content: "You need to be in the same voice channel as the bot!", ephemeral: true })
+    }
+
+    // Defer reply as search/connect might take time
+    await interaction.deferReply()
+
+    // Use the centralized handler for search, queue, play, and update
+    const result = await handleQueryAndPlay(
+        client,
+        guild.id,
+        voiceChannel,
+        interaction.channel, // Use interaction channel for feedback
+        query,
+        interaction.user,
+        player
+    )
+
+    // Edit the deferred reply with the result
+    await interaction.editReply(result.feedbackText || "Something went wrong.")
   },
 }

@@ -1,0 +1,32 @@
+services:
+  dimbybot:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev # Use the development Dockerfile
+    image: dimbybot-dev # Optional: Give the dev image a distinct name
+    command: yarn dev # Override the default command/entrypoint to run nodemon
+    volumes:
+      # Mount the entire source code directory into the container
+      # Note: Exclude node_modules to use the ones installed in the container
+      - ./:/app
+      - /app/node_modules # Anonymous volume to prevent local node_modules overwrite
+    environment:
+      # Ensure NODE_ENV is set for development if needed by any libs
+      - NODE_ENV=development
+      # Force color output for libraries like 'colors' or 'chalk'
+      - FORCE_COLOR=true
+
+  lavalink: # Add the lavalink service definition for development
+    build:
+      context: ./Lavalink # Point to the Lavalink directory
+      dockerfile: Dockerfile # Assuming the Dockerfile is named 'Dockerfile'
+    image: lavalink-dev # Optional: Give the dev image a distinct name
+
+  # Define other services ONLY if you need to override something specific
+  # for them in development (e.g., different ports, debug flags).
+  # Otherwise, the base docker-compose.yml definitions will be used.
+
+# Keep volumes definition if it's not already in the base file or needs overrides
+# volumes:
+#   postgres-data:
+#   node_modules: 

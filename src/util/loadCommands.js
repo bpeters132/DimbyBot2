@@ -14,13 +14,13 @@ export default async (client) => {
   client.commands = new Collection()
 
   const commandsBasePath = path.join(__dirname, "../commands")
-  client.log(`Starting command loading from base path: ${commandsBasePath}`)
+  client.info(`Starting command loading from base path: ${commandsBasePath}`)
 
   // Recursive function to load commands
   const loadCommandsRecursive = async (directoryPath) => {
     try {
       const entries = fs.readdirSync(directoryPath, { withFileTypes: true })
-      client.log(`Scanning directory: ${directoryPath}`)
+      client.info(`Scanning directory: ${directoryPath}`)
 
       for (const entry of entries) {
         const currentPath = path.join(directoryPath, entry.name)
@@ -47,7 +47,7 @@ export default async (client) => {
                 )
               } else {
                 client.commands.set(command.data.name, command)
-                client.log(`Loaded command: ${command.data.name} from ${entry.name}`)
+                client.info(`Loaded command: ${command.data.name} from ${entry.name}`)
               }
             } else {
               client.warn(
@@ -68,7 +68,7 @@ export default async (client) => {
   // Start the recursive loading process
   try {
     await loadCommandsRecursive(commandsBasePath)
-    client.log(`Finished loading commands. Total loaded: ${client.commands.size}`)
+    client.info(`Finished loading commands. Total loaded: ${client.commands.size}`)
   } catch (error) {
     // Catch any top-level error during the initial call (e.g., base directory doesn't exist)
     client.error(`Failed to initiate command loading from ${commandsBasePath}:`, error)
