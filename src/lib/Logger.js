@@ -1,57 +1,214 @@
 import winston from "winston"
 import colors from "colors"
+import fs from "fs"
+import path from "path"
 
-// Simple logger class using Winston for file logging and console.log with colors
+// Enhanced logger class with better error reporting and metrics
 export default class Logger {
-  constructor(file) {
-    // Basic Winston setup for file transport only
-    if (!file) {
-      console.warn("Logger Warning: No log file path provided. File logging disabled.")
-      this.logger = winston.createLogger({ transports: [] }) // Empty logger if no path
-    } else {
-      try {
-        // Define format for file logging, including Winston's timestamp
-        const fileLogFormat = winston.format.combine(
-          winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }), // Use Winston timestamp
-          winston.format.errors({ stack: true }), // Log stack trace for errors
-          winston.format.splat(),
-          winston.format.printf(({ level, message, timestamp, stack }) => {
-            // Include stack trace in the message if it exists
-            return `${timestamp} [${level.toUpperCase()}]: ${message}${stack ? '\n' + stack : ''}`
-          })
-        )
+  constructor(file, options = {}) {
+    this.metrics = {
+      errors: 0,
+      warnings: 0,
+      info: 0,
+      debug: 0,
+      startTime: new Date(),
+      lastErrorTime: null,
+      errorsByType: new Map(),
+      performanceMetrics: new Map()
+    }
 
-        this.logger = winston.createLogger({
-          // Note: Winston's top-level 'level' only filters *before* transports.
-          // We handle debug filtering manually in the debug() method for console.
-          // File transport level is implicitly 'info' or higher unless overridden.
-          format: fileLogFormat, // Apply the defined format to all transports
-          transports: [
-             new winston.transports.File({
-                 filename: file,
-                 // Optionally set level specifically for file transport if needed
-             })
-          ],
-        })
-      } catch (error) {
-        console.error(`Logger Error: Failed to create file transport for ${file}:`, error)
-        this.logger = winston.createLogger({ transports: [] }) // Fallback to empty logger
-      }
+    // Enhanced options
+    this.options = {
+      enableFileRotation: options.enableFileRotation ?? true,
+      maxFileSize: options.maxFileSize ?? 50 * 1024 * 1024, // 50MB
+      maxFiles: options.maxFiles ?? 10,
+      enableMetrics: options.enableMetrics ?? true,
+      enableErrorTracking: options.enableErrorTracking ?? true,
+      ...options
+    }
+
+    // Setup Winston logger
+    this._setupWinston(file)
+    
+    // Setup error tracking
+    if (this.options.enableErrorTracking) {
+      this._setupErrorTracking()
+    }
+
+    // Setup periodic metrics logging
+    if (this.options.enableMetrics) {
+      this._setupMetricsLogging()
     }
   }
 
-  // Helper to format date/time for *console* output (keeps existing format)
+  _setupWinston(file) {
+    const transports = []
+
+    if (file) {
+      try {
+        // Ensure log directory exists
+        const logDir = path.dirname(file)
+        if (!fs.existsSync(logDir)) {
+          fs.mkdirSync(logDir, { recursive: true })
+        }
+
+        // Enhanced file format with more context
+        const fileLogFormat = winston.format.combine(
+          winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
+          winston.format.errors({ stack: true }),
+          winston.format.splat(),
+          winston.format.json(), // Use JSON format for better parsing
+          winston.format.printf(({ level, message, timestamp, stack, ...meta }) => {
+            const baseLog = {
+              timestamp,
+              level: level.toUpperCase(),
+              message,
+              pid: process.pid,
+              memory: process.memoryUsage(),
+              ...meta
+            }
+            
+            if (stack) {
+              baseLog.stack = stack
+            }
+            
+            return JSON.stringify(baseLog)
+          })
+        )
+
+        // Add file transport with rotation
+        if (this.options.enableFileRotation) {
+          transports.push(new winston.transports.File({
+            filename: file,
+            format: fileLogFormat,
+            maxsize: this.options.maxFileSize,
+            maxFiles: this.options.maxFiles,
+            tailable: true
+          }))
+        } else {
+          transports.push(new winston.transports.File({
+            filename: file,
+            format: fileLogFormat
+          }))
+        }
+
+        // Add error-specific log file
+        const errorFile = file.replace('.log', '-errors.log')
+        transports.push(new winston.transports.File({
+          filename: errorFile,
+          level: 'error',
+          format: fileLogFormat,
+          maxsize: this.options.maxFileSize,
+          maxFiles: this.options.maxFiles
+        }))
+
+      } catch (error) {
+        console.error(`Logger Error: Failed to create file transport for ${file}:`, error)
+      }
+    }
+
+    // Add console transport for development
+    if (process.env.NODE_ENV !== 'production') {
+      transports.push(new winston.transports.Console({
+        format: winston.format.combine(
+          winston.format.colorize(),
+          winston.format.simple()
+        )
+      }))
+    }
+
+    this.logger = winston.createLogger({
+      level: process.env.LOG_LEVEL?.toLowerCase() || 'info',
+      transports,
+      exitOnError: false,
+      // Add uncaught exception handling
+      exceptionHandlers: file ? [
+        new winston.transports.File({ 
+          filename: file.replace('.log', '-exceptions.log'),
+          format: winston.format.combine(
+            winston.format.timestamp(),
+            winston.format.errors({ stack: true }),
+            winston.format.json()
+          )
+        })
+      ] : [],
+      // Add unhandled rejection handling
+      rejectionHandlers: file ? [
+        new winston.transports.File({ 
+          filename: file.replace('.log', '-rejections.log'),
+          format: winston.format.combine(
+            winston.format.timestamp(),
+            winston.format.errors({ stack: true }),
+            winston.format.json()
+          )
+        })
+      ] : []
+    })
+  }
+
+  _setupErrorTracking() {
+    // Track unique errors and their frequency
+    this.errorCache = new Map()
+    
+    // Setup process-level error handlers
+    process.on('uncaughtException', (error) => {
+      this.error('Uncaught Exception:', error)
+      // Don't exit immediately, let Winston handle it
+    })
+
+    process.on('unhandledRejection', (reason, promise) => {
+      this.error('Unhandled Rejection at:', promise, 'reason:', reason)
+    })
+
+    process.on('warning', (warning) => {
+      this.warn('Process warning:', warning)
+    })
+  }
+
+  _setupMetricsLogging() {
+    // Log metrics every 5 minutes
+    setInterval(() => {
+      this._logMetrics()
+    }, 5 * 60 * 1000)
+  }
+
+  _logMetrics() {
+    const uptime = Date.now() - this.metrics.startTime.getTime()
+    const memUsage = process.memoryUsage()
+    
+    const metricsData = {
+      uptime: Math.floor(uptime / 1000), // in seconds
+      memory: {
+        rss: Math.round(memUsage.rss / 1024 / 1024), // MB
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024), // MB
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024), // MB
+        external: Math.round(memUsage.external / 1024 / 1024) // MB
+      },
+      logCounts: {
+        errors: this.metrics.errors,
+        warnings: this.metrics.warnings,
+        info: this.metrics.info,
+        debug: this.metrics.debug
+      },
+      errorsByType: Object.fromEntries(this.metrics.errorsByType),
+      performance: Object.fromEntries(this.metrics.performanceMetrics)
+    }
+
+    this.logger.info('System Metrics', { metrics: metricsData, type: 'METRICS' })
+  }
+
+  // Helper to format date/time for console output
   _getTimestamp() {
     const d = new Date()
-    // Pad month, day, hour, minute for consistent formatting
-    const month = String(d.getMonth() + 1).padStart(2, "0") // Months are 0-indexed
+    const month = String(d.getMonth() + 1).padStart(2, "0")
     const day = String(d.getDate()).padStart(2, "0")
     const hour = String(d.getHours()).padStart(2, "0")
     const minute = String(d.getMinutes()).padStart(2, "0")
-    return `[${day}:${month}:${d.getFullYear()} - ${hour}:${minute}]`
+    const second = String(d.getSeconds()).padStart(2, "0")
+    return `[${day}:${month}:${d.getFullYear()} - ${hour}:${minute}:${second}]`
   }
 
-  // Helper to format args array (handles objects/errors better than simple concatenation)
+  // Helper to format arguments
   _formatArgs(args) {
     return args
       .map((arg) => {
@@ -60,7 +217,7 @@ export default class Logger {
         }
         if (typeof arg === "object" && arg !== null) {
           try {
-            return JSON.stringify(arg)
+            return JSON.stringify(arg, null, 2)
           } catch (e) {
             return "[Unserializable Object]"
           }
@@ -70,49 +227,147 @@ export default class Logger {
       .join(" ")
   }
 
+  // Enhanced logging methods with context and metadata
   info(text, ...args) {
+    this.metrics.info++
     const messageArgs = this._formatArgs(args)
     const fullMessage = text + (messageArgs ? " " + messageArgs : "")
-    // Log to file using Winston (will use Winston timestamp format)
-    this.logger.info(fullMessage) // Pass only the core message
-    // Log to console using custom timestamp and colors
+    
+    // Extract metadata from args
+    const metadata = this._extractMetadata(args)
+    
+    this.logger.info(fullMessage, metadata)
     console.log(colors.gray(this._getTimestamp()) + colors.green(` | INFO | ${fullMessage}`))
   }
 
   warn(text, ...args) {
+    this.metrics.warnings++
     const messageArgs = this._formatArgs(args)
     const fullMessage = text + (messageArgs ? " " + messageArgs : "")
-    // Log to file using Winston (will use Winston timestamp format)
-    this.logger.warn(fullMessage)
-    // Log to console using custom timestamp and colors
+    
+    const metadata = this._extractMetadata(args)
+    
+    this.logger.warn(fullMessage, metadata)
     console.log(colors.gray(this._getTimestamp()) + colors.yellow(` | WARN | ${fullMessage}`))
   }
 
   error(text, ...args) {
+    this.metrics.errors++
+    this.metrics.lastErrorTime = new Date()
+    
     const messageArgs = this._formatArgs(args)
     const fullMessage = text + (messageArgs ? " " + messageArgs : "")
-    // Log to file using Winston (will use Winston timestamp format)
-    // Pass error object directly if possible for better stack trace logging
+    
+    // Track error types
     const errorArg = args.find(arg => arg instanceof Error)
     if (errorArg) {
-        this.logger.error(fullMessage, { error: errorArg })
+      const errorType = errorArg.constructor.name
+      this.metrics.errorsByType.set(errorType, (this.metrics.errorsByType.get(errorType) || 0) + 1)
+      
+      // Enhanced error logging with stack trace
+      this.logger.error(fullMessage, {
+        error: {
+          name: errorArg.name,
+          message: errorArg.message,
+          stack: errorArg.stack,
+          type: errorType
+        },
+        ...this._extractMetadata(args)
+      })
     } else {
-        this.logger.error(fullMessage)
+      this.logger.error(fullMessage, this._extractMetadata(args))
     }
-    // Log to console using custom timestamp and colors
+    
     console.log(colors.gray(this._getTimestamp()) + colors.red(` | ERROR | ${fullMessage}`))
   }
 
   debug(text, ...args) {
-    // Only proceed if LOG_LEVEL enables debug
     if (process.env.LOG_LEVEL?.toLowerCase() !== "debug") {
-      return // Skip debug logging
+      return
     }
+    
+    this.metrics.debug++
     const messageArgs = this._formatArgs(args)
     const fullMessage = text + (messageArgs ? " " + messageArgs : "")
-    // Log to file using Winston (will use Winston timestamp format)
-    this.logger.debug(fullMessage)
-    // Log to console using custom timestamp and colors
+    
+    const metadata = this._extractMetadata(args)
+    
+    this.logger.debug(fullMessage, metadata)
     console.log(colors.gray(this._getTimestamp()) + colors.magenta(` | DEBUG | ${fullMessage}`))
+  }
+
+  // New method for performance tracking
+  time(label) {
+    const startTime = process.hrtime.bigint()
+    this.metrics.performanceMetrics.set(label, { startTime, endTime: null, duration: null })
+    this.debug(`Timer started: ${label}`)
+  }
+
+  timeEnd(label) {
+    const metric = this.metrics.performanceMetrics.get(label)
+    if (metric) {
+      metric.endTime = process.hrtime.bigint()
+      metric.duration = Number(metric.endTime - metric.startTime) / 1000000 // Convert to milliseconds
+      this.debug(`Timer ended: ${label} (${metric.duration.toFixed(2)}ms)`)
+      return metric.duration
+    }
+    this.warn(`Timer not found: ${label}`)
+    return null
+  }
+
+  // Method to log structured data
+  logStructured(level, message, data = {}) {
+    const structuredData = {
+      timestamp: new Date().toISOString(),
+      level: level.toUpperCase(),
+      message,
+      ...data
+    }
+    
+    this.logger.log(level, message, structuredData)
+  }
+
+  // Method to get current metrics
+  getMetrics() {
+    return {
+      ...this.metrics,
+      uptime: Date.now() - this.metrics.startTime.getTime(),
+      memory: process.memoryUsage()
+    }
+  }
+
+  // Helper to extract metadata from arguments
+  _extractMetadata(args) {
+    const metadata = {}
+    
+    // Look for objects that aren't errors and use them as metadata
+    args.forEach((arg, index) => {
+      if (typeof arg === 'object' && arg !== null && !(arg instanceof Error)) {
+        if (arg.guildId) metadata.guildId = arg.guildId
+        if (arg.userId) metadata.userId = arg.userId
+        if (arg.channelId) metadata.channelId = arg.channelId
+        if (arg.commandName) metadata.commandName = arg.commandName
+        if (arg.type && typeof arg.type === 'string') metadata.type = arg.type
+      }
+    })
+    
+    return metadata
+  }
+
+  // Method to create child logger with context
+  createChild(context = {}) {
+    const childLogger = Object.create(this)
+    childLogger.context = context
+    
+    // Override logging methods to include context
+    const originalMethods = ['info', 'warn', 'error', 'debug']
+    originalMethods.forEach(method => {
+      const originalMethod = this[method].bind(this)
+      childLogger[method] = (text, ...args) => {
+        return originalMethod(text, ...args, context)
+      }
+    })
+    
+    return childLogger
   }
 }

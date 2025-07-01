@@ -20,10 +20,16 @@
     "date-fns": "^4.1.0",
     "discord.js": "^14.6.0",
     "dotenv": "^16.0.3",
+    "express": "^4.18.0",
+    "express-rate-limit": "^7.1.0",
+    "express-session": "^1.17.3",
     "ffmpeg-static": "^5.2.0",
     "lavalink-client": "^2.5.0",
     "nodemailer": "^6.10.0",
+    "passport": "^0.7.0",
+    "passport-discord": "^0.1.4",
     "sodium": "^3.0.2",
+    "ws": "^8.14.0",
     "winston": "^3.17.0"
   },
   "devDependencies": {

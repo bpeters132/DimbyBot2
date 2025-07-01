@@ -79,13 +79,11 @@ export default (client) => {
       }
 
       try {
-        client.info(
-          `[InteractionCreate] Executing command "${commandName}" for user ${interaction.user.tag} (${interaction.user.id}) in guild ${interaction.guild?.name ?? "DM"} (${interaction.guild?.id ?? "N/A"})`
-        )
-        await command.execute(interaction, client)
+        // Use the enhanced command execution method
+        await client.executeCommand(commandName, interaction)
         client.debug(`[InteractionCreate] Successfully executed command "${commandName}".`)
       } catch (error) {
-        // Log the core error regardless
+        // Error has already been tracked by executeCommand, just handle the response
         client.error(`[InteractionCreate] Error executing command "${commandName}":`, error)
 
         // Attempt to send a generic error reply ONLY if the interaction is still valid
@@ -104,6 +102,14 @@ export default (client) => {
               `[InteractionCreate] Failed to send generic error reply for ${commandName} (Interaction likely invalid):`,
               replyError
             )
+            // Track the reply error too
+            await client.trackError(replyError, {
+              commandName,
+              userId: interaction.user.id,
+              guildId: interaction.guildId,
+              component: 'interaction_handler',
+              phase: 'error_reply'
+            })
           }
         } else {
            // If replied or deferred, the command likely tried to handle its own response/error.
