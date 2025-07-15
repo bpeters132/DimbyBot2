@@ -19,7 +19,6 @@ jobs:
     env:
       REGISTRY: ghcr.io
       IMAGE_BOT: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:latest
-      IMAGE_LAVALINK: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -35,17 +34,9 @@ jobs:
         run: |
           docker build -t $IMAGE_BOT -f Dockerfile .
 
-      - name: Build lavalink image
-        run: |
-          docker build -t $IMAGE_LAVALINK -f Lavalink/Dockerfile ./Lavalink
-
       - name: Push bot image
         run: |
           docker push $IMAGE_BOT
-
-      - name: Push lavalink image
-        run: |
-          docker push $IMAGE_LAVALINK
 
   deploy:
     needs: build-and-push
@@ -54,7 +45,6 @@ jobs:
     env:
       REGISTRY: ghcr.io
       IMAGE_BOT: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:latest
-      IMAGE_LAVALINK: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -85,7 +75,6 @@ jobs:
           EMAIL_PASS=${{ secrets.EMAIL_PASS }}
           GITLAB_EMAIL=${{ secrets.GITLAB_EMAIL }}
           BOT_IMAGE=${{ env.IMAGE_BOT }}
-          LAVALINK_IMAGE=${{ env.IMAGE_LAVALINK }}
           EOF
 
       - name: Copy files to server
@@ -95,7 +84,7 @@ jobs:
           username: ${{ secrets.DEPLOY_SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.DEPLOY_SERVER_SSH_PORT }}
-          source: "ci_generated.env,docker-compose.yml"
+          source: "ci_generated.env,docker-compose.yml,Lavalink/entrypoint.sh"
           target: "/home/bot/"
 
       - name: Copy deployment script to server
@@ -108,7 +97,6 @@ jobs:
             export $(grep -v '^#' .env | xargs)
           fi
           sed -i "s|image: .*bot.*|image: $BOT_IMAGE|" docker-compose.yml
-          sed -i "s|image: .*lavalink.*|image: $LAVALINK_IMAGE|" docker-compose.yml
           /usr/bin/docker compose down
           /usr/bin/docker compose pull
           /usr/bin/docker compose up -d
