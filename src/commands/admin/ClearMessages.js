@@ -10,10 +10,9 @@ export default {
     ),
 
   /**
-   *
-   * @param {import('discord.js').Client} client
-   * @param {import('discord.js').CommandInteraction} interaction
-   *
+   * Executes the /clearmessages command to bulk delete messages in a channel.
+   * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
+   * @param {import('../../lib/BotClient.js').default} client The bot client instance.
    */
   async execute(interaction, client) {
     const clear_amount = interaction.options.getInteger("count")
@@ -60,4 +59,4 @@ export default {
       })
     }
   },
-} 
+}

@@ -8,10 +8,9 @@ export default {
       option.setName("position").setDescription("time to seek to").setRequired(true)
     ),
   /**
-   *
-   * @param {import('../../lib/BotClient.js').default} client
-   * @param {import('discord.js').CommandInteraction} interaction
-   *
+   * Executes the /seek command to jump to a specific position in the current track.
+   * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
+   * @param {import('../../lib/BotClient.js').default} client The bot client instance.
    */
   async execute(interaction, client) {
     const position = interaction.options.getInteger("position")

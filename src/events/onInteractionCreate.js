@@ -8,6 +8,10 @@ import { getGuildSettings } from "../util/saveControlChannel.js"
 import { handleControlButtonInteraction } from "./handlers/handleControlButtonInteraction.js"
 import { cleanupControlChannel } from "./handlers/handleControlChannel.js"
 
+/**
+ * Sets up the event listener for the 'interactionCreate' event.
+ * @param {import('../lib/BotClient.js').default} client The bot client instance.
+ */
 export default (client) => {
   client.on("interactionCreate", async (interaction) => {
     // --- Button Interaction Handling ---

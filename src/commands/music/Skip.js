@@ -3,10 +3,9 @@ import { SlashCommandBuilder } from "discord.js"
 export default {
   data: new SlashCommandBuilder().setName("skip").setDescription("Skip the song"),
   /**
-   *
-   * @param {import('../../lib/BotClient.js').default} client
-   * @param {import('discord.js').CommandInteraction} interaction
-   *
+   * Executes the /skip command to skip the current track.
+   * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
+   * @param {import('../../lib/BotClient.js').default} client The bot client instance.
    */
   async execute(interaction, client) {
     const guild = interaction.guild

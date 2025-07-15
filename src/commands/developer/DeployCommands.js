@@ -2,8 +2,12 @@ import { SlashCommandBuilder, REST, Routes, MessageFlags } from "discord.js"
 import fs from "fs"
 import path from "path"
 
-// Helper function to recursively load command files
-// Adjust this if your command loading logic is different!
+/**
+ * Recursively loads command files from a directory and its subdirectories.
+ * @param {string} dir The directory to load commands from.
+ * @param {Array<object>} commands An array to store the loaded command data.
+ * @returns {Promise<Array<object>>} A promise that resolves with an array of command data objects.
+ */
 async function loadCommands(dir, commands = []) {
     const dirents = fs.readdirSync(dir, { withFileTypes: true })
     for (const dirent of dirents) {
@@ -87,4 +91,4 @@ export default {
       await interaction.editReply(`❌ Failed to reload application commands. Check console for details. Error: ${error.message}`)
     }
   },
-} 
+}

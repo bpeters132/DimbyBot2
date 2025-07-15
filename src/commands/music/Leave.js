@@ -3,10 +3,9 @@ import { SlashCommandBuilder} from "discord.js"
 export default {
   data: new SlashCommandBuilder().setName("leave").setDescription("Tell the bot to leave"),
   /**
-   *
-   * @param {import('../../lib/BotClient.js').default} client
-   * @param {import('discord.js').CommandInteraction} interaction
-   *
+   * Executes the /leave command to make the bot leave the voice channel and destroy the player.
+   * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
+   * @param {import('../../lib/BotClient.js').default} client The bot client instance.
    */
   async execute(interaction, client) {
     client.debug(`Leave command invoked by ${interaction.user.tag} in guild ${interaction.guild.id}`)

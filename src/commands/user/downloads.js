@@ -23,6 +23,11 @@ const data = new SlashCommandBuilder()
       )
   )
 
+/**
+ * Executes the /downloads command to list or clean up downloaded files.
+ * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
+ * @param {import('../../lib/BotClient.js').default} client The bot client instance.
+ */
 async function execute(interaction, client) {
   const downloadsDir = path.join(process.cwd(), "downloads")
   
@@ -147,4 +152,4 @@ async function execute(interaction, client) {
   }
 }
 
-export default { data, execute } 
+export default { data, execute }
