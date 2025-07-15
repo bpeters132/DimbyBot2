@@ -5,10 +5,9 @@ import { formatDuration } from "../../util/formatDuration.js"
 export default {
   data: new SlashCommandBuilder().setName("nowplaying").setDescription("View current playing song"),
   /**
-   *
-   * @param {import('../../lib/BotClient.js').default} client
-   * @param {import('discord.js').CommandInteraction} interaction
-   *
+   * Executes the /nowplaying command to display the currently playing track.
+   * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
+   * @param {import('../../lib/BotClient.js').default} client The bot client instance.
    */
   async execute(interaction, client) {
     const guild = interaction.guild

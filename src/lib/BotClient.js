@@ -53,16 +53,35 @@ class BotClient extends Client {
     this.info("BotClient constructor: Finished.")
   }
 
-  // Shorthands for the logger
+  /**
+   * Logs an informational message.
+   * @param {string} Text The message to log.
+   * @param {...any} args Additional arguments to log.
+   */
   info(Text, ...args) {
     this.logger.info(Text, ...args)
   }
+  /**
+   * Logs an error message.
+   * @param {string} Text The message to log.
+   * @param {...any} args Additional arguments to log.
+   */
   error(Text, ...args) {
     this.logger.error(Text, ...args)
   }
+  /**
+   * Logs a warning message.
+   * @param {string} Text The message to log.
+   * @param {...any} args Additional arguments to log.
+   */
   warn(Text, ...args) {
     this.logger.warn(Text, ...args)
   }
+  /**
+   * Logs a debug message.
+   * @param {string} Text The message to log.
+   * @param {...any} args Additional arguments to log.
+   */
   debug(Text, ...args) {
     this.logger.debug(Text, ...args)
   }

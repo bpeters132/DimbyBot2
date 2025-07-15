@@ -8,7 +8,10 @@ const __dirname = path.dirname(__filename)
 const storageDir = path.join(__dirname, "..", "..", "storage")
 const settingsFile = path.join(storageDir, "guild_settings.json")
 
-// Pass client for logging - Exported for use in handler
+/**
+ * Ensures that the storage directory exists, creating it if necessary.
+ * This function is synchronous and will block until the directory is created.
+ */
 export function ensureStorageDir() {
   if (!fs.existsSync(storageDir)) {
     console.debug(`[guildSettings] Storage directory ${storageDir} not found, attempting creation.`)
@@ -21,7 +24,10 @@ export function ensureStorageDir() {
   }
 }
 
-// Pass client for logging and calling ensureStorageDir
+/**
+ * Reads and parses the guild settings from the JSON file.
+ * @returns {object} The parsed guild settings object, or an empty object if the file doesn't exist or an error occurs.
+ */
 export function getGuildSettings() {
   ensureStorageDir() // Pass client
   console.debug(`[guildSettings] Attempting to read settings from: ${settingsFile}`)
@@ -48,7 +54,10 @@ export function getGuildSettings() {
   }
 }
 
-// Pass client for logging and calling ensureStorageDir
+/**
+ * Saves the provided guild settings object to the JSON file.
+ * @param {object} settings The guild settings object to save.
+ */
 export function saveGuildSettings(settings) {
   ensureStorageDir() // Pass client
   console.debug(`[guildSettings] Attempting to save settings to: ${settingsFile}`)

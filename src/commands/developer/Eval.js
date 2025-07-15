@@ -4,7 +4,11 @@ import { Buffer } from "node:buffer" // For creating file buffers
 
 const MAX_FIELD_LENGTH = 1024 // Discord embed field limit
 
-// Function to collect sensitive values for redaction
+/**
+ * Collects sensitive values from the client and environment variables for redaction.
+ * @param {import('../../lib/BotClient.js').default} client The bot client instance.
+ * @returns {Map<string, string>} A map of sensitive values to their placeholders.
+ */
 function getSensitiveValues(client) {
   const sensitive = new Map() // Use a Map to store value -> placeholder
 
@@ -152,4 +156,4 @@ export default {
       }
     }
   },
-} 
+}

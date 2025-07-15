@@ -11,10 +11,9 @@ export default {
 
 
   /**
-   *
-   * @param {import('discord.js').CommandInteraction} interaction
-   * @param {import('../../lib/BotClient.js').default} client
-   *
+   * Executes the /play command to search for and play a track.
+   * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
+   * @param {import('../../lib/BotClient.js').default} client The bot client instance.
    */
   async execute(interaction, client) {
     const query = interaction.options.getString("query")

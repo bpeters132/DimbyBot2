@@ -1,8 +1,13 @@
 import winston from "winston"
 import colors from "colors"
 
-// Simple logger class using Winston for file logging and console.log with colors
+/**
+ * A simple logger class that logs to both the console with colors and a file.
+ */
 export default class Logger {
+  /**
+   * @param {string} file The path to the log file.
+   */
   constructor(file) {
     // Basic Winston setup for file transport only
     if (!file) {
@@ -40,7 +45,11 @@ export default class Logger {
     }
   }
 
-  // Helper to format date/time for *console* output (keeps existing format)
+  /**
+   * Formats the current timestamp for console output.
+   * @returns {string} The formatted timestamp.
+   * @private
+   */
   _getTimestamp() {
     const d = new Date()
     // Pad month, day, hour, minute for consistent formatting
@@ -51,7 +60,12 @@ export default class Logger {
     return `[${day}:${month}:${d.getFullYear()} - ${hour}:${minute}]`
   }
 
-  // Helper to format args array (handles objects/errors better than simple concatenation)
+  /**
+   * Formats an array of arguments into a single string.
+   * @param {any[]} args The arguments to format.
+   * @returns {string} The formatted string.
+   * @private
+   */
   _formatArgs(args) {
     return args
       .map((arg) => {
@@ -70,6 +84,11 @@ export default class Logger {
       .join(" ")
   }
 
+  /**
+   * Logs an informational message.
+   * @param {string} text The message to log.
+   * @param {...any} args Additional arguments to log.
+   */
   info(text, ...args) {
     const messageArgs = this._formatArgs(args)
     const fullMessage = text + (messageArgs ? " " + messageArgs : "")
@@ -79,6 +98,11 @@ export default class Logger {
     console.log(colors.gray(this._getTimestamp()) + colors.green(` | INFO | ${fullMessage}`))
   }
 
+  /**
+   * Logs a warning message.
+   * @param {string} text The message to log.
+   * @param {...any} args Additional arguments to log.
+   */
   warn(text, ...args) {
     const messageArgs = this._formatArgs(args)
     const fullMessage = text + (messageArgs ? " " + messageArgs : "")
@@ -88,6 +112,11 @@ export default class Logger {
     console.log(colors.gray(this._getTimestamp()) + colors.yellow(` | WARN | ${fullMessage}`))
   }
 
+  /**
+   * Logs an error message.
+   * @param {string} text The message to log.
+   * @param {...any} args Additional arguments to log.
+   */
   error(text, ...args) {
     const messageArgs = this._formatArgs(args)
     const fullMessage = text + (messageArgs ? " " + messageArgs : "")
@@ -103,6 +132,11 @@ export default class Logger {
     console.log(colors.gray(this._getTimestamp()) + colors.red(` | ERROR | ${fullMessage}`))
   }
 
+  /**
+   * Logs a debug message if the LOG_LEVEL is set to 'debug'.
+   * @param {string} text The message to log.
+   * @param {...any} args Additional arguments to log.
+   */
   debug(text, ...args) {
     // Only proceed if LOG_LEVEL enables debug
     if (process.env.LOG_LEVEL?.toLowerCase() !== "debug") {

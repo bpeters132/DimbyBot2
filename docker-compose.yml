@@ -1,8 +1,10 @@
 services:
   lavalink:
-    image: placeholder-lavalink # This will be replaced by the deploy script
+    image: ghcr.io/lavalink-devs/lavalink:4.1.1
     container_name: lavalink
     restart: unless-stopped
+    working_dir: /app
+    entrypoint: ["sh", "/app/entrypoint.sh"]
     environment:
       # These will be picked up by Lavalink/entrypoint.sh
       - LAVALINK_PORT=${LAVALINK_PORT}
@@ -18,8 +20,18 @@ services:
     ports:
       - "${LAVALINK_PORT}:${LAVALINK_PORT}" # Map host port to container port
     volumes:
+      - ./Lavalink/entrypoint.sh:/app/entrypoint.sh
       - lavalink-plugins:/app/plugins
       - dimbybot-downloads:/app/downloads
+    networks:
+      - internal
+    depends_on:
+      - spotify-tokener
+
+  spotify-tokener:
+    image: ghcr.io/topi314/spotify-tokener:master
+    container_name: spotify-tokener
+    restart: unless-stopped
     networks:
       - internal
 

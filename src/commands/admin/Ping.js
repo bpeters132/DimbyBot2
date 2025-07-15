@@ -3,9 +3,9 @@ import { SlashCommandBuilder, EmbedBuilder } from "discord.js"
 export default {
   data: new SlashCommandBuilder().setName("ping").setDescription("Replies with pong and latency!"),
   /**
-   *
-   * @param {import('discord.js').Client} client
-   * @param {import('discord.js').CommandInteraction} interaction
+   * Executes the /ping command to check bot and API latency.
+   * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
+   * @param {import('../../lib/BotClient.js').default} client The bot client instance.
    */
   async execute(interaction, client) {
     const sent = await interaction.reply({ content: "Pinging...", fetchReply: true })

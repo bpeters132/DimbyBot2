@@ -3,10 +3,9 @@ import { SlashCommandBuilder } from "discord.js"
 export default {
   data: new SlashCommandBuilder().setName("shuffle").setDescription("Shuffle the current queue"),
   /**
-   *
-   * @param {import('../../lib/BotClient.js').default} client
-   * @param {import('discord.js').CommandInteraction} interaction
-   *
+   * Executes the /shuffle command to shuffle the queue.
+   * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
+   * @param {import('../../lib/BotClient.js').default} client The bot client instance.
    */
   async execute(interaction, client) {
     const guild = interaction.guild

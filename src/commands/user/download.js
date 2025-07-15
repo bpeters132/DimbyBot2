@@ -10,12 +10,24 @@ const MAX_FILE_AGE_DAYS = 7
 // Maximum total size of downloads directory in MB
 const MAX_DIR_SIZE_MB = 1000
 
+/**
+ * Creates a textual progress bar.
+ * @param {number} progress The progress percentage.
+ * @param {number} [length=20] The length of the progress bar.
+ * @returns {string} The progress bar string.
+ */
 function createProgressBar(progress, length = 20) {
     const filled = Math.round((progress / 100) * length)
     const empty = length - filled
     return `[${"█".repeat(filled)}${"░".repeat(empty)}]`
 }
 
+/**
+ * Cleans up files in the downloads directory that are older than MAX_FILE_AGE_DAYS.
+ * @param {string} downloadsDir The path to the downloads directory.
+ * @param {import('../../lib/BotClient.js').default} client The bot client instance.
+ * @returns {{deletedCount: number, totalSize: number}} The number of deleted files and their total size.
+ */
 function cleanupOldFiles(downloadsDir, client) {
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - MAX_FILE_AGE_DAYS)
@@ -90,6 +102,12 @@ function cleanupOldFiles(downloadsDir, client) {
   return { deletedCount, totalSize }
 }
 
+/**
+ * Checks the total size of the downloads directory and cleans up the oldest files if it exceeds MAX_DIR_SIZE_MB.
+ * @param {string} downloadsDir The path to the downloads directory.
+ * @param {import('../../lib/BotClient.js').default} client The bot client instance.
+ * @returns {{deletedCount: number, deletedSize: number}} The number of deleted files and their total size.
+ */
 function checkAndCleanupDirectory(downloadsDir, client) {
   // Get total size of directory
   const totalSize = fs.readdirSync(downloadsDir)
@@ -142,6 +160,11 @@ const data = new SlashCommandBuilder()
       .setRequired(true)
   )
 
+/**
+ * Executes the /download command to download a YouTube video and play it.
+ * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
+ * @param {import('../../lib/BotClient.js').default} client The bot client instance.
+ */
 async function execute(interaction, client) {
   const url = interaction.options.getString("url")
   const member = interaction.member

@@ -26,6 +26,11 @@ export default {
   category: "admin",
   aliases: ["cc"],
 
+  /**
+   * Executes the /control-channel command to set or unset the music control channel.
+   * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
+   * @param {import('../../lib/BotClient.js').default} client The bot client instance.
+   */
   async execute(interaction, client) {
     const { guild, channel, options } = interaction
     const subcommand = options.getSubcommand()

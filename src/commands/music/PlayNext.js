@@ -8,10 +8,9 @@ export default {
       option.setName("query").setDescription("The song name or URL").setRequired(true)
     ),
   /**
-   *
-   * @param {import('../../lib/BotClient.js').default} client
-   * @param {import('discord.js').CommandInteraction} interaction
-   *
+   * Executes the /playnext command to add a track to the top of the queue.
+   * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
+   * @param {import('../../lib/BotClient.js').default} client The bot client instance.
    */
   async execute(interaction, client) {
     await interaction.deferReply()
