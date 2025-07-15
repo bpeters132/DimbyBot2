@@ -51,7 +51,7 @@ jobs:
 
       - name: Generate .env file
         run: |
-          cat << EOF > ci_generated.env
+          cat << EOF > .env
           BOT_TOKEN=${{ secrets.BOT_TOKEN }}
           CLIENT_ID=${{ secrets.CLIENT_ID }}
           GUILD_ID=${{ secrets.GUILD_ID }}
@@ -75,6 +75,8 @@ jobs:
           EMAIL_PASS=${{ secrets.EMAIL_PASS }}
           GITLAB_EMAIL=${{ secrets.GITLAB_EMAIL }}
           BOT_IMAGE=${{ env.IMAGE_BOT }}
+          GH_ACTOR=${{ github.actor }}
+          GH_TOKEN=${{ secrets.GITHUB_TOKEN }}
           EOF
 
       - name: Copy files to server
@@ -84,7 +86,7 @@ jobs:
           username: ${{ secrets.DEPLOY_SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.DEPLOY_SERVER_SSH_PORT }}
-          source: "ci_generated.env,docker-compose.yml,Lavalink/entrypoint.sh"
+          source: ".env,docker-compose.yml,Lavalink/entrypoint.sh"
           target: "/home/bot/"
 
       - name: Copy deployment script to server
@@ -93,10 +95,9 @@ jobs:
           #!/bin/bash
           set -e
           cd /home/bot
-          if [ -f .env ]; then
-            export $(grep -v '^#' .env | xargs)
-          fi
+          export $(grep -v '^#' .env | xargs)
           sed -i "s|image: .*bot.*|image: $BOT_IMAGE|" docker-compose.yml
+          echo "$GH_TOKEN" | /usr/bin/docker login ghcr.io -u "$GH_ACTOR" --password-stdin
           /usr/bin/docker compose down
           /usr/bin/docker compose pull
           /usr/bin/docker compose up -d
