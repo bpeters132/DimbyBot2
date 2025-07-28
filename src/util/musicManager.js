@@ -26,6 +26,8 @@ export async function handleQueryAndPlay(
   player
 ) {
   client.debug(`[MusicManager] handleQueryAndPlay called for guild ${guildId}. Query: "${query}"`)
+  client.debug(`[MusicManager] Player object in handleQueryAndPlay: ${JSON.stringify(player, null, 2)}`)
+  client.debug(`[MusicManager] Player queue in handleQueryAndPlay: ${JSON.stringify(player.queue, null, 2)}`)
   let feedbackText = ""
   let success = false
   let trackToAdd = null
@@ -325,32 +327,6 @@ export async function handleQueryAndPlay(
         }
       }
 
-      if (
-        !searchResult ||
-        searchResult.loadType === "LOAD_FAILED" ||
-        searchResult.loadType === "NO_MATCHES"
-      ) {
-        client.debug(
-          `[MusicManager] Direct search failed or no matches for "${query}". Trying Spotify fallback.`
-        )
-        try {
-          searchResult = await player.search(query, requester)
-          searchAttempts.push({
-            source: "spotify/fallback",
-            success: true,
-            loadType: searchResult.loadType,
-          })
-          client.debug(
-            `[MusicManager] Spotify/fallback search completed. Query: "${query}", LoadType: ${searchResult.loadType}`
-          )
-        } catch (error) {
-          searchAttempts.push({ source: "spotify/fallback", success: false, error: error.message })
-          client.warn(
-            `[MusicManager] Spotify/fallback search failed for query "${query}". Error: ${error.message}`
-          )
-          if (!searchError) searchError = error
-        }
-      }
     } else {
       client.debug(
         `[MusicManager] Skipping main Lavalink search as searchResult is already populated. LoadType: ${searchResult.loadType}`
@@ -482,28 +458,11 @@ export async function handleQueryAndPlay(
           )
         }
 
-        if (!player.playing) {
-          if (player.queue.size > 0) {
-            await player.play()
-            client.debug(
-              `[MusicManager] Lavalink player started playing [${player.queue.current?.info?.title || "track from queue"}].`
-            )
-          } else if (trackToAdd) {
-            client.warn(
-              `[MusicManager] Player not playing, queue empty, but trackToAdd exists. Fallback direct play for [${trackToAdd.info.title}].`
-            )
-            await player.play({ track: trackToAdd })
-            client.debug(
-              `[MusicManager] Lavalink player (fallback) started playing [${trackToAdd.info.title}].`
-            )
-          } else {
-            client.debug(
-              `[MusicManager] Player not playing and no specific track to play after connection.`
-            )
-          }
-        } else {
+        client.debug(`[MusicManager] Before play check: player.playing=${player.playing}, player.queue.size=${player.queue.size}`)
+        if (!player.playing && player.queue.tracks.length > 0) {
+          await player.play()
           client.debug(
-            `[MusicManager] Player already playing. [${trackToAdd?.info?.title || "New track"}] was added to queue.`
+            `[MusicManager] Lavalink player started playing [${player.queue.current?.info?.title || "track from queue"}].`
           )
         }
       } catch (playError) {

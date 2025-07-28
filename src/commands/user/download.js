@@ -19,7 +19,7 @@ const MAX_DIR_SIZE_MB = 1000
 function createProgressBar(progress, length = 20) {
     const filled = Math.round((progress / 100) * length)
     const empty = length - filled
-    return `[${"█".repeat(filled)}${"░".repeat(empty)}]`
+    return `\`[${'█'.repeat(filled)}${'░'.repeat(empty)}]\``
 }
 
 /**
@@ -369,7 +369,8 @@ async function execute(interaction, client) {
 
     })
 
-  } catch (error) {
+  }
+ catch (error) {
     client.error(`[Download] Error downloading video:`, error)
     if (interaction.replied || interaction.deferred) {
         await interaction.editReply({
