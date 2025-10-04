@@ -51,7 +51,7 @@ server:
   port: ${LAVALINK_PORT}
 lavalink:
   plugins:
-    - dependency: "dev.lavalink.youtube:youtube-plugin:1.13.5"
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.14.0"
       snapshot: false
     - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:dbda8e7"
       repository: "https://maven.lavalink.dev/snapshots"
