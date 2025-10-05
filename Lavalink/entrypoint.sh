@@ -20,6 +20,7 @@ plugins:
       token: ${LAVALINK_YOUTUBE_POT_TOKEN}
       visitorData: ${LAVALINK_YOUTUBE_POT_VISITORDATA}
     clients:
+      - ANDROID_VR
       - WEB
       - WEBEMBEDDED
   lavasrc:
