@@ -24,3 +24,4 @@ storage/guild_settings.json
 # VSCode
 .vscode/
 .vscode/settings.json
+.kilocode/mcp.json
