@@ -1,0 +1,1 @@
+This document serves as a reference for understanding the alignment between deployment reliability strategies and observability practices. It highlights how deployment health checks, rollbacks, and monitoring metrics work together to ensure system stability. TODO: Expand with specific examples of overlapping concerns and implementation guidelines.

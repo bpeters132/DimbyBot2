@@ -1,31 +1,36 @@
-# Use an appropriate base image with Java (e.g., OpenJDK JRE)
-FROM eclipse-temurin:17-jre-alpine
+# Multi-stage Dockerfile for Lavalink
+
+# base: Install system dependencies without app code
+FROM eclipse-temurin:17-jre-alpine AS base
 
 WORKDIR /app
 
-# Install required system libraries and utilities
 RUN apk add --no-cache \
     libgcc \
     gcompat \
     dos2unix \
     curl
 
-# Download the latest Lavalink.jar
+# fetch: Download Lavalink.jar once and cache across builds
+FROM base AS fetch
+
 RUN curl -L https://github.com/lavalink-devs/Lavalink/releases/latest/download/Lavalink.jar -o Lavalink.jar
+
+# runtime: Minimal runtime image with Lavalink.jar and entrypoint
+FROM base AS runtime
+
+# Copy Lavalink.jar from fetch stage
+COPY --from=fetch /app/Lavalink.jar /app/Lavalink.jar
 
 # Copy the entrypoint script
 COPY entrypoint.sh entrypoint.sh
+
 # Ensure script has correct line endings (LF) and is executable
 # Ensure /tmp exists and has correct permissions
 RUN dos2unix entrypoint.sh \
     && chmod +x entrypoint.sh \
     && mkdir -p /tmp \
-    && chmod 1777 /tmp \
-    # Add debugging steps:
-    && echo "--- Listing /app contents:" \
-    && ls -la /app/ \
-    && echo "--- Checking for /bin/sh:" \
-    && which sh
+    && chmod 1777 /tmp
 
 # Default port Lavalink runs on
 EXPOSE 2333
@@ -37,4 +42,4 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=5 \
 
 # Run the entrypoint script which generates application.yml and starts Lavalink
 # Use absolute path and explicitly invoke sh to bypass shebang issues
-ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"] 
+ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]

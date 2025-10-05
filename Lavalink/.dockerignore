@@ -1,0 +1,27 @@
+# Git specific
+.git
+.gitignore
+
+# Logs
+logs/
+*.log
+
+# Downloads
+downloads/
+
+# Documentation
+docs/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Env files
+.env
+.env.*
+
+# Generated config files
+application.yml
+
+# Allow Lavalink.jar (downloaded during build)
+!Lavalink.jar

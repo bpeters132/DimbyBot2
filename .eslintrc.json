@@ -1,13 +1,19 @@
 {
-  "plugins": ["prettier"],
-  "extends": ["eslint:recommended", "prettier"],
+  "root": true,
+  "plugins": ["prettier", "import", "node", "promise"],
+  "extends": ["eslint:recommended", "plugin:import/recommended", "plugin:node/recommended", "plugin:promise/recommended", "prettier"],
   "env": {
     "node": true,
-    "es6": true
+    "es2023": true
   },
   "parserOptions": {
-    "ecmaVersion": 2021,
+    "ecmaVersion": 2023,
     "sourceType": "module"
+  },
+  "settings": {
+    "import/resolver": {
+      "node": true
+    }
   },
   "rules": {
     "semi": ["error", "never"]

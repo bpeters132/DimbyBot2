@@ -10,7 +10,24 @@
     "deployGlobal": "node ./src/deploy/deployGlobal.js",
     "destroyGlobal": "node ./src/deploy/destroyGlobal.js",
     "deployGuild": "node ./src/deploy/deployGuild.js",
-    "destroyGuild": "node ./src/deploy/destroyGuild.js"
+    "destroyGuild": "node ./src/deploy/destroyGuild.js",
+    "lint": "eslint --cache --ext .js,.cjs,.mjs src/ Lavalink/ docs/suggestions",
+    "lint:fix": "yarn lint --fix",
+    "format": "prettier \"**/*.{js,cjs,mjs,json,md,yml,yaml}\"",
+    "format:check": "yarn format --check",
+    "markdownlint": "markdownlint \"docs/**/*.md\" README.md",
+    "lint:all": "yarn lint && yarn format:check && yarn markdownlint",
+    "hooks:setup": "husky install && npx husky set .husky/pre-commit 'yarn lint-staged'",
+    "hooks:remove": "rm -rf .husky"
+  },
+  "lint-staged": {
+    "*.{js,cjs,mjs}": [
+      "eslint --cache --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
   },
   "license": "MIT",
   "dependencies": {
@@ -29,7 +46,13 @@
   "devDependencies": {
     "eslint": "^9.31.0",
     "eslint-config-prettier": "10.1.5",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-prettier": "^5.5.1",
+    "eslint-plugin-promise": "^7.2.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.11",
+    "markdownlint-cli": "^0.44.0",
     "nodemon": "^3.1.9",
     "prettier": "3.6.2"
   },

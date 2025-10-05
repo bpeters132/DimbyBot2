@@ -14,8 +14,21 @@ Dockerfile
 docker-compose.yml
 
 # Logs
+logs/
 logs.log
 *.log
+
+# Downloads
+downloads/
+
+# Documentation
+docs/
+
+# Coverage reports
+coverage/
+
+# Husky
+.husky/
 
 # OS specific
 .DS_Store
@@ -30,4 +43,4 @@ Lavalink/application.yml
 lavaNodesConfig.js
 
 # Don't include Lavalink build context in bot build context
-Lavalink/ 
+Lavalink/

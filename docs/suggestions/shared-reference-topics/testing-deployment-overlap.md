@@ -1,0 +1,1 @@
+This document outlines the cross-theme relationships between automated testing infrastructure and deployment readiness practices. It explores how CI/CD testing pipelines intersect with deployment strategies to ensure reliable releases. TODO: Detail specific integration points and best practices for combining testing and deployment workflows.

@@ -75,6 +75,30 @@ exec:
 	@echo "Executing '$(or $(cmd),sh)' in service '$(service)'..."
 	$(DC) exec $(service) $(or $(cmd),sh)
 
+.PHONY: lint
+lint:
+	yarn lint
+
+.PHONY: lint-fix
+lint-fix:
+	yarn lint:fix
+
+.PHONY: format
+format:
+	yarn format
+
+.PHONY: format-check
+format-check:
+	yarn format:check
+
+.PHONY: markdownlint
+markdownlint:
+	yarn markdownlint
+
+.PHONY: lint-all
+lint-all:
+	yarn lint:all
+
 # Catch-all target to allow for passing additional arguments
 %:
-	@: 
+	@:

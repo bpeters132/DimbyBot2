@@ -1,37 +1,58 @@
-# Use a recent Node.js LTS version
-FROM node:20-alpine
+# Multi-stage Dockerfile for DimbyBot
 
-WORKDIR /app
+# bot-base: Install system dependencies, Python venv, yt-dlp, ffmpeg without app code
+FROM node:20-alpine AS bot-base
 
-# Install yt-dlp and its dependencies (always latest from pip)
-# Also install build tools needed for native Node.js modules
-RUN apk add --no-cache python3 py3-pip ffmpeg build-base autoconf automake libtool g++ \
+RUN apk add --no-cache \
+    python3 \
+    py3-pip \
+    ffmpeg \
+    build-base \
+    autoconf \
+    automake \
+    libtool \
+    g++ \
     && python3 -m venv /opt/venv \
     && . /opt/venv/bin/activate \
     && pip3 install --no-cache-dir yt-dlp \
     && ln -sf /opt/venv/bin/yt-dlp /usr/bin/yt-dlp
 
-# Copy package files and install dependencies
-COPY package.json yarn.lock ./
-# It's generally better to run `yarn install` *after* installing build deps
-# and *before* copying the rest of the app code to leverage Docker layer caching.
-RUN yarn install --production
+# deps: Copy package files and install dependencies with frozen lockfile
+FROM bot-base AS deps
 
-# Copy the rest of the application code
+WORKDIR /app
+
+COPY package.json yarn.lock ./
+
+RUN YARN_CACHE_FOLDER=/tmp/.yarn-cache yarn install --frozen-lockfile
+
+# builder: Copy project files, reuse deps, prepare production assets
+FROM deps AS builder
+
 COPY . .
 
-# Copy the entrypoint script
-COPY entrypoint.sh entrypoint.sh
-# Ensure script has correct line endings (LF) and is executable
-RUN apk add --no-cache dos2unix \
-    && dos2unix entrypoint.sh \
-    && chmod +x entrypoint.sh \
-    # Add debugging steps:
-    && echo "--- Listing /app contents:" \
-    && ls -la /app/ \
-    && echo "--- Checking for /bin/sh:" \
-    && which sh
+# Prune node_modules for production (remove dev dependencies)
+RUN yarn install --production --frozen-lockfile && yarn cache clean
 
-# Run the entrypoint script which generates lavaNodesConfig.js and starts the bot
-# Use absolute path and explicitly invoke sh to bypass shebang issues
-ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"] 
+# runtime: Minimal runtime image with copied artifacts
+FROM node:20-alpine AS runtime
+
+# Copy yt-dlp environment from bot-base
+COPY --from=bot-base /opt/venv /opt/venv
+COPY --from=bot-base /usr/bin/yt-dlp /usr/bin/yt-dlp
+
+# Copy production node_modules and app source from builder
+COPY --from=builder /app/node_modules /app/node_modules
+COPY --from=builder /app /app
+
+# Copy and prepare entrypoint script
+COPY entrypoint.sh /app/entrypoint.sh
+
+RUN apk add --no-cache dos2unix \
+    && dos2unix /app/entrypoint.sh \
+    && chmod +x /app/entrypoint.sh
+
+WORKDIR /app
+
+# Run the entrypoint script
+ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
