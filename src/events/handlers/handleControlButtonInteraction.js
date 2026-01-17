@@ -118,6 +118,11 @@ export async function handleControlButtonInteraction(interaction, client) {
 
   // 6. Execute Action & Update Control Message
   let actionTaken = false
+  /**
+   * Sends a follow-up and refreshes the control message when a player action fails.
+   * @param {Error} error The error thrown by the player action.
+   * @returns {Promise<void>}
+   */
   const handleActionError = async (error) => {
     client.error(
       `[ControlButtonHandler] Error executing player action for ${customId}:`,

@@ -16,7 +16,11 @@ export default async (client) => {
   const commandsBasePath = path.join(__dirname, "../commands")
   client.info(`Starting command loading from base path: ${commandsBasePath}`)
 
-  // Recursive function to load commands
+  /**
+   * Recursively loads command modules from a directory.
+   * @param {string} directoryPath The directory to scan.
+   * @returns {Promise<void>}
+   */
   const loadCommandsRecursive = async (directoryPath) => {
     try {
       const entries = fs.readdirSync(directoryPath, { withFileTypes: true })

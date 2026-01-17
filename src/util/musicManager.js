@@ -5,6 +5,13 @@ import { playLocalFile } from "./localPlayer.js"
 import { getLocalPlayerState, stopLocalPlayer } from "./localPlayer.js"
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } from "discord.js"
 
+/**
+ * Ensures the Lavalink player is connected to the target voice channel.
+ * @param {import('../lib/BotClient.js').default} client The bot client instance.
+ * @param {import('@lavaclient/queue').Queue} player The Lavalink player instance.
+ * @param {import('discord.js').VoiceBasedChannel} voiceChannel The target voice channel.
+ * @returns {Promise<void>}
+ */
 async function ensurePlayerConnected(client, player, voiceChannel) {
     if (!player.connected || player.voiceChannelId !== voiceChannel.id) {
         client.debug(

@@ -11,6 +11,11 @@ const MAX_FILE_AGE_DAYS = 7
 // Maximum total size of downloads directory in MB (default fallback)
 const DEFAULT_MAX_DIR_SIZE_MB = 1000
 
+/**
+ * Resolves the configured downloads size limit for a guild.
+ * @param {string} guildId The guild ID to read settings for.
+ * @returns {number} The max directory size in MB.
+ */
 function getMaxDirSizeMb(guildId) {
   const settings = getGuildSettings()
   const guildSettings = settings[guildId] || {}

@@ -6,6 +6,11 @@ import { getGuildSettings } from "../../util/saveControlChannel.js"
 
 const DEFAULT_MAX_DIR_SIZE_MB = 1000
 
+/**
+ * Resolves the configured downloads size limit for a guild.
+ * @param {string} guildId The guild ID to read settings for.
+ * @returns {number} The max directory size in MB.
+ */
 function getMaxDirSizeMb(guildId) {
     const settings = getGuildSettings()
     const guildSettings = settings[guildId] || {}
@@ -105,11 +110,46 @@ async function execute(interaction, client) {
             })
             .join("\n\n")
 
-        return interaction.reply({
-            content: `**Downloaded Files (${files.length})**\n` +
-                `Storage: ${totalSizeMB}MB / ${limitMb}MB\n\n` +
-                `${fileList}`,
-        })
+        const header =
+            `**Downloaded Files (${files.length})**\n` +
+            `Storage: ${totalSizeMB}MB / ${limitMb}MB\n\n`
+
+        const maxContentLength = 2000
+        const headerFits = header.length < maxContentLength
+        if (headerFits && (header.length + fileList.length) <= maxContentLength) {
+            return interaction.reply({
+                content: header + fileList,
+            })
+        }
+
+        const chunks = []
+        let currentChunk = headerFits ? header : ""
+        for (const entry of fileList.split("\n\n")) {
+            const entryWithSpacing = currentChunk ? `\n\n${entry}` : entry
+            if ((currentChunk.length + entryWithSpacing.length) > maxContentLength) {
+                if (currentChunk) {
+                    chunks.push(currentChunk)
+                }
+                currentChunk = entry
+            } else {
+                currentChunk += entryWithSpacing
+            }
+        }
+        if (currentChunk) {
+            chunks.push(currentChunk)
+        }
+
+        if (chunks.length === 0) {
+            return interaction.reply({
+                content: headerFits ? header : `**Downloaded Files (${files.length})**\n`,
+            })
+        }
+
+        await interaction.reply({ content: chunks[0] })
+        for (const chunk of chunks.slice(1)) {
+            await interaction.followUp({ content: chunk })
+        }
+        return
     }
 
     if (subcommand === "cleanup") {

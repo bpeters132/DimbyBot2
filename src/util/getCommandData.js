@@ -18,7 +18,11 @@ export default async function getCommandData() {
   const commandsBasePath = path.join(__dirname, "../commands")
   console.log(`[DeployUtil] Starting command data loading from: ${commandsBasePath}`)
 
-  // Define an asynchronous recursive function to load commands from a directory.
+  /**
+   * Recursively loads command data from a directory.
+   * @param {string} directoryPath The directory to scan.
+   * @returns {Promise<void>}
+   */
   const loadCommandsRecursive = async (directoryPath) => {
     try {
       // Read all entries (files and directories) in the current directory.

@@ -215,8 +215,8 @@ export function stopLocalPlayer(client, guildId) {
 
 /**
  * Gets the current state of the local player for a guild.
- * @param {string} guildId 
- * @returns {{isPlaying: boolean, trackTitle?: string} | null}
+ * @param {string} guildId The guild ID to look up.
+ * @returns {{isPlaying: boolean, trackTitle?: string, requesterId?: string, startedAt?: number} | null}
  */
 export function getLocalPlayerState(guildId) {
     if(activeLocalPlayers.has(guildId)) {

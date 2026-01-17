@@ -4,7 +4,11 @@ import getCommandData from "../util/getCommandData.js"
 import dotenv from "dotenv"
 dotenv.config()
 
-;(async () => {
+/**
+ * Deploys application commands globally using environment configuration.
+ * @returns {Promise<void>}
+ */
+async function deployGlobalCommands() {
   const appID = process.env.CLIENT_ID
   const token = process.env.BOT_TOKEN
 
@@ -33,4 +37,6 @@ dotenv.config()
   } catch (error) {
     console.error("Failed to register global application commands:", error)
   }
-})()
+}
+
+deployGlobalCommands()
