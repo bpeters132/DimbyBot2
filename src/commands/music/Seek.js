@@ -30,6 +30,6 @@ export default {
     }
 
     await player.seek(position)
-    interaction.reply("Seek complete.")
+    await interaction.reply("Seek complete.")
   },
 }

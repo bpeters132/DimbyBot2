@@ -14,18 +14,18 @@ export default {
     // Check if user is in a voice channel
     const voiceChannel = member.voice.channel
     if (!voiceChannel) {
-      return interaction.reply({ content: "Join a voice channel first!" })
+      return await interaction.reply({ content: "Join a voice channel first!" })
     }
 
     const player = client.lavalink.players.get(guild.id)
 
     if (!player || (!player.queue.current && player.queue.tracks.length === 0)) {
-      return interaction.reply("Nothing is playing.")
+      return await interaction.reply("Nothing is playing.")
     } else if (player.queue.current && player.queue.tracks.length === 0) {
-      return interaction.reply("The last song in the queue is already playing!")
+      return await interaction.reply("The last song in the queue is already playing!")
     }
 
     await player.queue.shuffle()
-    interaction.reply("Queue shuffled.")
+    await interaction.reply("Queue shuffled.")
   },
 }

@@ -153,12 +153,12 @@ async function execute(interaction, client) {
                     const stats = fs.statSync(file.path)
                     totalSize += stats.size
                     fs.unlinkSync(file.path)
+                    deletedCount++
                 }
                 // Remove from metadata
                 if (metadata[file.name]) {
                     delete metadata[file.name]
                 }
-                deletedCount++
             } catch (error) {
                 errors.push(`${file.name}: ${error.message}`)
             }
