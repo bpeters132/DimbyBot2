@@ -72,11 +72,14 @@ function cleanupOldFiles(downloadsDir, client, guildId) {
     if (downloadDate < cutoffDate) {
       try {
         const stats = fs.existsSync(filePath) ? fs.statSync(filePath) : null
-        if (stats) totalSize += stats.size
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
-        deletedCount++
-        metadataDirty = true
+        if (stats) {
+          totalSize += stats.size
+          fs.unlinkSync(filePath)
+          deletedCount++
+          metadataDirty = true
+        }
         delete metadata[fileName]
+        metadataDirty = true
         client.debug(
           `[Download Cleanup] Deleted "${fileName}" (downloaded ${downloadDate.toISOString()}) due to age.`
         )

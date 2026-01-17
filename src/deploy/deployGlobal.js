@@ -12,6 +12,14 @@ async function deployGlobalCommands() {
   const appID = process.env.CLIENT_ID
   const token = process.env.BOT_TOKEN
 
+  const missing = []
+  if (!appID) missing.push("CLIENT_ID")
+  if (!token) missing.push("BOT_TOKEN")
+  if (missing.length > 0) {
+    console.error(`Missing required environment variable(s): ${missing.join(", ")}`)
+    process.exit(1)
+  }
+
   const rest = new REST({ version: "10" }).setToken(token)
 
   console.log("Gathering command data...")

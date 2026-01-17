@@ -273,7 +273,7 @@ export async function handleControlButtonInteraction(interaction, client) {
               content: "Skipped the track. The queue is now empty.",
             })
 
-            player.destroy()
+            await player.destroy()
             actionTaken = true // Mark action as taken because the desired outcome (stopping) occurred.
             
           } else {

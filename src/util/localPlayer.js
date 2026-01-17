@@ -132,7 +132,8 @@ export async function playLocalFile(
     `[LocalPlayer] Started playing local file: "${localFile.title}" in guild ${voiceChannel.guild.id}`
   )
 
-  const feedbackText = `Now playing local file: **${localFile.title}** (requested by ${requester})`
+  const safeRequester = requester || "someone"
+  const feedbackText = `Now playing local file: **${localFile.title}** (requested by ${safeRequester})`
 
   // Handle playback finish
   audioPlayer.once(AudioPlayerStatus.Idle, () => {

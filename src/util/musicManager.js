@@ -64,12 +64,11 @@ export async function handleQueryAndPlay(
     player
 ) {
     client.debug(`[MusicManager] handleQueryAndPlay called for guild ${guildId}. Query: "${query}"`)
+    const queueSize = player?.queue?.size ?? player?.queue?.tracks?.length ?? 0
     client.debug(
-        `[MusicManager] Player object in handleQueryAndPlay: ${JSON.stringify(player, null, 2)}`
+        `[MusicManager] Player state in handleQueryAndPlay: state=${player?.state ?? "unknown"}, playing=${player?.playing ?? "unknown"}, position=${player?.position ?? "unknown"}`
     )
-    client.debug(
-        `[MusicManager] Player queue in handleQueryAndPlay: ${JSON.stringify(player.queue, null, 2)}`
-    )
+    client.debug(`[MusicManager] Player queue in handleQueryAndPlay: size=${queueSize}`)
     let feedbackText = ""
     let success = false
     let trackToAdd = null
