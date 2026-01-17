@@ -120,14 +120,12 @@ export function createControlButtons(client, player) {
     .setCustomId("control_shuffle")
     .setLabel("Shuffle")
     .setStyle(ButtonStyle.Secondary)
-    .setEmoji("🔀")
     .setDisabled(!hasCurrent && !hasQueue)
 
   const loopButton = new ButtonBuilder()
     .setCustomId("control_loop")
     .setLabel("Loop")
     .setStyle(ButtonStyle.Secondary)
-    .setEmoji("🔁")
     .setDisabled(!hasCurrent && !hasQueue)
 
   const row = new ActionRowBuilder().addComponents(

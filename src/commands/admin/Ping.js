@@ -14,7 +14,7 @@ export default {
 
     const embed = new EmbedBuilder()
       .setColor(0x0099ff)
-      .setTitle("🏓 Pong!")
+      .setTitle("Pong!")
       .addFields(
         { name: "Roundtrip Latency", value: `${roundtripLatency}ms`, inline: true },
         { name: "WebSocket Latency", value: `${wsLatency}ms`, inline: true }

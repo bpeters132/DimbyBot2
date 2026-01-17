@@ -7,7 +7,7 @@
 
 // Import utility functions
 import { getGuildSettings } from "../util/saveControlChannel.js"
-import { updateControlMessage } from "../events/handlers/handleControlChannel.js"
+import { updateControlMessage } from "./handlers/handleControlChannel.js"
 
 /**
  * Sets up event listeners for the Lavalink Manager.
@@ -58,7 +58,7 @@ export default async (client) => {
           `[LavaMgrEvents] Sending trackStart message to non-control channel ${player.textChannelId} in guild ${player.guildId}.`
         )
         channel
-          .send(`▶️ Now playing: **${track.info.title}**`)
+          .send(`Now playing: **${track.info.title}**`)
           .then((msg) => {
             // Delete the message after 10 seconds, with a retry on network error
             setTimeout(() => {
@@ -107,7 +107,7 @@ export default async (client) => {
           `[LavaMgrEvents] Sending trackStuck message to non-control channel ${player.textChannelId} in guild ${player.guildId}.`
         )
         channel
-          .send(`⚠️ Track Stuck! **${track.info.title}**`)
+          .send(`Track stuck: **${track.info.title}**`)
           .catch((e) => client.error("[LavaMgrEvents] Failed to send trackStuck message:", e))
       }
       client.debug(`[LavaMgrEvents] Attempting to skip stuck track in guild ${player.guildId}.`)
@@ -129,7 +129,7 @@ export default async (client) => {
         )
 
         // Build detailed error message
-        let errorMessage = `❌ Error playing **${track?.info?.title ?? "the track"}**\n\n`
+        let errorMessage = `Error playing **${track?.info?.title ?? "the track"}**\n\n`
         
         // Check for specific error types
         if (payload.exception?.cause?.includes("No supported audio streams available")) {
@@ -208,7 +208,7 @@ export default async (client) => {
           `[LavaMgrEvents] Sending queueEnd message to non-control channel ${player.textChannelId} in guild ${player.guildId}.`
         )
         channel
-          .send("⏹️ Queue has ended!")
+          .send("Queue has ended.")
           .catch((e) => client.error("[LavaMgrEvents] Failed to send queueEnd message:", e))
       }
 

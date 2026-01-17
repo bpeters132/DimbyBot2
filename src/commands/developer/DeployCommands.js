@@ -1,6 +1,10 @@
 import { SlashCommandBuilder, REST, Routes, MessageFlags } from "discord.js"
 import fs from "fs"
 import path from "path"
+import { fileURLToPath } from "url"
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 /**
  * Recursively loads command files from a directory and its subdirectories.
@@ -35,7 +39,23 @@ async function loadCommands(dir, commands = []) {
 export default {
   data: new SlashCommandBuilder()
     .setName("deploycommands")
-    .setDescription("Deploys/refreshes slash commands globally (Developer Only)"),
+    .setDescription("Deploys/refreshes slash commands (Developer Only)")
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("deployglobal")
+        .setDescription("Deploy/refresh slash commands globally")
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("deploylocal")
+        .setDescription("Deploy/refresh slash commands to a single guild")
+        .addStringOption((option) =>
+          option
+            .setName("guildid")
+            .setDescription("Target guild ID (defaults to current guild)")
+            .setRequired(false)
+        )
+    ),
   /**
    * @param {import('../../lib/BotClient.js').default} client
    * @param {import('discord.js').CommandInteraction} interaction
@@ -67,7 +87,9 @@ export default {
     try {
       const commands = []
       // Start loading from the base commands directory
-      const commandsPath = path.join(client.dirname, 'commands') 
+      const commandsPath = client.dirname
+        ? path.join(client.dirname, "commands")
+        : path.resolve(__dirname, "..")
       await loadCommands(commandsPath, commands)
 
       if (commands.length === 0) {
@@ -77,14 +99,39 @@ export default {
 
       const rest = new REST().setToken(client.token)
 
-      client.debug(`[DeployCmd] Refreshing ${commands.length} application (/) commands globally.`)
-      await rest.put(
-        Routes.applicationCommands(client.user.id),
-        { body: commands },
-      )
-
-      await interaction.editReply(`✅ Successfully reloaded ${commands.length} application (/) commands globally.`)
-      client.info(`[DeployCmd] Successfully deployed ${commands.length} commands globally by ${interaction.user.tag}`)
+      const subcommand = interaction.options.getSubcommand()
+      if (subcommand === "deploylocal") {
+        const targetGuildId = interaction.options.getString("guildid") || interaction.guildId
+        if (!targetGuildId) {
+          await interaction.editReply("❌ Guild ID is required for local deploys.")
+          return
+        }
+        client.debug(
+          `[DeployCmd] Refreshing ${commands.length} application (/) commands for guild ${targetGuildId}.`
+        )
+        await rest.put(
+          Routes.applicationGuildCommands(client.user.id, targetGuildId),
+          { body: commands },
+        )
+        await interaction.editReply(
+          `✅ Successfully reloaded ${commands.length} application (/) commands for guild ${targetGuildId}.`
+        )
+        client.info(
+          `[DeployCmd] Successfully deployed ${commands.length} commands to guild ${targetGuildId} by ${interaction.user.tag}`
+        )
+      } else {
+        client.debug(`[DeployCmd] Refreshing ${commands.length} application (/) commands globally.`)
+        await rest.put(
+          Routes.applicationCommands(client.user.id),
+          { body: commands },
+        )
+        await interaction.editReply(
+          `✅ Successfully reloaded ${commands.length} application (/) commands globally.`
+        )
+        client.info(
+          `[DeployCmd] Successfully deployed ${commands.length} commands globally by ${interaction.user.tag}`
+        )
+      }
 
     } catch (error) {
       client.error("[DeployCmd] Failed to deploy commands:", error)

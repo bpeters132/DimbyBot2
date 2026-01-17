@@ -5,7 +5,7 @@ export default {
     .setName("seek")
     .setDescription("Seek through the currently playing song")
     .addIntegerOption((option) =>
-      option.setName("position").setDescription("time to seek to").setRequired(true)
+      option.setName("position").setDescription("Time to seek to").setRequired(true)
     ),
   /**
    * Executes the /seek command to jump to a specific position in the current track.
@@ -30,6 +30,6 @@ export default {
     }
 
     await player.seek(position)
-    interaction.reply("SEEKED!")
+    interaction.reply("Seek complete.")
   },
 }

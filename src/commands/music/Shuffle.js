@@ -22,10 +22,10 @@ export default {
     if (!player || (!player.queue.current && player.queue.tracks.length === 0)) {
       return interaction.reply("Nothing is playing.")
     } else if (player.queue.current && player.queue.tracks.length === 0) {
-      return interaction.reply("The last song of the queue is already playing!")
+      return interaction.reply("The last song in the queue is already playing!")
     }
 
     await player.queue.shuffle()
-    interaction.reply("Queue Shuffled!")
+    interaction.reply("Queue shuffled.")
   },
 }

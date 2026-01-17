@@ -115,7 +115,13 @@ export async function playLocalFile(
   }
 
   const audioPlayer = createAudioPlayer()
-  activeLocalPlayers.set(voiceChannel.guild.id, { audioPlayer, connection, currentTrack: localFile }) // Store player and connection
+  activeLocalPlayers.set(voiceChannel.guild.id, {
+    audioPlayer,
+    connection,
+    currentTrack: localFile,
+    requesterId: requester?.id,
+    startedAt: Date.now(),
+  }) // Store player and connection
 
   const resource = createAudioResource(fs.createReadStream(localFile.path))
 
@@ -126,7 +132,7 @@ export async function playLocalFile(
     `[LocalPlayer] Started playing local file: "${localFile.title}" in guild ${voiceChannel.guild.id}`
   )
 
-  const feedbackText = `🎵 Now playing local file: **${localFile.title}** (requested by ${requester})`
+  const feedbackText = `Now playing local file: **${localFile.title}** (requested by ${requester})`
 
   // Handle playback finish
   audioPlayer.once(AudioPlayerStatus.Idle, () => {
@@ -181,7 +187,7 @@ export async function playLocalFile(
     }
     activeLocalPlayers.delete(voiceChannel.guild.id)
     // We could send an error message to textChannel here
-    textChannel.send(`⚠️ Error playing local file **${localFile.title}**: ${error.message}`).catch(e => client.error("Failed to send error message to text channel", e))
+    textChannel.send(`Error playing local file **${localFile.title}**: ${error.message}`).catch(e => client.error("Failed to send error message to text channel", e))
 
   })
 
@@ -217,7 +223,9 @@ export function getLocalPlayerState(guildId) {
         const playerInstance = activeLocalPlayers.get(guildId)
         return {
             isPlaying: playerInstance.audioPlayer.state.status === AudioPlayerStatus.Playing,
-            trackTitle: playerInstance.currentTrack?.title
+            trackTitle: playerInstance.currentTrack?.title,
+            requesterId: playerInstance.requesterId,
+            startedAt: playerInstance.startedAt
         }
     }
     return null

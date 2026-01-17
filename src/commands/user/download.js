@@ -3,12 +3,21 @@ import { spawn } from "child_process"
 import path from "path"
 import fs from "fs"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
+import { getGuildSettings } from "../../util/saveControlChannel.js"
 
 // Maximum age of files in days before automatic cleanup
 const MAX_FILE_AGE_DAYS = 7
 
-// Maximum total size of downloads directory in MB
-const MAX_DIR_SIZE_MB = 1000
+// Maximum total size of downloads directory in MB (default fallback)
+const DEFAULT_MAX_DIR_SIZE_MB = 1000
+
+function getMaxDirSizeMb(guildId) {
+  const settings = getGuildSettings()
+  const guildSettings = settings[guildId] || {}
+  const configured = guildSettings.downloadsMaxMb
+  const parsed = Number.parseFloat(configured)
+  return Number.isNaN(parsed) ? DEFAULT_MAX_DIR_SIZE_MB : parsed
+}
 
 /**
  * Creates a textual progress bar.
@@ -26,13 +35,15 @@ function createProgressBar(progress, length = 20) {
  * Cleans up files in the downloads directory that are older than MAX_FILE_AGE_DAYS.
  * @param {string} downloadsDir The path to the downloads directory.
  * @param {import('../../lib/BotClient.js').default} client The bot client instance.
+ * @param {string} guildId The guild ID used to scope cleanup.
  * @returns {{deletedCount: number, totalSize: number}} The number of deleted files and their total size.
  */
-function cleanupOldFiles(downloadsDir, client) {
+function cleanupOldFiles(downloadsDir, client, guildId) {
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - MAX_FILE_AGE_DAYS)
   let deletedCount = 0
   let totalSize = 0
+  let metadataDirty = false
 
   const metadataPath = path.join(downloadsDir, '.metadata.json')
   let metadata = {}
@@ -45,52 +56,33 @@ function cleanupOldFiles(downloadsDir, client) {
     }
   }
 
-  const filesInDir = fs.readdirSync(downloadsDir).filter(file => file.endsWith(".wav"))
+  const entries = Object.entries(metadata).filter(
+    ([, info]) => info && info.guildId === guildId
+  )
 
-  for (const fileName of filesInDir) {
-    const fileInfo = metadata[fileName]
+  for (const [fileName, fileInfo] of entries) {
     const filePath = path.join(downloadsDir, fileName)
-
-    if (fileInfo && fileInfo.downloadDate) {
-      const downloadDate = new Date(fileInfo.downloadDate)
-      if (downloadDate < cutoffDate) {
-        try {
-          const stats = fs.statSync(filePath)
-          totalSize += stats.size
-          fs.unlinkSync(filePath)
-          deletedCount++
-          client.debug(`[Download Cleanup] Deleted "${fileName}" (downloaded ${downloadDate.toISOString()}) due to age.`)
-          // Remove from metadata as well
-          delete metadata[fileName]
-        } catch (error) {
-          client.error(`[Download Cleanup] Failed to delete old file "${fileName}":`, error)
-        }
-      }
-    } else if (fs.existsSync(filePath)) { // File exists but no metadata or downloadDate
-      // Option: Fallback to mtime, or just log and potentially delete if orphaned
-      // For now, let's assume files without proper metadata downloadDate might be stale or orphaned
-      // and check their mtime as a fallback, or delete if very old / treat as error.
-      // Let's be conservative and use mtime as a fallback for this case.
+    const downloadDate = fileInfo?.downloadDate ? new Date(fileInfo.downloadDate) : null
+    if (!downloadDate || Number.isNaN(downloadDate.getTime())) continue
+    if (downloadDate < cutoffDate) {
       try {
-        const stats = fs.statSync(filePath)
-        if (stats.mtime < cutoffDate) {
-          totalSize += stats.size
-          fs.unlinkSync(filePath)
-          deletedCount++
-          client.warn(`[Download Cleanup] Deleted "${fileName}" based on mtime (metadata missing/incomplete). mtime: ${stats.mtime.toISOString()}`)
-          // If it was in metadata but lacked downloadDate, remove it.
-          if (metadata[fileName]) delete metadata[fileName]
-        } else {
-          client.warn(`[Download Cleanup] File "${fileName}" missing downloadDate in metadata, but mtime is recent. Kept. mtime: ${stats.mtime.toISOString()}`)
-        }
+        const stats = fs.existsSync(filePath) ? fs.statSync(filePath) : null
+        if (stats) totalSize += stats.size
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+        deletedCount++
+        metadataDirty = true
+        delete metadata[fileName]
+        client.debug(
+          `[Download Cleanup] Deleted "${fileName}" (downloaded ${downloadDate.toISOString()}) due to age.`
+        )
       } catch (error) {
-        client.error(`[Download Cleanup] Error processing file "${fileName}" with missing metadata:`, error)
+        client.error(`[Download Cleanup] Failed to delete old file "${fileName}":`, error)
       }
     }
   }
   
   // Update metadata if changes were made
-  if (deletedCount > 0) {
+  if (metadataDirty) {
       try {
         fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
         client.debug("[Download Cleanup] Updated metadata file after deleting old entries.")
@@ -106,41 +98,75 @@ function cleanupOldFiles(downloadsDir, client) {
  * Checks the total size of the downloads directory and cleans up the oldest files if it exceeds MAX_DIR_SIZE_MB.
  * @param {string} downloadsDir The path to the downloads directory.
  * @param {import('../../lib/BotClient.js').default} client The bot client instance.
+ * @param {string} guildId The guild ID used to scope cleanup.
+ * @param {number} maxDirSizeMb The max directory size in MB.
+ * @param {string|null} [protectedFileName=null] Filename to skip during cleanup.
  * @returns {{deletedCount: number, deletedSize: number}} The number of deleted files and their total size.
  */
-function checkAndCleanupDirectory(downloadsDir, client) {
-  // Get total size of directory
-  const totalSize = fs.readdirSync(downloadsDir)
-    .filter(file => file.endsWith(".wav"))
-    .reduce((size, file) => size + fs.statSync(path.join(downloadsDir, file)).size, 0)
+function enforceDirectoryLimit(downloadsDir, client, guildId, maxDirSizeMb, protectedFileName = null) {
+  const metadataPath = path.join(downloadsDir, '.metadata.json')
+  let metadata = {}
+  if (fs.existsSync(metadataPath)) {
+    try {
+      metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'))
+    } catch (error) {
+      client.error(`[Download Cleanup] Error reading metadata file for size cleanup:`, error)
+      return { deletedCount: 0, deletedSize: 0 }
+    }
+  }
 
+  const files = Object.entries(metadata)
+    .filter(([, info]) => info && info.guildId === guildId)
+    .map(([name, info]) => {
+      const filePath = path.join(downloadsDir, name)
+      if (!fs.existsSync(filePath)) return null
+      const stats = fs.statSync(filePath)
+      const date = info?.downloadDate ? new Date(info.downloadDate) : stats.mtime
+      return {
+        name,
+        path: filePath,
+        date,
+        size: stats.size,
+      }
+    })
+    .filter(Boolean)
+
+  const totalSize = files.reduce((size, file) => size + file.size, 0)
   const totalSizeMB = totalSize / (1024 * 1024)
 
   // If directory is too large, delete oldest files until under limit
-  if (totalSizeMB > MAX_DIR_SIZE_MB) {
-    const files = fs.readdirSync(downloadsDir)
-      .filter(file => file.endsWith(".wav"))
-      .map(file => ({
-        name: file,
-        path: path.join(downloadsDir, file),
-        date: fs.statSync(path.join(downloadsDir, file)).mtime,
-        size: fs.statSync(path.join(downloadsDir, file)).size
-      }))
+  if (totalSizeMB > maxDirSizeMb) {
+    const candidates = files
+      .filter((file) => file.name !== protectedFileName)
       .sort((a, b) => a.date - b.date)
 
     let deletedCount = 0
     let deletedSize = 0
+    let metadataDirty = false
 
-    for (const file of files) {
-      if ((totalSizeMB - (deletedSize / (1024 * 1024))) <= MAX_DIR_SIZE_MB) {
+    for (const file of candidates) {
+      if ((totalSizeMB - (deletedSize / (1024 * 1024))) <= maxDirSizeMb) {
         break
       }
       try {
         fs.unlinkSync(file.path)
         deletedCount++
         deletedSize += file.size
+        if (metadata[file.name]) {
+          delete metadata[file.name]
+          metadataDirty = true
+        }
       } catch (error) {
         client.error(`Failed to delete ${file.name}:`, error)
+      }
+    }
+
+    if (metadataDirty) {
+      try {
+        fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
+        client.debug("[Download Cleanup] Updated metadata after size cleanup.")
+      } catch (error) {
+        client.error("[Download Cleanup] Error writing metadata file after size cleanup:", error)
       }
     }
 
@@ -152,7 +178,7 @@ function checkAndCleanupDirectory(downloadsDir, client) {
 
 const data = new SlashCommandBuilder()
   .setName("download")
-  .setDescription("Download a YouTube video and play it or add to queue.")
+  .setDescription("Download a YouTube video and play it or add to the queue.")
   .addStringOption((option) =>
     option
       .setName("url")
@@ -172,22 +198,32 @@ async function execute(interaction, client) {
 
   if (!member.voice.channel) {
     return interaction.reply({
-      content: "❌ You need to be in a voice channel to use this command.",
-      ephemeral: true
+      content: "You need to be in a voice channel to use this command.",
     })
   }
   
   // Validate URL
   if (!url.includes("youtube.com") && !url.includes("youtu.be")) {
     return interaction.reply({
-      content: "❌ Please provide a valid YouTube URL.",
-      ephemeral: true
+      content: "Please provide a valid YouTube URL.",
     })
   }
 
   await interaction.deferReply()
 
   try {
+    let lastReplyAt = 0
+    const updateReply = async (content, force = false) => {
+      const now = Date.now()
+      if (!force && now - lastReplyAt < 1500) return
+      lastReplyAt = now
+      await interaction.editReply(content).catch((e) =>
+        client.error("Failed to edit reply for download status", e)
+      )
+    }
+
+    await updateReply("Starting download... Preparing workspace.", true)
+
     // Create downloads directory if it doesn't exist
     const downloadsDir = path.join(process.cwd(), "downloads")
     if (!fs.existsSync(downloadsDir)) {
@@ -195,19 +231,27 @@ async function execute(interaction, client) {
     }
 
     // Cleanup old files
-    const { deletedCount: ageDeletedCount, totalSize: ageDeletedSize } = cleanupOldFiles(downloadsDir, client)
-    const { deletedCount: sizeLimitDeletedCount, deletedSize: sizeLimitDeletedSize } = checkAndCleanupDirectory(downloadsDir, client)
+    await updateReply("Cleaning old downloads...", true)
+    const maxDirSizeMb = getMaxDirSizeMb(guildId)
+    const { deletedCount: ageDeletedCount, totalSize: ageDeletedSize } = cleanupOldFiles(
+      downloadsDir,
+      client,
+      guildId
+    )
+    const { deletedCount: sizeLimitDeletedCount, deletedSize: sizeLimitDeletedSize } =
+      enforceDirectoryLimit(downloadsDir, client, guildId, maxDirSizeMb)
 
     if (ageDeletedCount > 0) {
       client.debug(`[Download] Cleaned up ${ageDeletedCount} files older than ${MAX_FILE_AGE_DAYS} days (Total size: ${(ageDeletedSize / (1024*1024)).toFixed(2)}MB).`)
     }
     if (sizeLimitDeletedCount > 0) {
-      client.debug(`[Download] Cleaned up ${sizeLimitDeletedCount} files due to directory size limit > ${MAX_DIR_SIZE_MB}MB (Total size freed: ${(sizeLimitDeletedSize / (1024*1024)).toFixed(2)}MB).`)
+      client.debug(`[Download] Cleaned up ${sizeLimitDeletedCount} files due to directory size limit > ${maxDirSizeMb}MB (Total size freed: ${(sizeLimitDeletedSize / (1024*1024)).toFixed(2)}MB).`)
     }
     
     let downloadedFilePath = null
 
     // Download the video
+    await updateReply("Downloading audio... This can take a moment.", true)
     const downloadProcess = spawn('yt-dlp', [
         url,
         '-x',
@@ -237,7 +281,7 @@ async function execute(interaction, client) {
                 return
             }
 
-            const progressMatch = line.match(/\[download\]\s+(\d+\.\d+)% of (\d+\.\d+)([KMG]iB) at (\d+\.\d+)([KMG]iB\/s) ETA (\d+:\d+)/)
+            const progressMatch = line.match(/\[download]\s+(\d+\.\d+)% of (\d+\.\d+)([KMG]iB) at (\d+\.\d+)([KMG]iB\/s) ETA (\d+:\d+)/)
             if (progressMatch) {
                 const progress = parseFloat(progressMatch[1])
                 const totalSize = parseFloat(progressMatch[2])
@@ -246,7 +290,7 @@ async function execute(interaction, client) {
                 const speedUnit = progressMatch[5]
                 const eta = progressMatch[6]
 
-                if (progress > lastProgress) {
+                if (progress >= lastProgress + 1) {
                     lastProgress = progress
                     const progressBar = createProgressBar(progress)
                     const statusText = `Downloading... ${progress.toFixed(1)}%\n` +
@@ -256,9 +300,9 @@ async function execute(interaction, client) {
                         `ETA: ${eta}`
 
                     if (!progressMessage) {
-                        interaction.editReply(statusText).then(msg => progressMessage = msg).catch(e => client.error("Failed to edit reply for progress", e))
+                        updateReply(statusText).then(msg => progressMessage = msg).catch(e => client.error("Failed to edit reply for progress", e))
                     } else {
-                        interaction.editReply(statusText).catch(e => client.error("Failed to edit reply for progress", e))
+                        updateReply(statusText).catch(e => client.error("Failed to edit reply for progress", e))
                     }
                 }
             }
@@ -275,6 +319,8 @@ async function execute(interaction, client) {
             await interaction.editReply('Error downloading video. Please try again later.').catch(e => client.error("Failed to edit reply on download error",e))
             return
         }
+
+        await updateReply("Download complete. Finalizing file...", true)
 
         let filePath = downloadedFilePath
         let downloadedFile = filePath ? path.basename(filePath) : null
@@ -303,9 +349,11 @@ async function execute(interaction, client) {
 
         if (!filePath || !downloadedFile) {
             client.error(`[Download] Could not determine downloaded file path.`)
-            await interaction.editReply('Could not find the downloaded file after download process. Please check logs.').catch(e => client.error("Failed to edit reply on file not found",e))
+            await interaction.editReply('Could not find the downloaded file after the download process. Please check logs.').catch(e => client.error("Failed to edit reply on file not found",e))
             return
         }
+
+        await updateReply(`Saved as **${downloadedFile.replace(".wav", "")}**. Updating library...`, true)
 
         const metadataPath = path.join(downloadsDir, '.metadata.json')
         let metadata = {}
@@ -320,7 +368,8 @@ async function execute(interaction, client) {
         metadata[downloadedFile] = {
             downloadDate: new Date().toISOString(),
             originalUrl: url,
-            filePath: filePath
+            filePath: filePath,
+            guildId: guildId
         }
         
         try {
@@ -332,8 +381,22 @@ async function execute(interaction, client) {
 
         client.debug(`[Download] Successfully downloaded: ${filePath}`)
 
+        const postCleanup = enforceDirectoryLimit(
+            downloadsDir,
+            client,
+            guildId,
+            maxDirSizeMb,
+            downloadedFile
+        )
+        if (postCleanup.deletedCount > 0) {
+            client.debug(
+                `[Download] Post-download cleanup removed ${postCleanup.deletedCount} files (${(postCleanup.deletedSize / (1024 * 1024)).toFixed(2)}MB) to honor ${maxDirSizeMb}MB limit.`
+            )
+        }
+
         // Auto-play logic using handleQueryAndPlay
         try {
+            await updateReply("Attempting to play the downloaded track...", true)
             let player = client.lavalink.getPlayer(guildId)
             if (!player) {
                 player = client.lavalink.createPlayer({
@@ -356,13 +419,13 @@ async function execute(interaction, client) {
             )
 
             // Edit the reply with the feedback from handleQueryAndPlay
-            await interaction.editReply(playResult.feedbackText || "✅ Download complete. Playback status updated.").catch(e => client.error("Failed to send final download & play confirmation via HQP", e))
+            await interaction.editReply(playResult.feedbackText || "Download complete. Playback status updated.").catch(e => client.error("Failed to send final download & play confirmation via HQP", e))
 
         } catch (playError) {
             client.error("[Download] Error during auto-play setup or HQP call:", playError)
             await interaction.editReply(
-                `✅ Downloaded: **${downloadedFile.replace(".wav", "")}**\n` +
-                `⚠️ Could not automatically play the song: ${playError.message}\n`+
+                `Downloaded: **${downloadedFile.replace(".wav", "")}**\n` +
+                `Could not automatically play the song: ${playError.message}\n`+
                 `Use \`/play ${downloadedFile.replace(".wav", "")}\` to play it.`
             ).catch(e => client.error("Failed to send download confirmation with autoplay error", e))
         }
@@ -374,12 +437,11 @@ async function execute(interaction, client) {
     client.error(`[Download] Error downloading video:`, error)
     if (interaction.replied || interaction.deferred) {
         await interaction.editReply({
-            content: `❌ Failed to download video: ${error.message}`,
+            content: `Failed to download video: ${error.message}`,
         }).catch(e => client.error("Failed to edit reply on main catch block", e))
     } else {
         await interaction.reply({
-            content: `❌ Failed to download video: ${error.message}`,
-            ephemeral: true
+            content: `Failed to download video: ${error.message}`,
         }).catch(e => client.error("Failed to reply on main catch block", e))
     }
   }

@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, MessageFlags } from "discord.js"
+import { SlashCommandBuilder } from "discord.js"
 
 export default {
   data: new SlashCommandBuilder()
@@ -17,8 +17,7 @@ export default {
     if (!voiceChannel) {
       client.debug("[ClearQueue] User not in a voice channel.")
       return interaction.reply({ 
-        content: "Join a voice channel first!", 
-        flags: [MessageFlags.Ephemeral] 
+        content: "Join a voice channel first!"
       })
     }
 
@@ -27,8 +26,7 @@ export default {
     if (!botMember.voice.channel) {
       client.debug("[ClearQueue] Bot not in a voice channel.")
       return interaction.reply({ 
-        content: "I'm not in a voice channel!", 
-        flags: [MessageFlags.Ephemeral] 
+        content: "I'm not in a voice channel!"
       })
     }
 
@@ -36,8 +34,7 @@ export default {
     if (botMember.voice.channel.id !== voiceChannel.id) {
       client.debug("[ClearQueue] User not in the same voice channel as the bot.")
       return interaction.reply({ 
-        content: "You must be in the same voice channel as me!", 
-        flags: [MessageFlags.Ephemeral] 
+        content: "You must be in the same voice channel as me!"
       })
     }
 
@@ -46,16 +43,14 @@ export default {
     if (!player) {
       client.debug("[ClearQueue] No player found for this guild.")
       return interaction.reply({ 
-        content: "Nothing is playing right now.", 
-        flags: [MessageFlags.Ephemeral] 
+        content: "Nothing is playing right now."
       })
     }
 
     if (player.queue.tracks.length === 0) {
       client.debug("[ClearQueue] Queue is already empty.")
       return interaction.reply({ 
-        content: "The queue is already empty.", 
-        flags: [MessageFlags.Ephemeral] 
+        content: "The queue is already empty."
       })
     }
 
@@ -66,14 +61,13 @@ export default {
       // Clear the tracks array directly
       player.queue.tracks = []
 
-      await interaction.reply({ content: `✅ Cleared ${queueSize} tracks from the queue.` })
+      await interaction.reply({ content: `Cleared ${queueSize} tracks from the queue.` })
       client.debug(`[ClearQueue] Successfully cleared queue for guild ${guild.id}`)
     
     } catch (error) {
       client.error("[ClearQueue] Error clearing the queue:", error)
       await interaction.reply({ 
-        content: "An error occurred while trying to clear the queue.", 
-        flags: [MessageFlags.Ephemeral] 
+        content: "An error occurred while trying to clear the queue."
       })
     }
   },

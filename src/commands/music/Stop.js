@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, MessageFlags } from "discord.js"
+import { SlashCommandBuilder } from "discord.js"
 import { stopLocalPlayer, getLocalPlayerState } from "../../util/localPlayer.js"
 
 export default {
@@ -40,11 +40,11 @@ export default {
 
     let replyContent = "Nothing was playing."
     if (stoppedLocal && stoppedLavalink) {
-      replyContent = "⏹️ All playback stopped and queue cleared."
+      replyContent = "All playback stopped and the queue was cleared."
     } else if (stoppedLocal) {
-      replyContent = "⏹️ Local playback stopped."
+      replyContent = "Local playback stopped."
     } else if (stoppedLavalink) {
-      replyContent = "⏹️ Lavalink playback stopped and queue cleared."
+      replyContent = "Lavalink playback stopped and the queue was cleared."
     } else if (localPlayerWasActive && !stoppedLocal) {
       replyContent = "Could not stop the local player. Please check logs."
     } else if (lavalinkPlayer && !stoppedLavalink && (lavalinkPlayer.playing || lavalinkPlayer.queue.current)) {
@@ -54,8 +54,7 @@ export default {
     // Use fetchReply to get the message object for potential deletion
     const msg = await interaction.reply({ 
       content: replyContent, 
-      fetchReply: true, 
-      flags: (replyContent === "Nothing was playing.") ? [MessageFlags.Ephemeral] : [] 
+      fetchReply: true
     })
 
     // Auto-delete reply only if something was actually stopped
