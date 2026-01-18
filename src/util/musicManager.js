@@ -8,7 +8,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } from "dis
 /**
  * Ensures the Lavalink player is connected to the target voice channel.
  * @param {import('../lib/BotClient.js').default} client The bot client instance.
- * @param {import('@lavaclient/queue').Queue} player The Lavalink player instance.
+ * @param {import('lavalink-client').Player} player The Lavalink player instance.
  * @param {import('discord.js').VoiceBasedChannel} voiceChannel The target voice channel.
  * @returns {Promise<void>}
  */
@@ -18,7 +18,7 @@ async function ensurePlayerConnected(client, player, voiceChannel) {
             `[MusicManager] Lavalink player not connected or in wrong channel. Player state: Connected=${player.connected}, Player VC=${player.voiceChannelId}, Target VC=${voiceChannel.id}. Reconnecting/Moving.`
         )
         player.voiceChannelId = voiceChannel.id
-        await player.connect(voiceChannel.id)
+        await player.connect()
         client.debug(
             `[MusicManager] Lavalink player connect/move call initiated. Waiting for connection.`
         )
@@ -51,7 +51,7 @@ async function ensurePlayerConnected(client, player, voiceChannel) {
  * @param {import('discord.js').TextBasedChannel} textChannel The text channel for feedback.
  * @param {string} query The search query.
  * @param {import('discord.js').User} requester The user who requested the music.
- * @param {import('@lavaclient/queue').Queue} player The Lavalink player instance.
+ * @param {import('lavalink-client').Player} player The Lavalink player instance.
  * @returns {Promise<{success: boolean, feedbackText: string, error?: Error}>}
  */
 export async function handleQueryAndPlay(
@@ -396,14 +396,15 @@ export async function handleQueryAndPlay(
 
         if (!searchResult) {
             client.debug(`[MusicManager] Performing main Lavalink search for query: "${query}"`)
-            // Keep pre-search attempts for comprehensive error reporting
+            const preSearchAttempts = [...searchAttempts]
+            const mainSearchAttempts = []
             searchError = null
 
             if (!isUrl) {
                 try {
                     const searchQuery = query.trim().replace(/\s+/g, " ")
                     searchResult = await player.search(searchQuery, requester)
-                    searchAttempts.push({
+                    mainSearchAttempts.push({
                         source: "direct",
                         success: true,
                         loadType: searchResult.loadType,
@@ -413,7 +414,11 @@ export async function handleQueryAndPlay(
                     )
                 } catch (error) {
                     searchError = error
-                    searchAttempts.push({ source: "direct", success: false, error: error.message })
+                    mainSearchAttempts.push({
+                        source: "direct",
+                        success: false,
+                        error: error.message,
+                    })
                     client.warn(
                         `[MusicManager] Direct search (non-URL) failed for query "${query}". Error: ${error.message}`
                     )
@@ -421,7 +426,7 @@ export async function handleQueryAndPlay(
             } else {
                 try {
                     searchResult = await player.search(query, requester)
-                    searchAttempts.push({
+                    mainSearchAttempts.push({
                         source: "direct-url",
                         success: true,
                         loadType: searchResult.loadType,
@@ -431,7 +436,7 @@ export async function handleQueryAndPlay(
                     )
                 } catch (error) {
                     searchError = error
-                    searchAttempts.push({
+                    mainSearchAttempts.push({
                         source: "direct-url",
                         success: false,
                         error: error.message,
@@ -441,6 +446,7 @@ export async function handleQueryAndPlay(
                     )
                 }
             }
+            searchAttempts = [...preSearchAttempts, ...mainSearchAttempts]
         } else {
             client.debug(
                 `[MusicManager] Skipping main Lavalink search as searchResult is already populated. LoadType: ${searchResult.loadType}`
