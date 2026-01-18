@@ -135,7 +135,7 @@ export function createControlButtons(client, player) {
     shuffleButton,
     loopButton
   )
-  console.debug(
+  client.debug(
     `[guildSettings] Control buttons created. Button labels: ${row.components.map((c) => c.data.label).join(", ")}`
   )
   return row
@@ -214,7 +214,7 @@ export async function cleanupControlChannel(channel, controlMessageId, client) {
  */
 export async function updateControlMessage(client, guildId) {
   client.debug(`[ControlHandler] Attempting to update control message for guild ${guildId}`)
-  const guildSettings = getGuildSettings()
+  const guildSettings = getGuildSettings(client)
   const settings = guildSettings[guildId]
 
   if (!settings || !settings.controlChannelId || !settings.controlMessageId) {
@@ -230,7 +230,7 @@ export async function updateControlMessage(client, guildId) {
   let controlChannel = null
 
   try {
-    ensureStorageDir()
+    ensureStorageDir(client)
     controlChannel = await client.channels.fetch(settings.controlChannelId).catch(() => null)
     if (!controlChannel || !controlChannel.isTextBased()) {
       client.warn(

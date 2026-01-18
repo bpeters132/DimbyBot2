@@ -4,14 +4,14 @@ import { ActivityType } from "discord.js"
  * @param {import('../lib/BotClient').default} client
  */
 export default async (client) => {
-  client.on("ready", () => {
+  client.on("clientReady", () => {
     client.debug("Ready event triggered.") // Debug log
     client.lavalink.init(client.user) // init lavalink
 
     client.info(`Logged in as ${client.user.tag}! (${client.user.id})`)
     
     // Initial status
-    client.user.setActivity("I have been reborn", { type: ActivityType.Custom })
+    client.user.setActivity("I hate that Pancake guy!", { type: ActivityType.Custom })
     
     // Create a toggle for status rotation
     let showGuildCount = true
@@ -24,9 +24,9 @@ export default async (client) => {
         client.user.setActivity(`${guildCount} servers`, { type: ActivityType.Watching })
         client.info(`Set status to ${guildCount} servers`)
       } else {
-        client.debug("Setting status to 'I have been reborn'.") // Debug log
-        client.user.setActivity("I have been reborn", { type: ActivityType.Custom })
-        client.info("Set status to I have been reborn")
+        client.debug("Setting status to 'I hate that Pancake guy!'.") // Debug log
+        client.user.setActivity("I hate that Pancake guy!", { type: ActivityType.Custom })
+        client.info("I hate that Pancake guy!")
       }
       showGuildCount = !showGuildCount
       client.debug(`showGuildCount toggled to: ${showGuildCount}`) // Debug log

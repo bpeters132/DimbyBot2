@@ -51,7 +51,7 @@ export default async (client) => {
 
       const channel = client.channels.cache.get(player.textChannelId)
       // Check if textChannelId exists and is different from control channel before sending
-      const currentGuildSettings = getGuildSettings() // Use imported function
+      const currentGuildSettings = getGuildSettings(client) // Use imported function
       const controlChannelId = currentGuildSettings[player.guildId]?.controlChannelId
       if (channel && player.textChannelId !== controlChannelId) {
         client.debug(
@@ -100,7 +100,7 @@ export default async (client) => {
       updateControlMessage(client, player.guildId)
 
       const channel = client.channels.cache.get(player.textChannelId)
-      const currentGuildSettings = getGuildSettings() // Use imported function
+      const currentGuildSettings = getGuildSettings(client) // Use imported function
       const controlChannelId = currentGuildSettings[player.guildId]?.controlChannelId
       if (channel && player.textChannelId !== controlChannelId) {
         client.debug(
@@ -121,7 +121,7 @@ export default async (client) => {
       updateControlMessage(client, player.guildId)
 
       const channel = client.channels.cache.get(player.textChannelId)
-      const currentGuildSettings = getGuildSettings() // Use imported function
+      const currentGuildSettings = getGuildSettings(client) // Use imported function
       const controlChannelId = currentGuildSettings[player.guildId]?.controlChannelId
       if (channel && player.textChannelId !== controlChannelId) {
         client.debug(
@@ -201,7 +201,7 @@ export default async (client) => {
 
       // Send message to non-control channel
       const channel = client.channels.cache.get(player.textChannelId)
-      const currentGuildSettings = getGuildSettings() // Use imported function
+      const currentGuildSettings = getGuildSettings(client) // Use imported function
       const controlChannelId = currentGuildSettings[player.guildId]?.controlChannelId
       if (channel && player.textChannelId !== controlChannelId) {
         client.debug(

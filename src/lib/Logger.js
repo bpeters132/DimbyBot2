@@ -9,6 +9,8 @@ export default class Logger {
    * @param {string} file The path to the log file.
    */
   constructor(file) {
+    this.logFilePath = file || null
+    this.debugEnabled = process.env.LOG_LEVEL?.toLowerCase() === "debug"
     // Basic Winston setup for file transport only
     if (!file) {
       console.warn("Logger Warning: No log file path provided. File logging disabled.")
@@ -43,6 +45,29 @@ export default class Logger {
         this.logger = winston.createLogger({ transports: [] }) // Fallback to empty logger
       }
     }
+
+    this._applyDebugLevel()
+  }
+
+  _applyDebugLevel() {
+    if (!this.logger) {
+      return
+    }
+    this.logger.level = this.debugEnabled ? "debug" : "info"
+  }
+
+  setDebugEnabled(enabled) {
+    this.debugEnabled = Boolean(enabled)
+    process.env.LOG_LEVEL = this.debugEnabled ? "debug" : "info"
+    this._applyDebugLevel()
+  }
+
+  getDebugEnabled() {
+    return this.debugEnabled
+  }
+
+  getLogFilePath() {
+    return this.logFilePath
   }
 
   /**
@@ -139,7 +164,7 @@ export default class Logger {
    */
   debug(text, ...args) {
     // Only proceed if LOG_LEVEL enables debug
-    if (process.env.LOG_LEVEL?.toLowerCase() !== "debug") {
+    if (!this.debugEnabled) {
       return // Skip debug logging
     }
     const messageArgs = this._formatArgs(args)

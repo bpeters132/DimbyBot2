@@ -36,7 +36,7 @@ export default (client) => {
     )
 
     // Check if it's the control channel
-    const guildSettings = getGuildSettings()
+    const guildSettings = getGuildSettings(client)
     const settings = guildSettings[guildId]
     if (!settings || !settings.controlChannelId || channel.id !== settings.controlChannelId) {
       // client.debug(`[MessageCreate] Message not in control channel for guild ${guildId}. Configured: ${settings?.controlChannelId ?? 'None'}.`) // Can be noisy
