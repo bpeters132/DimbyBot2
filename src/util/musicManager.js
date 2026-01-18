@@ -22,9 +22,20 @@ async function ensurePlayerConnected(client, player, voiceChannel) {
             const cleanup = () => {
                 if (timeoutId) clearTimeout(timeoutId)
                 client.lavalink.off("playerMove", onPlayerMove)
+                client.lavalink.off("playerUpdate", onPlayerUpdate)
             }
             const onPlayerMove = (movedPlayer, oldChannelId, newChannelId) => {
                 if (movedPlayer.guildId === player.guildId && newChannelId === voiceChannel.id) {
+                    cleanup()
+                    resolve()
+                }
+            }
+            const onPlayerUpdate = (oldPlayerJson, updatedPlayer) => {
+                if (
+                    updatedPlayer.guildId === player.guildId &&
+                    updatedPlayer.connected &&
+                    updatedPlayer.voiceChannelId === voiceChannel.id
+                ) {
                     cleanup()
                     resolve()
                 }
@@ -34,6 +45,7 @@ async function ensurePlayerConnected(client, player, voiceChannel) {
                 reject(new Error("Lavalink player failed to confirm connection."))
             }, timeoutMs)
             client.lavalink.on("playerMove", onPlayerMove)
+            client.lavalink.on("playerUpdate", onPlayerUpdate)
         })
 
         await player.connect()
@@ -44,7 +56,7 @@ async function ensurePlayerConnected(client, player, voiceChannel) {
             await movePromise
         } catch (error) {
             client.warn(
-                `[MusicManager] Lavalink player failed to connect (player.connected is false) within ${timeoutMs / 1000}s.`
+                `[MusicManager] Lavalink player failed to confirm connection within ${timeoutMs / 1000}s.`
             )
             throw error
         }
