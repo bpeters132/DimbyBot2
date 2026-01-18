@@ -78,7 +78,7 @@ export default {
       })
     }
 
-    const settings = getGuildSettings()
+    const settings = getGuildSettings(client)
     if (!settings[targetGuildId]) {
       settings[targetGuildId] = {}
     }
@@ -97,7 +97,7 @@ export default {
     if (subcommand === "set") {
       const sizeMb = interaction.options.getNumber("size_mb")
       settings[targetGuildId].downloadsMaxMb = sizeMb
-      saveGuildSettings(settings)
+      saveGuildSettings(settings, client)
       return interaction.reply({
         content: `Set download limit for guild ${targetGuildId} to ${sizeMb}MB.`,
         flags: [MessageFlags.Ephemeral],
@@ -110,7 +110,7 @@ export default {
         if (Object.keys(settings[targetGuildId]).length === 0) {
           delete settings[targetGuildId]
         }
-        saveGuildSettings(settings)
+        saveGuildSettings(settings, client)
       }
       return interaction.reply({
         content: `Cleared custom download limit for guild ${targetGuildId}. Default is ${DEFAULT_MAX_DIR_SIZE_MB}MB.`,

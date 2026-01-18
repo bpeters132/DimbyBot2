@@ -8,11 +8,12 @@ const DEFAULT_MAX_DIR_SIZE_MB = 1000
 
 /**
  * Resolves the configured downloads size limit for a guild.
+ * @param {import('../../lib/BotClient.js').default} client The bot client instance.
  * @param {string} guildId The guild ID to read settings for.
  * @returns {number} The max directory size in MB.
  */
-function getMaxDirSizeMb(guildId) {
-    const settings = getGuildSettings()
+function getMaxDirSizeMb(client, guildId) {
+    const settings = getGuildSettings(client)
     const guildSettings = settings[guildId] || {}
     const configured = guildSettings.downloadsMaxMb
     const parsed = Number.parseFloat(configured)
@@ -99,7 +100,7 @@ async function execute(interaction, client) {
         // Calculate total size and limit
         const totalSize = files.reduce((sum, file) => sum + file.size, 0)
         const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2)
-        const limitMb = getMaxDirSizeMb(guildId)
+        const limitMb = getMaxDirSizeMb(client, guildId)
 
         const fileList = files
             .map((file, index) => {

@@ -46,7 +46,7 @@ export default (client) => {
       // Check if the command is used in the control channel
       if (interaction.inGuild()) {
         try {
-          const allSettings = getGuildSettings() // Get the entire settings object
+          const allSettings = getGuildSettings(client) // Get the entire settings object
           const guildSettings = allSettings[guildId] // Get settings for the specific guild
 
           // Check if this guild has settings AND if the command is in its control channel

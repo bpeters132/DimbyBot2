@@ -36,7 +36,7 @@ export default {
     const subcommand = options.getSubcommand()
     client.debug(`[Control-Channel] Executing subcommand: ${subcommand} in guild ${guild.id}`)
 
-    const guildSettings = getGuildSettings()
+    const guildSettings = getGuildSettings(client)
 
     if (!guildSettings[guild.id]) {
       client.debug(`[Control-Channel] Initializing settings for guild ${guild.id}`)
@@ -134,7 +134,7 @@ export default {
         client.debug(
           `[Control-Channel] Saving new settings for guild ${guild.id}: Channel ${targetChannel.id}, Message ${controlMessage.id}.`
         )
-        saveGuildSettings(guildSettings)
+        saveGuildSettings(guildSettings, client)
 
         return interaction.reply({
           content: `Set ${targetChannel} as the music control channel. The control message has been created.`,
@@ -204,7 +204,7 @@ export default {
         client.debug(`[Control-Channel] Removing empty settings entry for guild ${guild.id}.`)
         delete guildSettings[guild.id]
       }
-      saveGuildSettings(guildSettings)
+      saveGuildSettings(guildSettings, client)
       client.debug(`[Control-Channel] Saved settings after unset for guild ${guild.id}.`)
 
       return interaction.reply({

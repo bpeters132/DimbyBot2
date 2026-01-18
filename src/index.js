@@ -32,7 +32,7 @@ const logger = new Logger(logFilePath)
 
 logger.info("Starting application...")
 // Add a check to inform about debug status based on environment variable
-if (process.env.LOG_LEVEL?.toLowerCase() === 'debug') {
+if (logger.getDebugEnabled()) {
     logger.info("Debug logging is enabled via LOG_LEVEL environment variable.")
 } else {
     logger.info("Debug logging is disabled. Set LOG_LEVEL=debug to enable it.")
