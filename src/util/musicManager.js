@@ -169,38 +169,53 @@ export async function handleQueryAndPlay(
         const downloadsDir = path.join(process.cwd(), "downloads")
         let matchingFile = null
 
-    if (!skipLocalMatch && fs.existsSync(downloadsDir)) {
-      const metadataPath = path.join(downloadsDir, ".metadata.json")
-      let metadata = {}
-      if (fs.existsSync(metadataPath)) {
-        try {
-          metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"))
-        } catch (error) {
-          client.error(`[MusicManager] Error reading downloads metadata:`, error)
-        }
-      }
+        if (!skipLocalMatch) {
+            let metadata = {}
+            let downloadsAccessible = true
+            try {
+                await fs.promises.access(downloadsDir)
+            } catch {
+                downloadsAccessible = false
+            }
 
-      const files = fs
-        .readdirSync(downloadsDir)
-        .filter((file) => file.endsWith(".wav"))
-        .filter((file) => metadata[file]?.guildId === guildId)
-        .map((f) => ({
-          name: f,
-          path: path.join(downloadsDir, f),
-          title: f.replace(/\.wav$/, "").toLowerCase(),
-        }))
+            if (downloadsAccessible) {
+                const metadataPath = path.join(downloadsDir, ".metadata.json")
+                try {
+                    const metadataContents = await fs.promises.readFile(metadataPath, "utf8")
+                    metadata = JSON.parse(metadataContents)
+                } catch (error) {
+                    if (error.code !== "ENOENT") {
+                        client.error(`[MusicManager] Error reading downloads metadata:`, error)
+                    }
+                }
 
-            const queryLower = stringForLocalSearch.toLowerCase()
-            const queryWords = queryLower.split(/\s+/).filter((word) => word.length > 0)
-            if (queryWords.length > 0) {
-                matchingFile = files.find((fileEntry) => {
-                    const titleWords = fileEntry.title
-                        .split(/\s+/)
-                        .filter((word) => word.length > 0)
-                    return queryWords.every((qw) =>
-                        titleWords.some((tw) => tw.includes(qw) || qw.includes(tw))
-                    )
-                })
+                let files = []
+                try {
+                    const entries = await fs.promises.readdir(downloadsDir)
+                    files = entries
+                        .filter((file) => file.endsWith(".wav"))
+                        .filter((file) => metadata[file]?.guildId === guildId)
+                        .map((f) => ({
+                            name: f,
+                            path: path.join(downloadsDir, f),
+                            title: f.replace(/\.wav$/, "").toLowerCase(),
+                        }))
+                } catch (error) {
+                    client.error(`[MusicManager] Error reading downloads directory:`, error)
+                }
+
+                const queryLower = stringForLocalSearch.toLowerCase()
+                const queryWords = queryLower.split(/\s+/).filter((word) => word.length > 0)
+                if (queryWords.length > 0) {
+                    matchingFile = files.find((fileEntry) => {
+                        const titleWords = fileEntry.title
+                            .split(/\s+/)
+                            .filter((word) => word.length > 0)
+                        return queryWords.every((qw) =>
+                            titleWords.some((tw) => tw.includes(qw) || qw.includes(tw))
+                        )
+                    })
+                }
             }
         }
 

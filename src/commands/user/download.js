@@ -79,6 +79,7 @@ function cleanupOldFiles(downloadsDir, client, guildId) {
           metadataDirty = true
         }
         delete metadata[fileName]
+        metadataDirty = true
         client.debug(
           `[Download Cleanup] Deleted "${fileName}" (downloaded ${downloadDate.toISOString()}) due to age.`
         )
