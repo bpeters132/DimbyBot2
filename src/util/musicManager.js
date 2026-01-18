@@ -396,7 +396,7 @@ export async function handleQueryAndPlay(
 
         if (!searchResult) {
             client.debug(`[MusicManager] Performing main Lavalink search for query: "${query}"`)
-            searchAttempts = []
+            // Keep pre-search attempts for comprehensive error reporting
             searchError = null
 
             if (!isUrl) {
@@ -593,7 +593,13 @@ export async function handleQueryAndPlay(
             searchResult?.loadType === "playlist"
         ) {
             client.debug(`[MusicManager] Triggering control message update for guild ${guildId}.`)
-            await updateControlMessage(client, guildId)
+            try {
+                await updateControlMessage(client, guildId)
+            } catch (error) {
+                client.warn(
+                    `[MusicManager] Control message update failed for guild ${guildId}: ${error.message}`
+                )
+            }
         }
 
         return { success, feedbackText, error: errorResult }

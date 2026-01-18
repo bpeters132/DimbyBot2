@@ -27,6 +27,7 @@ async function deployGlobalCommands() {
 
   if (!commandsToDeploy || commandsToDeploy.length === 0) {
     console.error("No command data found to deploy. Exiting.")
+    process.exitCode = 1
     return
   }
 
@@ -47,4 +48,7 @@ async function deployGlobalCommands() {
   }
 }
 
-deployGlobalCommands()
+deployGlobalCommands().catch((error) => {
+  console.error("Failed to deploy global application commands:", error)
+  process.exitCode = 1
+})

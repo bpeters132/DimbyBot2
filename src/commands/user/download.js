@@ -76,12 +76,11 @@ function cleanupOldFiles(downloadsDir, client, guildId) {
           totalSize += stats.size
           fs.unlinkSync(filePath)
           deletedCount++
-          metadataDirty = true
         }
         delete metadata[fileName]
         metadataDirty = true
         client.debug(
-          `[Download Cleanup] Deleted "${fileName}" (downloaded ${downloadDate.toISOString()}) due to age.`
+          `[Download Cleanup] Removed "${fileName}" entry (downloaded ${downloadDate.toISOString()}) due to age${stats ? "" : " (metadata only)"}.`
         )
       } catch (error) {
         client.error(`[Download Cleanup] Failed to delete old file "${fileName}":`, error)
@@ -127,8 +126,12 @@ function enforceDirectoryLimit(downloadsDir, client, guildId, maxDirSizeMb, prot
     .filter(([, info]) => info && info.guildId === guildId)
     .map(([name, info]) => {
       const filePath = path.join(downloadsDir, name)
-      if (!fs.existsSync(filePath)) return null
-      const stats = fs.statSync(filePath)
+      let stats
+      try {
+        stats = fs.statSync(filePath)
+      } catch {
+        return null
+      }
       const date = info?.downloadDate ? new Date(info.downloadDate) : stats.mtime
       return {
         name,
@@ -279,7 +282,6 @@ async function execute(interaction, client) {
         '-o', `${downloadsDir}/%(title)s.%(ext)s`
     ])
 
-    let progressMessage = null
     let lastProgress = 0
     let outputBuffer = ""
 
@@ -296,7 +298,7 @@ async function execute(interaction, client) {
                 return
             }
 
-            const progressMatch = line.match(/\[download]\s+(\d+\.\d+)% of (\d+\.\d+)([KMG]iB) at (\d+\.\d+)([KMG]iB\/s) ETA (\d+:\d+)/)
+            const progressMatch = line.match(/\[download]\s+(\d+(?:\.\d+)?)% of (\d+(?:\.\d+)?)([KMG]iB) at (\d+(?:\.\d+)?)([KMG]iB\/s) ETA (\d+:\d+)/)
             if (progressMatch) {
                 const progress = parseFloat(progressMatch[1])
                 const totalSize = parseFloat(progressMatch[2])
@@ -314,11 +316,9 @@ async function execute(interaction, client) {
                         `Speed: ${speed}${speedUnit}\n` +
                         `ETA: ${eta}`
 
-                    if (!progressMessage) {
-                        updateReply(statusText).then(msg => progressMessage = msg).catch(e => client.error("Failed to edit reply for progress", e))
-                    } else {
-                        updateReply(statusText).catch(e => client.error("Failed to edit reply for progress", e))
-                    }
+                    updateReply(statusText).catch((e) =>
+                        client.error("Failed to edit reply for progress", e)
+                    )
                 }
             }
         })
