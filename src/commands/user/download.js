@@ -342,9 +342,7 @@ async function execute(interaction, client) {
             client.error("[Download] Failed to start yt-dlp", err)
             updateReply(
                 "Failed to start download process: yt-dlp not found or could not be executed."
-            ).catch((e) =>
-                client.error("Failed to notify user about download failure", e)
-            )
+            ).catch((e) => client.error("Failed to notify user about download failure", e))
         })
 
         let lastProgress = 0
@@ -520,8 +518,7 @@ async function execute(interaction, client) {
                     // Edit the reply with the feedback from handleQueryAndPlay
                     await interaction
                         .editReply(
-                            playResult.feedbackText ||
-                                "Download complete. Playback status updated."
+                            playResult.feedbackText || "Download complete. Playback status updated."
                         )
                         .catch((e) =>
                             client.error(
@@ -549,9 +546,7 @@ async function execute(interaction, client) {
                 await updateReply(
                     "An unexpected error occurred while finalizing the download. Please try again later.",
                     true
-                ).catch((e) =>
-                    client.error("Failed to edit reply on close handler error", e)
-                )
+                ).catch((e) => client.error("Failed to edit reply on close handler error", e))
             }
         })
     } catch (error) {

@@ -117,7 +117,7 @@ async function execute(interaction, client) {
 
         const maxContentLength = 2000
         const headerFits = header.length < maxContentLength
-        if (headerFits && (header.length + fileList.length) <= maxContentLength) {
+        if (headerFits && header.length + fileList.length <= maxContentLength) {
             return interaction.reply({
                 content: header + fileList,
             })
@@ -127,7 +127,7 @@ async function execute(interaction, client) {
         let currentChunk = headerFits ? header : ""
         for (const entry of fileList.split("\n\n")) {
             const entryWithSpacing = currentChunk ? `\n\n${entry}` : entry
-            if ((currentChunk.length + entryWithSpacing.length) > maxContentLength) {
+            if (currentChunk.length + entryWithSpacing.length > maxContentLength) {
                 if (currentChunk) {
                     chunks.push(currentChunk)
                 }
@@ -166,8 +166,8 @@ async function execute(interaction, client) {
                 const date = info.downloadDate
                     ? new Date(info.downloadDate)
                     : fs.existsSync(filePath)
-                        ? fs.statSync(filePath).mtime
-                        : null
+                      ? fs.statSync(filePath).mtime
+                      : null
                 return {
                     name: file,
                     path: filePath,
