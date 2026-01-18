@@ -214,13 +214,14 @@ async function execute(interaction, client) {
   }
   
   // Validate URL
-  let parsedUrl
+  let isValidHost = false
   try {
-    parsedUrl = new URL(url)
-  } catch {}
-  const hostname = parsedUrl?.hostname
-  const isValidHost =
-    hostname === "youtu.be" || hostname === "youtube.com" || hostname?.endsWith(".youtube.com")
+    const hostname = new URL(url).hostname
+    isValidHost =
+      hostname === "youtu.be" || hostname === "youtube.com" || hostname?.endsWith(".youtube.com")
+  } catch {
+    // Invalid URL format
+  }
   if (!isValidHost) {
     return interaction.reply({
       content: "Please provide a valid YouTube URL.",

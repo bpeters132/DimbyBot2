@@ -1,8 +1,7 @@
 import { updateControlMessage } from "../events/handlers/handleControlChannel.js"
 import path from "path"
 import fs from "fs"
-import { playLocalFile } from "./localPlayer.js"
-import { getLocalPlayerState, stopLocalPlayer } from "./localPlayer.js"
+import { playLocalFile, getLocalPlayerState, stopLocalPlayer } from "./localPlayer.js"
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } from "discord.js"
 
 /**
@@ -212,7 +211,10 @@ export async function handleQueryAndPlay(
                             .split(/\s+/)
                             .filter((word) => word.length > 0)
                         return queryWords.every((qw) =>
-                            titleWords.some((tw) => tw.includes(qw) || qw.includes(tw))
+                            titleWords.some((tw) => {
+                                if (qw.length < 3) return tw === qw
+                                return tw.includes(qw) || qw.includes(tw)
+                            })
                         )
                     })
                 }
@@ -554,7 +556,7 @@ export async function handleQueryAndPlay(
                 await ensurePlayerConnected(client, player, voiceChannel)
 
                 client.debug(
-                    `[MusicManager] Before play check: player.playing=${player.playing}, player.queue.size=${player.queue.size}`
+                    `[MusicManager] Before play check: player.playing=${player.playing}, player.queue.tracks.length=${player.queue.tracks.length}`
                 )
                 if (!player.playing && player.queue.tracks.length > 0) {
                     await player.play()
