@@ -87,9 +87,7 @@ export function saveGuildSettings(settings, loggerInstance) {
   try {
     const data = JSON.stringify(settings, null, 4)
     fs.writeFileSync(settingsFile, data, "utf8")
-    logger.debug(
-      `[guildSettings] Successfully saved settings. Data snippet: ${data.substring(0, 100)}...`
-    )
+    logger.debug(`[guildSettings] Successfully saved settings to: ${settingsFile}`)
   } catch (error) {
     logger.error(`[guildSettings] Error writing guild settings to ${settingsFile}: ${error}`)
   }
