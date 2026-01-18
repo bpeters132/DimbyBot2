@@ -16,21 +16,37 @@ async function ensurePlayerConnected(client, player, voiceChannel) {
         client.debug(
             `[MusicManager] Lavalink player not connected or in wrong channel. Player state: Connected=${player.connected}, Player VC=${player.voiceChannelId}, Target VC=${voiceChannel.id}. Reconnecting/Moving.`
         )
-        player.voiceChannelId = voiceChannel.id
+        const timeoutMs = 10000
+        const movePromise = new Promise((resolve, reject) => {
+            let timeoutId = null
+            const cleanup = () => {
+                if (timeoutId) clearTimeout(timeoutId)
+                client.lavalink.off("playerMove", onPlayerMove)
+            }
+            const onPlayerMove = (movedPlayer, oldChannelId, newChannelId) => {
+                if (movedPlayer.guildId === player.guildId && newChannelId === voiceChannel.id) {
+                    cleanup()
+                    resolve()
+                }
+            }
+            timeoutId = setTimeout(() => {
+                cleanup()
+                reject(new Error("Lavalink player failed to confirm connection."))
+            }, timeoutMs)
+            client.lavalink.on("playerMove", onPlayerMove)
+        })
+
         await player.connect()
         client.debug(
             `[MusicManager] Lavalink player connect/move call initiated. Waiting for connection.`
         )
-        const startTime = Date.now()
-        const timeoutMs = 10000
-        while (!player.connected && Date.now() - startTime < timeoutMs) {
-            await new Promise((r) => setTimeout(r, 100))
-        }
-        if (!player.connected) {
+        try {
+            await movePromise
+        } catch (error) {
             client.warn(
                 `[MusicManager] Lavalink player failed to connect (player.connected is false) within ${timeoutMs / 1000}s.`
             )
-            throw new Error("Lavalink player failed to confirm connection.")
+            throw error
         }
         client.debug(
             `[MusicManager] Lavalink player connect/move call completed. Player VC ${player.voiceChannelId}, Connected=${player.connected}.`
