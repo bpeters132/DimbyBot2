@@ -68,11 +68,45 @@ function cleanupOldFiles(downloadsDir, client, guildId) {
 
     for (const [fileName, fileInfo] of entries) {
         const filePath = path.join(downloadsDir, fileName)
-        const downloadDate = fileInfo?.downloadDate ? new Date(fileInfo.downloadDate) : null
-        if (!downloadDate || Number.isNaN(downloadDate.getTime())) continue
+        let downloadDate = fileInfo?.downloadDate ? new Date(fileInfo.downloadDate) : null
+        let stats = null
+        if (!downloadDate || Number.isNaN(downloadDate.getTime())) {
+            try {
+                stats = fs.statSync(filePath)
+                downloadDate = stats.mtime
+            } catch (error) {
+                if (error.code === "ENOENT") {
+                    delete metadata[fileName]
+                    metadataDirty = true
+                    client.debug(
+                        `[Download Cleanup] Removed "${fileName}" entry with missing file and no valid date.`
+                    )
+                    continue
+                }
+                client.error(
+                    `[Download Cleanup] Failed to stat file "${fileName}" for date fallback:`,
+                    error
+                )
+                continue
+            }
+        }
         if (downloadDate < cutoffDate) {
             try {
-                const stats = fs.existsSync(filePath) ? fs.statSync(filePath) : null
+                if (!stats) {
+                    try {
+                        stats = fs.statSync(filePath)
+                    } catch (error) {
+                        if (error.code === "ENOENT") {
+                            delete metadata[fileName]
+                            metadataDirty = true
+                            client.debug(
+                                `[Download Cleanup] Removed "${fileName}" entry due to missing file.`
+                            )
+                            continue
+                        }
+                        throw error
+                    }
+                }
                 if (stats) {
                     totalSize += stats.size
                     fs.unlinkSync(filePath)
@@ -350,144 +384,161 @@ async function execute(interaction, client) {
         })
 
         downloadProcess.on("close", async (code) => {
-            if (code !== 0) {
-                client.error(`[Download] yt-dlp process exited with code ${code}`)
-                await interaction
-                    .editReply("Error downloading video. Please try again later.")
-                    .catch((e) => client.error("Failed to edit reply on download error", e))
-                return
-            }
+            try {
+                if (code !== 0) {
+                    client.error(`[Download] yt-dlp process exited with code ${code}`)
+                    await interaction
+                        .editReply("Error downloading video. Please try again later.")
+                        .catch((e) => client.error("Failed to edit reply on download error", e))
+                    return
+                }
 
-            await updateReply("Download complete. Finalizing file...", true)
+                await updateReply("Download complete. Finalizing file...", true)
 
-            let filePath = downloadedFilePath
-            let downloadedFile = filePath ? path.basename(filePath) : null
+                let filePath = downloadedFilePath
+                let downloadedFile = filePath ? path.basename(filePath) : null
 
-            if (!filePath) {
-                client.debug(
-                    `[Download] File path not captured from yt-dlp output. Attempting to find most recent .wav file.`
-                )
-                const files = fs.readdirSync(downloadsDir)
-                client.debug(
-                    `[Download] Searching for downloaded file in directory: ${downloadsDir}`
-                )
-                client.debug(`[Download] Available files: ${files.join(", ")}`)
-
-                const wavFiles = files
-                    .filter((file) => file.endsWith(".wav"))
-                    .map((file) => ({
-                        name: file,
-                        path: path.join(downloadsDir, file),
-                        mtime: fs.statSync(path.join(downloadsDir, file)).mtime,
-                    }))
-                    .sort((a, b) => b.mtime - a.mtime)
-
-                if (wavFiles.length > 0) {
-                    downloadedFile = wavFiles[0].name
-                    filePath = wavFiles[0].path
+                if (!filePath) {
                     client.debug(
-                        `[Download] Found most recent WAV: ${downloadedFile} at ${filePath}`
+                        `[Download] File path not captured from yt-dlp output. Attempting to find most recent .wav file.`
                     )
-                }
-            }
-
-            if (!filePath || !downloadedFile) {
-                client.error(`[Download] Could not determine downloaded file path.`)
-                await interaction
-                    .editReply(
-                        "Could not find the downloaded file after the download process. Please check logs."
+                    const files = fs.readdirSync(downloadsDir)
+                    client.debug(
+                        `[Download] Searching for downloaded file in directory: ${downloadsDir}`
                     )
-                    .catch((e) => client.error("Failed to edit reply on file not found", e))
-                return
-            }
+                    client.debug(`[Download] Available files: ${files.join(", ")}`)
 
-            await updateReply(
-                `Saved as **${downloadedFile.replace(".wav", "")}**. Updating library...`,
-                true
-            )
+                    const wavFiles = files
+                        .filter((file) => file.endsWith(".wav"))
+                        .map((file) => ({
+                            name: file,
+                            path: path.join(downloadsDir, file),
+                            mtime: fs.statSync(path.join(downloadsDir, file)).mtime,
+                        }))
+                        .sort((a, b) => b.mtime - a.mtime)
 
-            const metadataPath = path.join(downloadsDir, ".metadata.json")
-            let metadata = {}
-            if (fs.existsSync(metadataPath)) {
-                try {
-                    metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"))
-                } catch (error) {
-                    client.error(`[Download] Error reading metadata file:`, error)
+                    if (wavFiles.length > 0) {
+                        downloadedFile = wavFiles[0].name
+                        filePath = wavFiles[0].path
+                        client.debug(
+                            `[Download] Found most recent WAV: ${downloadedFile} at ${filePath}`
+                        )
+                    }
                 }
-            }
 
-            metadata[downloadedFile] = {
-                downloadDate: new Date().toISOString(),
-                originalUrl: url,
-                filePath: filePath,
-                guildId: guildId,
-            }
+                if (!filePath || !downloadedFile) {
+                    client.error(`[Download] Could not determine downloaded file path.`)
+                    await interaction
+                        .editReply(
+                            "Could not find the downloaded file after the download process. Please check logs."
+                        )
+                        .catch((e) => client.error("Failed to edit reply on file not found", e))
+                    return
+                }
 
-            try {
-                fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
-                client.debug(`[Download] Updated metadata for ${downloadedFile}`)
-            } catch (error) {
-                client.error(`[Download] Error writing metadata file:`, error)
-            }
-
-            client.debug(`[Download] Successfully downloaded: ${filePath}`)
-
-            const postCleanup = enforceDirectoryLimit(
-                downloadsDir,
-                client,
-                guildId,
-                maxDirSizeMb,
-                downloadedFile
-            )
-            if (postCleanup.deletedCount > 0) {
-                client.debug(
-                    `[Download] Post-download cleanup removed ${postCleanup.deletedCount} files (${(postCleanup.deletedSize / (1024 * 1024)).toFixed(2)}MB) to honor ${maxDirSizeMb}MB limit.`
+                await updateReply(
+                    `Saved as **${downloadedFile.replace(".wav", "")}**. Updating library...`,
+                    true
                 )
-            }
 
-            // Auto-play logic using handleQueryAndPlay
-            try {
-                await updateReply("Attempting to play the downloaded track...", true)
-                let player = client.lavalink.getPlayer(guildId)
-                if (!player) {
-                    player = client.lavalink.createPlayer({
-                        guildId: guildId,
-                        voiceChannelId: member.voice.channel.id,
-                        textChannelId: interaction.channel.id,
-                        selfDeaf: true,
-                    })
+                const metadataPath = path.join(downloadsDir, ".metadata.json")
+                let metadata = {}
+                if (fs.existsSync(metadataPath)) {
+                    try {
+                        metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"))
+                    } catch (error) {
+                        client.error(`[Download] Error reading metadata file:`, error)
+                    }
                 }
-                // No need to manually connect here, handleQueryAndPlay should manage it.
 
-                const playResult = await handleQueryAndPlay(
+                metadata[downloadedFile] = {
+                    downloadDate: new Date().toISOString(),
+                    originalUrl: url,
+                    filePath: filePath,
+                    guildId: guildId,
+                }
+
+                try {
+                    fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
+                    client.debug(`[Download] Updated metadata for ${downloadedFile}`)
+                } catch (error) {
+                    client.error(`[Download] Error writing metadata file:`, error)
+                }
+
+                client.debug(`[Download] Successfully downloaded: ${filePath}`)
+
+                const postCleanup = enforceDirectoryLimit(
+                    downloadsDir,
                     client,
                     guildId,
-                    member.voice.channel, // Pass the voice channel object
-                    interaction.channel, // Pass the text channel object
-                    filePath, // Use the file path as the query
-                    interaction.user, // Pass the requester
-                    player // Pass the player instance
+                    maxDirSizeMb,
+                    downloadedFile
                 )
+                if (postCleanup.deletedCount > 0) {
+                    client.debug(
+                        `[Download] Post-download cleanup removed ${postCleanup.deletedCount} files (${(postCleanup.deletedSize / (1024 * 1024)).toFixed(2)}MB) to honor ${maxDirSizeMb}MB limit.`
+                    )
+                }
 
-                // Edit the reply with the feedback from handleQueryAndPlay
-                await interaction
-                    .editReply(
-                        playResult.feedbackText || "Download complete. Playback status updated."
+                // Auto-play logic using handleQueryAndPlay
+                try {
+                    await updateReply("Attempting to play the downloaded track...", true)
+                    let player = client.lavalink.getPlayer(guildId)
+                    if (!player) {
+                        player = client.lavalink.createPlayer({
+                            guildId: guildId,
+                            voiceChannelId: member.voice.channel.id,
+                            textChannelId: interaction.channel.id,
+                            selfDeaf: true,
+                        })
+                    }
+                    // No need to manually connect here, handleQueryAndPlay should manage it.
+
+                    const playResult = await handleQueryAndPlay(
+                        client,
+                        guildId,
+                        member.voice.channel, // Pass the voice channel object
+                        interaction.channel, // Pass the text channel object
+                        filePath, // Use the file path as the query
+                        interaction.user, // Pass the requester
+                        player // Pass the player instance
                     )
-                    .catch((e) =>
-                        client.error("Failed to send final download & play confirmation via HQP", e)
-                    )
-            } catch (playError) {
-                client.error("[Download] Error during auto-play setup or HQP call:", playError)
-                await interaction
-                    .editReply(
-                        `Downloaded: **${downloadedFile.replace(".wav", "")}**\n` +
-                            `Could not automatically play the song: ${playError.message}\n` +
-                            `Use \`/play ${downloadedFile.replace(".wav", "")}\` to play it.`
-                    )
-                    .catch((e) =>
-                        client.error("Failed to send download confirmation with autoplay error", e)
-                    )
+
+                    // Edit the reply with the feedback from handleQueryAndPlay
+                    await interaction
+                        .editReply(
+                            playResult.feedbackText ||
+                                "Download complete. Playback status updated."
+                        )
+                        .catch((e) =>
+                            client.error(
+                                "Failed to send final download & play confirmation via HQP",
+                                e
+                            )
+                        )
+                } catch (playError) {
+                    client.error("[Download] Error during auto-play setup or HQP call:", playError)
+                    await interaction
+                        .editReply(
+                            `Downloaded: **${downloadedFile.replace(".wav", "")}**\n` +
+                                `Could not automatically play the song: ${playError.message}\n` +
+                                `Use \`/play ${downloadedFile.replace(".wav", "")}\` to play it.`
+                        )
+                        .catch((e) =>
+                            client.error(
+                                "Failed to send download confirmation with autoplay error",
+                                e
+                            )
+                        )
+                }
+            } catch (error) {
+                client.error("[Download] Unexpected error in close handler", error)
+                await updateReply(
+                    "An unexpected error occurred while finalizing the download. Please try again later.",
+                    true
+                ).catch((e) =>
+                    client.error("Failed to edit reply on close handler error", e)
+                )
             }
         })
     } catch (error) {
