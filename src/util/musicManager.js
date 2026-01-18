@@ -73,7 +73,6 @@ export async function handleQueryAndPlay(
     let success = false
     let trackToAdd = null
     let errorResult = null
-    let localFilePlayed = false
     let searchResult = null
     let searchError = null
     let searchAttempts = []
@@ -279,7 +278,6 @@ export async function handleQueryAndPlay(
                         matchingFile,
                         requester
                     )
-                    localFilePlayed = true
                     if (localPlayResult.success) {
                         return { ...localPlayResult, success: true }
                     } else {
@@ -336,13 +334,6 @@ export async function handleQueryAndPlay(
                     feedbackText = `${requester}, No selection made. Proceeding to search online for "${query}".`
                 }
             }
-        }
-
-        if (localFilePlayed) {
-            client.debug(
-                "[MusicManager] localFilePlayed is true. No further Lavalink action needed in this path."
-            )
-            return { success: true, feedbackText, error: errorResult }
         }
 
         const currentLocalPlayerState = getLocalPlayerState(guildId)
@@ -559,7 +550,11 @@ export async function handleQueryAndPlay(
                         player.queue.tracks.length > 0 &&
                         player.queue.current?.info?.uri !== trackToAdd.info.uri
                     ) {
-                        player.skip()
+                        try {
+                            await player.skip()
+                        } catch (skipError) {
+                            client.error(`[MusicManager] Error skipping to next track:`, skipError)
+                        }
                         feedbackText += "\n\nSkipping to next track..."
                     }
                 } else {
@@ -577,7 +572,11 @@ export async function handleQueryAndPlay(
             )
         }
 
-        if (trackToAdd || searchResult?.loadType === "PLAYLIST_LOADED") {
+        if (
+            trackToAdd ||
+            searchResult?.loadType === "PLAYLIST_LOADED" ||
+            searchResult?.loadType === "playlist"
+        ) {
             client.debug(`[MusicManager] Triggering control message update for guild ${guildId}.`)
             await updateControlMessage(client, guildId)
         }

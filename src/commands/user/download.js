@@ -79,7 +79,6 @@ function cleanupOldFiles(downloadsDir, client, guildId) {
           metadataDirty = true
         }
         delete metadata[fileName]
-        metadataDirty = true
         client.debug(
           `[Download Cleanup] Deleted "${fileName}" (downloaded ${downloadDate.toISOString()}) due to age.`
         )
@@ -211,7 +210,14 @@ async function execute(interaction, client) {
   }
   
   // Validate URL
-  if (!url.includes("youtube.com") && !url.includes("youtu.be")) {
+  let parsedUrl
+  try {
+    parsedUrl = new URL(url)
+  } catch {}
+  const hostname = parsedUrl?.hostname
+  const isValidHost =
+    hostname === "youtu.be" || hostname === "youtube.com" || hostname?.endsWith(".youtube.com")
+  if (!isValidHost) {
     return interaction.reply({
       content: "Please provide a valid YouTube URL.",
     })
