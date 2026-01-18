@@ -3,10 +3,10 @@ import { PermissionFlagsBits, SlashCommandBuilder, MessageFlags } from "discord.
 export default {
   data: new SlashCommandBuilder()
     .setName("clearmessages") // Renamed from "clear"
-    .setDescription("Used to clear messages, can clear up to 30 messages")
+    .setDescription("Clear up to 30 messages")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
     .addIntegerOption((option) =>
-      option.setName("count").setDescription("The amount of messages to clear").setRequired(true)
+      option.setName("count").setDescription("The number of messages to clear").setRequired(true)
     ),
 
   /**

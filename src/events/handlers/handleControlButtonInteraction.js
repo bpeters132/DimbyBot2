@@ -1,6 +1,5 @@
 import { getGuildSettings } from "../../util/saveControlChannel.js"
 import { updateControlMessage } from "./handleControlChannel.js"
-import { MessageFlags } from 'discord.js'
 /**
  * Handles button interactions originating from the control message.
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -78,8 +77,7 @@ export async function handleControlButtonInteraction(interaction, client) {
     client.debug(`[ControlButtonHandler] User ${interaction.user.id} not in a voice channel.`)
     try {
       await interaction.reply({ 
-        content: "You must be in a voice channel to use the controls!", 
-        flags: [MessageFlags.Ephemeral] 
+        content: "You must be in a voice channel to use the controls!"
       })
     } catch (e) { client.error("Error replying to VC check fail:", e) }
     return
@@ -89,8 +87,7 @@ export async function handleControlButtonInteraction(interaction, client) {
     // Allow control anyway? Or deny? Let's deny for now for consistency.
     try {
       await interaction.reply({ 
-        content: "Cannot verify player's voice channel. Controls unavailable.", 
-        flags: [MessageFlags.Ephemeral] 
+        content: "Cannot verify player's voice channel. Controls unavailable."
       })
     } catch (e) { client.error("Error replying to player VC check fail:", e) }
     return
@@ -99,8 +96,7 @@ export async function handleControlButtonInteraction(interaction, client) {
     client.debug(`[ControlButtonHandler] User ${interaction.user.id} in different VC (${member.voice.channel.id}) than player (${player.voiceChannelId}).`)
     try {
       await interaction.reply({ 
-        content: "You must be in the same voice channel as the bot to use the controls!", 
-        flags: [MessageFlags.Ephemeral] 
+        content: "You must be in the same voice channel as the bot to use the controls!"
       })
     } catch (e) { client.error("Error replying to mismatched VC check fail:", e) }
     return
@@ -122,6 +118,36 @@ export async function handleControlButtonInteraction(interaction, client) {
 
   // 6. Execute Action & Update Control Message
   let actionTaken = false
+  /**
+   * Sends a follow-up and refreshes the control message when a player action fails.
+   * @param {Error} error The error thrown by the player action.
+   * @returns {Promise<void>}
+   */
+  const handleActionError = async (error) => {
+    client.error(
+      `[ControlButtonHandler] Error executing player action for ${customId}:`,
+      error
+    )
+    try {
+      await interaction.followUp({
+        content: "An error occurred while controlling the player.",
+      })
+    } catch (followUpError) {
+      client.error(
+        `[ControlButtonHandler] Failed to send player error follow-up:`,
+        followUpError
+      )
+    }
+    client.warn(
+      `[ControlButtonHandler] Updating control message after player error for ${customId}.`
+    )
+    updateControlMessage(client, guildId).catch((err) =>
+      client.error(
+        `[ControlButtonHandler] Error updating control message after player error ${customId}:`,
+        err
+      )
+    )
+  }
   try {
     client.debug(`[ControlButtonHandler] Executing action for ${customId}`)
     switch (customId) {
@@ -145,8 +171,8 @@ export async function handleControlButtonInteraction(interaction, client) {
               // Even if it errored, the state is likely 'paused', so consider the action taken
               actionTaken = true
             } else {
-              client.error("[ControlButtonHandler] Error pausing player:", pauseError)
-              throw pauseError // Re-throw unexpected errors
+              await handleActionError(pauseError)
+              return
             }
           }
         } else {
@@ -166,8 +192,8 @@ export async function handleControlButtonInteraction(interaction, client) {
                 // Consider the action taken even if this error occurs, as the intent was to resume
                 actionTaken = true
               } else {
-                client.error("[ControlButtonHandler] Error resuming player:", resumeError)
-                throw resumeError // Re-throw unexpected errors
+                await handleActionError(resumeError)
+                return
               }
             }
           } else {
@@ -202,11 +228,8 @@ export async function handleControlButtonInteraction(interaction, client) {
               client.debug("[ControlButtonHandler] Player started playing.")
               actionTaken = true
             } catch (playError) {
-              client.error(
-                "[ControlButtonHandler] Error trying to play current track on stopped player:",
-                playError
-              )
-              throw playError // Re-throw to be caught by the outer handler
+              await handleActionError(playError)
+              return
             }
           }
         }
@@ -250,14 +273,13 @@ export async function handleControlButtonInteraction(interaction, client) {
               content: "Skipped the track. The queue is now empty.",
             })
 
-            player.destroy()
+            await player.destroy()
             actionTaken = true // Mark action as taken because the desired outcome (stopping) occurred.
             
           } else {
             // This is an unexpected error during skip
-            client.error("[ControlButtonHandler] Unexpected error during player.skip():", skipError)
-            // Re-throw the error to be caught by the outer try-catch block that sends a generic error message.
-            throw skipError
+            await handleActionError(skipError)
+            return
           }
         }
 
@@ -300,7 +322,7 @@ export async function handleControlButtonInteraction(interaction, client) {
         try {
           player.queue.shuffle()
           client.debug("[ControlButtonHandler] Queue shuffled.")
-          await interaction.followUp({ content: "🔀 Queue shuffled." })
+          await interaction.followUp({ content: "Queue shuffled." })
           actionTaken = true
         } catch (shuffleError) {
           client.error("[ControlButtonHandler] Error shuffling queue:", shuffleError)
@@ -317,10 +339,10 @@ export async function handleControlButtonInteraction(interaction, client) {
 
         if (currentLoop === 'none') {
           newMode = 'track'
-          feedback = 'Track loop 🔁 enabled.'
+          feedback = "Track loop enabled."
         } else if (currentLoop === 'track') {
           newMode = 'queue'
-          feedback = 'Queue loop 🔁 enabled.'
+          feedback = "Queue loop enabled."
         } else { // currentLoop === 'queue'
           newMode = 'none'
           feedback = 'Loop disabled.'
@@ -357,27 +379,6 @@ export async function handleControlButtonInteraction(interaction, client) {
       client.debug(`[ControlButtonHandler] No action taken for ${customId}, not updating message.`)
     }
   } catch (playerError) {
-    client.error(
-      `[ControlButtonHandler] Error executing player action for ${customId}:`,
-      playerError
-    )
-    try {
-      // Attempt to notify user about the error
-      await interaction.followUp({
-        content: "An error occurred while controlling the player.",
-      })
-    } catch (followUpError) {
-      client.error(`[ControlButtonHandler] Failed to send player error follow-up:`, followUpError)
-    }
-    // Attempt to update the control message even after an error
-    client.warn(
-      `[ControlButtonHandler] Updating control message after player error for ${customId}.`
-    )
-    updateControlMessage(client, guildId).catch((err) =>
-      client.error(
-        `[ControlButtonHandler] Error updating control message after player error ${customId}:`,
-        err
-      )
-    )
+    await handleActionError(playerError)
   }
 }

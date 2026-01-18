@@ -20,12 +20,7 @@ COPY entrypoint.sh entrypoint.sh
 RUN dos2unix entrypoint.sh \
     && chmod +x entrypoint.sh \
     && mkdir -p /tmp \
-    && chmod 1777 /tmp \
-    # Add debugging steps:
-    && echo "--- Listing /app contents:" \
-    && ls -la /app/ \
-    && echo "--- Checking for /bin/sh:" \
-    && which sh
+    && chmod 1777 /tmp
 
 # Default port Lavalink runs on
 EXPOSE 2333

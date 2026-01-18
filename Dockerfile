@@ -1,5 +1,5 @@
 # Use a recent Node.js LTS version
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
@@ -26,11 +26,7 @@ COPY entrypoint.sh entrypoint.sh
 RUN apk add --no-cache dos2unix \
     && dos2unix entrypoint.sh \
     && chmod +x entrypoint.sh \
-    # Add debugging steps:
-    && echo "--- Listing /app contents:" \
-    && ls -la /app/ \
-    && echo "--- Checking for /bin/sh:" \
-    && which sh
+
 
 # Run the entrypoint script which generates lavaNodesConfig.js and starts the bot
 # Use absolute path and explicitly invoke sh to bypass shebang issues

@@ -4,7 +4,11 @@ import getCommandData from "../util/getCommandData.js"
 import dotenv from "dotenv"
 dotenv.config()
 
-;(async () => {
+/**
+ * Deploys application commands to a single guild using environment configuration.
+ * @returns {Promise<void>}
+ */
+async function deployGuildCommands() {
   const appID = process.env.CLIENT_ID
   const devGuildID = process.env.GUILD_ID
   const token = process.env.BOT_TOKEN
@@ -44,4 +48,6 @@ dotenv.config()
   } catch (error) {
     console.error(`Failed to register application commands for guild ${devGuildID}:`, error)
   }
-})()
+}
+
+deployGuildCommands()

@@ -115,7 +115,7 @@ export default {
      * @returns {ActionRowBuilder<ButtonBuilder>} The action row with buttons.
      */
     const generateButtons = (page) => {
-      const row = new ActionRowBuilder().addComponents(
+      return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("prev_page")
           .setLabel("Previous")
@@ -127,7 +127,6 @@ export default {
           .setStyle(ButtonStyle.Primary)
           .setDisabled(page === totalPages) // Disable next button on last page
       )
-      return row
     }
     
     // Generate initial embed and buttons for the first page
@@ -153,7 +152,7 @@ export default {
     collector.on("collect", async (i) => {
       // Double-check user (although filter should handle this)
       if (i.user.id !== interaction.user.id) {
-        return i.reply({ content: "You can't control this queue pagination!" })
+        return i.reply({ content: "You can't control this queue's pagination!" })
       }
 
       // Acknowledge the button click visually without sending a new message

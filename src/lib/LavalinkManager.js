@@ -2,8 +2,9 @@ import { LavalinkManager } from "lavalink-client"
 import { nodes } from "../../lavaNodesConfig.js"
 
 /**
- *
- * @param {import('./BotClient.js').default} client
+ * Creates and configures the Lavalink manager instance for the bot.
+ * @param {import('./BotClient.js').default} client The bot client instance.
+ * @returns {import('lavalink-client').LavalinkManager} The configured Lavalink manager.
  */
 export default function createLavalinkManager(client) {
   client.debug("Creating LavalinkManager instance.") // Debug log

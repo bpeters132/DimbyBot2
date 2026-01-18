@@ -1,9 +1,9 @@
-import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js"
+import { SlashCommandBuilder, EmbedBuilder } from "discord.js"
 import { getLocalPlayerState } from "../../util/localPlayer.js"
 import { formatDuration } from "../../util/formatDuration.js"
 
 export default {
-  data: new SlashCommandBuilder().setName("nowplaying").setDescription("View current playing song"),
+  data: new SlashCommandBuilder().setName("nowplaying").setDescription("View the currently playing song"),
   /**
    * Executes the /nowplaying command to display the currently playing track.
    * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
@@ -23,15 +23,19 @@ export default {
     const localPlayerState = getLocalPlayerState(guild.id)
 
     if (localPlayerState && localPlayerState.isPlaying && localPlayerState.trackTitle) {
+      const elapsedMs = localPlayerState.startedAt ? Date.now() - localPlayerState.startedAt : 0
+      const elapsed = elapsedMs > 0 ? formatDuration(elapsedMs) : "N/A"
+      const requesterText = localPlayerState.requesterId
+        ? `<@${localPlayerState.requesterId}>`
+        : "Unknown"
       const embed = new EmbedBuilder()
         .setColor(0x00AAFF) // Blue for local player
-        .setTitle("🎵 Now Playing (Local)")
+        .setTitle("Now Playing (Local)")
         .setDescription(`**${localPlayerState.trackTitle}**`)
         .addFields(
           { name: "Source", value: "Local File", inline: true },
-          // @discordjs/voice doesn't easily provide current playback position without more complex tracking
-          // So we'll omit position/duration for local files for now, or show "N/A"
-          { name: "Time", value: "N/A (Live Stream)", inline: true }
+          { name: "Elapsed", value: `\`${elapsed}\``, inline: true },
+          { name: "Requester", value: requesterText, inline: true }
         )
         .setFooter({ text: "Playing via local file stream." })
         .setTimestamp()
@@ -44,8 +48,7 @@ export default {
 
     if (!lavalinkPlayer || !lavalinkPlayer.queue.current) { // Simplified check
       return interaction.reply({ 
-        content: "Nothing is playing.", 
-        flags: [MessageFlags.Ephemeral] 
+        content: "Nothing is playing."
       })
     }
 
@@ -66,7 +69,7 @@ export default {
 
     const embed = new EmbedBuilder()
       .setColor(0x00FFAA) // Green for Lavalink
-      .setTitle("🎵 Now Playing (Lavalink)")
+      .setTitle("Now Playing (Lavalink)")
       .setDescription(`[${track.info.title}](${track.info.uri})`)
       .addFields(
         { name: "Artist", value: track.info.author || "Unknown Artist", inline: true },

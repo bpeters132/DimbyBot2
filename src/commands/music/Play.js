@@ -1,10 +1,10 @@
-import { SlashCommandBuilder, MessageFlags } from "discord.js"
+import { SlashCommandBuilder } from "discord.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
 
 export default {
   data: new SlashCommandBuilder()
     .setName("play")
-    .setDescription("Queries and play's a song")
+    .setDescription("Searches for and plays a song")
     .addStringOption((option) =>
       option.setName("query").setDescription("The song name or URL").setRequired(true)
     ),
@@ -48,8 +48,7 @@ export default {
     } else if (player.voiceChannelId !== voiceChannel.id) {
         // Optional: Handle user being in a different channel than the bot
         return interaction.reply({ 
-          content: "You need to be in the same voice channel as the bot!", 
-          flags: [MessageFlags.Ephemeral] 
+          content: "You need to be in the same voice channel as the bot!"
         })
     }
 

@@ -99,8 +99,7 @@ export default (client) => {
           try {
             // Use reply if no response has been attempted yet
             await interaction.reply({
-              content: `There was an error executing \`/${commandName}\`. Please check the logs or contact the developer.`,
-              ephemeral: true // Keep generic errors ephemeral
+              content: `There was an error executing \`/${commandName}\`. Please check the logs or contact the developer.`
             })
           } catch (replyError) {
             // Log if even the initial reply fails (e.g., interaction truly invalid for some reason)
