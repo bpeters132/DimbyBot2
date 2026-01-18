@@ -173,7 +173,10 @@ function enforceDirectoryLimit(
             } catch {
                 return null
             }
-            const date = info?.downloadDate ? new Date(info.downloadDate) : stats.mtime
+            let date = info?.downloadDate ? new Date(info.downloadDate) : stats.mtime
+            if (Number.isNaN(date.getTime())) {
+                date = stats.mtime
+            }
             return {
                 name,
                 path: filePath,
@@ -190,7 +193,7 @@ function enforceDirectoryLimit(
     if (totalSizeMB > maxDirSizeMb) {
         const candidates = files
             .filter((file) => file.name !== protectedFileName)
-            .sort((a, b) => a.date - b.date)
+            .sort((a, b) => a.date.getTime() - b.date.getTime())
 
         let deletedCount = 0
         let deletedSize = 0
