@@ -334,6 +334,15 @@ async function execute(interaction, client) {
             `${downloadsDir}/%(title)s.%(ext)s`,
         ])
 
+        downloadProcess.on("error", (err) => {
+            client.error("[Download] Failed to start yt-dlp", err)
+            updateReply(
+                "Failed to start download process: yt-dlp not found or could not be executed."
+            ).catch((e) =>
+                client.error("Failed to notify user about download failure", e)
+            )
+        })
+
         let lastProgress = 0
         let outputBuffer = ""
 
