@@ -41,3 +41,6 @@
 - Local dev requires `.env` and `lavaNodesConfig.js` in the repo root.
 - Use `.env.example` and `lavaNodesConfig.js.example` as templates.
 - Never commit real tokens or credentials.
+
+## Tooling & Docs
+- Strongly prefer MCP server resources when available; use Context7 for library/framework documentation queries.
