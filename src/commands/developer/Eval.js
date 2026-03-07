@@ -85,7 +85,6 @@ export default {
     }
 
     try {
-      // eslint-disable-next-line no-eval
       let evaled = await eval(`(async () => { ${code} })()`)
 
       if (typeof evaled !== "string") {

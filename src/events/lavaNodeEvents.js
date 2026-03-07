@@ -50,8 +50,7 @@ export default async (client) => {
         })
         // Emitted when a node connection is successfully resumed after a disconnection.
         // Provides the resume payload and potentially information about players that were active.
-        .on("resumed", (node, payload, players) => {
-            // eslint-disable-line no-unused-vars
+        .on("resumed", (node, payload) => {
             client.info(`Lavalink Node ${node.id} RESUMED. Payload: ${JSON.stringify(payload)}`)
             // Note: 'players' might be an array of LavalinkPlayer or an InvalidLavalinkRestRequest object.
             // Player state might need to be restored or re-initialized here based on the 'payload' and 'players' data.
@@ -72,7 +71,6 @@ export default async (client) => {
         // Emitted for every raw message received from the Lavalink node. Useful for debugging.
         // This event can be very noisy and is typically commented out in production.
         .on("raw", (node, payload) => {
-            // eslint-disable-line no-unused-vars
             client.debug(`Lavalink Node ${node.id} RAW: ${JSON.stringify(payload)}`)
         })
 }

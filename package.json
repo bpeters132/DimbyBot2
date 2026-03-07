@@ -7,6 +7,11 @@
   "scripts": {
     "start": "node ./src/index.js",
     "dev": "nodemon ./src/index.js",
+    "docker:dev:build": "docker compose -f docker-compose.yml -f docker-compose.dev.yml build",
+    "docker:dev:up": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d",
+    "docker:dev:down": "docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v",
+    "docker:dev:rebuild": "npm run docker:dev:down && npm run docker:dev:build && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d",
+    "docker:dev:logs": "docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f",
     "deployGlobal": "node ./src/deploy/deployGlobal.js",
     "destroyGlobal": "node ./src/deploy/destroyGlobal.js",
     "deployGuild": "node ./src/deploy/deployGuild.js",
@@ -15,24 +20,26 @@
   "license": "MIT",
   "dependencies": {
     "@discordjs/opus": "^0.10.0",
-    "@discordjs/voice": "0.18.x",
-    "@snazzah/davey": "^0.1.9",
+    "@discordjs/voice": "0.19.0",
+    "@snazzah/davey": "^0.1.10",
     "colors": "^1.4.0",
     "date-fns": "^4.1.0",
     "discord.js": "^14.25.1",
-    "dotenv": "^17.2.3",
+    "dotenv": "^17.3.1",
     "ffmpeg-static": "^5.3.0",
-    "lavalink-client": "^2.7.8",
-    "nodemailer": "^7.0.12",
+    "lavalink-client": "^2.9.7",
+    "nodemailer": "^8.0.1",
     "sodium": "^3.0.2",
     "winston": "^3.19.0"
   },
   "devDependencies": {
-    "eslint": "^9.39.2",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.0.3",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
-    "nodemon": "^3.1.11",
-    "prettier": "3.8.0"
+    "globals": "^17.4.0",
+    "nodemon": "^3.1.14",
+    "prettier": "3.8.1"
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
   "nodemonConfig": {

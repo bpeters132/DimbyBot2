@@ -1,4 +1,6 @@
 #!/bin/sh
+set -e
+
 echo "Bot Entrypoint: Starting..."
 
 # ==============================================================================
@@ -32,5 +34,10 @@ echo "Bot Entrypoint: lavaNodesConfig.js generated successfully."
 # This ensures that 'yarn start' becomes the main process (PID 1) in the container,
 # which is important for signal handling (like stopping the container).
 
+if [ "$#" -gt 0 ]; then
+  echo "Bot Entrypoint: Executing '$*'..."
+  exec "$@"
+fi
+
 echo "Bot Entrypoint: Executing 'yarn start'..."
-exec yarn start 
+exec yarn start

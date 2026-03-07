@@ -97,7 +97,7 @@ export async function handleQueryAndPlay(
     )
     client.debug(`[MusicManager] Player queue in handleQueryAndPlay: size=${queueSize}`)
     let feedbackText = ""
-    let success = false
+    let success
     let trackToAdd = null
     let errorResult = null
     let searchResult = null
