@@ -29,6 +29,6 @@ COPY --chmod=755 entrypoint.sh /usr/local/bin/dimbybot-entrypoint.sh
 
 # Use the same entrypoint as production so dev containers generate
 # lavaNodesConfig.js from compose environment before starting nodemon.
-ENTRYPOINT ["/bin/sh", "/usr/local/bin/dimbybot-entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/dimbybot-entrypoint.sh"]
 
 CMD ["yarn", "dev"] 
