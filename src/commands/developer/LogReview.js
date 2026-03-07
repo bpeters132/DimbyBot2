@@ -67,7 +67,7 @@ export default {
             })
         }
 
-        let contents = ""
+        let contents
         try {
             contents = fs.readFileSync(logPath, "utf8")
         } catch (error) {

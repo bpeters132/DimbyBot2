@@ -23,16 +23,16 @@ RUN yarn install
 # Copy the rest of the application code (will be overridden by mounts in dev)
 COPY . .
 
-# Copy the entrypoint script
-COPY entrypoint.sh entrypoint.sh
+# Copy the entrypoint script outside /app so the dev bind mount
+# does not overwrite it with the host copy.
+COPY entrypoint.sh /usr/local/bin/dimbybot-entrypoint.sh
 # Ensure script has correct line endings (LF) and is executable
 RUN apk add --no-cache dos2unix \
-    && dos2unix entrypoint.sh \
-    && chmod +x entrypoint.sh
+    && dos2unix /usr/local/bin/dimbybot-entrypoint.sh \
+    && chmod +x /usr/local/bin/dimbybot-entrypoint.sh
 
-# The command will be overridden in docker-compose.dev.yml to use nodemon
-# Keep the ENTRYPOINT if entrypoint.sh does necessary setup before execing the main process
-# ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"] 
+# Use the same entrypoint as production so dev containers generate
+# lavaNodesConfig.js from compose environment before starting nodemon.
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/dimbybot-entrypoint.sh"]
 
-# Default command if ENTRYPOINT wasn't used or if entrypoint.sh expects one (might need adjustment)
 CMD ["yarn", "dev"] 

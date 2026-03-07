@@ -40,12 +40,7 @@ export default {
         })
     }
 
-    // Ensure connected, connecting if necessary
-    if (!player.connected) {
-        if (player.state !== 'CONNECTING') {
-             await player.connect()
-        }
-    } else if (player.voiceChannelId !== voiceChannel.id) {
+    if (player.connected && player.voiceChannelId !== voiceChannel.id) {
         // Optional: Handle user being in a different channel than the bot
         return interaction.reply({ 
           content: "You need to be in the same voice channel as the bot!"

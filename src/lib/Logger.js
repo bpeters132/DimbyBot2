@@ -100,7 +100,7 @@ export default class Logger {
                 if (typeof arg === "object" && arg !== null) {
                     try {
                         return JSON.stringify(arg)
-                    } catch (e) {
+                    } catch {
                         return "[Unserializable Object]"
                     }
                 }
