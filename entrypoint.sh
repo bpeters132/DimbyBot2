@@ -24,7 +24,20 @@ validate_port() {
       echo "Bot Entrypoint: LAVALINK_PORT must be a numeric value, got '$LAVALINK_PORT'" >&2
       return 1
       ;;
+    0)
+      echo "Bot Entrypoint: LAVALINK_PORT must be greater than 0" >&2
+      return 1
+      ;;
+    0*)
+      echo "Bot Entrypoint: LAVALINK_PORT must not include leading zeroes, got '$LAVALINK_PORT'" >&2
+      return 1
+      ;;
   esac
+
+  if [ "$LAVALINK_PORT" -gt 65535 ]; then
+    echo "Bot Entrypoint: LAVALINK_PORT must be 65535 or lower, got '$LAVALINK_PORT'" >&2
+    return 1
+  fi
 }
 
 validate_secure_flag() {
