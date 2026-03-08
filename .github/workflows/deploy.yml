@@ -2,7 +2,6 @@ name: CI/CD
 
 permissions:
   contents: read
-  packages: write
 
 on:
   push:
@@ -20,6 +19,9 @@ jobs:
   build-and-push:
     if: ${{ github.event_name != 'workflow_dispatch' || !inputs.skip_build }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     env:
       REGISTRY: ghcr.io
       IMAGE_BOT: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:latest
@@ -55,6 +57,9 @@ jobs:
     needs: build-and-push
     if: always() && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     env:
       REGISTRY: ghcr.io
       IMAGE_BOT: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:latest
