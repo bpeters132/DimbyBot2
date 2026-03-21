@@ -7,6 +7,7 @@
 
 // Import utility functions
 import { getGuildSettings } from "../util/saveControlChannel.js"
+import { rememberAutoplayPlayed } from "../util/autoplayHistory.js"
 import { updateControlMessage } from "./handlers/handleControlChannel.js"
 
 /**
@@ -48,6 +49,24 @@ export default async (client) => {
                 `[LavaMgrEvents] Track started in Guild: ${player.guildId}, Title: ${track.info.title}`
             )
             updateControlMessage(client, player.guildId)
+
+            const prev = player.queue.previous?.[0]
+            const prevAuthor = prev?.info?.author?.trim()
+            const prevTitle = prev?.info?.title?.trim()
+            const previousInsufficient =
+                !prevTitle ||
+                !prevAuthor ||
+                /^unknown$/i.test(prevAuthor)
+            if (previousInsufficient && track?.info?.title) {
+                player.set("lastTrack", {
+                    artist: track.info.author?.trim() || "Unknown Artist",
+                    title: track.info.title.trim(),
+                })
+            }
+
+            if (track?.info) {
+                rememberAutoplayPlayed(player, track.info)
+            }
 
             const channel = client.channels.cache.get(player.textChannelId)
             // Check if textChannelId exists and is different from control channel before sending

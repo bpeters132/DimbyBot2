@@ -27,6 +27,11 @@ COPY . .
 # does not overwrite it with the host copy.
 COPY --chmod=755 entrypoint.sh /usr/local/bin/dimbybot-entrypoint.sh
 
+# Runtime environment (see Dockerfile in repo root for the full list):
+# Autoplay: Spotify API on the bot (compose / .env):
+#   LAVALINK_SPOTIFY_CLIENT_ID, LAVALINK_SPOTIFY_CLIENT_SECRET or SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
+# MusicBrainz fallback: MUSICBRAINZ_CONTACT or MUSICBRAINZ_CONTACT_URL; MUSICBRAINZ_SIMILAR=off to disable
+
 # Use the same entrypoint as production so dev containers generate
 # lavaNodesConfig.js from compose environment before starting nodemon.
 ENTRYPOINT ["/usr/local/bin/dimbybot-entrypoint.sh"]
