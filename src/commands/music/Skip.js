@@ -11,33 +11,57 @@ export default {
     const guild = interaction.guild
     const member = interaction.member
 
-    // Check if user is in a voice channel
     const voiceChannel = member.voice.channel
     if (!voiceChannel) {
       return interaction.reply({ content: "Join a voice channel first!" })
     }
 
-    const player = client.lavalink.players.get(guild.id)
+    const player = client.lavalink.getPlayer(guild.id)
 
-    if (!player || (!player.queue.current && player.queue.tracks.length === 0)) {
-      return interaction.reply("Nothing is playing.")
-    } else if (player.queue.current && player.queue.tracks.length === 0) {
-      return interaction.reply("The last song in the queue is already playing!")
+    if (!player) {
+      return interaction.reply({ content: "Nothing is playing." })
     }
 
-    player.skip()
-    // Use fetchReply to get the message object
-    const msg = await interaction.reply({ content: "SKIPPED!", fetchReply: true })
-    // Delete after delay with retry
+    if (player.connected && player.voiceChannelId !== voiceChannel.id) {
+      return interaction.reply({
+        content: "You need to be in the same voice channel as the bot!",
+      })
+    }
+
+    const hasCurrent = !!player.queue.current
+    const hasQueued = player.queue.tracks.length > 0
+
+    if (!hasCurrent && !hasQueued) {
+      return interaction.reply({ content: "Nothing is playing." })
+    }
+
+    await interaction.deferReply()
+
+    try {
+      if (hasQueued) {
+        await player.skip()
+      } else {
+        // Only the current track (e.g. autoplay with an empty upcoming queue).
+        // Default skip() throws when queue.tracks is empty — use throwError: false.
+        await player.skip(0, false)
+      }
+    } catch (e) {
+      client.error("[SkipCmd] skip failed:", e)
+      return interaction.editReply({
+        content: "Could not skip right now. Try again in a moment.",
+      })
+    }
+
+    const msg = await interaction.editReply({ content: "Skipped!" })
     setTimeout(() => {
       msg.delete().catch((e) => {
         client.error("[SkipCmd] Failed to delete reply (attempt 1):", e)
-        if (e.code === 'EAI_AGAIN' || e.message.includes('ECONNRESET')) {
+        if (e.code === "EAI_AGAIN" || e.message.includes("ECONNRESET")) {
           setTimeout(() => {
             msg.delete().catch((e2) => client.error("[SkipCmd] Failed to delete reply (attempt 2):", e2))
-          }, 2000) // Retry after 2 seconds
+          }, 2000)
         }
       })
-    }, 1000 * 10) // 10 seconds initial delay
+    }, 1000 * 10)
   },
 }

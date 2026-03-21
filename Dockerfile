@@ -20,6 +20,14 @@ RUN yarn install --production
 # Copy the rest of the application code
 COPY . .
 
+# Runtime environment (inject via compose/K8s; do not bake secrets into the image):
+#   Required for Lavalink: LAVALINK_HOST, LAVALINK_PORT, LAVALINK_PASSWORD, LAVALINK_NODE_ID, LAVALINK_SECURE
+#   Bot: BOT_TOKEN, CLIENT_ID, and other vars from .env.example
+#   Autoplay (Spotify Web API — same app as Lavalink Spotify plugin):
+#     LAVALINK_SPOTIFY_CLIENT_ID, LAVALINK_SPOTIFY_CLIENT_SECRET
+#   Optional autoplay overrides: SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
+#   MusicBrainz fallback: MUSICBRAINZ_CONTACT or MUSICBRAINZ_CONTACT_URL; MUSICBRAINZ_SIMILAR=off to disable
+
 # Copy the entrypoint script
 COPY entrypoint.sh entrypoint.sh
 # Ensure script has correct line endings (LF) and is executable

@@ -56,7 +56,12 @@ export function createControlEmbed(client, player) {
         },
         { name: "Queue", value: `${player.queue.tracks.length} songs`, inline: true },
         { name: "Status", value: player.playing ? "Playing" : "Paused", inline: true },
-        { name: "Loop", value: player.loop ? player.loop.toUpperCase() : 'NONE', inline: true }
+        { name: "Loop", value: player.loop ? player.loop.toUpperCase() : "NONE", inline: true },
+        {
+          name: "Autoplay",
+          value: player.get("autoplay") ? "On" : "Off",
+          inline: true,
+        }
       )
     if (currentTrack.requester) {
       embed.addFields({
@@ -73,7 +78,12 @@ export function createControlEmbed(client, player) {
     embed.addFields(
       { name: "Queue", value: "Empty", inline: true },
       { name: "Status", value: "Idle", inline: true },
-      { name: "Loop", value: "Off", inline: true }
+      { name: "Loop", value: "Off", inline: true },
+      {
+        name: "Autoplay",
+        value: player?.get?.("autoplay") ? "On" : "Off",
+        inline: true,
+      }
     )
   }
 

@@ -243,72 +243,30 @@ export async function handleControlButtonInteraction(interaction, client) {
         break
       }
       case "control_skip": {
-        const hadCurrentTrack = !!player.queue.current // Check if there *was* a track before skipping
-        if (!hadCurrentTrack) {
+        if (!player.queue.current) {
           client.warn("[ControlButtonHandler] Skip clicked but no current track was playing.")
           await interaction.followUp({
             content: "Nothing is currently playing to skip.",
           })
-          break // Don't set actionTaken, nothing changed
+          break
         }
 
         try {
-          client.debug("[ControlButtonHandler] Attempting player.skip().")
-          await player.skip() // Execute the skip
-          client.debug("[ControlButtonHandler] player.skip() completed successfully.")
-          actionTaken = true // Skip succeeded without error (more tracks were in queue)
-        } catch (skipError) {
-          // Check if the error is the specific RangeError expected when skipping the last track
-          const isLastTrackSkipError =
-            skipError instanceof RangeError &&
-            skipError.message === "Can't skip more than the queue size"
-
-          if (isLastTrackSkipError) {
-            client.warn(
-              `[ControlButtonHandler] player.skip() threw expected RangeError for last track: ${skipError.message}. Treating as stop.`
-            )
-            // The skip effectively stopped the player by trying to skip the last track.
-            // The player state should now reflect 'stopped', and queue.current should be null/undefined.
-            await interaction.followUp({
-              content: "Skipped the track. The queue is now empty.",
-            })
-
-            await player.destroy()
-            actionTaken = true // Mark action as taken because the desired outcome (stopping) occurred.
-            
+          if (player.queue.tracks.length > 0) {
+            client.debug("[ControlButtonHandler] player.skip() (queued tracks exist).")
+            await player.skip()
           } else {
-            // This is an unexpected error during skip
-            await handleActionError(skipError)
-            return
-          }
-        }
-
-        // This block now executes if skip() succeeded OR threw the caught error
-        if (actionTaken) {
-          // Check the player's state *after* the skip attempt.
-          // If skip() succeeded or threw the caught error, player.queue.current should be null/undefined.
-          if (!player.queue.current) {
-            client.debug("[ControlButtonHandler] Queue is empty after skip action.")
-            // Send a specific message indicating the queue ended
-            try {
-              // Use interaction.followUp since we deferred earlier
-              // This message is now sent within the isLastTrackSkipError block if applicable
-              // If skip succeeded normally, the control message update is enough
-            } catch (followUpError) {
-              client.error(
-                '[ControlButtonHandler] Failed to send "queue empty after skip" follow-up:',
-                followUpError
-              )
-            }
-          } else {
-            // This case should ideally not happen if skip() worked correctly on the last track
-            // or if the specific error was caught, but log just in case.
             client.debug(
-              `[ControlButtonHandler] Next track exists after skip: ${player.queue.current?.info?.title ?? "N/A"}`
+              "[ControlButtonHandler] player.skip(0, false) — only current track (e.g. autoplay)."
             )
+            await player.skip(0, false)
           }
+          actionTaken = true
+          await interaction.followUp({ content: "Skipped." })
+        } catch (skipError) {
+          await handleActionError(skipError)
+          return
         }
-        // If an unexpected error was thrown, actionTaken remains false, and the outer catch handles the reply.
 
         break
       }
