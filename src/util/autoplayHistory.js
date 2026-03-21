@@ -302,7 +302,12 @@ function compositionMatchFromCores(ca, cb, authorA, authorB, opts = {}) {
     return false
   }
 
-  if (ca === cb) return true
+  // Short cores: exact string match alone would merge unrelated songs (e.g. "Run", "Up"); require same primary artist.
+  if (ca === cb) {
+    const artistBKnown = authorB && authorB !== "_"
+    if (!artistBKnown) return false
+    return isSamePrimaryArtist(authorA, authorB)
+  }
   if (strictShortCrossArtist) {
     return !!(
       authorB &&

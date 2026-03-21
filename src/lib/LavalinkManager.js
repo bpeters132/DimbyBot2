@@ -138,6 +138,18 @@ async function searchFirstPlayableTrack(
 }
 
 /**
+ * @param {import("lavalink-client").Player} player
+ * @returns {boolean}
+ */
+function shouldStillInjectAutoplayTrack(player) {
+  if (!player.get("autoplay")) return false
+  if ((player.queue?.tracks?.length ?? 0) > 0) return false
+  if (player.queue?.current) return false
+  if (player.playing) return false
+  return true
+}
+
+/**
  * @param {import('./BotClient.js').default} client
  * @param {import("lavalink-client").Player} player
  * @param {string} line
@@ -148,7 +160,7 @@ function sendAutoplayChannelMessage(client, player, line) {
   if (!channel || player.textChannelId === controlChannelId) return
 
   channel
-    .send(line)
+    .send({ content: line, allowedMentions: { parse: [] } })
     .then((msg) => {
       setTimeout(() => {
         msg.delete().catch((e) => {
@@ -204,6 +216,8 @@ async function tryQueueAndPlayAutoplay(client, player, endedTrack, seed, request
     ) {
       lavalinkTrack.track = resolvedUri.trim()
     }
+
+    if (!shouldStillInjectAutoplayTrack(player)) return false
 
     player.queue.add(lavalinkTrack)
     try {

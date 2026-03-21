@@ -15,31 +15,40 @@ export default {
    * @param {import('../../lib/BotClient.js').default} client
    */
   async execute(interaction, client) {
+    const noMentions = { allowedMentions: { parse: [] } }
+
     const genreName = interaction.options.getString("name")?.trim()
     if (!genreName) {
-      return interaction.reply({ content: "Please provide a genre name." })
+      return interaction.reply({ content: "Please provide a genre name.", ...noMentions })
     }
 
     const guild = interaction.guild
     if (!guild) {
-      return interaction.reply({ content: "This command can only be used in a server." })
+      return interaction.reply({ content: "This command can only be used in a server.", ...noMentions })
     }
 
     let member = interaction.member
+    if (member && !member.voice?.channel) {
+      return interaction.reply({ content: "Join a voice channel first!", ...noMentions })
+    }
+
+    await interaction.deferReply()
+
     if (!member) {
       try {
         member = await guild.members.fetch(interaction.user.id)
       } catch {
-        return interaction.reply({
+        return interaction.editReply({
           content: "Could not determine your member info—try again or re-run the command.",
+          ...noMentions,
         })
+      }
+      if (!member.voice?.channel) {
+        return interaction.editReply({ content: "Join a voice channel first!", ...noMentions })
       }
     }
 
     const voiceChannel = member.voice.channel
-    if (!voiceChannel) {
-      return interaction.reply({ content: "Join a voice channel first!" })
-    }
 
     let player = client.lavalink?.getPlayer(guild.id)
 
@@ -54,12 +63,11 @@ export default {
     }
 
     if (player.voiceChannelId && player.voiceChannelId !== voiceChannel.id) {
-      return interaction.reply({
+      return interaction.editReply({
         content: "You need to be in the same voice channel as the bot!",
+        ...noMentions,
       })
     }
-
-    await interaction.deferReply()
 
     const result = await handleQueryAndPlay(
       client,
@@ -75,11 +83,15 @@ export default {
       const p = client.lavalink.getPlayer(guild.id)
       p?.set("autoplay", true)
       if (p) seedAutoplayHistoryFromPlayer(p)
-      await interaction.editReply(
-        `Autoplay enabled for **${genreName}**. ${result.feedbackText ?? "Queued."}`
-      )
+      await interaction.editReply({
+        content: `Autoplay enabled for **${genreName}**. ${result.feedbackText ?? "Queued."}`,
+        ...noMentions,
+      })
     } else {
-      await interaction.editReply(result.feedbackText || "Something went wrong.")
+      await interaction.editReply({
+        content: result.feedbackText || "Something went wrong.",
+        ...noMentions,
+      })
     }
   },
 }
