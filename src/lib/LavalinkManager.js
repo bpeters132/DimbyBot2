@@ -48,9 +48,9 @@ function resolveAutoplaySeed(player, endedTrack) {
   }
 
   const stored = player.get("lastTrack")
-  if ((!title || !artist) && stored?.title) {
-    artist = (stored.artist || artist || "").trim() || "Unknown Artist"
-    title = stored.title.trim()
+  if (stored && (!title || !artist)) {
+    if (!title && stored.title) title = stored.title.trim()
+    if (!artist) artist = (stored.artist || "").trim() || "Unknown Artist"
   }
 
   if (!title) return null
@@ -165,11 +165,21 @@ function sendAutoplayChannelMessage(client, player, line) {
       setTimeout(() => {
         msg.delete().catch((e) => {
           client.error("[LavalinkManager] Failed to delete autoplay message (attempt 1):", e)
-          if (e.code === "EAI_AGAIN" || e.message.includes("ECONNRESET")) {
+          const errMsg =
+            typeof e === "object" && e !== null && "message" in e && typeof e.message === "string"
+              ? e.message
+              : String(e)
+          const errCode =
+            typeof e === "object" && e !== null && "code" in e ? /** @type {{ code?: string }} */ (e).code : undefined
+          if (errCode === "EAI_AGAIN" || errMsg.includes("ECONNRESET")) {
             setTimeout(() => {
-              msg.delete().catch((e2) =>
-                client.error("[LavalinkManager] Failed to delete autoplay message (attempt 2):", e2)
-              )
+              try {
+                void msg.delete().catch((e2) => {
+                  client.error("[LavalinkManager] Failed to delete autoplay message (attempt 2):", e2)
+                })
+              } catch (inner) {
+                client.error("[LavalinkManager] Autoplay message delete retry threw:", inner)
+              }
             }, 2000)
           }
         })

@@ -53,13 +53,21 @@ export default {
     let player = client.lavalink?.getPlayer(guild.id)
 
     if (!player) {
-      player = await client.lavalink.createPlayer({
-        guildId: guild.id,
-        voiceChannelId: voiceChannel.id,
-        textChannelId: interaction.channelId,
-        selfDeaf: true,
-        volume: 100,
-      })
+      try {
+        player = await client.lavalink.createPlayer({
+          guildId: guild.id,
+          voiceChannelId: voiceChannel.id,
+          textChannelId: interaction.channelId,
+          selfDeaf: true,
+          volume: 100,
+        })
+      } catch (err) {
+        client.error("[GenreCmd] createPlayer failed:", err)
+        return interaction.editReply({
+          content: "Could not join voice right now. Try again in a moment.",
+          ...noMentions,
+        })
+      }
     }
 
     if (player.voiceChannelId && player.voiceChannelId !== voiceChannel.id) {

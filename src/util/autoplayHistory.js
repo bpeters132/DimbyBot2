@@ -522,7 +522,14 @@ export function isDuplicateAutoplayCandidate(cand, ended) {
 
   const tc = normalizeAutoplayComparable(cand.title)
   const te = normalizeAutoplayComparable(ended.title)
-  if (tc.length >= 4 && te.length >= 4 && tc === te) return true
+  if (
+    tc.length >= 4 &&
+    te.length >= 4 &&
+    tc === te &&
+    artistsCompatibleForSameSong(cand.author, ended.author)
+  ) {
+    return true
+  }
 
   const fullC = normalizeAutoplayComparable(`${cand.author || ""} ${cand.title}`)
   const fullE = normalizeAutoplayComparable(`${ended.author || ""} ${ended.title}`)
