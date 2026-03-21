@@ -196,8 +196,13 @@ async function tryQueueAndPlayAutoplay(client, player, endedTrack, seed, request
     if (isDuplicateAutoplayCandidate(lavalinkTrack.info, endedInfo)) return false
     if (isAutoplayRecentlyPlayed(player, lavalinkTrack.info)) return false
 
-    if (!lavalinkTrack.track && lavalinkTrack.info?.uri) {
-      lavalinkTrack.track = lavalinkTrack.info.uri
+    const resolvedUri = lavalinkTrack.info?.uri
+    if (
+      !lavalinkTrack.track &&
+      typeof resolvedUri === "string" &&
+      resolvedUri.trim().length > 0
+    ) {
+      lavalinkTrack.track = resolvedUri.trim()
     }
 
     player.queue.add(lavalinkTrack)

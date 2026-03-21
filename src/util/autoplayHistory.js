@@ -18,7 +18,7 @@ export function youtubeVideoIdFromUri(uri) {
   if (!uri || typeof uri !== "string") return null
   try {
     const u = new URL(uri)
-    const host = u.hostname.replace(/^www\./, "")
+    const host = u.hostname
     if (host === "youtu.be") {
       const id = u.pathname.replace(/^\//, "").split("/")[0]
       return id || null

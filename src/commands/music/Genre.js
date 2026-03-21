@@ -53,7 +53,7 @@ export default {
       })
     }
 
-    if (player.connected && player.voiceChannelId !== voiceChannel.id) {
+    if (player.voiceChannelId && player.voiceChannelId !== voiceChannel.id) {
       return interaction.reply({
         content: "You need to be in the same voice channel as the bot!",
       })
