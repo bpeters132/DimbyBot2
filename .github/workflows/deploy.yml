@@ -39,6 +39,7 @@ jobs:
 
       - name: Build bot image
         run: |
+          # Dockerfile is multi-stage: yarn install + yarn build (TypeScript → dist/), then runtime yarn install --production + copied dist/
           docker build -t $IMAGE_BOT -f Dockerfile .
 
       - name: Build lavalink image
@@ -98,7 +99,7 @@ jobs:
           MUSICBRAINZ_SIMILAR=${{ secrets.MUSICBRAINZ_SIMILAR }}
           EMAIL_USER=${{ secrets.EMAIL_USER }}
           EMAIL_PASS=${{ secrets.EMAIL_PASS }}
-          GITLAB_EMAIL=${{ secrets.GITLAB_EMAIL }}
+          FEEDBACK_EMAIL=${{ secrets.FEEDBACK_EMAIL }}
           BOT_IMAGE=${{ env.IMAGE_BOT }}
           LAVALINK_IMAGE=${{ env.IMAGE_LAVALINK }}
           GH_ACTOR=${{ github.actor }}

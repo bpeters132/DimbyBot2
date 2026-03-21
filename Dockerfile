@@ -1,24 +1,36 @@
 # Use a recent Node.js LTS version
-FROM node:22-alpine
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Install yt-dlp and its dependencies (always latest from pip)
-# Also install build tools needed for native Node.js modules
+# Install yt-dlp and native build tools (e.g. sodium)
 RUN apk add --no-cache python3 py3-pip ffmpeg build-base autoconf automake libtool g++ \
     && python3 -m venv /opt/venv \
     && . /opt/venv/bin/activate \
     && pip3 install --no-cache-dir yt-dlp \
     && ln -sf /opt/venv/bin/yt-dlp /usr/bin/yt-dlp
 
-# Copy package files and install dependencies
 COPY package.json yarn.lock ./
-# It's generally better to run `yarn install` *after* installing build deps
-# and *before* copying the rest of the app code to leverage Docker layer caching.
+RUN yarn install
+
+COPY . .
+RUN yarn build
+
+# --- runtime image ---
+FROM node:22-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache python3 py3-pip ffmpeg build-base autoconf automake libtool g++ \
+    && python3 -m venv /opt/venv \
+    && . /opt/venv/bin/activate \
+    && pip3 install --no-cache-dir yt-dlp \
+    && ln -sf /opt/venv/bin/yt-dlp /usr/bin/yt-dlp
+
+COPY package.json yarn.lock ./
 RUN yarn install --production
 
-# Copy the rest of the application code
-COPY . .
+COPY --from=builder /app/dist ./dist
 
 # Runtime environment (inject via compose/K8s; do not bake secrets into the image):
 #   Required for Lavalink: LAVALINK_HOST, LAVALINK_PORT, LAVALINK_PASSWORD, LAVALINK_NODE_ID, LAVALINK_SECURE
@@ -28,14 +40,9 @@ COPY . .
 #   Optional autoplay overrides: SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
 #   MusicBrainz fallback: MUSICBRAINZ_CONTACT or MUSICBRAINZ_CONTACT_URL; MUSICBRAINZ_SIMILAR=off to disable
 
-# Copy the entrypoint script
 COPY entrypoint.sh entrypoint.sh
-# Ensure script has correct line endings (LF) and is executable
 RUN apk add --no-cache dos2unix \
     && dos2unix entrypoint.sh \
     && chmod +x entrypoint.sh
 
-
-# Run the entrypoint script which generates lavaNodesConfig.js and starts the bot
-# Use absolute path and explicitly invoke sh to bypass shebang issues
 ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]

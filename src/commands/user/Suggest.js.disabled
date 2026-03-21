@@ -4,12 +4,12 @@ import nodemailer from "nodemailer"
 /**
  * Suggest command.
  * Allows users to submit suggestions via email to a pre-configured address,
- * intended for integration with an issue tracker like GitLab.
+ * intended for integration with an issue tracker or shared inbox via email.
  */
 export default {
   data: new SlashCommandBuilder()
     .setName("suggest")
-    .setDescription("Submit a suggestion to the repository issue board")
+    .setDescription("Submit a suggestion by email to the bot team")
     // Option for the suggestion title
     .addStringOption((option) =>
       option.setName("title").setDescription("The title of your suggestion").setRequired(true)
@@ -42,9 +42,9 @@ export default {
 
     // --- Environment Variable Validation ---
     // Ensure necessary email credentials and recipient address are configured in the environment.
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !process.env.GITLAB_EMAIL) {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !process.env.FEEDBACK_EMAIL) {
       client.error(
-        "Suggest command failed: Missing required environment variables (EMAIL_USER, EMAIL_PASS, GITLAB_EMAIL)."
+        "Suggest command failed: Missing required environment variables (EMAIL_USER, EMAIL_PASS, FEEDBACK_EMAIL)."
       )
       // Inform the user that the bot configuration is incomplete.
       return interaction.editReply({
@@ -87,7 +87,7 @@ export default {
     // --- Email Content Definition ---
     const mailOptions = {
       from: process.env.EMAIL_USER, // Sender address (must match Mailgun sending domain/user)
-      to: process.env.GITLAB_EMAIL, // Recipient address (e.g., GitLab service desk email)
+      to: process.env.FEEDBACK_EMAIL, // Recipient inbox for suggestions
       subject: title, // Use the user-provided title as the email subject
       // Construct the email body with user and suggestion detailsF
       text: `

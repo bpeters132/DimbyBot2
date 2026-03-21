@@ -1,33 +1,41 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `src/` contains the bot source code.
+- `src/` contains the bot source code (TypeScript, compiled to `dist/`).
   - `src/commands/` slash command definitions.
   - `src/deploy/` deploy/destroy scripts for Discord commands.
   - `src/events/` Discord event handlers.
   - `src/lib/` core libraries and services.
   - `src/util/` shared utilities.
-  - `src/index.js` app entry point.
+  - `src/types/` shared type definitions (`src/types/index.ts`).
+  - `src/index.ts` app entry point.
 - `Lavalink/` holds the Lavalink service files.
 - `downloads/`, `logs/`, `storage/` are runtime directories and should stay out of commits.
 
 ## Build, Test, and Development Commands
-- `npm install` or `yarn install` installs dependencies.
-- `npm start` runs the bot (`src/index.js`).
-- `npm run dev` runs with `nodemon` for local iteration.
+- `yarn install` installs dependencies.
+- `yarn build` runs `tsc` and emits JavaScript to `dist/`.
+- `yarn typecheck` runs `tsc --noEmit` (typecheck only, no `dist/` output).
+- `yarn lint` runs ESLint on the repo (`eslint.config.js`).
+- `yarn start` runs the compiled bot (`node dist/index.js`). Run `yarn build` first (or use Docker, which builds in the image).
+- `yarn dev` runs `tsc --watch` and `nodemon` together so `dist/` stays up to date.
 - Docker dev environment:
   - `./dev-env.sh build` builds images.
   - `./dev-env.sh up` starts services (bot + Lavalink).
   - `make up` or `make down` provides the same via Makefile shortcuts.
-- Command deployment:
-  - `npm run deployGlobal` / `npm run destroyGlobal`
-  - `npm run deployGuild` / `npm run destroyGuild` (requires `GUILD_ID`).
+- Command deployment (after `yarn build`):
+  - `yarn deployGlobal` / `yarn destroyGlobal`
+  - `yarn deployGuild` / `yarn destroyGuild` (requires `GUILD_ID`).
 
 ## Coding Style & Naming Conventions
-- JavaScript (ES modules). Indentation: 2 spaces.
-- Semicolons are disabled; see `.eslintrc.json`.
+- TypeScript (ES modules). Imports from local modules use `.js` extensions (NodeNext). Indentation: 2 spaces.
+- **Documentation:** Prefer short `/** … */` summaries on non-trivial exports. Avoid legacy JSDoc `@param {import('…')}` blocks in `.ts` files—use real TypeScript parameter types instead.
+- **Shared command types** (`src/types/index.ts`): `Command` uses `SlashCommandData` (`name` + `toJSON()` for REST) and `SlashCommandExecute` (`Promise<unknown>` so handlers may return Discord reply objects). A `BotClient` type alias is exported for use in helpers.
+- **`tsconfig.json`:** `strict` is on; `strictNullChecks` and `noImplicitAny` are currently **off** so older handlers stay buildable. Tightening those flags is welcome once call sites use proper guards (e.g. `interaction.inGuild()`, `GuildMember` vs API payloads) and typed parameters in `src/util/`.
+- **Root `lavaNodesConfig.d.ts`:** typings for generated `lavaNodesConfig.js` (included next to `src/**/*` in `tsconfig`).
+- Semicolons are disabled; see `eslint.config.js`.
 - Prettier config in `.prettierrc.json` (print width 100, double quotes).
-- Suggested manual checks: `npx eslint .` and `npx prettier --check .`.
+- Suggested manual checks: `yarn lint`, `yarn typecheck`, and `yarn prettier --check .`.
 
 ## Testing Guidelines
 - No test framework is configured in `package.json`.

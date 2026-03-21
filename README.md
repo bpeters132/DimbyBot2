@@ -17,7 +17,7 @@ Author is just a dude that can barely code but can figure things out.
 ## Prerequisites
 
 *   Node.js - current LTS
-*   npm or yarn
+*   [Yarn](https://yarnpkg.com/) (this repo uses Yarn 1.x; see `packageManager` in `package.json`)
 
 ## Installation
 
@@ -28,30 +28,14 @@ Author is just a dude that can barely code but can figure things out.
     ```
 2.  Install dependencies:
     ```bash
-    npm install
-    # or
     yarn install
     ```
 
-## Configuration (Deployment via GitLab CI/CD)
+## Configuration (deployment)
 
-For optimal deployment to a destination server, this project uses GitLab CI/CD.
+**Local:** Copy `.env.example` to `.env` and fill in values. For Lavalink, use `lavaNodesConfig.js.example` as a template for `lavaNodesConfig.js` (or rely on `entrypoint.sh` in Docker to generate it from env vars).
 
-1.  **Fork this repository** on GitLab.
-2.  In your forked repository's GitLab settings, navigate to **Settings > CI/CD > Variables**.
-3.  Define the following environment variables required by the bot:
-    ```dotenv
-    DISCORD_TOKEN=your_discord_bot_token
-    # Add other necessary environment variables
-    # LAVALINK_HOST=...
-    # LAVALINK_PORT=...
-    # LAVALINK_PASSWORD=...
-    # EMAIL_USER=...
-    # EMAIL_PASS=...
-    # GUILD_ID=... (Required for deployGuild/destroyGuild scripts)
-    ```
-    **Note:** The `.env` file itself is **not** used during CI/CD deployment. The variables listed above (or in a potential `.env.example` file) serve as a reference and **must** be defined 1:1 within your GitLab repository's **Settings > CI/CD > Variables**.
-    The CI/CD pipeline configured in `.gitlab-ci.yml` will use these GitLab variables when deploying the bot.
+**GitHub Actions:** Production deploy is defined in `.github/workflows/deploy.yml`. It builds container images, pushes to GHCR, and SSHes to your server to run `docker compose`. Configure the required values as **repository secrets** in GitHub (**Settings → Secrets and variables → Actions**). See the workflow’s “Generate .env file” step for the secret names used on the server. Optional **`FEEDBACK_EMAIL`** is the inbox for the disabled `/suggest` feature (see `.env.example`).
 
 ## Local Development Setup
 
@@ -72,14 +56,12 @@ If you want to run the bot locally for development or testing:
     ```bash
     ./dev-env.sh up
     ```
-*   **Deploy Slash Commands (run locally or via CI/CD):**
-    *   Globally: `npm run deployGlobal`
-    *   To a specific guild: `npm run deployGuild` (requires `GUILD_ID` environment variable)
-    *   Can be run in your local terminal
-*   **Remove Slash Commands (run locally or via CI/CD):**
-    *   Globally: `npm run destroyGlobal`
-    *   From a specific guild: `npm run destroyGuild` (requires `GUILD_ID` environment variable)
-    *   Can be run in your local terminal
+*   **Deploy Slash Commands (run locally; run `yarn build` first so `dist/deploy/` exists):**
+    *   Globally: `yarn deployGlobal`
+    *   To a specific guild: `yarn deployGuild` (requires `GUILD_ID` environment variable)
+*   **Remove Slash Commands:**
+    *   Globally: `yarn destroyGlobal`
+    *   From a specific guild: `yarn destroyGuild` (requires `GUILD_ID` environment variable)
 
 ## Project Structure
 
@@ -90,7 +72,8 @@ src/
 ├── events/        # Event handlers (e.g., messageCreate, interactionCreate)
 ├── lib/           # Core libraries or bot-specific modules
 ├── util/          # Utility functions
-└── index.js       # Main application entry point
+├── types/         # Shared TypeScript types
+└── index.ts       # Main application entry (compiled to dist/)
 ```
 
 ## Key Dependencies
