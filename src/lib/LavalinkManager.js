@@ -10,6 +10,7 @@ import {
   isDuplicateAutoplayCandidate,
   isAutoplayRecentlyPlayed,
   isPlausibleAutoplayMusicTrack,
+  matchesCatalogCandidate,
   orderSimilarByArtistVariety,
   orderLavalinkTracksForAutoplay,
 } from "../util/autoplayHistory.js"
@@ -81,7 +82,7 @@ function isAllowedSearchLoadType(searchResult) {
  * @param {import('./BotClient.js').default} client
  * @param {import("lavalink-client").Track | undefined} endedTrack
  * @param {string} seedArtist
- * @param {{ searchQueries?: string[] } | undefined} [opts]
+ * @param {{ searchQueries?: string[], catalogArtist?: string, catalogTitle?: string } | undefined} [opts]
  * @returns {Promise<import("lavalink-client").Track | import("lavalink-client").UnresolvedTrack | null>}
  */
 async function searchFirstPlayableTrack(
@@ -129,6 +130,17 @@ async function searchFirstPlayableTrack(
     for (const t of ordered) {
       if (!t?.info) continue
       if (!isPlausibleAutoplayMusicTrack(t.info)) continue
+      const catA = opts?.catalogArtist
+      const catT = opts?.catalogTitle
+      if (
+        catA != null &&
+        catT != null &&
+        String(catA).trim() &&
+        String(catT).trim() &&
+        !matchesCatalogCandidate(t.info, String(catA), String(catT), seedArtist, endedTrack?.info)
+      ) {
+        continue
+      }
       if (isDuplicateAutoplayCandidate(t.info, endedTrack?.info)) continue
       if (isAutoplayRecentlyPlayed(player, t.info)) continue
       return t
@@ -298,6 +310,8 @@ async function tryQueueAndPlayAutoplay(client, player, endedTrack, seed, request
     const ytForSim = youtubeSearchQueriesForCatalogTrack(sim)
     const track = await searchFirstPlayableTrack(player, q, requester, client, effectiveEnded, seed.artist, {
       searchQueries: ytForSim,
+      catalogArtist: sim.artist,
+      catalogTitle: sim.title,
     })
     if (track && (await tryOne(track, q))) return true
   }

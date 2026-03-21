@@ -27,14 +27,11 @@ export default {
       return interaction.reply({ content: "This command can only be used in a server.", ...noMentions })
     }
 
-    let member = interaction.member
-    if (member && !member.voice?.channel) {
-      return interaction.reply({ content: "Join a voice channel first!", ...noMentions })
-    }
-
     await interaction.deferReply()
 
-    if (!member) {
+    let member = interaction.member
+    const memberNeedsFetch = !member || !("voice" in member)
+    if (memberNeedsFetch) {
       try {
         member = await guild.members.fetch(interaction.user.id)
       } catch {
@@ -43,9 +40,10 @@ export default {
           ...noMentions,
         })
       }
-      if (!member.voice?.channel) {
-        return interaction.editReply({ content: "Join a voice channel first!", ...noMentions })
-      }
+    }
+
+    if (!member.voice?.channel) {
+      return interaction.editReply({ content: "Join a voice channel first!", ...noMentions })
     }
 
     const voiceChannel = member.voice.channel

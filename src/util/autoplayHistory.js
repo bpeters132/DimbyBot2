@@ -348,6 +348,37 @@ export function titlesLikelySameSong(titleA, titleB, authorA, authorB) {
 }
 
 /**
+ * True if a Lavalink search hit corresponds to the catalog row we queried (not an unrelated top result).
+ * Compares the hit to the catalog artist/title; when the catalog row is the same work as the track that
+ * ended (common for the autoplay seed), {@link endedInfo} is used as an alternate spelling for matching.
+ * @param {import("lavalink-client").TrackInfo | import("lavalink-client").UnresolvedTrackInfo | undefined} info
+ * @param {string} catalogArtist
+ * @param {string} catalogTitle
+ * @param {string} seedArtist
+ * @param {import("lavalink-client").TrackInfo | undefined} endedInfo
+ * @returns {boolean}
+ */
+export function matchesCatalogCandidate(info, catalogArtist, catalogTitle, seedArtist, endedInfo) {
+  void seedArtist
+  if (!info) return false
+  const ca = String(catalogArtist || "").trim()
+  const ct = String(catalogTitle || "").trim()
+  if (!ca || !ct) return false
+
+  if (autoplaySameComposition(ca, ct, info.author, info.title)) return true
+  if (isSamePrimaryArtist(ca, info.author) && titlesLikelySameSong(ct, info.title, ca, info.author)) return true
+
+  const ea = endedInfo?.author?.trim()
+  const et = endedInfo?.title?.trim()
+  if (ea && et && autoplaySameComposition(ca, ct, ea, et)) {
+    if (autoplaySameComposition(ea, et, info.author, info.title)) return true
+    if (isSamePrimaryArtist(ea, info.author) && titlesLikelySameSong(et, info.title, ea, info.author)) return true
+  }
+
+  return false
+}
+
+/**
  * Same musical work as the seed (covers, remixes, lyric uploads), for filtering recommendations / autoplay.
  * @param {string | undefined} seedArtist
  * @param {string | undefined} seedTitle
@@ -374,9 +405,9 @@ export function autoplaySameComposition(
  */
 function artistsCompatibleForSameSong(authorA, authorB) {
   if (isSamePrimaryArtist(authorA, authorB)) return true
+  if (isWeakArtistKey(authorA) || isWeakArtistKey(authorB)) return false
   const pa = primaryArtistKey(authorA)
   const pb = primaryArtistKey(authorB)
-  if (isWeakArtistKey(authorA) || isWeakArtistKey(authorB)) return true
   if (pa.length >= 4 && pb.length >= 4 && (pa.includes(pb) || pb.includes(pa))) return true
   return false
 }
