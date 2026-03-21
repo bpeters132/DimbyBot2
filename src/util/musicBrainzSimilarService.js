@@ -8,16 +8,24 @@ const MB_ROOT = "https://musicbrainz.org/ws/2"
 let lastMbRequestAt = 0
 const MB_MIN_INTERVAL_MS = 1100
 
+function hasMusicBrainzContact() {
+  return !!(
+    process.env.MUSICBRAINZ_CONTACT?.trim() || process.env.MUSICBRAINZ_CONTACT_URL?.trim()
+  )
+}
+
 function musicBrainzDisabled() {
-  const v = process.env.MUSICBRAINZ_SIMILAR?.trim().toLowerCase()
-  return v === "0" || v === "false" || v === "off"
+  const v = process.env.MUSICBRAINZ_SIMILAR?.trim()?.toLowerCase() ?? ""
+  if (v === "0" || v === "false" || v === "off") return true
+  if (!hasMusicBrainzContact()) return true
+  return false
 }
 
 function musicBrainzUserAgent() {
   const contact =
     process.env.MUSICBRAINZ_CONTACT?.trim() ||
     process.env.MUSICBRAINZ_CONTACT_URL?.trim() ||
-    "https://github.com/DimbyBot2/dimbybot2"
+    "https://github.com/bpeters132/DimbyBot2"
   return `DimbyBot/0.2.0 ( ${contact} )`
 }
 

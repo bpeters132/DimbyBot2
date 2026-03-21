@@ -21,7 +21,20 @@ export default {
     }
 
     const guild = interaction.guild
-    const member = interaction.member
+    if (!guild) {
+      return interaction.reply({ content: "This command can only be used in a server." })
+    }
+
+    let member = interaction.member
+    if (!member) {
+      try {
+        member = await guild.members.fetch(interaction.user.id)
+      } catch {
+        return interaction.reply({
+          content: "Could not determine your member info—try again or re-run the command.",
+        })
+      }
+    }
 
     const voiceChannel = member.voice.channel
     if (!voiceChannel) {

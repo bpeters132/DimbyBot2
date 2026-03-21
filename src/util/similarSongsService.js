@@ -243,11 +243,8 @@ async function spotifySimilarTracksFromRelatedAndTop(
   }
 
   const relatedSlice = relatedArtists.slice(0, 12)
-  const topBatches = await Promise.all(
-    relatedSlice.map((a) => fetchArtistTopTracks(accessToken, a.id, market))
-  )
-
-  for (const batch of topBatches) {
+  for (const a of relatedSlice) {
+    const batch = await fetchArtistTopTracks(accessToken, a.id, market)
     if (!batch.ok) {
       lastStatus = batch.httpStatus
       lastSnippet = batch.errorSnippet
@@ -389,6 +386,7 @@ async function getSpotifyAccessToken() {
  * @param {string} accessToken
  * @param {string} artist
  * @param {string} trackName
+ * @param {string} market ISO 3166-1 alpha-2 market/country code for Spotify search
  * @returns {Promise<string | null>} Spotify track id
  */
 async function spotifySearchTrackId(accessToken, artist, trackName, market) {

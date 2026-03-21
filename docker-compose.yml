@@ -77,10 +77,10 @@ services:
       - LAVALINK_SPOTIFY_CLIENT_SECRET=${LAVALINK_SPOTIFY_CLIENT_SECRET}
       - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
       - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
-      # MusicBrainz autoplay fallback (User-Agent contact; optional MUSICBRAINZ_SIMILAR=off to disable)
+      # MusicBrainz autoplay fallback: requires MUSICBRAINZ_CONTACT or MUSICBRAINZ_CONTACT_URL in .env; SIMILAR defaults to off (see musicBrainzSimilarService.js).
       - MUSICBRAINZ_CONTACT=${MUSICBRAINZ_CONTACT}
       - MUSICBRAINZ_CONTACT_URL=${MUSICBRAINZ_CONTACT_URL}
-      - MUSICBRAINZ_SIMILAR=${MUSICBRAINZ_SIMILAR}
+      - MUSICBRAINZ_SIMILAR=${MUSICBRAINZ_SIMILAR:-off}
       # Database connection URL (uses service name 'postgres-db' as host)
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-db:5432/${POSTGRES_DB}
     volumes:

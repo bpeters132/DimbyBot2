@@ -22,7 +22,7 @@ export default {
       return interaction.reply({ content: "Nothing is playing." })
     }
 
-    if (player.connected && player.voiceChannelId !== voiceChannel.id) {
+    if (player.voiceChannelId && player.voiceChannelId !== voiceChannel.id) {
       return interaction.reply({
         content: "You need to be in the same voice channel as the bot!",
       })

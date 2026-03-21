@@ -209,8 +209,12 @@ async function tryQueueAndPlayAutoplay(client, player, endedTrack, seed, request
       )
       try {
         await player.queue.remove(lavalinkTrack)
-      } catch {
-        /* ignore */
+      } catch (removeErr) {
+        client.debug(
+          `[LavalinkManager] Autoplay: queue.remove after play failure failed track=${
+            lavalinkTrack?.info?.identifier ?? lavalinkTrack?.track ?? "?"
+          } uri=${lavalinkTrack?.info?.uri ?? "?"}: ${removeErr?.message ?? removeErr}`
+        )
       }
       return false
     }

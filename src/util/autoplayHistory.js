@@ -23,7 +23,7 @@ export function youtubeVideoIdFromUri(uri) {
       const id = u.pathname.replace(/^\//, "").split("/")[0]
       return id || null
     }
-    if (host.includes("youtube.com")) {
+    if (host === "youtube.com" || host.endsWith(".youtube.com")) {
       const v = u.searchParams.get("v")
       if (v) return v
       const m = u.pathname.match(/\/(?:embed|shorts|live)\/([^/?]+)/)
@@ -471,6 +471,9 @@ export function isAutoplayRecentlyPlayed(player, info) {
 }
 
 /**
+ * Clears session autoplay “recently played” state.
+ * Also clears legacy key "autoplayRecent" (older single-string format) so mixed-version deploys do not leave stale data.
+ * TODO: remove the autoplayRecent line after 2026-09-01 if no production players still carry that key.
  * @param {import("lavalink-client").Player} player
  */
 export function clearAutoplayRecent(player) {

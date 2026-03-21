@@ -243,8 +243,10 @@ export async function handleControlButtonInteraction(interaction, client) {
         break
       }
       case "control_skip": {
-        if (!player.queue.current) {
-          client.warn("[ControlButtonHandler] Skip clicked but no current track was playing.")
+        if (!player.queue.current && player.queue.tracks.length === 0) {
+          client.warn(
+            "[ControlButtonHandler] Skip clicked but no current track and no queued tracks."
+          )
           await interaction.followUp({
             content: "Nothing is currently playing to skip.",
           })
