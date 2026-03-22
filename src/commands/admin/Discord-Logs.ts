@@ -10,6 +10,7 @@ import type {
   DiscordLogLevelName,
   GuildDiscordLogSettings,
   GuildSettings,
+  GuildSettingsStore,
 } from "../../types/index.js"
 import {
   discordLogLevelAllowed,
@@ -43,6 +44,44 @@ function applyNormalizedDiscordLog(next: GuildDiscordLogSettings, guildRow: Guil
   } else {
     delete guildRow.discordLog
   }
+}
+
+/** Copy of `discordLog` safe to mutate without affecting the live settings cache. */
+function detachGuildDiscordLog(cfg: GuildDiscordLogSettings | undefined): GuildDiscordLogSettings {
+  if (!cfg) {
+    return {}
+  }
+  return {
+    ...cfg,
+    byLevel: cfg.byLevel ? { ...cfg.byLevel } : undefined,
+  }
+}
+
+/** Copy of a guild row safe to mutate (detached `discordLog` / `byLevel`). */
+function detachGuildRow(row: GuildSettings | undefined): GuildSettings {
+  if (!row) {
+    return {}
+  }
+  const out: GuildSettings = { ...row }
+  if (row.discordLog) {
+    out.discordLog = detachGuildDiscordLog(row.discordLog)
+  }
+  return out
+}
+
+/** New store map with this guild’s row replaced; drops the guild key if `row` is empty. */
+function storeWithGuildRow(
+  store: GuildSettingsStore,
+  guildId: string,
+  row: GuildSettings
+): GuildSettingsStore {
+  const next: GuildSettingsStore = { ...store }
+  if (Object.keys(row).length === 0) {
+    delete next[guildId]
+  } else {
+    next[guildId] = row
+  }
+  return next
 }
 
 function formatConfig(cfg: GuildDiscordLogSettings): string {
@@ -158,13 +197,9 @@ export default {
 
     const sub = interaction.options.getSubcommand()
     const store = getGuildSettings(client)
-    if (!store[guild.id]) {
-      store[guild.id] = {}
-    }
-    const guildRow = store[guild.id]
 
     if (sub === "show") {
-      const cfg = guildRow.discordLog
+      const cfg = store[guild.id]?.discordLog
       if (!cfg) {
         return interaction.reply({
           content:
@@ -180,17 +215,16 @@ export default {
 
     if (sub === "min-level") {
       const raw = interaction.options.getString("level", true)
-      const next: GuildDiscordLogSettings = { ...(guildRow.discordLog ?? {}) }
+      const working = detachGuildRow(store[guild.id])
+      const next = detachGuildDiscordLog(working.discordLog)
       if (raw === "default" || raw === "debug") {
         delete next.minLevel
       } else {
         next.minLevel = raw as DiscordLogLevelName
       }
-      applyNormalizedDiscordLog(next, guildRow)
-      if (Object.keys(guildRow).length === 0) {
-        delete store[guild.id]
-      }
-      const ok = saveGuildSettings(store, client)
+      applyNormalizedDiscordLog(next, working)
+      const nextStore = storeWithGuildRow(store, guild.id, working)
+      const ok = saveGuildSettings(nextStore, client)
       if (!ok) {
         return interaction.reply({
           content: "Could not save settings to disk. Check that `storage/` is writable.",
@@ -208,34 +242,35 @@ export default {
 
     if (sub === "unset") {
       const target = interaction.options.getString("target", true)
-      const current = guildRow.discordLog
+      const working = detachGuildRow(store[guild.id])
+      const current = working.discordLog
       if (!current) {
         return interaction.reply({
           content: "Nothing to unset — Discord logging is not configured.",
           flags: [MessageFlags.Ephemeral],
         })
       }
-      const next: GuildDiscordLogSettings = { ...current }
       if (target === "everything") {
-        delete guildRow.discordLog
+        delete working.discordLog
       } else if (target === "all") {
+        const next = detachGuildDiscordLog(current)
         delete next.allChannelId
-        applyNormalizedDiscordLog(next, guildRow)
+        applyNormalizedDiscordLog(next, working)
       } else if (target === "min-level") {
+        const next = detachGuildDiscordLog(current)
         delete next.minLevel
-        applyNormalizedDiscordLog(next, guildRow)
+        applyNormalizedDiscordLog(next, working)
       } else {
         const lvl = target as DiscordLogLevelName
+        const next = detachGuildDiscordLog(current)
         if (next.byLevel?.[lvl]) {
           delete next.byLevel[lvl]
         }
-        applyNormalizedDiscordLog(next, guildRow)
+        applyNormalizedDiscordLog(next, working)
       }
 
-      if (Object.keys(guildRow).length === 0) {
-        delete store[guild.id]
-      }
-      const ok = saveGuildSettings(store, client)
+      const nextStore = storeWithGuildRow(store, guild.id, working)
+      const ok = saveGuildSettings(nextStore, client)
       if (!ok) {
         return interaction.reply({
           content: "Could not save settings to disk. Check that `storage/` is writable.",
@@ -284,7 +319,8 @@ export default {
         })
       }
 
-      const next: GuildDiscordLogSettings = { ...guildRow.discordLog }
+      const working = detachGuildRow(store[guild.id])
+      const next = detachGuildDiscordLog(working.discordLog)
       const channelId = channel.id
       if (scope === "all") {
         next.allChannelId = channelId
@@ -293,8 +329,9 @@ export default {
         next.byLevel = { ...next.byLevel, [lvl]: channelId }
       }
 
-      guildRow.discordLog = normalizeDiscordLog(next) ?? next
-      const ok = saveGuildSettings(store, client)
+      applyNormalizedDiscordLog(next, working)
+      const nextStore = storeWithGuildRow(store, guild.id, working)
+      const ok = saveGuildSettings(nextStore, client)
       if (!ok) {
         return interaction.reply({
           content: "Could not save settings to disk. Check that `storage/` is writable.",

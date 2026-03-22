@@ -21,6 +21,56 @@ const MAX_EMBED_DESC = 3900
 
 const TRUNCATE_SUFFIX = "\n… (truncated)"
 
+/** Max queued Discord forwards; oldest entries are dropped when full. */
+const DISCORD_LOG_FORWARD_QUEUE_CAP = 200
+
+type DiscordLogForwardJob = {
+  client: BotClient
+  level: DiscordLogLevelName
+  message: string
+}
+
+const discordLogForwardQueue: DiscordLogForwardJob[] = []
+let discordLogForwardWorkerActive = false
+
+function enqueueDiscordLogForward(job: DiscordLogForwardJob): void {
+  while (discordLogForwardQueue.length >= DISCORD_LOG_FORWARD_QUEUE_CAP) {
+    discordLogForwardQueue.shift()
+  }
+  const last = discordLogForwardQueue[discordLogForwardQueue.length - 1]
+  if (
+    last &&
+    last.client === job.client &&
+    last.level === job.level &&
+    last.message === job.message
+  ) {
+    return
+  }
+  discordLogForwardQueue.push(job)
+}
+
+async function runDiscordLogForwardWorker(): Promise<void> {
+  if (discordLogForwardWorkerActive) {
+    return
+  }
+  discordLogForwardWorkerActive = true
+  try {
+    while (discordLogForwardQueue.length > 0) {
+      const item = discordLogForwardQueue.shift()!
+      try {
+        await forwardLogToDiscordChannels(item.client, item.level, item.message)
+      } catch (err: unknown) {
+        console.error("[discordLogForward] Failed to forward log:", err)
+      }
+    }
+  } finally {
+    discordLogForwardWorkerActive = false
+    if (discordLogForwardQueue.length > 0) {
+      void runDiscordLogForwardWorker()
+    }
+  }
+}
+
 /** Resolves the text channel id to send `level` to, or null if this guild has no target for that level. */
 export function resolveDiscordLogChannelId(
   cfg: GuildDiscordLogSettings,
@@ -112,11 +162,8 @@ export function scheduleDiscordLogForward(
   level: DiscordLogLevelName,
   message: string
 ): void {
-  setImmediate(() => {
-    void forwardLogToDiscordChannels(client, level, message).catch((err: unknown) => {
-      console.error("[discordLogForward] Failed to forward log:", err)
-    })
-  })
+  enqueueDiscordLogForward({ client, level, message })
+  void runDiscordLogForwardWorker()
 }
 
 /** Attaches the Discord forwarder to the process logger (idempotent). */
