@@ -31,12 +31,27 @@ export interface Command {
 
 export type EventSetup = (client: BotClient) => void | Promise<void>
 
+/** Severity labels used for Discord log routing (matches the bot logger). */
+export type DiscordLogLevelName = "debug" | "info" | "warn" | "error"
+
+/**
+ * Per-guild Discord log forwarding: one channel for all levels (`allChannelId`) and/or
+ * overrides per level (`byLevel`). `minLevel` drops lower severities before any channel is chosen.
+ */
+export interface GuildDiscordLogSettings {
+  allChannelId?: string
+  byLevel?: Partial<Record<DiscordLogLevelName, string>>
+  minLevel?: DiscordLogLevelName
+}
+
 /** Per-guild fields persisted in `storage/guild_settings.json`. */
 export interface GuildSettings {
   controlChannelId?: string
   controlMessageId?: string
   /** Optional per-guild cap for the downloads folder (MB). */
   downloadsMaxMb?: number
+  /** Optional forwarding of bot log lines to Discord channels in this guild. */
+  discordLog?: GuildDiscordLogSettings
 }
 
 /** Map of Discord guild id → settings for that guild. */
@@ -81,6 +96,11 @@ export interface DownloadFileMetadata {
 
 export type DownloadsMetadataStore = Record<string, DownloadFileMetadata>
 
+export type DiscordLogForwarder = (
+  level: DiscordLogLevelName,
+  message: string
+) => void
+
 export interface LoggerInterface {
   info(text: string, ...args: unknown[]): void
   warn(text: string, ...args: unknown[]): void
@@ -89,4 +109,6 @@ export interface LoggerInterface {
   setDebugEnabled(enabled: boolean): void
   getDebugEnabled(): boolean
   getLogFilePath(): string | null
+  /** When set, each log line is forwarded (e.g. to Discord) after console/file logging. */
+  setDiscordForwarder?(callback: DiscordLogForwarder | null): void
 }

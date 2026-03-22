@@ -113,6 +113,7 @@ jobs:
           username: ${{ secrets.DEPLOY_SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.DEPLOY_SERVER_SSH_PORT }}
+          # Production stack only — do not add docker-compose.dev.yml (local bind mounts / Dockerfile.dev).
           source: ".env,docker-compose.yml"
           target: "/home/bot/"
 
