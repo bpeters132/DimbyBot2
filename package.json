@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "start": "node dist/index.js",
-    "dev": "concurrently -k \"tsc -w --preserveWatchOutput\" \"nodemon\"",
+    "dev": "yarn build && concurrently -k \"tsc -w --preserveWatchOutput\" \"nodemon\"",
     "docker:dev:build": "docker compose -f docker-compose.yml -f docker-compose.dev.yml build",
     "docker:dev:up": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d",
     "docker:dev:down": "docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v",

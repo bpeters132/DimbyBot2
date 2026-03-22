@@ -1,3 +1,5 @@
+# Local development overrides merged with docker-compose.yml (e.g. dev-env.sh, Makefile, yarn docker:dev:*).
+# Production deploy (.github/workflows/deploy.yml) copies only docker-compose.yml — this file is never used on the server.
 services:
   dimbybot:
     build:
@@ -10,6 +12,10 @@ services:
       # Note: Exclude node_modules to use the ones installed in the container
       - ./:/app
       - /app/node_modules # Anonymous volume to prevent local node_modules overwrite
+      # Override dimbybot-storage from docker-compose.yml: otherwise /app/storage is a named
+      # volume and `compose down -v` removes guild_settings.json (incl. discord-log routes).
+      # Do not bind ./downloads here — Lavalink still uses the shared dimbybot-downloads volume.
+      - ./storage:/app/storage
     environment:
       # Ensure NODE_ENV is set for development if needed by any libs
       - NODE_ENV=development
@@ -29,4 +35,4 @@ services:
 # Keep volumes definition if it's not already in the base file or needs overrides
 # volumes:
 #   postgres-data:
-#   node_modules: 
+#   node_modules:

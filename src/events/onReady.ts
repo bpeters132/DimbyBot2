@@ -1,5 +1,6 @@
 import { ActivityType } from "discord.js"
 import type BotClient from "../lib/BotClient.js"
+import { attachDiscordLogForwarding } from "../util/discordLogForward.js"
 import { refreshAllControlMessages } from "./handlers/handleControlChannel.js"
 
 export default async (client: BotClient) => {
@@ -13,6 +14,12 @@ export default async (client: BotClient) => {
     client.lavalink.init({ id: user.id, username: user.username })
 
     client.info(`Logged in as ${user.tag}! (${user.id})`)
+
+    try {
+      attachDiscordLogForwarding(client)
+    } catch (err: unknown) {
+      client.error("[onReady] attachDiscordLogForwarding failed:", err)
+    }
 
     refreshAllControlMessages(client).catch((err: unknown) =>
       client.error("[ControlHandler] refreshAllControlMessages failed:", err)

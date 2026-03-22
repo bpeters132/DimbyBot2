@@ -1,6 +1,6 @@
 import winston from "winston"
 import colors from "colors"
-import type { LoggerInterface } from "../types/index.js"
+import type { DiscordLogForwarder, DiscordLogLevelName, LoggerInterface } from "../types/index.js"
 
 /**
  * A simple logger class that logs to both the console with colors and a file.
@@ -9,6 +9,7 @@ export default class Logger implements LoggerInterface {
   private logFilePath: string | null
   private debugEnabled: boolean
   private logger: winston.Logger
+  private discordForwarder: DiscordLogForwarder | null = null
 
   constructor(file?: string) {
     this.logFilePath = file ?? null
@@ -62,6 +63,21 @@ export default class Logger implements LoggerInterface {
     return this.logFilePath
   }
 
+  setDiscordForwarder(callback: DiscordLogForwarder | null) {
+    this.discordForwarder = callback
+  }
+
+  private _notifyDiscord(level: DiscordLogLevelName, fullMessage: string) {
+    if (!this.discordForwarder) {
+      return
+    }
+    try {
+      this.discordForwarder(level, fullMessage)
+    } catch (err: unknown) {
+      console.error("[Logger] discordForwarder threw (swallowed):", err)
+    }
+  }
+
   private _getTimestamp() {
     const d = new Date()
     const y = d.getFullYear()
@@ -95,6 +111,7 @@ export default class Logger implements LoggerInterface {
     const fullMessage = text + (messageArgs ? " " + messageArgs : "")
     this.logger.info(fullMessage)
     console.log(colors.gray(this._getTimestamp()) + colors.green(` | INFO | ${fullMessage}`))
+    this._notifyDiscord("info", fullMessage)
   }
 
   warn(text: string, ...args: unknown[]) {
@@ -102,6 +119,7 @@ export default class Logger implements LoggerInterface {
     const fullMessage = text + (messageArgs ? " " + messageArgs : "")
     this.logger.warn(fullMessage)
     console.log(colors.gray(this._getTimestamp()) + colors.yellow(` | WARN | ${fullMessage}`))
+    this._notifyDiscord("warn", fullMessage)
   }
 
   error(text: string, ...args: unknown[]) {
@@ -114,6 +132,7 @@ export default class Logger implements LoggerInterface {
       this.logger.error(fullMessage)
     }
     console.log(colors.gray(this._getTimestamp()) + colors.red(` | ERROR | ${fullMessage}`))
+    this._notifyDiscord("error", fullMessage)
   }
 
   debug(text: string, ...args: unknown[]) {
@@ -124,5 +143,6 @@ export default class Logger implements LoggerInterface {
     const fullMessage = text + (messageArgs ? " " + messageArgs : "")
     this.logger.debug(fullMessage)
     console.log(colors.gray(this._getTimestamp()) + colors.magenta(` | DEBUG | ${fullMessage}`))
+    this._notifyDiscord("debug", fullMessage)
   }
 }

@@ -23,6 +23,11 @@ RUN yarn install
 # Copy the rest of the application code (will be overridden by mounts in dev)
 COPY . .
 
+# Compile TypeScript so `docker compose build` fails on TS errors and the image
+# is coherent. At runtime `./:/app` replaces /app; `yarn dev` still runs `yarn build`
+# first so dist/ always matches the mounted source.
+RUN yarn build
+
 # Copy the entrypoint script outside /app so the dev bind mount
 # does not overwrite it with the host copy.
 COPY --chmod=755 entrypoint.sh /usr/local/bin/dimbybot-entrypoint.sh

@@ -8,7 +8,7 @@ const __dirname = import.meta.dirname
 const storageDir = path.join(__dirname, "..", "..", "storage")
 const settingsFile = path.join(storageDir, "guild_settings.json")
 
-/** In-memory store so handlers see updates even when disk write fails; synced from disk once at cold start. */
+/** In-memory store; synced from disk once at cold start. Updated only after a successful save. */
 let guildSettingsCache: GuildSettingsStore | null = null
 
 function getLogger(logger: Partial<LoggerInterface> | undefined): LoggerInterface {
@@ -89,7 +89,7 @@ function readGuildSettingsFromDisk(loggerInstance?: Partial<LoggerInterface>): G
 
 /**
  * Returns the mutable guild settings map, loading from disk on first use in this process.
- * Callers must use this same object with {@link saveGuildSettings} so updates stay consistent.
+ * After a successful {@link saveGuildSettings}, the cache is replaced by the object that was saved.
  */
 export function getGuildSettings(loggerInstance?: Partial<LoggerInterface>): GuildSettingsStore {
   if (guildSettingsCache === null) {
@@ -99,7 +99,7 @@ export function getGuildSettings(loggerInstance?: Partial<LoggerInterface>): Gui
 }
 
 /**
- * Persists guild settings to disk. Keeps the in-memory cache aligned with `settings`.
+ * Persists guild settings to disk. On success, replaces the in-memory cache with `settings`.
  * @returns whether the file was written successfully
  */
 export function saveGuildSettings(
@@ -107,12 +107,12 @@ export function saveGuildSettings(
   loggerInstance?: Partial<LoggerInterface>
 ): boolean {
   const logger = getLogger(loggerInstance)
-  guildSettingsCache = settings
   ensureStorageDir(loggerInstance)
   logger.debug(`[guildSettings] Attempting to save settings to: ${settingsFile}`)
   try {
     const data = JSON.stringify(settings, null, 4)
     fs.writeFileSync(settingsFile, data, "utf8")
+    guildSettingsCache = settings
     logger.debug(`[guildSettings] Successfully saved settings to: ${settingsFile}`)
     return true
   } catch (error: unknown) {
