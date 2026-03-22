@@ -131,7 +131,7 @@ export default {
         )
         const controlMessage = await targetChannel.send({
           embeds: [controlEmbed],
-          components: [controlButtons],
+          components: controlButtons,
         })
         client.debug(`[Control-Channel] Sent new control message ${controlMessage.id}.`)
 

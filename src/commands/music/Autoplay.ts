@@ -3,7 +3,7 @@ import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 
-import { clearAutoplayRecent, seedAutoplayHistoryFromPlayer } from "../../util/autoplayHistory.js"
+import { toggleAutoplay } from "../../util/autoplayHistory.js"
 import { updateControlMessage } from "../../events/handlers/handleControlChannel.js"
 
 export default {
@@ -41,14 +41,7 @@ export default {
       })
     }
 
-    const current = !!player.get("autoplay")
-    player.set("autoplay", !current)
-    const enabled = !current
-    if (!enabled) {
-      clearAutoplayRecent(player)
-    } else {
-      seedAutoplayHistoryFromPlayer(player)
-    }
+    const enabled = toggleAutoplay(player)
 
     await interaction.reply({
       content: enabled ? "Autoplay is now **enabled**." : "Autoplay is now **disabled**.",

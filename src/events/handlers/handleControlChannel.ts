@@ -115,13 +115,12 @@ export function createControlEmbed(client: BotClient, player: Player | null | un
 }
 
 /**
- * Creates the action row with buttons for the player control message.
- * @param {import("../../lib/BotClient").default} client The bot client instance for logging.
- * @param {import("lavalink-client").Player | null | undefined} player The Lavalink player (if any).
- * @returns {ActionRowBuilder<ButtonBuilder>} The created action row.
+ * Creates action rows for the player control message (max 5 buttons per row; autoplay is on row 2).
  */
-// Pass client for logging
-export function createControlButtons(client: BotClient, player: Player | null | undefined) {
+export function createControlButtons(
+  client: BotClient,
+  player: Player | null | undefined
+): ActionRowBuilder<ButtonBuilder>[] {
   client.debug(
     `[ControlHandler] Creating control buttons. Player state: ${player ? `Playing: ${player.playing}, Current: ${!!player.queue?.current}, Queue Size: ${player.queue?.tracks?.length ?? 0}` : "null"}`
   )
@@ -159,19 +158,32 @@ export function createControlButtons(client: BotClient, player: Player | null | 
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(!hasCurrent && !hasQueue)
 
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const mainRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     playPauseButton,
     stopButton,
     skipButton,
     shuffleButton,
     loopButton
   )
-  client.debug(
-    `[guildSettings] Control buttons created. Button labels: ${row.components
-      .map((c) => ("data" in c && c.data && "label" in c.data ? String((c.data as { label?: string }).label ?? "") : "?"))
-      .join(", ")}`
-  )
-  return row
+
+  const autoplayOn = Boolean(player?.get?.("autoplay"))
+  const autoplayButton = new ButtonBuilder()
+    .setCustomId("control_autoplay")
+    .setLabel(autoplayOn ? "Autoplay: On" : "Autoplay: Off")
+    .setStyle(autoplayOn ? ButtonStyle.Success : ButtonStyle.Secondary)
+    .setDisabled(!player)
+
+  const autoplayRow = new ActionRowBuilder<ButtonBuilder>().addComponents(autoplayButton)
+
+  const rows = [mainRow, autoplayRow]
+  const labels = rows
+    .flatMap((r) => r.components)
+    .map((c) =>
+      "data" in c && c.data && "label" in c.data ? String((c.data as { label?: string }).label ?? "") : "?"
+    )
+    .join(", ")
+  client.debug(`[guildSettings] Control buttons created. Button labels: ${labels}`)
+  return rows
 }
 
 /**
@@ -303,7 +315,7 @@ export async function updateControlMessage(client: BotClient, guildId: string) {
     const updatedEmbed = createControlEmbed(client, player)
     const updatedButtons = createControlButtons(client, player)
 
-    await controlMessage.edit({ embeds: [updatedEmbed], components: [updatedButtons] })
+    await controlMessage.edit({ embeds: [updatedEmbed], components: updatedButtons })
     client.debug(
       `[ControlHandler] Successfully edited control message ${controlMessage.id} in guild ${guildId}`
     )
@@ -324,5 +336,23 @@ export async function updateControlMessage(client: BotClient, guildId: string) {
     } else {
       client.error(`[ControlHandler] Failed to update control message for guild ${guildId}:`, error)
     }
+  }
+}
+
+/**
+ * Re-edits every guild control message so new buttons/layout apply without `/control-channel set`.
+ * Called once after login; staggered to reduce rate limits.
+ */
+export async function refreshAllControlMessages(client: BotClient): Promise<void> {
+  const store = getGuildSettings(client)
+  const guildIds = Object.keys(store).filter(
+    (id) => store[id]?.controlChannelId && store[id]?.controlMessageId
+  )
+  client.info(`[ControlHandler] Refreshing ${guildIds.length} control message(s) after startup.`)
+  for (const gid of guildIds) {
+    await updateControlMessage(client, gid).catch((err: unknown) =>
+      client.warn(`[ControlHandler] Startup refresh failed for guild ${gid}: ${err}`)
+    )
+    await sleep(400)
   }
 }
