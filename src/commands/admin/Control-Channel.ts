@@ -140,7 +140,13 @@ export default {
         client.debug(
           `[Control-Channel] Saving new settings for guild ${guild.id}: Channel ${targetChannel.id}, Message ${controlMessage.id}.`
         )
-        saveGuildSettings(guildSettings, client)
+        const persisted = saveGuildSettings(guildSettings, client)
+        if (!persisted) {
+          return interaction.reply({
+            content:
+              `Posted the control message in ${targetChannel}, but **could not save settings to disk** (check that \`/app/storage\` is writable in Docker). Controls work until the bot restarts; fix volume permissions and run \`/control-channel set\` again.`,
+          })
+        }
 
         return interaction.reply({
           content: `Set ${targetChannel} as the music control channel. The control message has been created.`,
@@ -210,8 +216,17 @@ export default {
         client.debug(`[Control-Channel] Removing empty settings entry for guild ${guild.id}.`)
         delete guildSettings[guild.id]
       }
-      saveGuildSettings(guildSettings, client)
-      client.debug(`[Control-Channel] Saved settings after unset for guild ${guild.id}.`)
+      const persisted = saveGuildSettings(guildSettings, client)
+      client.debug(
+        `[Control-Channel] Persist settings after unset for guild ${guild.id}: ${persisted ? "ok" : "failed"}.`
+      )
+
+      if (!persisted) {
+        return interaction.reply({
+          content:
+            "Removed the control channel in memory, but **could not save** `guild_settings.json`. After a restart the old channel may return until `/app/storage` is writable.",
+        })
+      }
 
       return interaction.reply({
         content: "Music control channel configuration removed.",

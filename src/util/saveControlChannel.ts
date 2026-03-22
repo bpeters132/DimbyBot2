@@ -8,6 +8,9 @@ const __dirname = import.meta.dirname
 const storageDir = path.join(__dirname, "..", "..", "storage")
 const settingsFile = path.join(storageDir, "guild_settings.json")
 
+/** In-memory store so handlers see updates even when disk write fails; synced from disk once at cold start. */
+let guildSettingsCache: GuildSettingsStore | null = null
+
 function getLogger(logger: Partial<LoggerInterface> | undefined): LoggerInterface {
   if (
     logger &&
@@ -59,10 +62,7 @@ export function ensureStorageDir(loggerInstance?: Partial<LoggerInterface>) {
   }
 }
 
-/**
- * Reads and parses the guild settings from the JSON file.
- */
-export function getGuildSettings(loggerInstance?: Partial<LoggerInterface>): GuildSettingsStore {
+function readGuildSettingsFromDisk(loggerInstance?: Partial<LoggerInterface>): GuildSettingsStore {
   const logger = getLogger(loggerInstance)
   ensureStorageDir(loggerInstance)
   logger.debug(`[guildSettings] Attempting to read settings from: ${settingsFile}`)
@@ -73,14 +73,12 @@ export function getGuildSettings(loggerInstance?: Partial<LoggerInterface>): Gui
       if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
         logger.debug(`[guildSettings] Successfully read and parsed settings file.`)
         return parsed as GuildSettingsStore
-      } else {
-        logger.warn(`[guildSettings] Parsed settings file is not a valid object.`)
-        return {}
       }
-    } else {
-      logger.debug(`[guildSettings] Settings file does not exist.`)
+      logger.warn(`[guildSettings] Parsed settings file is not a valid object.`)
       return {}
     }
+    logger.debug(`[guildSettings] Settings file does not exist.`)
+    return {}
   } catch (error: unknown) {
     logger.error(
       `[guildSettings] Error reading or parsing guild settings from ${settingsFile}: ${error}`
@@ -90,20 +88,35 @@ export function getGuildSettings(loggerInstance?: Partial<LoggerInterface>): Gui
 }
 
 /**
- * Saves the provided guild settings object to the JSON file.
+ * Returns the mutable guild settings map, loading from disk on first use in this process.
+ * Callers must use this same object with {@link saveGuildSettings} so updates stay consistent.
+ */
+export function getGuildSettings(loggerInstance?: Partial<LoggerInterface>): GuildSettingsStore {
+  if (guildSettingsCache === null) {
+    guildSettingsCache = readGuildSettingsFromDisk(loggerInstance)
+  }
+  return guildSettingsCache
+}
+
+/**
+ * Persists guild settings to disk. Keeps the in-memory cache aligned with `settings`.
+ * @returns whether the file was written successfully
  */
 export function saveGuildSettings(
   settings: GuildSettingsStore,
   loggerInstance?: Partial<LoggerInterface>
-) {
+): boolean {
   const logger = getLogger(loggerInstance)
+  guildSettingsCache = settings
   ensureStorageDir(loggerInstance)
   logger.debug(`[guildSettings] Attempting to save settings to: ${settingsFile}`)
   try {
     const data = JSON.stringify(settings, null, 4)
     fs.writeFileSync(settingsFile, data, "utf8")
     logger.debug(`[guildSettings] Successfully saved settings to: ${settingsFile}`)
+    return true
   } catch (error: unknown) {
     logger.error(`[guildSettings] Error writing guild settings to ${settingsFile}: ${error}`)
+    return false
   }
 }

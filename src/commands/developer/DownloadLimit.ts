@@ -101,7 +101,14 @@ export default {
     if (subcommand === "set") {
       const sizeMb = interaction.options.getNumber("size_mb", true)
       settings[targetGuildId].downloadsMaxMb = sizeMb
-      saveGuildSettings(settings, client)
+      const ok = saveGuildSettings(settings, client)
+      if (!ok) {
+        client.error("[DownloadLimit] Failed to persist guild_settings.json after set.")
+        return interaction.reply({
+          content: `Updated limit in memory for guild ${targetGuildId} to ${sizeMb}MB, but **could not save** settings to disk.`,
+          flags: [MessageFlags.Ephemeral],
+        })
+      }
       return interaction.reply({
         content: `Set download limit for guild ${targetGuildId} to ${sizeMb}MB.`,
         flags: [MessageFlags.Ephemeral],
@@ -114,7 +121,14 @@ export default {
         if (Object.keys(settings[targetGuildId]).length === 0) {
           delete settings[targetGuildId]
         }
-        saveGuildSettings(settings, client)
+        const ok = saveGuildSettings(settings, client)
+        if (!ok) {
+          client.error("[DownloadLimit] Failed to persist guild_settings.json after clear.")
+          return interaction.reply({
+            content: `Cleared limit in memory for guild ${targetGuildId}, but **could not save** settings to disk.`,
+            flags: [MessageFlags.Ephemeral],
+          })
+        }
       }
       return interaction.reply({
         content: `Cleared custom download limit for guild ${targetGuildId}. Default is ${DEFAULT_MAX_DIR_SIZE_MB}MB.`,

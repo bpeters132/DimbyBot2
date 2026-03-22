@@ -35,7 +35,8 @@ WORKDIR /app
 # Runtime: ffmpeg + Python for the copied venv; yt-dlp venv is built in the builder stage.
 RUN apk add --no-cache \
     python3 \
-    ffmpeg
+    ffmpeg \
+    su-exec
 
 COPY --from=builder /opt/venv /opt/venv
 RUN ln -sf /opt/venv/bin/yt-dlp /usr/bin/yt-dlp
@@ -61,8 +62,7 @@ RUN apk add --no-cache dos2unix \
     && apk del dos2unix \
     && chown -R node:node /app
 
-USER node
-
+# Run as root so entrypoint can chown the mounted storage volume, then drop to `node` via su-exec.
 ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
 
 # No HTTP /health on this Discord bot; probe PID 1 cmdline (Node after exec) with a short interval.

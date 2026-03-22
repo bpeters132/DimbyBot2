@@ -6,7 +6,7 @@ WORKDIR /app
 # Install yt-dlp and its dependencies (always latest from pip)
 # Also install build tools needed for native Node.js modules
 # Use pipx to install yt-dlp to avoid PEP 668 issues
-RUN apk add --no-cache python3 py3-pip ffmpeg build-base autoconf automake libtool g++ pipx \
+RUN apk add --no-cache python3 py3-pip ffmpeg build-base autoconf automake libtool g++ pipx su-exec \
     && pipx install yt-dlp \
     && (pipx ensurepath || true) \
     # Optionally, create a symlink if yt-dlp installed by pipx isn't automatically in the default PATH 
