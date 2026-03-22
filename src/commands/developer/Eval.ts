@@ -4,8 +4,19 @@ import type BotClient from "../../lib/BotClient.js"
 
 import { inspect } from "util" // Used for formatting output
 import { Buffer } from "node:buffer" // For creating file buffers
+import { createHash } from "node:crypto"
 
 const MAX_FIELD_LENGTH = 1024 // Discord embed field limit
+
+/** Non-reversible fingerprint for correlating eval logs without storing the raw snippet. */
+function evalCodeFingerprint(code: string, userTag: string): string {
+  return createHash("sha256").update(`${userTag}\0${code}`, "utf8").digest("hex").slice(0, 16)
+}
+
+/** Log-safe line for eval start (never includes the raw code). */
+function evalCodeLogFingerprint(code: string, userTag: string): string {
+  return `[EvalCmd] Developer ${userTag} executing code [redacted] fingerprint=${evalCodeFingerprint(code, userTag)}`
+}
 
 /** Collects sensitive values from the client and environment for redaction. */
 function getSensitiveValues(client: BotClient): Map<string, string> {
@@ -58,7 +69,7 @@ export default {
     // --- End Developer Check ---
 
     const code = interaction.options.getString("code", true)
-    client.debug(`[EvalCmd] Developer ${interaction.user.tag} executing code: ${code}`)
+    client.debug(evalCodeLogFingerprint(code, interaction.user.tag))
 
     await interaction.deferReply({ 
       flags: [MessageFlags.Ephemeral] 
@@ -116,7 +127,10 @@ export default {
       await interaction.editReply(replyOptions)
 
     } catch (err: unknown) {
-      client.error(`[EvalCmd] Error executing code: ${code}`, err)
+      client.error(
+        `[EvalCmd] Error executing code [redacted] user=${interaction.user.tag} fingerprint=${evalCodeFingerprint(code, interaction.user.tag)}`,
+        err
+      )
       const e = err instanceof Error ? err : new Error(String(err))
       let errorString = e.stack || e.toString() // Get stack trace if available
       errorString = redact(errorString) // Redact sensitive info from error
@@ -141,7 +155,7 @@ export default {
         const attachment = new AttachmentBuilder(errorBuffer, { name: 'eval_error.txt' })
         replyOptions.files.push(attachment)
       } else {
-        errorEmbed.addFields({ name: "Error", value: `\`\`\`xl\n${errorString}\n\`\`\`` })
+        errorEmbed.addFields({ name: "Error", value: `\`\`\`txt\n${errorString}\n\`\`\`` })
       }
 
       if (code.length > MAX_FIELD_LENGTH - 10) {

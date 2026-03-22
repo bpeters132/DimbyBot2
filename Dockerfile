@@ -32,16 +32,13 @@ FROM node:22-alpine3.22
 
 WORKDIR /app
 
-COPY docker/ytdlp-requirements.txt /tmp/ytdlp-requirements.txt
-# Runtime: ffmpeg + yt-dlp only (no compiler toolchain).
+# Runtime: ffmpeg + Python for the copied venv; yt-dlp venv is built in the builder stage.
 RUN apk add --no-cache \
     python3=3.12.12-r0 \
-    py3-pip=25.1.1-r1 \
-    ffmpeg=8.0.1-r1 \
-    && python3 -m venv /opt/venv \
-    && . /opt/venv/bin/activate \
-    && pip3 install --no-cache-dir -r /tmp/ytdlp-requirements.txt \
-    && ln -sf /opt/venv/bin/yt-dlp /usr/bin/yt-dlp
+    ffmpeg=8.0.1-r1
+
+COPY --from=builder /opt/venv /opt/venv
+RUN ln -sf /opt/venv/bin/yt-dlp /usr/bin/yt-dlp
 
 COPY package.json yarn.lock ./
 COPY --from=builder /app/node_modules ./node_modules

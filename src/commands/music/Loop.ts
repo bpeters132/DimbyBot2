@@ -40,6 +40,12 @@ export default {
       return interaction.reply({ content: "There is no player for this guild." })
     }
 
+    if (player.voiceChannelId && player.voiceChannelId !== voiceChannel.id) {
+      return interaction.reply({
+        content: "You must be in the player's voice channel to change repeat mode.",
+      })
+    }
+
     if (!player.playing) {
       return interaction.reply({ content: "There is nothing playing." })
     }

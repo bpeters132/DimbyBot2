@@ -89,8 +89,9 @@ export default {
     if (subcommand === "show") {
       const configured = settings[targetGuildId].downloadsMaxMb
       const parsed = Number(configured ?? Number.NaN)
-      const limit = Number.isFinite(parsed) ? parsed : DEFAULT_MAX_DIR_SIZE_MB
-      const suffix = Number.isFinite(parsed) ? " (custom)" : " (default)"
+      const validCustom = Number.isFinite(parsed) && parsed >= 1
+      const limit = validCustom ? parsed : DEFAULT_MAX_DIR_SIZE_MB
+      const suffix = validCustom ? " (custom)" : " (default)"
       return interaction.reply({
         content: `Download limit for guild ${targetGuildId}: ${limit}MB${suffix}.`,
         flags: [MessageFlags.Ephemeral],

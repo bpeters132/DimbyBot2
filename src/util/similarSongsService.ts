@@ -239,6 +239,8 @@ async function spotifySimilarTracksFromRelatedAndTop(
   }
 
   const seedCtx = await fetchTrackSeedContext(accessToken, seedTrackId, market)
+  const hintLabel = String(artistNameHint || "").trim()
+
   if (!seedCtx.ok) {
     if (seedCtx.httpStatus === 429) {
       return {
@@ -247,6 +249,23 @@ async function spotifySimilarTracksFromRelatedAndTop(
         rateLimited: true,
         httpStatus: 429,
         errorSnippet: seedCtx.errorSnippet,
+      }
+    }
+    if (hintLabel) {
+      const searched = await searchTopTracksByArtistName(accessToken, hintLabel, market)
+      if (searched.ok) {
+        pushFromTracks(searched.tracks)
+      } else if (searched.httpStatus === 429) {
+        return {
+          tracks: out,
+          apiFailed: out.length === 0,
+          rateLimited: true,
+          httpStatus: 429,
+          errorSnippet: searched.errorSnippet,
+        }
+      }
+      if (out.length > 0) {
+        return { tracks: out, apiFailed: false, rateLimited: false }
       }
     }
     return {
@@ -260,9 +279,26 @@ async function spotifySimilarTracksFromRelatedAndTop(
 
   const { artistIds, primaryArtistName } = seedCtx
   const primaryArtistId = artistIds[0]
-  const artistLabel = primaryArtistName || String(artistNameHint || "").trim()
+  const artistLabel = primaryArtistName || hintLabel
 
   if (!primaryArtistId) {
+    if (artistLabel) {
+      const searched = await searchTopTracksByArtistName(accessToken, artistLabel, market)
+      if (searched.ok) {
+        pushFromTracks(searched.tracks)
+      } else if (searched.httpStatus === 429) {
+        return {
+          tracks: out,
+          apiFailed: out.length === 0,
+          rateLimited: true,
+          httpStatus: 429,
+          errorSnippet: searched.errorSnippet,
+        }
+      }
+    }
+    if (out.length > 0) {
+      return { tracks: out, apiFailed: false, rateLimited: false }
+    }
     return {
       tracks: [],
       apiFailed: true,
@@ -514,6 +550,12 @@ export async function getSimilarTracks(
     if (detail) o.failureDetail = detail
     return o
   }
+  const maxSimilar = 100
+  const defaultLimit = 15
+  const nLimit = Number.isFinite(Number(limit))
+    ? Math.max(1, Math.min(maxSimilar, Math.floor(Number(limit))))
+    : defaultLimit
+
   const a = String(artist).trim()
   const t = String(trackName).trim()
   if (!a || !t) return empty("missing_artist_or_title")
@@ -531,7 +573,7 @@ export async function getSimilarTracks(
         spotifyNotes.push("spotify_track_lookup_failed")
       } else {
         const { tracks, apiFailed, rateLimited, httpStatus, errorSnippet } =
-          await spotifySimilarTracksFromRelatedAndTop(token, trackId, market, limit, a)
+          await spotifySimilarTracksFromRelatedAndTop(token, trackId, market, nLimit, a)
 
         if (rateLimited) spotifyNotes.push("spotify_rate_limited")
         if (tracks.length > 0) return { tracks }
@@ -548,7 +590,7 @@ export async function getSimilarTracks(
     spotifyNotes.push("no_spotify_credentials")
   }
 
-  const mb = await getMusicBrainzSimilarTracks(a, t, limit)
+  const mb = await getMusicBrainzSimilarTracks(a, t, nLimit)
   if (mb.tracks.length > 0) return { tracks: mb.tracks }
 
   const detail = [...spotifyNotes, mb.failure, mb.failureDetail].filter(Boolean).join(" | ")

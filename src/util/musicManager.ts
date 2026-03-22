@@ -492,7 +492,7 @@ export async function handleQueryAndPlay(
         }
 
         const loadT = searchResult?.loadType as string | undefined
-        if (!searchResult || loadT === "LOAD_FAILED" || loadT === "NO_MATCHES") {
+        if (!searchResult) {
             client.warn(
                 `[MusicManager] All Lavalink search attempts failed for query "${query}". Attempts: ${JSON.stringify(searchAttempts)}`
             )
@@ -526,10 +526,7 @@ export async function handleQueryAndPlay(
             case "track":
             case "TRACK_LOADED": {
                 trackToAdd = searchResult.tracks[0]
-                client.debug(
-                    `[MusicManager] Loaded single track: ${trackToAdd.info.title}. Adding to queue.`
-                )
-                player.queue.add(trackToAdd)
+                client.debug(`[MusicManager] Loaded single track: ${trackToAdd.info.title}. Will enqueue after connection.`)
                 if (!feedbackText)
                     feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`
                 success = true
@@ -539,9 +536,8 @@ export async function handleQueryAndPlay(
             case "search": {
                 trackToAdd = searchResult.tracks[0]
                 client.debug(
-                    `[MusicManager] Found search result: ${trackToAdd.info.title}. Adding first track to queue.`
+                    `[MusicManager] Found search result: ${trackToAdd.info.title}. Will enqueue first match after connection.`
                 )
-                player.queue.add(trackToAdd)
                 if (!feedbackText)
                     feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`
                 success = true
@@ -550,9 +546,8 @@ export async function handleQueryAndPlay(
             case "PLAYLIST_LOADED":
             case "playlist":
                 client.debug(
-                    `[MusicManager] Loaded playlist: ${searchResult.playlist?.name} (${searchResult.tracks.length} tracks). Adding to queue.`
+                    `[MusicManager] Loaded playlist: ${searchResult.playlist?.name} (${searchResult.tracks.length} tracks). Will enqueue after connection.`
                 )
-                player.queue.add(searchResult.tracks)
                 trackToAdd = searchResult.tracks[0]
                 if (!feedbackText)
                     feedbackText = `Added playlist **${searchResult.playlist?.name ?? "Unknown Playlist"}** (${searchResult.tracks.length} songs) to the queue.`
@@ -576,12 +571,23 @@ export async function handleQueryAndPlay(
             `[MusicManager] Search result handling complete. Success: ${success}, Track added: ${!!trackToAdd}. Feedback: "${feedbackText}"`
         )
 
+        const isPlaylistEnqueue = loadT === "PLAYLIST_LOADED" || loadT === "playlist"
         if (success && trackToAdd) {
             client.debug(
-                `[MusicManager] Lavalink track [${trackToAdd.info.title}] to be played. Ensuring player is connected then starting playback.`
+                `[MusicManager] Lavalink track [${trackToAdd.info.title}] to be played. Ensuring player is connected, enqueueing, then starting playback.`
             )
             try {
                 await ensurePlayerConnected(client, player, voiceChannel)
+
+                if (isPlaylistEnqueue && searchResult.tracks.length > 0) {
+                    player.queue.add(searchResult.tracks)
+                    client.debug(
+                        `[MusicManager] Enqueued playlist (${searchResult.tracks.length} tracks) for guild ${guildId}.`
+                    )
+                } else {
+                    player.queue.add(trackToAdd)
+                    client.debug(`[MusicManager] Enqueued single track [${trackToAdd.info.title}].`)
+                }
 
                 client.debug(
                     `[MusicManager] Before play check: player.playing=${player.playing}, player.queue.tracks.length=${player.queue.tracks.length}`

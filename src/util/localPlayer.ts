@@ -16,6 +16,26 @@ import type { ActiveLocalPlayer, LocalFile, LocalPlayerState, QueryPlayResult } 
 const activeLocalPlayers = new Map<string, ActiveLocalPlayer>()
 const pendingLocalPlayGuildIds = new Set<string>()
 
+/** Resolves when Lavalink emits `playerDestroy` for the guild or after `timeoutMs` (teardown handoff). */
+function waitForLavalinkPlayerDestroy(client: BotClient, guildId: string, timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      client.lavalink.off("playerDestroy", onDestroy)
+      resolve()
+    }
+    const onDestroy = (p: Player) => {
+      if (p.guildId !== guildId) return
+      finish()
+    }
+    const timer = setTimeout(finish, timeoutMs)
+    client.lavalink.on("playerDestroy", onDestroy)
+  })
+}
+
 export async function playLocalFile(
   client: BotClient,
   lavalinkPlayer: Player | null | undefined,
@@ -27,6 +47,8 @@ export async function playLocalFile(
   client.debug(
     `[LocalPlayer] Attempting to play local file: "${localFile.title}" in guild ${voiceChannel.guild.id}`
   )
+
+  let postLavalinkHandoff: Promise<void> = new Promise((r) => queueMicrotask(r))
 
   if (lavalinkPlayer) {
     client.debug(
@@ -42,6 +64,8 @@ export async function playLocalFile(
       }
     }
     if (client.lavalink.players.has(voiceChannel.guild.id)) {
+      const gid = voiceChannel.guild.id
+      postLavalinkHandoff = waitForLavalinkPlayerDestroy(client, gid, 2000)
       try {
         client.debug(
           `[LocalPlayer] Attempting to destroy existing Lavalink player for guild ${voiceChannel.guild.id}.`
@@ -83,7 +107,7 @@ export async function playLocalFile(
   pendingLocalPlayGuildIds.add(guildId)
 
   try {
-    await new Promise((resolve) => setTimeout(resolve, 750))
+    await postLavalinkHandoff
 
     if (activeLocalPlayers.has(guildId)) {
       const oldPlayer = activeLocalPlayers.get(guildId)!
