@@ -3,21 +3,27 @@
   "version": "0.2.0",
   "type": "module",
   "description": "A discord bot for friends!",
-  "main": "./src/index.js",
+  "main": "./dist/index.js",
   "scripts": {
-    "start": "node ./src/index.js",
-    "dev": "nodemon ./src/index.js",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "start": "node dist/index.js",
+    "dev": "concurrently -k \"tsc -w --preserveWatchOutput\" \"nodemon\"",
     "docker:dev:build": "docker compose -f docker-compose.yml -f docker-compose.dev.yml build",
     "docker:dev:up": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d",
     "docker:dev:down": "docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v",
-    "docker:dev:rebuild": "npm run docker:dev:down && npm run docker:dev:build && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d",
+    "docker:dev:rebuild": "yarn docker:dev:down && yarn docker:dev:build && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d",
     "docker:dev:logs": "docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f",
-    "deployGlobal": "node ./src/deploy/deployGlobal.js",
-    "destroyGlobal": "node ./src/deploy/destroyGlobal.js",
-    "deployGuild": "node ./src/deploy/deployGuild.js",
-    "destroyGuild": "node ./src/deploy/destroyGuild.js"
+    "deployGlobal": "node ./dist/deploy/deployGlobal.js",
+    "destroyGlobal": "node ./dist/deploy/destroyGlobal.js",
+    "deployGuild": "node ./dist/deploy/deployGuild.js",
+    "destroyGuild": "node ./dist/deploy/destroyGuild.js"
   },
   "license": "MIT",
+  "engines": {
+    "node": ">=20.11.0"
+  },
   "dependencies": {
     "@discordjs/voice": "0.19.0",
     "@snazzah/davey": "^0.1.10",
@@ -34,12 +40,17 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/node": "^22.13.10",
+    "@types/ws": "^8.18.1",
+    "concurrently": "^9.1.2",
     "eslint": "^10.0.3",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
     "globals": "^17.4.0",
     "nodemon": "^3.1.14",
-    "prettier": "3.8.1"
+    "prettier": "3.8.1",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.26.1"
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
   "nodemonConfig": {
@@ -47,6 +58,9 @@
       "storage/*",
       "logs/*"
     ],
-    "ext": "js,json"
+    "watch": ["dist"],
+    "ext": "js,json",
+    "delay": 1000,
+    "exec": "node dist/index.js"
   }
 }

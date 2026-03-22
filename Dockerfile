@@ -1,24 +1,48 @@
-# Use a recent Node.js LTS version
-FROM node:22-alpine
+# Pin Alpine minor so apk version pins stay valid (see builder RUN apk add).
+FROM node:22-alpine3.22 AS builder
 
 WORKDIR /app
 
-# Install yt-dlp and its dependencies (always latest from pip)
-# Also install build tools needed for native Node.js modules
-RUN apk add --no-cache python3 py3-pip ffmpeg build-base autoconf automake libtool g++ \
+COPY docker/ytdlp-requirements.txt /tmp/ytdlp-requirements.txt
+# Native build tools (e.g. sodium) — pinned for reproducibility (Alpine 3.22 / current node:22-alpine).
+RUN apk add --no-cache \
+    python3=3.12.12-r0 \
+    py3-pip=25.1.1-r1 \
+    ffmpeg=8.0.1-r1 \
+    build-base=0.5-r3 \
+    autoconf=2.72-r1 \
+    automake=1.18.1-r0 \
+    libtool=2.5.4-r2 \
+    g++=15.2.0-r2 \
     && python3 -m venv /opt/venv \
     && . /opt/venv/bin/activate \
-    && pip3 install --no-cache-dir yt-dlp \
+    && pip3 install --no-cache-dir -r /tmp/ytdlp-requirements.txt \
     && ln -sf /opt/venv/bin/yt-dlp /usr/bin/yt-dlp
 
-# Copy package files and install dependencies
 COPY package.json yarn.lock ./
-# It's generally better to run `yarn install` *after* installing build deps
-# and *before* copying the rest of the app code to leverage Docker layer caching.
-RUN yarn install --production
+RUN yarn install --frozen-lockfile
 
-# Copy the rest of the application code
 COPY . .
+RUN yarn build \
+    && rm -rf node_modules \
+    && yarn install --production --frozen-lockfile
+
+# --- runtime image ---
+FROM node:22-alpine3.22
+
+WORKDIR /app
+
+# Runtime: ffmpeg + Python for the copied venv; yt-dlp venv is built in the builder stage.
+RUN apk add --no-cache \
+    python3=3.12.12-r0 \
+    ffmpeg=8.0.1-r1
+
+COPY --from=builder /opt/venv /opt/venv
+RUN ln -sf /opt/venv/bin/yt-dlp /usr/bin/yt-dlp
+
+COPY package.json yarn.lock ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
 
 # Runtime environment (inject via compose/K8s; do not bake secrets into the image):
 #   Required for Lavalink: LAVALINK_HOST, LAVALINK_PORT, LAVALINK_PASSWORD, LAVALINK_NODE_ID, LAVALINK_SECURE
@@ -28,14 +52,19 @@ COPY . .
 #   Optional autoplay overrides: SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
 #   MusicBrainz fallback: MUSICBRAINZ_CONTACT or MUSICBRAINZ_CONTACT_URL; MUSICBRAINZ_SIMILAR=off to disable
 
-# Copy the entrypoint script
 COPY entrypoint.sh entrypoint.sh
-# Ensure script has correct line endings (LF) and is executable
-RUN apk add --no-cache dos2unix \
-    && dos2unix entrypoint.sh \
-    && chmod +x entrypoint.sh
+COPY healthcheck.sh healthcheck.sh
+# dos2unix only for CRLF normalization; remove before layer commit so it is not a runtime dependency.
+RUN apk add --no-cache dos2unix=7.5.3-r0 \
+    && dos2unix entrypoint.sh healthcheck.sh \
+    && chmod +x entrypoint.sh healthcheck.sh \
+    && apk del dos2unix \
+    && chown -R node:node /app
 
+USER node
 
-# Run the entrypoint script which generates lavaNodesConfig.js and starts the bot
-# Use absolute path and explicitly invoke sh to bypass shebang issues
 ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
+
+# No HTTP /health on this Discord bot; probe PID 1 cmdline (Node after exec) with a short interval.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+    CMD /bin/sh /app/healthcheck.sh
