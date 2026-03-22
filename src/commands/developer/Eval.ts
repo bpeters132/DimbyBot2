@@ -9,7 +9,7 @@ const MAX_FIELD_LENGTH = 1024 // Discord embed field limit
 
 /** Collects sensitive values from the client and environment for redaction. */
 function getSensitiveValues(client: BotClient): Map<string, string> {
-  const sensitive = new Map() // Use a Map to store value -> placeholder
+  const sensitive = new Map<string, string>()
 
   // Add bot token
   if (client.token && typeof client.token === 'string') {

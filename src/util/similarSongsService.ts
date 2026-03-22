@@ -20,28 +20,59 @@ function getSpotifyMarket() {
   return /^[A-Z]{2}$/.test(up) ? up : "US"
 }
 
-/**
- * @param {string} accessToken
- * @param {string} trackId
- * @param {string} market
- * @returns {Promise<{ artistIds: string[], primaryArtistName: string }>}
- */
-async function fetchTrackSeedContext(accessToken: string, trackId: string, market: string) {
+type TrackSeedContextOk = {
+  ok: true
+  artistIds: string[]
+  primaryArtistName: string
+}
+
+type TrackSeedContextErr = {
+  ok: false
+  artistIds: []
+  primaryArtistName: ""
+  httpStatus?: number
+  errorSnippet?: string
+}
+
+/** Loads seed track artists from Spotify; surfaces HTTP/network failures like the other Spotify helpers. */
+async function fetchTrackSeedContext(
+  accessToken: string,
+  trackId: string,
+  market: string
+): Promise<TrackSeedContextOk | TrackSeedContextErr> {
   try {
     const q = new URLSearchParams({ market })
     const res = await fetch(`${SPOTIFY_API}/tracks/${trackId}?${q}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
-    if (!res.ok) return { artistIds: [], primaryArtistName: "" }
+    if (!res.ok) {
+      const text = await res.text().catch(() => "")
+      return {
+        ok: false,
+        artistIds: [],
+        primaryArtistName: "",
+        httpStatus: res.status,
+        errorSnippet: text.replace(/\s+/g, " ").trim().slice(0, 280),
+      }
+    }
     const data = (await res.json()) as { artists?: { id?: string; name?: string }[] }
     const artists = data?.artists
-    if (!Array.isArray(artists)) return { artistIds: [], primaryArtistName: "" }
+    if (!Array.isArray(artists)) {
+      return { ok: true, artistIds: [], primaryArtistName: "" }
+    }
     const artistIds = artists.map((a) => a?.id).filter((id): id is string => typeof id === "string")
     const n = artists[0]?.name
     const primaryArtistName = typeof n === "string" ? n.trim() : ""
-    return { artistIds, primaryArtistName }
-  } catch {
-    return { artistIds: [], primaryArtistName: "" }
+    return { ok: true, artistIds, primaryArtistName }
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return {
+      ok: false,
+      artistIds: [],
+      primaryArtistName: "",
+      httpStatus: undefined,
+      errorSnippet: msg,
+    }
   }
 }
 
@@ -207,11 +238,27 @@ async function spotifySimilarTracksFromRelatedAndTop(
     return false
   }
 
-  const { artistIds, primaryArtistName } = await fetchTrackSeedContext(
-    accessToken,
-    seedTrackId,
-    market
-  )
+  const seedCtx = await fetchTrackSeedContext(accessToken, seedTrackId, market)
+  if (!seedCtx.ok) {
+    if (seedCtx.httpStatus === 429) {
+      return {
+        tracks: [],
+        apiFailed: true,
+        rateLimited: true,
+        httpStatus: 429,
+        errorSnippet: seedCtx.errorSnippet,
+      }
+    }
+    return {
+      tracks: [],
+      apiFailed: true,
+      rateLimited: false,
+      httpStatus: seedCtx.httpStatus ?? 0,
+      errorSnippet: seedCtx.errorSnippet,
+    }
+  }
+
+  const { artistIds, primaryArtistName } = seedCtx
   const primaryArtistId = artistIds[0]
   const artistLabel = primaryArtistName || String(artistNameHint || "").trim()
 

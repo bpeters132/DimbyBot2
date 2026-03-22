@@ -120,5 +120,11 @@ export default {
         flags: [MessageFlags.Ephemeral],
       })
     }
+
+    client.warn(`[DownloadLimit] Unexpected subcommand: ${subcommand}`)
+    return interaction.reply({
+      content: `Unknown subcommand: ${subcommand}.`,
+      flags: [MessageFlags.Ephemeral],
+    })
   },
 }

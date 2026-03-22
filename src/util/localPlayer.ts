@@ -87,13 +87,13 @@ export async function playLocalFile(
 
     if (activeLocalPlayers.has(guildId)) {
       const oldPlayer = activeLocalPlayers.get(guildId)!
-    oldPlayer.audioPlayer.stop(true)
-    if (oldPlayer.connection && oldPlayer.connection.state.status !== VoiceConnectionStatus.Destroyed) {
-      if (oldPlayer.onDisconnected) {
-        oldPlayer.connection.off(VoiceConnectionStatus.Disconnected, oldPlayer.onDisconnected)
+      oldPlayer.audioPlayer.stop(true)
+      if (oldPlayer.connection && oldPlayer.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+        if (oldPlayer.onDisconnected) {
+          oldPlayer.connection.off(VoiceConnectionStatus.Disconnected, oldPlayer.onDisconnected)
+        }
+        oldPlayer.connection.destroy()
       }
-      oldPlayer.connection.destroy()
-    }
       activeLocalPlayers.delete(guildId)
       client.debug(`[LocalPlayer] Destroyed previous local player for guild ${guildId}`)
     }

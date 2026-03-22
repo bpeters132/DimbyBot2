@@ -7,8 +7,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ComponentType,
-  type TextBasedChannel,
-  type TextChannel,
+  type GuildTextBasedChannel,
   type User,
   type VoiceBasedChannel,
 } from "discord.js"
@@ -108,7 +107,7 @@ export async function handleQueryAndPlay(
   client: BotClient,
   guildId: string,
   voiceChannel: VoiceBasedChannel,
-  textChannel: TextBasedChannel,
+  textChannel: GuildTextBasedChannel,
   query: string,
   requester: User,
   player: Player
@@ -308,7 +307,7 @@ export async function handleQueryAndPlay(
                     .setStyle(ButtonStyle.Secondary)
             )
 
-            const confirmationMessage = await (textChannel as TextChannel).send({
+            const confirmationMessage = await textChannel.send({
                 content: confirmationContent,
                 components: [row],
             })
@@ -599,10 +598,7 @@ export async function handleQueryAndPlay(
                 const pem = playError instanceof Error ? playError.message : String(playError)
                 if (pem.includes("No supported audio streams available")) {
                     feedbackText = `${requester}, I couldn't play [${trackToAdd.info.title}](${trackToAdd.info.uri}) because it has no supported audio streams (age/region lock, private, etc.).`
-                    if (
-                        player.queue.tracks.length > 0 &&
-                        player.queue.current?.info?.uri !== trackToAdd.info.uri
-                    ) {
+                    if (player.queue.tracks.length > 0) {
                         try {
                             await player.skip()
                         } catch (skipError) {

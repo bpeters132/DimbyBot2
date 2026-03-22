@@ -14,7 +14,12 @@ export default {
     .setDescription("Clear up to 30 messages")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
     .addIntegerOption((option) =>
-      option.setName("count").setDescription("The number of messages to clear").setRequired(true)
+      option
+        .setName("count")
+        .setDescription("The number of messages to clear")
+        .setRequired(true)
+        .setMinValue(1)
+        .setMaxValue(30)
     ),
 
   async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {

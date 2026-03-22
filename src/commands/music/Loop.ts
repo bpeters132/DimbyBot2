@@ -34,7 +34,7 @@ export default {
       return interaction.reply({ content: "Join a voice channel first!" })
     }
 
-    const player = client.lavalink.getPlayer(guild.id)
+    const player = client.lavalink.players.get(guild.id)
 
     if (!player) {
       return interaction.reply({ content: "There is no player for this guild." })

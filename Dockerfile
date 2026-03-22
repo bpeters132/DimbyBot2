@@ -58,6 +58,9 @@ COPY --from=builder /app/dist ./dist
 COPY entrypoint.sh entrypoint.sh
 RUN apk add --no-cache dos2unix=7.5.3-r0 \
     && dos2unix entrypoint.sh \
-    && chmod +x entrypoint.sh
+    && chmod +x entrypoint.sh \
+    && chown -R node:node /app
+
+USER node
 
 ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
