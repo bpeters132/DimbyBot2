@@ -17,7 +17,7 @@ export default (client: BotClient) => {
             }
         }
         if (message.author.bot) {
-            client.debug('[MessageCreate] Ignoring message from bot:', message.author.tag)
+            // client.debug('[MessageCreate] Ignoring message from bot:', message.author.tag)
             return // Usually ignore bots
         }
         if (!message.guild) {
