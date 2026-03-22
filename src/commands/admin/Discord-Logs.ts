@@ -319,7 +319,8 @@ export default {
         })
       }
 
-      const working = detachGuildRow(store[guild.id])
+      const latestStore = getGuildSettings(client)
+      const working = detachGuildRow(latestStore[guild.id])
       const next = detachGuildDiscordLog(working.discordLog)
       const channelId = channel.id
       if (scope === "all") {
@@ -330,7 +331,7 @@ export default {
       }
 
       applyNormalizedDiscordLog(next, working)
-      const nextStore = storeWithGuildRow(store, guild.id, working)
+      const nextStore = storeWithGuildRow(latestStore, guild.id, working)
       const ok = saveGuildSettings(nextStore, client)
       if (!ok) {
         return interaction.reply({

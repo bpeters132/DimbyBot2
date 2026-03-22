@@ -32,6 +32,7 @@ type DiscordLogForwardJob = {
 
 const discordLogForwardQueue: DiscordLogForwardJob[] = []
 let discordLogForwardWorkerActive = false
+let discordLogForwardWorkerScheduled = false
 
 function enqueueDiscordLogForward(job: DiscordLogForwardJob): void {
   while (discordLogForwardQueue.length >= DISCORD_LOG_FORWARD_QUEUE_CAP) {
@@ -163,7 +164,14 @@ export function scheduleDiscordLogForward(
   message: string
 ): void {
   enqueueDiscordLogForward({ client, level, message })
-  void runDiscordLogForwardWorker()
+  if (discordLogForwardWorkerScheduled) {
+    return
+  }
+  discordLogForwardWorkerScheduled = true
+  setImmediate(() => {
+    discordLogForwardWorkerScheduled = false
+    void runDiscordLogForwardWorker()
+  })
 }
 
 /** Attaches the Discord forwarder to the process logger (idempotent). */
@@ -176,9 +184,12 @@ export function attachDiscordLogForwarding(client: BotClient): void {
   })
 }
 
-/** Removes Discord forwarding (e.g. for tests). */
+/** Removes Discord forwarding (e.g. for tests) and drops queued forwards for this client. */
 export function detachDiscordLogForwarding(client: BotClient): void {
   if (typeof client.logger.setDiscordForwarder === "function") {
     client.logger.setDiscordForwarder(null)
   }
+  const kept = discordLogForwardQueue.filter((job) => job.client !== client)
+  discordLogForwardQueue.length = 0
+  discordLogForwardQueue.push(...kept)
 }
