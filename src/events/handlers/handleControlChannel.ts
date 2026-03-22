@@ -182,7 +182,7 @@ export function createControlButtons(
       "data" in c && c.data && "label" in c.data ? String((c.data as { label?: string }).label ?? "") : "?"
     )
     .join(", ")
-  client.debug(`[guildSettings] Control buttons created. Button labels: ${labels}`)
+  client.debug(`[ControlHandler] Control buttons created. Button labels: ${labels}`)
   return rows
 }
 
