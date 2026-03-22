@@ -78,11 +78,11 @@ export default {
     // Get sensitive values BEFORE eval potentially modifies process.env or client
     const sensitiveValues = getSensitiveValues(client)
     
-    // Function to perform redaction on a string
+    // Function to perform redaction on a string (longer secrets first so a shorter value cannot leave a prefix unredacted).
     const redact = (str: string): string => {
       let redactedStr = str
-      for (const [value, placeholder] of sensitiveValues.entries()) {
-        // Use replaceAll for thoroughness
+      const entries = [...sensitiveValues.entries()].sort((a, b) => b[0].length - a[0].length)
+      for (const [value, placeholder] of entries) {
         redactedStr = redactedStr.replaceAll(value, placeholder)
       }
       return redactedStr
@@ -127,13 +127,13 @@ export default {
       await interaction.editReply(replyOptions)
 
     } catch (err: unknown) {
-      client.error(
-        `[EvalCmd] Error executing code [redacted] user=${interaction.user.tag} fingerprint=${evalCodeFingerprint(code, interaction.user.tag)}`,
-        err
-      )
       const e = err instanceof Error ? err : new Error(String(err))
-      let errorString = e.stack || e.toString() // Get stack trace if available
-      errorString = redact(errorString) // Redact sensitive info from error
+      let errorString = e.stack || e.toString()
+      errorString = redact(errorString)
+      client.error(
+        `[EvalCmd] Error executing code [redacted] user=${interaction.user.tag} fingerprint=${evalCodeFingerprint(code, interaction.user.tag)}:`,
+        errorString
+      )
 
       const errorEmbed = new EmbedBuilder()
         .setTitle("Eval Error ❌")

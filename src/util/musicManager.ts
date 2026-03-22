@@ -78,11 +78,10 @@ async function ensurePlayerConnected(
         })
 
         try {
-            await player.connect()
             client.debug(
                 `[MusicManager] Lavalink player connect/move call initiated. Waiting for connection.`
             )
-            await movePromise
+            await Promise.all([player.connect(), movePromise])
         } catch (error) {
             disposeMoveWait?.()
             const msg = error instanceof Error ? error.message : String(error)
@@ -281,7 +280,10 @@ export async function handleQueryAndPlay(
             }
 
             const lavalinkPlayerActive =
-              player && (player.playing || player.queue.tracks.length > 0)
+              player &&
+              (player.playing ||
+                player.queue.tracks.length > 0 ||
+                Boolean(player.queue.current))
 
             if (lavalinkPlayerActive) {
                 confirmationContent += `\n\nChoosing **Play Local File** will **stop the current online music and clear its queue**.`
@@ -527,8 +529,6 @@ export async function handleQueryAndPlay(
             case "TRACK_LOADED": {
                 trackToAdd = searchResult.tracks[0]
                 client.debug(`[MusicManager] Loaded single track: ${trackToAdd.info.title}. Will enqueue after connection.`)
-                if (!feedbackText)
-                    feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`
                 success = true
                 break
             }
@@ -538,8 +538,6 @@ export async function handleQueryAndPlay(
                 client.debug(
                     `[MusicManager] Found search result: ${trackToAdd.info.title}. Will enqueue first match after connection.`
                 )
-                if (!feedbackText)
-                    feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`
                 success = true
                 break
             }
@@ -549,8 +547,6 @@ export async function handleQueryAndPlay(
                     `[MusicManager] Loaded playlist: ${searchResult.playlist?.name} (${searchResult.tracks.length} tracks). Will enqueue after connection.`
                 )
                 trackToAdd = searchResult.tracks[0]
-                if (!feedbackText)
-                    feedbackText = `Added playlist **${searchResult.playlist?.name ?? "Unknown Playlist"}** (${searchResult.tracks.length} songs) to the queue.`
                 success = true
                 break
             default:
@@ -587,6 +583,14 @@ export async function handleQueryAndPlay(
                 } else {
                     player.queue.add(trackToAdd)
                     client.debug(`[MusicManager] Enqueued single track [${trackToAdd.info.title}].`)
+                }
+
+                if (!feedbackText) {
+                    if (isPlaylistEnqueue && searchResult.tracks.length > 0) {
+                        feedbackText = `Added playlist **${searchResult.playlist?.name ?? "Unknown Playlist"}** (${searchResult.tracks.length} songs) to the queue.`
+                    } else {
+                        feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`
+                    }
                 }
 
                 client.debug(

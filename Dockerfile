@@ -53,11 +53,18 @@ COPY --from=builder /app/dist ./dist
 #   MusicBrainz fallback: MUSICBRAINZ_CONTACT or MUSICBRAINZ_CONTACT_URL; MUSICBRAINZ_SIMILAR=off to disable
 
 COPY entrypoint.sh entrypoint.sh
+COPY healthcheck.sh healthcheck.sh
+# dos2unix only for CRLF normalization; remove before layer commit so it is not a runtime dependency.
 RUN apk add --no-cache dos2unix=7.5.3-r0 \
-    && dos2unix entrypoint.sh \
-    && chmod +x entrypoint.sh \
+    && dos2unix entrypoint.sh healthcheck.sh \
+    && chmod +x entrypoint.sh healthcheck.sh \
+    && apk del dos2unix \
     && chown -R node:node /app
 
 USER node
 
 ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
+
+# No HTTP /health on this Discord bot; probe PID 1 cmdline (Node after exec) with a short interval.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+    CMD /bin/sh /app/healthcheck.sh

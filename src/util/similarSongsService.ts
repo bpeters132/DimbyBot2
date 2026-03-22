@@ -76,11 +76,12 @@ async function fetchTrackSeedContext(
   }
 }
 
-/**
- * @param {string} accessToken
- * @param {string} artistId
- * @returns {Promise<{ ok: boolean, artists: { id: string, name?: string }[], httpStatus?: number, errorSnippet?: string }>}
- */
+function isValidArtist(a: unknown): a is { id: string; name?: string } {
+  if (!a || typeof a !== "object") return false
+  const id = (a as { id?: unknown }).id
+  return typeof id === "string" && id.length > 0
+}
+
 async function fetchRelatedArtists(accessToken: string, artistId: string) {
   try {
     const res = await fetch(`${SPOTIFY_API}/artists/${artistId}/related-artists`, {
@@ -98,25 +99,19 @@ async function fetchRelatedArtists(accessToken: string, artistId: string) {
         errorSnippet: text.replace(/\s+/g, " ").trim().slice(0, 280),
       }
     }
-    const data = (await res.json()) as { artists?: { id?: string; name?: string }[] }
+    const data = (await res.json()) as { artists?: unknown[] }
     const list = data?.artists
     if (!Array.isArray(list)) return { ok: true, artists: [] }
-    const artists: { id: string; name?: string }[] = list
-      .map((a) => ({ id: a?.id, name: a?.name }))
-      .filter((a) => typeof a.id === "string")
-      .map((a) => ({ id: a.id as string, name: typeof a.name === "string" ? a.name : undefined }))
+    const artists = list.filter(isValidArtist).map((a) => ({
+      id: a.id,
+      name: typeof a.name === "string" ? a.name : undefined,
+    }))
     return { ok: true, artists }
   } catch {
     return { ok: false, artists: [], httpStatus: 0, errorSnippet: "network_error" }
   }
 }
 
-/**
- * @param {string} accessToken
- * @param {string} artistId
- * @param {string} market
- * @returns {Promise<{ ok: boolean, tracks: unknown[], httpStatus?: number, errorSnippet?: string }>}
- */
 async function fetchArtistTopTracks(accessToken: string, artistId: string, market: string) {
   try {
     const params = new URLSearchParams({ market })
@@ -143,13 +138,7 @@ async function fetchArtistTopTracks(accessToken: string, artistId: string, marke
   }
 }
 
-/**
- * Catalog search when related-artists is unavailable (often 404 for client-credentials).
- * @param {string} accessToken
- * @param {string} artistName
- * @param {string} market
- * @returns {Promise<{ ok: boolean, tracks: unknown[], httpStatus?: number, errorSnippet?: string }>}
- */
+/** Catalog search when related-artists is unavailable (often 404 for client-credentials). */
 async function searchTopTracksByArtistName(
   accessToken: string,
   artistName: string,
@@ -185,11 +174,6 @@ async function searchTopTracksByArtistName(
   }
 }
 
-/**
- * @param {unknown} t
- * @param {Set<string>} excludeTrackIds
- * @returns {{ artist: string, title: string } | null}
- */
 function spotifyTrackToSim(t: unknown, excludeTrackIds: Set<string>) {
   if (!t || typeof t !== "object") return null
   const tr = t as { id?: unknown; name?: unknown; artists?: { name?: unknown }[] }
@@ -202,15 +186,7 @@ function spotifyTrackToSim(t: unknown, excludeTrackIds: Set<string>) {
   return { artist: art || "Unknown Artist", title: name }
 }
 
-/**
- * Similar tracks via Related Artists + Top Tracks (no deprecated /recommendations).
- * @param {string} accessToken
- * @param {string} seedTrackId
- * @param {string} market
- * @param {number} limit
- * @param {string} [artistNameHint] from Lavalink seed when track API name missing
- * @returns {Promise<{ tracks: { artist: string, title: string }[], apiFailed: boolean, rateLimited: boolean, httpStatus?: number, errorSnippet?: string }>}
- */
+/** Similar tracks via Related Artists + Top Tracks (no deprecated /recommendations). */
 async function spotifySimilarTracksFromRelatedAndTop(
   accessToken: string,
   seedTrackId: string,
@@ -385,7 +361,7 @@ async function spotifySimilarTracksFromRelatedAndTop(
         httpStatus: 429,
         errorSnippet: searched.errorSnippet,
       }
-    } else if (!searched.ok && out.length === 0) {
+    } else if (out.length === 0) {
       return {
         tracks: [],
         apiFailed: true,
@@ -409,11 +385,7 @@ async function spotifySimilarTracksFromRelatedAndTop(
   return { tracks: out, apiFailed: false, rateLimited: false }
 }
 
-/**
- * Formats a track object into a Lavalink-friendly search query.
- * @param {{ artist?: string, title?: string }} track
- * @returns {string}
- */
+/** Lavalink-friendly search query from artist + title fields. */
 export function formatTrackSearchQuery(track: { artist?: string; title?: string }) {
   const artist = String(track?.artist ?? "").trim()
   const title = String(track?.title ?? "").trim()
@@ -423,9 +395,6 @@ export function formatTrackSearchQuery(track: { artist?: string; title?: string 
   return ""
 }
 
-/**
- * @returns {{ id: string, secret: string } | null}
- */
 function getSpotifyAppCredentials() {
   const id =
     process.env.SPOTIFY_CLIENT_ID?.trim() || process.env.LAVALINK_SPOTIFY_CLIENT_ID?.trim()
@@ -435,9 +404,6 @@ function getSpotifyAppCredentials() {
   return null
 }
 
-/**
- * @returns {Promise<string | null>}
- */
 async function getSpotifyAccessToken() {
   const creds = getSpotifyAppCredentials()
   if (!creds) return null
@@ -471,13 +437,6 @@ async function getSpotifyAccessToken() {
   }
 }
 
-/**
- * @param {string} accessToken
- * @param {string} artist
- * @param {string} trackName
- * @param {string} market ISO 3166-1 alpha-2 market/country code for Spotify search
- * @returns {Promise<string | null>} Spotify track id
- */
 async function spotifySearchTrackId(
   accessToken: string,
   artist: string,
@@ -511,8 +470,6 @@ async function spotifySearchTrackId(
 /**
  * YouTube search strings for a Spotify-style catalog track (artist + title).
  * Ordered so Lavalink is more likely to resolve to the real recording, not clips.
- * @param {{ artist?: string, title?: string }} track
- * @returns {string[]}
  */
 export function youtubeSearchQueriesForCatalogTrack(track: { artist?: string; title?: string }) {
   const q = formatTrackSearchQuery(track)
@@ -526,13 +483,9 @@ export function youtubeSearchQueriesForCatalogTrack(track: { artist?: string; ti
 }
 
 /**
- * Fetches similar tracks for autoplay: Spotify catalog first (related/top/search), then MusicBrainz
+ * Similar tracks for autoplay: Spotify catalog first (related/top/search), then MusicBrainz
  * (artist-rels + browse recordings). See https://musicbrainz.org/doc/MusicBrainz_API
  * Uses SPOTIFY_* / LAVALINK_SPOTIFY_* when present; MB needs no key (User-Agent + ~1 req/s).
- * @param {string} artist
- * @param {string} trackName
- * @param {number} [limit=15]
- * @returns {Promise<{ tracks: { artist: string, title: string }[], failure?: string, failureDetail?: string }>}
  */
 export type SimilarTracksResult = {
   tracks: { artist: string; title: string }[]

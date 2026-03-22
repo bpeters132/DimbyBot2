@@ -44,59 +44,21 @@ export async function playLocalFile(
   localFile: LocalFile,
   requester: User | undefined
 ): Promise<QueryPlayResult> {
-  client.debug(
-    `[LocalPlayer] Attempting to play local file: "${localFile.title}" in guild ${voiceChannel.guild.id}`
-  )
+  const guildId = voiceChannel.guild.id
+  client.debug(`[LocalPlayer] Attempting to play local file: "${localFile.title}" in guild ${guildId}`)
 
-  let postLavalinkHandoff: Promise<void> = new Promise((r) => queueMicrotask(r))
-
-  if (lavalinkPlayer) {
-    client.debug(
-      `[LocalPlayer] Checking Lavalink player state for guild ${voiceChannel.guild.id}. Connected: ${lavalinkPlayer.connected}, Playing: ${lavalinkPlayer.playing}`
-    )
-    if (lavalinkPlayer.playing) {
-      try {
-        await lavalinkPlayer.stopPlaying(true, false)
-        client.debug(`[LocalPlayer] Stopped Lavalink player in guild ${voiceChannel.guild.id}.`)
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e)
-        client.warn(`[LocalPlayer] Failed to stop Lavalink player in guild ${voiceChannel.guild.id}: ${msg}`)
-      }
-    }
-    if (client.lavalink.players.has(voiceChannel.guild.id)) {
-      const gid = voiceChannel.guild.id
-      postLavalinkHandoff = waitForLavalinkPlayerDestroy(client, gid, 2000)
-      try {
-        client.debug(
-          `[LocalPlayer] Attempting to destroy existing Lavalink player for guild ${voiceChannel.guild.id}.`
-        )
-        await lavalinkPlayer.destroy()
-        client.debug(`[LocalPlayer] Destroyed Lavalink player for guild ${voiceChannel.guild.id}.`)
-
-        const deleted = client.lavalink.players.delete(voiceChannel.guild.id)
-        if (deleted) {
-          client.debug(
-            `[LocalPlayer] Successfully deleted player from Lavalink manager for guild ${voiceChannel.guild.id}.`
-          )
-        } else {
-          client.warn(
-            `[LocalPlayer] Attempted to delete player from Lavalink manager for guild ${voiceChannel.guild.id}, but it was not found (or delete returned false).`
-          )
-        }
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e)
-        client.warn(
-          `[LocalPlayer] Failed to destroy or delete Lavalink player in guild ${voiceChannel.guild.id}: ${msg}. Proceeding with @discordjs/voice connection attempt.`
-        )
-      }
-    } else {
-      client.debug(
-        `[LocalPlayer] No Lavalink player found in manager for guild ${voiceChannel.guild.id} prior to local play.`
-      )
+  try {
+    await fs.promises.access(localFile.path, fs.constants.R_OK)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    client.debug(`[LocalPlayer] Local file not readable: ${localFile.path} (${msg})`)
+    return {
+      success: false,
+      feedbackText: `I couldn't read the local file **${localFile.title}**. It may be missing or inaccessible.`,
+      error: e instanceof Error ? e : new Error(String(e)),
     }
   }
 
-  const guildId = voiceChannel.guild.id
   if (pendingLocalPlayGuildIds.has(guildId)) {
     return {
       success: false,
@@ -105,6 +67,49 @@ export async function playLocalFile(
     }
   }
   pendingLocalPlayGuildIds.add(guildId)
+
+  let postLavalinkHandoff: Promise<void> = new Promise((r) => queueMicrotask(r))
+
+  if (lavalinkPlayer) {
+    client.debug(
+      `[LocalPlayer] Checking Lavalink player state for guild ${guildId}. Connected: ${lavalinkPlayer.connected}, Playing: ${lavalinkPlayer.playing}`
+    )
+    if (lavalinkPlayer.playing) {
+      try {
+        await lavalinkPlayer.stopPlaying(true, false)
+        client.debug(`[LocalPlayer] Stopped Lavalink player in guild ${guildId}.`)
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        client.warn(`[LocalPlayer] Failed to stop Lavalink player in guild ${guildId}: ${msg}`)
+      }
+    }
+    if (client.lavalink.players.has(guildId)) {
+      postLavalinkHandoff = waitForLavalinkPlayerDestroy(client, guildId, 2000)
+      try {
+        client.debug(`[LocalPlayer] Attempting to destroy existing Lavalink player for guild ${guildId}.`)
+        await lavalinkPlayer.destroy()
+        client.debug(`[LocalPlayer] Destroyed Lavalink player for guild ${guildId}.`)
+
+        const deleted = client.lavalink.players.delete(guildId)
+        if (deleted) {
+          client.debug(
+            `[LocalPlayer] Successfully deleted player from Lavalink manager for guild ${guildId}.`
+          )
+        } else {
+          client.warn(
+            `[LocalPlayer] Attempted to delete player from Lavalink manager for guild ${guildId}, but it was not found (or delete returned false).`
+          )
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        client.warn(
+          `[LocalPlayer] Failed to destroy or delete Lavalink player in guild ${guildId}: ${msg}. Proceeding with @discordjs/voice connection attempt.`
+        )
+      }
+    } else {
+      client.debug(`[LocalPlayer] No Lavalink player found in manager for guild ${guildId} prior to local play.`)
+    }
+  }
 
   try {
     await postLavalinkHandoff
@@ -229,7 +234,9 @@ export async function playLocalFile(
         send: (content: string) => Promise<unknown>
       }
       sendable
-        .send(`Error playing local file **${localFile.title}**: ${error.message}`)
+        .send(
+          `An error occurred while playing **${localFile.title}**. Please try again or re-download the file.`
+        )
         .catch((e: unknown) => client.error("Failed to send error message to text channel", e))
     })
 
