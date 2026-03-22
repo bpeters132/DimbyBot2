@@ -104,7 +104,7 @@ export async function handleControlButtonInteraction(
       }
       return
     }
-    if (player.connected && player.voiceChannelId && player.voiceChannelId !== voiceChannel.id) {
+    if (player.connected && player.voiceChannelId !== voiceChannel.id) {
       try {
         await interaction.followUp({
           content: "You need to be in the same voice channel as the bot!",

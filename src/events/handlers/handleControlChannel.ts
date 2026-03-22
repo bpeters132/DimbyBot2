@@ -258,12 +258,15 @@ export async function cleanupControlChannel(
 
 
 /**
- * Updates the persistent control message for a guild and cleans up the channel.
+ * Updates the persistent control message for a guild and optionally cleans up the channel.
  * Fetches player state, channel, and message based on stored settings.
- * @param {import('../../lib/BotClient.js').default} client The bot client.
- * @param {string} guildId The ID of the guild.
+ * @param performCleanup When false, skips {@link cleanupControlChannel} (e.g. startup refresh should not bulk-delete).
  */
-export async function updateControlMessage(client: BotClient, guildId: string) {
+export async function updateControlMessage(
+  client: BotClient,
+  guildId: string,
+  performCleanup = true
+) {
   client.debug(`[ControlHandler] Attempting to update control message for guild ${guildId}`)
   const guildSettings = getGuildSettings(client)
   const settings = guildSettings[guildId]
@@ -320,10 +323,12 @@ export async function updateControlMessage(client: BotClient, guildId: string) {
       `[ControlHandler] Successfully edited control message ${controlMessage.id} in guild ${guildId}`
     )
 
-    // Don't await cleanup; let it run in the background after a delay.
-    cleanupControlChannel(controlChannel, controlMessage.id, client).catch((err: unknown) => {
-      client.error(`[ControlHandler] Background cleanup failed for channel ${controlChannel!.id}:`, err)
-    })
+    if (performCleanup) {
+      // Don't await cleanup; let it run in the background after a delay.
+      cleanupControlChannel(controlChannel, controlMessage.id, client).catch((err: unknown) => {
+        client.error(`[ControlHandler] Background cleanup failed for channel ${controlChannel!.id}:`, err)
+      })
+    }
   } catch (error: unknown) {
     const code =
       typeof error === "object" && error !== null && "code" in error
@@ -350,7 +355,7 @@ export async function refreshAllControlMessages(client: BotClient): Promise<void
   )
   client.info(`[ControlHandler] Refreshing ${guildIds.length} control message(s) after startup.`)
   for (const gid of guildIds) {
-    await updateControlMessage(client, gid).catch((err: unknown) =>
+    await updateControlMessage(client, gid, false).catch((err: unknown) =>
       client.warn(`[ControlHandler] Startup refresh failed for guild ${gid}: ${err}`)
     )
     await sleep(400)
