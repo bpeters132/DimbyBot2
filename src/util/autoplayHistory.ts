@@ -545,6 +545,16 @@ export function seedAutoplayHistoryFromPlayer(player: Player) {
   if (cur?.info) rememberAutoplayPlayed(player, cur.info)
 }
 
+/** Toggles Spotify-based autoplay on the player and syncs session history (same behavior as `/autoplay`). */
+export function toggleAutoplay(player: Player): boolean {
+  const wasOn = !!player.get("autoplay")
+  const next = !wasOn
+  player.set("autoplay", next)
+  if (!next) clearAutoplayRecent(player)
+  else seedAutoplayHistoryFromPlayer(player)
+  return next
+}
+
 /**
  * True if the candidate is the same source as the track that just ended.
  */

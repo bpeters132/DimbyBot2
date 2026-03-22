@@ -1,6 +1,7 @@
 import type { ButtonInteraction } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import { getGuildSettings } from "../../util/saveControlChannel.js"
+import { toggleAutoplay } from "../../util/autoplayHistory.js"
 import { updateControlMessage } from "./handleControlChannel.js"
 
 export async function handleControlButtonInteraction(
@@ -91,41 +92,70 @@ export async function handleControlButtonInteraction(
     `[ControlButtonHandler] Found player for guild ${guildId}. Connected: ${player.connected}, Playing: ${player.playing}`
   )
 
-  // 4. Voice Channel Check
-  if (!member.voice?.channel) {
-    client.debug(`[ControlButtonHandler] User ${interaction.user.id} not in a voice channel.`)
-    try {
-      await interaction.followUp({
-        content: "You must be in a voice channel to use the controls!",
-      })
-    } catch (e: unknown) {
-      client.error("Error sending VC check follow-up:", e)
+  // 4. Voice channel check (autoplay matches `/autoplay`; other controls require same VC as player when known)
+  if (customId === "control_autoplay") {
+    const voiceChannel = member.voice?.channel
+    if (!voiceChannel) {
+      client.debug(`[ControlButtonHandler] User ${interaction.user.id} not in VC for autoplay toggle.`)
+      try {
+        await interaction.followUp({ content: "Join a voice channel first!" })
+      } catch (e: unknown) {
+        client.error("Error sending VC check follow-up:", e)
+      }
+      return
     }
-    return
-  }
-  if (!player.voiceChannelId) {
-    client.warn(`[ControlButtonHandler] Player for guild ${guildId} exists but has no voiceChannelId. Cannot verify user channel.`)
-    try {
-      await interaction.followUp({
-        content: "Cannot verify player's voice channel. Controls unavailable.",
-      })
-    } catch (e: unknown) {
-      client.error("Error sending player VC check follow-up:", e)
+    if (player.connected && player.voiceChannelId !== voiceChannel.id) {
+      try {
+        await interaction.followUp({
+          content: "You need to be in the same voice channel as the bot!",
+        })
+      } catch (e: unknown) {
+        client.error("Error sending VC mismatch follow-up:", e)
+      }
+      return
     }
-    return
-  }
-  if (member.voice.channel.id !== player.voiceChannelId) {
-    client.debug(`[ControlButtonHandler] User ${interaction.user.id} in different VC (${member.voice.channel.id}) than player (${player.voiceChannelId}).`)
-    try {
-      await interaction.followUp({
-        content: "You must be in the same voice channel as the bot to use the controls!",
-      })
-    } catch (e: unknown) {
-      client.error("Error sending mismatched VC follow-up:", e)
+  } else {
+    if (!member.voice?.channel) {
+      client.debug(`[ControlButtonHandler] User ${interaction.user.id} not in a voice channel.`)
+      try {
+        await interaction.followUp({
+          content: "You must be in a voice channel to use the controls!",
+        })
+      } catch (e: unknown) {
+        client.error("Error sending VC check follow-up:", e)
+      }
+      return
     }
-    return
+    if (!player.voiceChannelId) {
+      client.warn(
+        `[ControlButtonHandler] Player for guild ${guildId} exists but has no voiceChannelId. Cannot verify user channel.`
+      )
+      try {
+        await interaction.followUp({
+          content: "Cannot verify player's voice channel. Controls unavailable.",
+        })
+      } catch (e: unknown) {
+        client.error("Error sending player VC check follow-up:", e)
+      }
+      return
+    }
+    if (member.voice.channel.id !== player.voiceChannelId) {
+      client.debug(
+        `[ControlButtonHandler] User ${interaction.user.id} in different VC (${member.voice.channel.id}) than player (${player.voiceChannelId}).`
+      )
+      try {
+        await interaction.followUp({
+          content: "You must be in the same voice channel as the bot to use the controls!",
+        })
+      } catch (e: unknown) {
+        client.error("Error sending mismatched VC follow-up:", e)
+      }
+      return
+    }
+    client.debug(
+      `[ControlButtonHandler] User ${interaction.user.id} is in the correct voice channel (${player.voiceChannelId}).`
+    )
   }
-  client.debug(`[ControlButtonHandler] User ${interaction.user.id} is in the correct voice channel (${player.voiceChannelId}).`)
 
   // 5. Execute Action & Update Control Message
   let actionTaken = false
@@ -328,6 +358,14 @@ export async function handleControlButtonInteraction(
           client.error("[ControlButtonHandler] Error setting loop mode:", loopError)
           await interaction.followUp({ content: "An error occurred while setting loop mode." }).catch(() => {})
         }
+        break
+      }
+      case "control_autoplay": {
+        const enabled = toggleAutoplay(player)
+        await interaction.followUp({
+          content: enabled ? "Autoplay **enabled**." : "Autoplay **disabled**.",
+        })
+        actionTaken = true
         break
       }
       default: {

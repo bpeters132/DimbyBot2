@@ -1,5 +1,6 @@
 import { ActivityType } from "discord.js"
 import type BotClient from "../lib/BotClient.js"
+import { refreshAllControlMessages } from "./handlers/handleControlChannel.js"
 
 export default async (client: BotClient) => {
   client.on("clientReady", () => {
@@ -12,6 +13,10 @@ export default async (client: BotClient) => {
     client.lavalink.init({ id: user.id, username: user.username })
 
     client.info(`Logged in as ${user.tag}! (${user.id})`)
+
+    refreshAllControlMessages(client).catch((err: unknown) =>
+      client.error("[ControlHandler] refreshAllControlMessages failed:", err)
+    )
 
     user.setActivity("I hate that Pancake guy!", { type: ActivityType.Custom })
     
