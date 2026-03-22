@@ -1,19 +1,19 @@
-# Pin Alpine minor so apk version pins stay valid (see builder RUN apk add).
+# Pin Node + Alpine minor; apk packages are unpinned so repo updates within 3.22 do not break builds.
 FROM node:22-alpine3.22 AS builder
 
 WORKDIR /app
 
 COPY docker/ytdlp-requirements.txt /tmp/ytdlp-requirements.txt
-# Native build tools (e.g. sodium) — pinned for reproducibility (Alpine 3.22 / current node:22-alpine).
+# Native build tools (e.g. sodium) + ffmpeg for any runtime checks during build.
 RUN apk add --no-cache \
-    python3=3.12.12-r0 \
-    py3-pip=25.1.1-r1 \
-    ffmpeg=8.0.1-r1 \
-    build-base=0.5-r3 \
-    autoconf=2.72-r1 \
-    automake=1.18.1-r0 \
-    libtool=2.5.4-r2 \
-    g++=15.2.0-r2 \
+    python3 \
+    py3-pip \
+    ffmpeg \
+    build-base \
+    autoconf \
+    automake \
+    libtool \
+    g++ \
     && python3 -m venv /opt/venv \
     && . /opt/venv/bin/activate \
     && pip3 install --no-cache-dir -r /tmp/ytdlp-requirements.txt \
@@ -34,8 +34,8 @@ WORKDIR /app
 
 # Runtime: ffmpeg + Python for the copied venv; yt-dlp venv is built in the builder stage.
 RUN apk add --no-cache \
-    python3=3.12.12-r0 \
-    ffmpeg=8.0.1-r1
+    python3 \
+    ffmpeg
 
 COPY --from=builder /opt/venv /opt/venv
 RUN ln -sf /opt/venv/bin/yt-dlp /usr/bin/yt-dlp
@@ -55,7 +55,7 @@ COPY --from=builder /app/dist ./dist
 COPY entrypoint.sh entrypoint.sh
 COPY healthcheck.sh healthcheck.sh
 # dos2unix only for CRLF normalization; remove before layer commit so it is not a runtime dependency.
-RUN apk add --no-cache dos2unix=7.5.3-r0 \
+RUN apk add --no-cache dos2unix \
     && dos2unix entrypoint.sh healthcheck.sh \
     && chmod +x entrypoint.sh healthcheck.sh \
     && apk del dos2unix \
