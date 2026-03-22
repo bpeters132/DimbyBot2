@@ -154,13 +154,13 @@ async function browseRecordingsForArtist(artistMbid: string, limit: number) {
 
 /**
  * @param {string} artist
- * @param {string} trackTitle unused for now (could refine search later)
+ * @param {string} _trackTitle unused for now (could refine search later)
  * @param {number} limit
  * @returns {Promise<{ tracks: { artist: string, title: string }[], failure?: string, failureDetail?: string }>}
  */
 export async function getMusicBrainzSimilarTracks(
   artist: string,
-  trackTitle: string,
+  _trackTitle: string,
   limit = 15
 ) {
   const cap = Math.min(Math.max(Number(limit) || 15, 1), 50)

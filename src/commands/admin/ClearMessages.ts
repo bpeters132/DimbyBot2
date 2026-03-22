@@ -28,9 +28,9 @@ export default {
       })
     }
 
-    if (clear_amount > 30) {
+    if (clear_amount <= 0 || clear_amount > 30) {
       return interaction.reply({
-        content: "You can only clear up to 30 messages at once!",
+        content: "Count must be between 1 and 30 messages.",
         ephemeral: true,
       })
     }

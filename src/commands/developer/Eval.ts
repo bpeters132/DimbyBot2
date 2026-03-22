@@ -16,7 +16,8 @@ function getSensitiveValues(client: BotClient): Map<string, string> {
     sensitive.set(client.token, '[REDACTED TOKEN]')
   }
 
-  const sensitiveKey = /\b(PASSWORD|SECRET|TOKEN|CREDENTIAL|API_KEY|PRIVATE|ACCESS)\b|_KEY$/i
+  const sensitiveKey =
+    /(?:^|_)(PASS|PWD|PASSWORD|SECRET|TOKEN|CRED|CREDENTIAL|API|KEY|PRIVATE|ACCESS)(?:_|$)/i
   for (const key in process.env) {
     if (!sensitiveKey.test(key)) continue
     const value = process.env[key]

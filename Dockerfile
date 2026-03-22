@@ -1,5 +1,5 @@
-# Use a recent Node.js LTS version
-FROM node:22-alpine AS builder
+# Pin Alpine minor so apk version pins stay valid (see builder RUN apk add).
+FROM node:22-alpine3.22 AS builder
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ RUN apk add --no-cache \
     && ln -sf /opt/venv/bin/yt-dlp /usr/bin/yt-dlp
 
 COPY package.json yarn.lock ./
-RUN yarn install
+RUN yarn install --frozen-lockfile
 
 COPY . .
 RUN yarn build \
@@ -28,7 +28,7 @@ RUN yarn build \
     && yarn install --production --frozen-lockfile
 
 # --- runtime image ---
-FROM node:22-alpine
+FROM node:22-alpine3.22
 
 WORKDIR /app
 

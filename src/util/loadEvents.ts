@@ -1,4 +1,4 @@
-import fs from "fs"
+import { promises as fsPromises } from "fs"
 import path from "path"
 import { pathToFileURL } from "url"
 import type BotClient from "../lib/BotClient.js"
@@ -15,7 +15,8 @@ export default async (client: BotClient) => {
   client.info(`Loading events from: ${eventsPath}`)
 
   try {
-    const eventFiles = fs.readdirSync(eventsPath).filter((file) => file.endsWith(".js"))
+    const allEntries = await fsPromises.readdir(eventsPath)
+    const eventFiles = allEntries.filter((file) => file.endsWith(".js"))
 
     client.info(`Found ${eventFiles.length} event files.`)
 

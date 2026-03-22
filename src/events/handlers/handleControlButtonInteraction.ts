@@ -54,6 +54,18 @@ export async function handleControlButtonInteraction(
 
   const guild = interaction.guild
   if (!guild) return
+
+  try {
+    await interaction.deferUpdate()
+    client.debug(`[ControlButtonHandler] Interaction ${customId} deferred successfully.`)
+  } catch (deferError: unknown) {
+    client.error(
+      `[ControlButtonHandler] Error deferring update for ${customId} interaction:`,
+      deferError
+    )
+    return
+  }
+
   const member =
     interaction.member && "voice" in interaction.member
       ? interaction.member
@@ -65,10 +77,9 @@ export async function handleControlButtonInteraction(
     client.warn(
       `[ControlButtonHandler] Player not found for guild ${guildId} when handling button ${customId}.`
     )
-    // Update the control message to reflect the stopped state
     await updateControlMessage(client, guildId)
     try {
-      await interaction.reply({
+      await interaction.followUp({
         content: "Player not found. It might have been stopped or disconnected.",
       })
     } catch {
@@ -84,53 +95,39 @@ export async function handleControlButtonInteraction(
   if (!member.voice?.channel) {
     client.debug(`[ControlButtonHandler] User ${interaction.user.id} not in a voice channel.`)
     try {
-      await interaction.reply({ 
-        content: "You must be in a voice channel to use the controls!"
+      await interaction.followUp({
+        content: "You must be in a voice channel to use the controls!",
       })
     } catch (e: unknown) {
-      client.error("Error replying to VC check fail:", e)
+      client.error("Error sending VC check follow-up:", e)
     }
     return
   }
   if (!player.voiceChannelId) {
     client.warn(`[ControlButtonHandler] Player for guild ${guildId} exists but has no voiceChannelId. Cannot verify user channel.`)
-    // Allow control anyway? Or deny? Let's deny for now for consistency.
     try {
-      await interaction.reply({ 
-        content: "Cannot verify player's voice channel. Controls unavailable."
+      await interaction.followUp({
+        content: "Cannot verify player's voice channel. Controls unavailable.",
       })
     } catch (e: unknown) {
-      client.error("Error replying to player VC check fail:", e)
+      client.error("Error sending player VC check follow-up:", e)
     }
     return
   }
   if (member.voice.channel.id !== player.voiceChannelId) {
     client.debug(`[ControlButtonHandler] User ${interaction.user.id} in different VC (${member.voice.channel.id}) than player (${player.voiceChannelId}).`)
     try {
-      await interaction.reply({ 
-        content: "You must be in the same voice channel as the bot to use the controls!"
+      await interaction.followUp({
+        content: "You must be in the same voice channel as the bot to use the controls!",
       })
     } catch (e: unknown) {
-      client.error("Error replying to mismatched VC check fail:", e)
+      client.error("Error sending mismatched VC follow-up:", e)
     }
     return
   }
   client.debug(`[ControlButtonHandler] User ${interaction.user.id} is in the correct voice channel (${player.voiceChannelId}).`)
 
-  // 5. Defer Interaction
-  try {
-    await interaction.deferUpdate()
-    client.debug(`[ControlButtonHandler] Interaction ${customId} deferred successfully.`)
-  } catch (deferError: unknown) {
-    client.error(
-      `[ControlButtonHandler] Error deferring update for ${customId} interaction:`,
-      deferError
-    )
-    // If defer fails, we probably can't proceed reliably
-    return
-  }
-
-  // 6. Execute Action & Update Control Message
+  // 5. Execute Action & Update Control Message
   let actionTaken = false
   /**
    * Sends a follow-up and refreshes the control message when a player action fails.

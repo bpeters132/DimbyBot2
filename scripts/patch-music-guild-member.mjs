@@ -31,7 +31,6 @@ for (const name of fs.readdirSync(musicDir)) {
   if (s.includes("guildMemberFromInteraction")) continue
 
   const insertImport = () => {
-    if (s.includes("guildMemberFromInteraction")) return
     s = s.replace(
       /import\s+type\s+\{\s*ChatInputCommandInteraction\s*\}\s+from\s+["']discord\.js["']\s*\r?\n/,
       'import type { ChatInputCommandInteraction } from "discord.js"\nimport { guildMemberFromInteraction } from "../../util/guildMember.js"\n'

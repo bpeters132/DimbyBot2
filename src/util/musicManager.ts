@@ -41,51 +41,57 @@ async function ensurePlayerConnected(
             `[MusicManager] Lavalink player not connected or in wrong channel. Player state: Connected=${player.connected}, Player VC=${player.voiceChannelId}, Target VC=${voiceChannel.id}. Reconnecting/Moving.`
         )
         const timeoutMs = 10000
+        let disposeMoveWait: (() => void) | undefined
         const movePromise = new Promise<void>((resolve, reject) => {
             let timeoutId: ReturnType<typeof setTimeout> | null = null
-            const cleanup = () => {
-                if (timeoutId) clearTimeout(timeoutId)
-                client.lavalink.off("playerMove", onPlayerMove)
-                client.lavalink.off("playerUpdate", onPlayerUpdate)
-            }
             const onPlayerMove = (
               movedPlayer: Player,
-              oldChannelId: string | null,
+              _oldChannelId: string | null,
               newChannelId: string | null
             ) => {
                 if (movedPlayer.guildId === player.guildId && newChannelId === voiceChannel.id) {
-                    cleanup()
+                    disposeMoveWait?.()
                     resolve()
                 }
             }
-            const onPlayerUpdate = (oldPlayerJson: PlayerJson, updatedPlayer: Player) => {
+            const onPlayerUpdate = (_oldPlayerJson: PlayerJson, updatedPlayer: Player) => {
                 if (
                     updatedPlayer.guildId === player.guildId &&
                     updatedPlayer.connected &&
                     updatedPlayer.voiceChannelId === voiceChannel.id
                 ) {
-                    cleanup()
+                    disposeMoveWait?.()
                     resolve()
                 }
             }
+            disposeMoveWait = () => {
+                if (timeoutId) clearTimeout(timeoutId)
+                timeoutId = null
+                client.lavalink.off("playerMove", onPlayerMove)
+                client.lavalink.off("playerUpdate", onPlayerUpdate)
+            }
             timeoutId = setTimeout(() => {
-                cleanup()
+                disposeMoveWait?.()
                 reject(new Error("Lavalink player failed to confirm connection."))
             }, timeoutMs)
             client.lavalink.on("playerMove", onPlayerMove)
             client.lavalink.on("playerUpdate", onPlayerUpdate)
         })
 
-        await player.connect()
-        client.debug(
-            `[MusicManager] Lavalink player connect/move call initiated. Waiting for connection.`
-        )
         try {
+            await player.connect()
+            client.debug(
+                `[MusicManager] Lavalink player connect/move call initiated. Waiting for connection.`
+            )
             await movePromise
         } catch (error) {
-            client.warn(
-                `[MusicManager] Lavalink player failed to confirm connection within ${timeoutMs / 1000}s.`
-            )
+            disposeMoveWait?.()
+            const msg = error instanceof Error ? error.message : String(error)
+            if (msg === "Lavalink player failed to confirm connection.") {
+                client.warn(
+                    `[MusicManager] Lavalink player failed to confirm connection within ${timeoutMs / 1000}s.`
+                )
+            }
             throw error
         }
         client.debug(
@@ -524,9 +530,6 @@ export async function handleQueryAndPlay(
                 client.debug(
                     `[MusicManager] Loaded single track: ${trackToAdd.info.title}. Adding to queue.`
                 )
-                if (!trackToAdd.encoded && trackToAdd.info?.uri?.trim()) {
-                  trackToAdd.encoded = trackToAdd.info.uri.trim() as Track["encoded"]
-                }
                 player.queue.add(trackToAdd)
                 if (!feedbackText)
                     feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`
@@ -539,9 +542,6 @@ export async function handleQueryAndPlay(
                 client.debug(
                     `[MusicManager] Found search result: ${trackToAdd.info.title}. Adding first track to queue.`
                 )
-                if (!trackToAdd.encoded && trackToAdd.info?.uri?.trim()) {
-                  trackToAdd.encoded = trackToAdd.info.uri.trim() as Track["encoded"]
-                }
                 player.queue.add(trackToAdd)
                 if (!feedbackText)
                     feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`

@@ -34,7 +34,7 @@ export default {
       return interaction.reply({ content: "Join a voice channel first!" })
     }
 
-    const player = client.lavalink.players.get(guild.id)
+    const player = client.lavalink.getPlayer(guild.id)
 
     if (!player) {
       return interaction.reply({ content: "There is no player for this guild." })
@@ -45,10 +45,6 @@ export default {
     }
 
     const mode = interaction.options.getString("mode", true)
-    if (mode !== "off" && mode !== "track" && mode !== "queue") {
-      return interaction.reply({ content: "Invalid loop mode." })
-    }
-
     switch (mode) {
       case "off":
         await player.setRepeatMode("off")
@@ -59,6 +55,8 @@ export default {
       case "queue":
         await player.setRepeatMode("queue")
         return interaction.reply({ content: "Now looping the queue." })
+      default:
+        return interaction.reply({ content: "Invalid loop mode." })
     }
   },
 }

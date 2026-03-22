@@ -486,7 +486,7 @@ export async function getSimilarTracks(
         const { tracks, apiFailed, rateLimited, httpStatus, errorSnippet } =
           await spotifySimilarTracksFromRelatedAndTop(token, trackId, market, limit, a)
 
-        if (rateLimited) return empty("spotify_rate_limited")
+        if (rateLimited) spotifyNotes.push("spotify_rate_limited")
         if (tracks.length > 0) return { tracks }
         if (apiFailed) {
           spotifyNotes.push(

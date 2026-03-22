@@ -151,7 +151,7 @@ export function createControlButtons(client: BotClient, player: Player | null | 
     .setCustomId("control_shuffle")
     .setLabel("Shuffle")
     .setStyle(ButtonStyle.Secondary)
-    .setDisabled(!hasCurrent && !hasQueue)
+    .setDisabled(!hasQueue)
 
   const loopButton = new ButtonBuilder()
     .setCustomId("control_loop")

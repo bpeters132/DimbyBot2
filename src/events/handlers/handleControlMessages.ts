@@ -92,6 +92,8 @@ export default async function handleControlMessages(client: BotClient, message: 
       client.debug(
         `[ControlHandler] Player not connected for guild ${guildId}. Attempting connection to VC ${voiceChannel.id}.`
       )
+      player.voiceChannelId = voiceChannel.id
+      player.textChannelId = sendChannel.id
       try {
         await player.connect()
         client.debug(

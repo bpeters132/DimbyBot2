@@ -14,12 +14,21 @@ function getLogger(logger: Partial<LoggerInterface> | undefined): LoggerInterfac
     typeof logger.debug === "function" &&
     typeof logger.info === "function" &&
     typeof logger.warn === "function" &&
-    typeof logger.error === "function" &&
-    typeof logger.setDebugEnabled === "function" &&
-    typeof logger.getDebugEnabled === "function" &&
-    typeof logger.getLogFilePath === "function"
+    typeof logger.error === "function"
   ) {
-    return logger as LoggerInterface
+    const l = logger as Partial<LoggerInterface>
+    return {
+      debug: (text: string, ...args: unknown[]) => l.debug!(text, ...args),
+      info: (text: string, ...args: unknown[]) => l.info!(text, ...args),
+      warn: (text: string, ...args: unknown[]) => l.warn!(text, ...args),
+      error: (text: string, ...args: unknown[]) => l.error!(text, ...args),
+      setDebugEnabled:
+        typeof l.setDebugEnabled === "function" ? l.setDebugEnabled.bind(l) : () => {},
+      getDebugEnabled:
+        typeof l.getDebugEnabled === "function" ? l.getDebugEnabled.bind(l) : () => false,
+      getLogFilePath:
+        typeof l.getLogFilePath === "function" ? l.getLogFilePath.bind(l) : () => null,
+    }
   }
   return {
     debug: () => {},

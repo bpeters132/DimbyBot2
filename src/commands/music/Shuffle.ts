@@ -23,6 +23,16 @@ export default {
 
     const player = client.lavalink.players.get(guild.id)
 
+    if (
+      player &&
+      player.voiceChannelId &&
+      player.voiceChannelId !== voiceChannel.id
+    ) {
+      return await interaction.reply({
+        content: "You must be in the same voice channel as the bot to use this command.",
+      })
+    }
+
     if (!player || (!player.queue.current && player.queue.tracks.length === 0)) {
       return await interaction.reply("Nothing is playing.")
     } else if (player.queue.current && player.queue.tracks.length === 0) {

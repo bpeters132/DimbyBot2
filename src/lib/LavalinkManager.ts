@@ -26,6 +26,25 @@ import { updateControlMessage } from "../events/handlers/handleControlChannel.js
 import { getGuildSettings } from "../util/saveControlChannel.js"
 import type BotClient from "./BotClient.js"
 
+/** If title starts with artist then a separator (-–—:|), returns the rest; otherwise null (no dynamic RegExp from user data). */
+function titleAfterArtistPrefix(titleRaw: string, artistRaw: string): string | null {
+  const title = titleRaw.trim().replace(/\s+/g, " ")
+  const artist = artistRaw.trim().replace(/\s+/g, " ")
+  if (!artist.length || !title.length) return null
+  const tl = title.toLowerCase()
+  const al = artist.toLowerCase()
+  if (!tl.startsWith(al)) return null
+  let i = artist.length
+  while (i < title.length && title[i] === " ") i++
+  if (i >= title.length) return null
+  const sep = title[i]
+  if (sep === undefined || !"-–—:|".includes(sep)) return null
+  i++
+  while (i < title.length && title[i] === " ") i++
+  const rest = title.slice(i).trim()
+  return rest.length > 0 ? rest : null
+}
+
 function resolveAutoplaySeed(player: Player, endedTrack: Track | undefined) {
   let artist = endedTrack?.info?.author?.trim()
   let title = endedTrack?.info?.title?.trim()
@@ -39,10 +58,8 @@ function resolveAutoplaySeed(player: Player, endedTrack: Track | undefined) {
   }
 
   if (title && artist && !/^unknown$/i.test(artist)) {
-    const esc = artist.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    const dup = new RegExp(`^\\s*${esc}\\s*[-–—:|]\\s*(.+)$`, "i")
-    const m2 = title.match(dup)
-    if (m2) title = m2[1].trim()
+    const afterDup = titleAfterArtistPrefix(title, artist)
+    if (afterDup) title = afterDup
   }
 
   if (!title) {
@@ -241,15 +258,6 @@ async function tryQueueAndPlayAutoplay(
     )
       return false
     if (isAutoplayRecentlyPlayed(player, lavalinkTrack.info)) return false
-
-    const resolvedUri = lavalinkTrack.info?.uri
-    if (
-      !lavalinkTrack.encoded &&
-      typeof resolvedUri === "string" &&
-      resolvedUri.trim().length > 0
-    ) {
-      lavalinkTrack.encoded = resolvedUri.trim() as Track["encoded"]
-    }
 
     if (!shouldStillInjectAutoplayTrack(player)) return false
 

@@ -385,46 +385,48 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         let lastProgress = 0
         let outputBuffer = ""
 
+        const processStdoutLine = (line: string) => {
+            client.debug(`[yt-dlp stdout] ${line}`)
+            if (line.startsWith(downloadsDir) && line.endsWith(".wav")) {
+                downloadedFilePath = line.trim()
+                client.debug(`[Download] Captured downloaded file path: ${downloadedFilePath}`)
+                return
+            }
+
+            const progressMatch = line.match(
+                /\[download]\s+(\d+(?:\.\d+)?)% of (\d+(?:\.\d+)?)([KMG]iB) at (\d+(?:\.\d+)?)([KMG]iB\/s) ETA (\d+:\d+)/
+            )
+            if (progressMatch) {
+                const progress = parseFloat(progressMatch[1])
+                const totalSize = parseFloat(progressMatch[2])
+                const sizeUnit = progressMatch[3]
+                const speed = parseFloat(progressMatch[4])
+                const speedUnit = progressMatch[5]
+                const eta = progressMatch[6]
+
+                if (progress >= lastProgress + 1) {
+                    lastProgress = progress
+                    const progressBar = createProgressBar(progress)
+                    const statusText =
+                        `Downloading... ${progress.toFixed(1)}%\n` +
+                        `${progressBar}\n` +
+                        `Size: ${totalSize}${sizeUnit}\n` +
+                        `Speed: ${speed}${speedUnit}\n` +
+                        `ETA: ${eta}`
+
+                    updateReply(statusText).catch((e: unknown) =>
+                        client.error("Failed to edit reply for progress", e)
+                    )
+                }
+            }
+        }
+
         downloadProcess.stdout?.on("data", (data: Buffer) => {
             outputBuffer += data.toString()
             const lines = outputBuffer.split("\n")
             outputBuffer = lines.pop() ?? ""
 
-            lines.forEach((line: string) => {
-                client.debug(`[yt-dlp stdout] ${line}`)
-                if (line.startsWith(downloadsDir) && line.endsWith(".wav")) {
-                    downloadedFilePath = line.trim()
-                    client.debug(`[Download] Captured downloaded file path: ${downloadedFilePath}`)
-                    return
-                }
-
-                const progressMatch = line.match(
-                    /\[download]\s+(\d+(?:\.\d+)?)% of (\d+(?:\.\d+)?)([KMG]iB) at (\d+(?:\.\d+)?)([KMG]iB\/s) ETA (\d+:\d+)/
-                )
-                if (progressMatch) {
-                    const progress = parseFloat(progressMatch[1])
-                    const totalSize = parseFloat(progressMatch[2])
-                    const sizeUnit = progressMatch[3]
-                    const speed = parseFloat(progressMatch[4])
-                    const speedUnit = progressMatch[5]
-                    const eta = progressMatch[6]
-
-                    if (progress >= lastProgress + 1) {
-                        lastProgress = progress
-                        const progressBar = createProgressBar(progress)
-                        const statusText =
-                            `Downloading... ${progress.toFixed(1)}%\n` +
-                            `${progressBar}\n` +
-                            `Size: ${totalSize}${sizeUnit}\n` +
-                            `Speed: ${speed}${speedUnit}\n` +
-                            `ETA: ${eta}`
-
-                        updateReply(statusText).catch((e: unknown) =>
-                            client.error("Failed to edit reply for progress", e)
-                        )
-                    }
-                }
-            })
+            lines.forEach((line: string) => processStdoutLine(line))
         })
 
         downloadProcess.stderr?.on("data", (data: Buffer) => {
@@ -439,6 +441,14 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                         .editReply({ content: "Error downloading video. Please try again later." })
                         .catch((e: unknown) => client.error("Failed to edit reply on download error", e))
                     return
+                }
+
+                const tail = outputBuffer.trim()
+                outputBuffer = ""
+                if (tail) {
+                    for (const line of tail.split("\n")) {
+                        if (line.trim()) processStdoutLine(line.trim())
+                    }
                 }
 
                 await updateReply("Download complete. Finalizing file...", true)

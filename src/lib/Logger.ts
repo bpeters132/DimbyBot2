@@ -15,7 +15,7 @@ export default class Logger implements LoggerInterface {
     this.debugEnabled = process.env.LOG_LEVEL?.toLowerCase() === "debug"
     if (!file) {
       console.warn("Logger Warning: No log file path provided. File logging disabled.")
-      this.logger = winston.createLogger({ transports: [] })
+      this.logger = winston.createLogger({ silent: true })
     } else {
       try {
         const fileLogFormat = winston.format.combine(
@@ -37,7 +37,7 @@ export default class Logger implements LoggerInterface {
         })
       } catch (error) {
         console.error(`Logger Error: Failed to create file transport for ${file}:`, error)
-        this.logger = winston.createLogger({ transports: [] })
+        this.logger = winston.createLogger({ silent: true })
       }
     }
 

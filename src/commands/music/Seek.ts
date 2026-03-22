@@ -34,14 +34,11 @@ export default {
 
     const player = client.lavalink.players.get(guild.id)
 
-    if (!player || (!player.queue.current && player.queue.tracks.length === 0)) {
+    if (!player || !player.queue.current) {
       return interaction.reply("Nothing is playing.")
     }
 
     const current = player.queue.current
-    if (!current) {
-      return interaction.reply("Nothing is playing.")
-    }
 
     const durationMs = current.info.duration ?? 0
     const durationSec = Math.max(0, Math.floor(durationMs / 1000))
