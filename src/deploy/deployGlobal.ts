@@ -43,6 +43,7 @@ async function deployGlobalCommands() {
     console.log(`Successfully reloaded ${data.length} application (/) commands globally.`)
   } catch (error) {
     console.error("Failed to register global application commands:", error)
+    process.exit(1)
   }
 }
 

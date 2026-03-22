@@ -32,7 +32,7 @@ function musicBrainzUserAgent() {
 /**
  * @param {string} pathQuery path starting with / e.g. /artist?query=...
  */
-async function mbFetch(pathQuery: string) {
+async function mbFetch(pathQuery: string): Promise<Response> {
   const now = Date.now()
   const wait = Math.max(0, MB_MIN_INTERVAL_MS - (now - lastMbRequestAt))
   if (wait > 0) await new Promise((r) => setTimeout(r, wait))

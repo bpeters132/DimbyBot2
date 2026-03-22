@@ -17,11 +17,11 @@ async function deployGuildCommands() {
     console.error(
       "GUILD_ID is not set in the environment variables. Cannot deploy guild commands.",
     )
-    return
+    process.exit(1)
   }
   if (!appID || !token) {
     console.error("CLIENT_ID and BOT_TOKEN are required to deploy guild commands.")
-    return
+    process.exit(1)
   }
 
   const rest = new REST({ version: "10" }).setToken(token)
@@ -31,7 +31,7 @@ async function deployGuildCommands() {
 
   if (!commandsToDeploy || commandsToDeploy.length === 0) {
     console.error("No command data found to deploy. Exiting.")
-    return
+    process.exit(1)
   }
 
   console.log(
@@ -48,7 +48,11 @@ async function deployGuildCommands() {
     )
   } catch (error) {
     console.error(`Failed to register application commands for guild ${devGuildID}:`, error)
+    process.exit(1)
   }
 }
 
-deployGuildCommands()
+deployGuildCommands().catch((err: unknown) => {
+  console.error("deployGuildCommands failed:", err)
+  process.exit(1)
+})

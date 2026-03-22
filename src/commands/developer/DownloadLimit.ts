@@ -51,8 +51,8 @@ export default {
         )
     ),
   /**
+   * @param {import('discord.js').ChatInputCommandInteraction} interaction
    * @param {import('../../lib/BotClient.js').default} client
-   * @param {import('discord.js').CommandInteraction} interaction
    */
   async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
     const ownerId = process.env.OWNER_ID

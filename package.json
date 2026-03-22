@@ -21,6 +21,9 @@
     "destroyGuild": "node ./dist/deploy/destroyGuild.js"
   },
   "license": "MIT",
+  "engines": {
+    "node": ">=20.11.0"
+  },
   "dependencies": {
     "@discordjs/voice": "0.19.0",
     "@snazzah/davey": "^0.1.10",
@@ -55,8 +58,8 @@
       "storage/*",
       "logs/*"
     ],
-    "watch": ["src", "dist"],
-    "ext": "ts,json,js",
+    "watch": ["dist"],
+    "ext": "js,json",
     "delay": 1000,
     "exec": "node dist/index.js"
   }

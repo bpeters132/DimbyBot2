@@ -29,10 +29,14 @@ export default async (client: BotClient) => {
         const setupEvent = eventModule.default
 
         if (typeof setupEvent === "function") {
-          void setupEvent(client)
           const moduleId = file.replace(/\.js$/i, "")
-          client.info(`Loaded event handler: ${moduleId}`)
-          loadedCount++
+          try {
+            await Promise.resolve(setupEvent(client))
+            client.info(`Loaded event handler: ${moduleId}`)
+            loadedCount++
+          } catch (setupErr: unknown) {
+            client.error(`Error running event setup for ${filePath}:`, setupErr)
+          }
         } else {
           client.warn(
             `[WARNING] The event file at ${filePath} does not have a default export that is a function.`

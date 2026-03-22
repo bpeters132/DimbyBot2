@@ -13,6 +13,7 @@ import path from "path"
 const __dirname = import.meta.dirname
 
 async function loadCommands(
+  client: BotClient,
   dir: string,
   commands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = []
 ): Promise<RESTPostAPIChatInputApplicationCommandsJSONBody[]> {
@@ -20,22 +21,22 @@ async function loadCommands(
   for (const dirent of dirents) {
     const resPath = path.resolve(dir, dirent.name)
     if (dirent.isDirectory()) {
-      await loadCommands(resPath, commands)
-    } else if (dirent.isFile() && (dirent.name.endsWith(".js") || dirent.name.endsWith(".ts"))) {
+      await loadCommands(client, resPath, commands)
+    } else if (dirent.isFile() && dirent.name.endsWith(".js")) {
       try {
         const commandModule = (await import(`file://${resPath}`)) as {
           default?: { data: SlashCommandBuilder }
         }
         if (commandModule.default && commandModule.default.data instanceof SlashCommandBuilder) {
           commands.push(commandModule.default.data.toJSON())
-          console.log(`[DeployCmd] Loaded command: ${commandModule.default.data.name}`)
+          client.debug(`[DeployCmd] Loaded command: ${commandModule.default.data.name}`)
         } else {
-          console.warn(
+          client.warn(
             `[DeployCmd] Command file ${resPath} is missing a default export or valid 'data' property.`
           )
         }
       } catch (error: unknown) {
-        console.error(`[DeployCmd] Error loading command file ${resPath}:`, error)
+        client.error(`[DeployCmd] Error loading command file ${resPath}:`, error)
       }
     }
   }
@@ -85,7 +86,7 @@ export default {
     try {
       const commands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = []
       const commandsPath = path.join(__dirname, "..", "..", "commands")
-      await loadCommands(commandsPath, commands)
+      await loadCommands(client, commandsPath, commands)
 
       if (commands.length === 0) {
         await interaction.editReply("⚠️ No command files found or loaded.")

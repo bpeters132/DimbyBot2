@@ -28,10 +28,6 @@ export default {
         .setName("destroy")
         .setDescription("Destroy the player instance for a specific guild")
         .addStringOption(option => option.setName("guildid").setDescription("The ID of the guild to destroy the player for").setRequired(true))),
-  /**
-   * @param {import('../../lib/BotClient.js').default} client
-   * @param {import('discord.js').CommandInteraction} interaction
-   */
   async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
     // --- Developer Check ---
     const ownerId = process.env.OWNER_ID
@@ -90,8 +86,7 @@ export default {
               { name: "Node", value: player.node?.id || "N/A", inline: true },
               { name: "Voice Channel", value: `${voiceName} (${player.voiceChannelId ?? "N/A"})` },
               { name: "Text Channel", value: player.textChannelId || "N/A" },
-              { name: "Queue Size", value: queueSize.toString(), inline: true },
-              { name: "Connected", value: player.connected ? "Yes" : "No", inline: true }
+              { name: "Queue Size", value: queueSize.toString(), inline: true }
             )
             .setTimestamp()
 

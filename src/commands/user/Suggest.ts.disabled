@@ -1,4 +1,6 @@
 import { SlashCommandBuilder } from "discord.js"
+import type { ChatInputCommandInteraction } from "discord.js"
+import type BotClient from "../../lib/BotClient.js"
 import nodemailer from "nodemailer"
 
 /**
@@ -22,17 +24,13 @@ export default {
         .setRequired(true)
     ),
 
-  /**
-   * Executes the suggestion submission process.
-   * @param {import('../../lib/BotClient.js').default} client The bot client instance.
-   * @param {import('discord.js').ChatInputCommandInteraction} interaction The interaction object.
-   */
-  async execute(interaction, client) {
+  /** Submits the suggestion by email using configured SMTP. */
+  async execute(interaction: ChatInputCommandInteraction, client: BotClient) {
     client.debug(
       `Suggest command invoked by ${interaction.user.tag} in guild ${interaction.guild?.id ?? "DM"}`
     )
 
-    await interaction.deferReply()
+    await interaction.deferReply({ ephemeral: true })
 
     // Get the suggestion details from the command options
     const title = interaction.options.getString("title")
@@ -50,7 +48,6 @@ export default {
       return interaction.editReply({
         content:
           "Suggestion submission is not configured correctly on the bot's end. Please notify the administrator.",
-        ephemeral: true
       })
     }
     client.debug("Email environment variables seem present.")
@@ -80,7 +77,6 @@ export default {
       return interaction.editReply({
         content:
           "There was an error setting up the suggestion submission service. Please try again later.",
-        ephemeral: true
       })
     }
 
@@ -115,21 +111,17 @@ Submitted at: ${new Date().toISOString()}
       // Inform the user of success
       await interaction.editReply({
         content: "Your suggestion has been submitted successfully!",
-        ephemeral: true
       })
       client.debug(`Suggest command finished successfully for ${user.tag}.`)
-    } catch (error) {
-      // Log failure information
+    } catch (error: unknown) {
       client.error(`Suggest command failed: Error sending email for user ${user.tag}:`, error)
-      // Provide specific SMTP error details if available in the error object
-      if (error.responseCode) {
-        client.error(`SMTP Error Code: ${error.responseCode}, Response: ${error.response}`)
+      if (error && typeof error === "object" && "responseCode" in error) {
+        const smtpErr = error as { responseCode?: number; response?: string }
+        client.error(`SMTP Error Code: ${smtpErr.responseCode}, Response: ${smtpErr.response}`)
       }
-      // Inform the user about the failure
       await interaction.editReply({
         content:
           "There was an error submitting your suggestion. Please try again later or contact an admin if the issue persists.",
-        ephemeral: true
       })
     }
   },

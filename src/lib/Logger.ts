@@ -45,9 +45,6 @@ export default class Logger implements LoggerInterface {
   }
 
   private _applyDebugLevel() {
-    if (!this.logger) {
-      return
-    }
     this.logger.level = this.debugEnabled ? "debug" : "info"
   }
 
@@ -67,11 +64,12 @@ export default class Logger implements LoggerInterface {
 
   private _getTimestamp() {
     const d = new Date()
+    const y = d.getFullYear()
     const month = String(d.getMonth() + 1).padStart(2, "0")
     const day = String(d.getDate()).padStart(2, "0")
     const hour = String(d.getHours()).padStart(2, "0")
     const minute = String(d.getMinutes()).padStart(2, "0")
-    return `[${day}:${month}:${d.getFullYear()} - ${hour}:${minute}]`
+    return `[${y}-${month}-${day} ${hour}:${minute}]`
   }
 
   private _formatArgs(args: unknown[]) {

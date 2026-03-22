@@ -14,7 +14,10 @@ function getLogger(logger: Partial<LoggerInterface> | undefined): LoggerInterfac
     typeof logger.debug === "function" &&
     typeof logger.info === "function" &&
     typeof logger.warn === "function" &&
-    typeof logger.error === "function"
+    typeof logger.error === "function" &&
+    typeof logger.setDebugEnabled === "function" &&
+    typeof logger.getDebugEnabled === "function" &&
+    typeof logger.getLogFilePath === "function"
   ) {
     return logger as LoggerInterface
   }
@@ -58,7 +61,7 @@ export function getGuildSettings(loggerInstance?: Partial<LoggerInterface>): Gui
     if (fs.existsSync(settingsFile)) {
       const data = fs.readFileSync(settingsFile, "utf8")
       const parsed: unknown = JSON.parse(data)
-      if (typeof parsed === "object" && parsed !== null) {
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
         logger.debug(`[guildSettings] Successfully read and parsed settings file.`)
         return parsed as GuildSettingsStore
       } else {

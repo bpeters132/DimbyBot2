@@ -150,11 +150,6 @@ export default {
 
     // Handle collected button interactions
     collector.on("collect", async (i) => {
-      // Double-check user (although filter should handle this)
-      if (i.user.id !== interaction.user.id) {
-        return i.reply({ content: "You can't control this queue's pagination!" })
-      }
-
       // Acknowledge the button click visually without sending a new message
       await i.deferUpdate()
 
@@ -194,8 +189,7 @@ export default {
         // Attempt to edit the message to show disabled buttons
         try {
           await interaction.editReply({ embeds: [finalEmbed], components: [disabledButtons] })
-        } catch (error) {
-          // Log error if editing fails (e.g., message was deleted)
+        } catch (error: unknown) {
           client.error("Queue command: Failed to edit reply after collector end:", error)
         }
       }

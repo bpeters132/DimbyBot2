@@ -35,6 +35,13 @@ export default {
       return interaction.editReply({ content: "No player found for this guild." })
     }
 
+    const botMember = await guild.members.fetchMe()
+    if (!botMember.voice.channel || botMember.voice.channel.id !== voiceChannel.id) {
+      return interaction.editReply({
+        content: "You must be in the same voice channel as the bot to use this command.",
+      })
+    }
+
     const res = await player.search(query, { requester: interaction.user })
 
     if (!res || !res.tracks?.length) {

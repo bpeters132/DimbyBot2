@@ -19,6 +19,17 @@ import { getGuildSettings } from "../util/saveControlChannel.js"
 import { rememberAutoplayPlayed } from "../util/autoplayHistory.js"
 import { updateControlMessage } from "./handlers/handleControlChannel.js"
 
+type GuildTextSendable = { send: (content: string) => Promise<Message<boolean>> }
+
+function isTextSendable(channel: unknown): channel is GuildTextSendable {
+  return (
+    typeof channel === "object" &&
+    channel !== null &&
+    "send" in channel &&
+    typeof (channel as { send?: unknown }).send === "function"
+  )
+}
+
 export default async (client: BotClient) => {
     client.lavalink
         /**
@@ -78,11 +89,11 @@ export default async (client: BotClient) => {
             const channel = textId ? client.channels.cache.get(textId) : undefined
             const currentGuildSettings = getGuildSettings(client)
             const controlChannelId = currentGuildSettings[player.guildId]?.controlChannelId
-            if (channel && textId !== controlChannelId && "send" in channel) {
+            if (channel && textId !== controlChannelId && isTextSendable(channel)) {
                 client.debug(
                     `[LavaMgrEvents] Sending trackStart message to non-control channel ${player.textChannelId} in guild ${player.guildId}.`
                 )
-                ;(channel as { send: (content: string) => Promise<Message<boolean>> })
+                channel
                   .send(`Now playing: **${track.info.title}**`)
                   .then((msg: Message) => {
                     setTimeout(() => {
@@ -120,7 +131,7 @@ export default async (client: BotClient) => {
             )
             updateControlMessage(client, player.guildId)
         })
-        .on("trackStuck", (player: Player, track: Track | null, payload: TrackStuckEvent) => {
+        .on("trackStuck", async (player: Player, track: Track | null, payload: TrackStuckEvent) => {
             client.warn(
                 `[LavaMgrEvents] Track stuck in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "N/A"}, Threshold: ${payload.thresholdMs}`
             )
@@ -134,12 +145,12 @@ export default async (client: BotClient) => {
               channelStuck &&
               textIdStuck !== controlChannelIdStuck &&
               track &&
-              "send" in channelStuck
+              isTextSendable(channelStuck)
             ) {
                 client.debug(
                     `[LavaMgrEvents] Sending trackStuck message to non-control channel ${textIdStuck} in guild ${player.guildId}.`
                 )
-                ;(channelStuck as { send: (c: string) => Promise<unknown> })
+                channelStuck
                     .send(`Track stuck: **${track.info.title}**`)
                     .catch((e: unknown) =>
                         client.error("[LavaMgrEvents] Failed to send trackStuck message:", e)
@@ -148,11 +159,11 @@ export default async (client: BotClient) => {
             client.debug(
                 `[LavaMgrEvents] Attempting to skip stuck track in guild ${player.guildId}.`
             )
-            player.skip()
+            await player.skip()
         })
         .on(
           "trackError",
-          (player: Player, track: Track | UnresolvedTrack | null, payload: TrackExceptionEvent) => {
+          async (player: Player, track: Track | UnresolvedTrack | null, payload: TrackExceptionEvent) => {
             client.error(
                 `[LavaMgrEvents] Track error in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "Unknown Track"}`,
                 payload
@@ -164,7 +175,7 @@ export default async (client: BotClient) => {
             const currentGuildSettingsErr = getGuildSettings(client)
             const controlChannelIdErr = currentGuildSettingsErr[player.guildId]?.controlChannelId
             const tInfo = track?.info
-            if (channelErr && textIdErr !== controlChannelIdErr && tInfo && "send" in channelErr) {
+            if (channelErr && textIdErr !== controlChannelIdErr && tInfo && isTextSendable(channelErr)) {
                 client.debug(
                     `[LavaMgrEvents] Sending trackError message to non-control channel ${textIdErr} in guild ${player.guildId}.`
                 )
@@ -212,7 +223,7 @@ export default async (client: BotClient) => {
                     errorMessage += `• URI: ${tInfo.uri}`
                 }
 
-                ;(channelErr as { send: (c: string) => Promise<unknown> })
+                channelErr
                     .send(errorMessage)
                     .catch((e: unknown) =>
                         client.error("[LavaMgrEvents] Failed to send trackError message:", e)
@@ -222,15 +233,13 @@ export default async (client: BotClient) => {
             client.debug(
                 `[LavaMgrEvents] Attempting to skip track after error in guild ${player.guildId}.`
             )
-            // Only skip if there are tracks left in the queue
             if (player.queue.tracks.length > 0) {
-                player.skip()
+                await player.skip()
             } else {
                 client.debug(
                     `[LavaMgrEvents] Queue is empty, not skipping after error in guild ${player.guildId}.`
                 )
-                // Optionally, you might want to destroy the player here if the queue is empty and an error occurred
-                player.destroy() // Example: uncomment if you want to destroy on error + empty queue
+                await player.destroy()
             }
         })
 
@@ -246,11 +255,11 @@ export default async (client: BotClient) => {
             const channelQ = textIdQ ? client.channels.cache.get(textIdQ) : undefined
             const currentGuildSettingsQ = getGuildSettings(client)
             const controlChannelIdQ = currentGuildSettingsQ[player.guildId]?.controlChannelId
-            if (channelQ && textIdQ !== controlChannelIdQ && "send" in channelQ) {
+            if (channelQ && textIdQ !== controlChannelIdQ && isTextSendable(channelQ)) {
                 client.debug(
                     `[LavaMgrEvents] Sending queueEnd message to non-control channel ${textIdQ} in guild ${player.guildId}.`
                 )
-                ;(channelQ as { send: (c: string) => Promise<unknown> })
+                channelQ
                     .send("Queue has ended.")
                     .catch((e: unknown) =>
                         client.error("[LavaMgrEvents] Failed to send queueEnd message:", e)
@@ -262,19 +271,21 @@ export default async (client: BotClient) => {
                 `[LavaMgrEvents] Setting standard timeout to destroy player ${player.guildId} after queue end.`
             )
             setTimeout(() => {
-                client.debug(
-                    `[LavaMgrEvents] Executing standard queue end timeout check for player ${player.guildId}.`
-                )
-                if (player && player.queue.tracks.length === 0 && !player.queue.current) {
+                void (async () => {
                     client.debug(
-                        `[LavaMgrEvents] Player ${player.guildId} is idle, destroying after queue end timeout.`
+                        `[LavaMgrEvents] Executing standard queue end timeout check for player ${player.guildId}.`
                     )
-                    player.destroy()
-                } else {
-                    client.debug(
-                        `[LavaMgrEvents] Player ${player.guildId} has new tracks or state changed, not destroying after standard timeout. Player: ${!!player}, Queue Size: ${player?.queue.tracks.length}, Current: ${!!player?.queue.current}`
-                    )
-                }
+                    if (player && player.queue.tracks.length === 0 && !player.queue.current) {
+                        client.debug(
+                            `[LavaMgrEvents] Player ${player.guildId} is idle, destroying after queue end timeout.`
+                        )
+                        await player.destroy()
+                    } else {
+                        client.debug(
+                            `[LavaMgrEvents] Player ${player.guildId} has new tracks or state changed, not destroying after standard timeout. Player: ${!!player}, Queue Size: ${player?.queue.tracks.length}, Current: ${!!player?.queue.current}`
+                        )
+                    }
+                })()
             }, 5000)
         })
 
@@ -317,7 +328,7 @@ export default async (client: BotClient) => {
                                     `[LavaMgrEvents] Destroying player in Guild ${player.guildId} as bot is alone.`
                                 )
                                 await updateControlMessage(client, player.guildId) // Update before destroy
-                                player.destroy()
+                                await player.destroy()
                             }
                         } else {
                             client.warn(

@@ -164,19 +164,12 @@ export default async function handleControlMessages(client: BotClient, message: 
     )
     // 9. Delete user query
     try {
-      // Check permissions before attempting deletion
       const botPermissions = botUser ? sendChannel.permissionsFor(botUser) : null
       if (botPermissions?.has(PermissionsBitField.Flags.ManageMessages)) {
-        try {
-          await message.delete()
-          client.debug(
-            `[ControlHandler] Deleted user query message ${message.id} in guild ${guildId}.`
-          )
-        } catch {
-          client.debug(
-            `[ControlHandler] User query message ${message.id} already deleted or missing in guild ${guildId}.`
-          )
-        }
+        await message.delete()
+        client.debug(
+          `[ControlHandler] Deleted user query message ${message.id} in guild ${guildId}.`
+        )
       } else {
         client.warn(
           `[ControlHandler] Missing ManageMessages permission in control channel ${sendChannel.id} for guild ${guildId}, cannot delete query.`
@@ -184,14 +177,15 @@ export default async function handleControlMessages(client: BotClient, message: 
       }
     } catch (deleteError: unknown) {
       const de = deleteError as { code?: number; message?: string }
-      // Log specific errors if deletion fails for reasons other than missing permissions or message already gone
-      if (de.code !== 10008) {
-        // 10008: Unknown Message
-        client.warn(
-          `[ControlHandler] Failed to delete query message ${message.id} in guild ${guildId}: ${de.message} (Code: ${de.code})`
+      if (de.code === 10008) {
+        client.debug(
+          `[ControlHandler] User query message ${message.id} already deleted or missing in guild ${guildId}.`
         )
       } else {
-        client.warn(`[ControlHandler] Attempted to delete already deleted message ${message.id}.`)
+        client.warn(
+          `[ControlHandler] Failed to delete query message ${message.id} in guild ${guildId}:`,
+          deleteError
+        )
       }
     }
 
@@ -201,22 +195,20 @@ export default async function handleControlMessages(client: BotClient, message: 
       client.debug(
         `[ControlHandler] Scheduling deletion for feedback message ${fm.id} in guild ${guildId}.`
       )
-      setTimeout(async () => {
-        try {
+      setTimeout(() => {
+        void (async () => {
           try {
             await fm.delete()
             client.debug(`[ControlHandler] Deleted feedback message ${fm.id} in guild ${guildId}.`)
-          } catch {
-            /* already gone */
+          } catch (feedbackDeleteError: unknown) {
+            const fe = feedbackDeleteError as { code?: number; message?: string }
+            if (fe.code !== 10008) {
+              client.warn(
+                `[ControlHandler] Failed to delete feedback message ${fm.id}: ${fe.message}`
+              )
+            }
           }
-        } catch (feedbackDeleteError: unknown) {
-          const fe = feedbackDeleteError as { code?: number; message?: string }
-          if (fe.code !== 10008) {
-            client.warn(
-              `[ControlHandler] Failed to delete feedback message ${fm.id}: ${fe.message}`
-            )
-          }
-        }
+        })()
       }, 5000)
     }
     client.debug(

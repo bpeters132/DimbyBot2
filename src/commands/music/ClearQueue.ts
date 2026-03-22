@@ -7,10 +7,6 @@ export default {
   data: new SlashCommandBuilder()
     .setName("clearqueue")
     .setDescription("Clears all upcoming tracks from the queue, leaving the current song playing."),
-  /**
-   * @param {import('../../lib/BotClient.js').default} client
-   * @param {import('discord.js').CommandInteraction} interaction
-   */
   async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
     const guild = interaction.guild
     if (!guild) {
@@ -31,7 +27,7 @@ export default {
     }
 
     // Check if bot is in a voice channel
-    const botMember = await interaction.guild.members.fetchMe()
+    const botMember = await guild.members.fetchMe()
     if (!botMember.voice.channel) {
       client.debug("[ClearQueue] Bot not in a voice channel.")
       return interaction.reply({ 

@@ -194,8 +194,8 @@ function levenshtein(a: string, b: string) {
  * @returns {number}
  */
 function tokenJaccard(a: string, b: string) {
-  const ta = new Set(a.split(" ").filter((w: string) => w.length > 2))
-  const tb = new Set(b.split(" ").filter((w: string) => w.length > 2))
+  const ta = new Set(a.split(" ").filter((w) => w.length > 2))
+  const tb = new Set(b.split(" ").filter((w) => w.length > 2))
   if (ta.size === 0 || tb.size === 0) return 0
   let inter = 0
   for (const w of ta) if (tb.has(w)) inter++
@@ -275,7 +275,7 @@ const COMPOSITION_HEAD_STOP = new Set([
  * @returns {string}
  */
 function latinTitleHead(core: string) {
-  const words = latinWordBlob(core).split(" ").filter((w: string) => w.length > 1)
+  const words = latinWordBlob(core).split(" ").filter((w) => w.length > 1)
   const out = []
   for (const w of words) {
     if (COMPOSITION_HEAD_STOP.has(w)) break

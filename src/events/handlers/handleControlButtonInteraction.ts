@@ -178,8 +178,7 @@ export async function handleControlButtonInteraction(
             actionTaken = true
           } catch (pauseError: unknown) {
             const pe = pauseError instanceof Error ? pauseError.message : String(pauseError)
-            // Handle specific error potentially thrown even when trying to pause
-            if (pe === "Player is already paused - not able to pause.") {
+            if (pe.includes("already paused")) {
               client.warn(
                 `[ControlButtonHandler] Caught '${pe}' when trying to pause. Assuming already paused.`
               )
@@ -200,8 +199,7 @@ export async function handleControlButtonInteraction(
               actionTaken = true
             } catch (resumeError: unknown) {
               const re = resumeError instanceof Error ? resumeError.message : String(resumeError)
-              // It's less likely the 'already paused' error occurs with resume(), but keep check just in case
-              if (re === "Player is already paused - not able to pause.") {
+              if (re.includes("already paused")) {
                 client.warn(
                   `[ControlButtonHandler] Caught '${re}' when trying to resume. Assuming already playing or command had no effect.`
                 )

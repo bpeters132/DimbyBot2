@@ -342,21 +342,38 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
         // Download the video
         await updateReply("Downloading audio... This can take a moment.", true)
-        const downloadProcess = spawn("yt-dlp", [
-            url,
-            "-x",
-            "--audio-format",
-            "wav",
-            "--audio-quality",
-            "0",
-            "--no-playlist",
-            "--no-warnings",
-            "--newline",
-            "--print",
-            "after_move:filepath",
-            "-o",
-            `${downloadsDir}/%(title)s.%(ext)s`,
-        ])
+        let downloadProcess: ReturnType<typeof spawn>
+        try {
+            downloadProcess = spawn("yt-dlp", [
+                url,
+                "-x",
+                "--audio-format",
+                "wav",
+                "--audio-quality",
+                "0",
+                "--no-playlist",
+                "--no-warnings",
+                "--newline",
+                "--print",
+                "after_move:filepath",
+                "-o",
+                `${downloadsDir}/%(title)s.%(ext)s`,
+            ])
+        } catch (syncErr: unknown) {
+            client.error("[Download] spawn(yt-dlp) failed synchronously:", syncErr)
+            await updateReply(
+                "Failed to start download process: yt-dlp not found or could not be executed."
+            )
+            return
+        }
+
+        if (!downloadProcess.pid) {
+            client.error("[Download] yt-dlp spawn returned no PID")
+            await updateReply(
+                "Failed to start download process: yt-dlp not found or could not be executed."
+            )
+            return
+        }
 
         downloadProcess.on("error", (err: Error) => {
             client.error("[Download] Failed to start yt-dlp", err)
@@ -368,7 +385,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         let lastProgress = 0
         let outputBuffer = ""
 
-        downloadProcess.stdout.on("data", (data: Buffer) => {
+        downloadProcess.stdout?.on("data", (data: Buffer) => {
             outputBuffer += data.toString()
             const lines = outputBuffer.split("\n")
             outputBuffer = lines.pop() ?? ""
@@ -410,7 +427,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             })
         })
 
-        downloadProcess.stderr.on("data", (data: Buffer) => {
+        downloadProcess.stderr?.on("data", (data: Buffer) => {
             client.error(`[Download] yt-dlp stderr: ${data}`)
         })
 

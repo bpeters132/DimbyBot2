@@ -243,9 +243,12 @@ async function tryQueueAndPlayAutoplay(
     if (isAutoplayRecentlyPlayed(player, lavalinkTrack.info)) return false
 
     const resolvedUri = lavalinkTrack.info?.uri
-    const lt = lavalinkTrack as Track & { track?: string }
-    if (!lt.track && typeof resolvedUri === "string" && resolvedUri.trim().length > 0) {
-      lt.track = resolvedUri.trim()
+    if (
+      !lavalinkTrack.encoded &&
+      typeof resolvedUri === "string" &&
+      resolvedUri.trim().length > 0
+    ) {
+      lavalinkTrack.encoded = resolvedUri.trim() as Track["encoded"]
     }
 
     if (!shouldStillInjectAutoplayTrack(player)) return false
@@ -260,10 +263,9 @@ async function tryQueueAndPlayAutoplay(
         await player.queue.remove(lavalinkTrack)
       } catch (removeErr: unknown) {
         const rmsg = removeErr instanceof Error ? removeErr.message : String(removeErr)
-        const ltw = lavalinkTrack as Track & { track?: string }
         client.debug(
           `[LavalinkManager] Autoplay: queue.remove after play failure failed track=${
-            lavalinkTrack?.info?.identifier ?? ltw.track ?? "?"
+            lavalinkTrack?.info?.identifier ?? lavalinkTrack?.encoded ?? "?"
           } uri=${lavalinkTrack?.info?.uri ?? "?"}: ${rmsg}`
         )
       }
@@ -356,12 +358,18 @@ async function runAutoplay(client: BotClient, player: Player, endedTrack: Track 
 
 export default function createLavalinkManager(client: BotClient): LavalinkManager {
   client.debug("Creating LavalinkManager instance.")
+  const clientId = process.env.CLIENT_ID?.trim()
+  if (!clientId) {
+    const msg = "CLIENT_ID is required for Lavalink (empty id breaks voice/player identity)."
+    client.error(`[LavalinkManager] ${msg}`)
+    throw new Error(msg)
+  }
   const manager = new LavalinkManager({
     nodes,
     sendToShard: (guildId, payload) => client.guilds.cache.get(guildId)?.shard?.send(payload),
     autoSkip: true,
     client: {
-      id: process.env.CLIENT_ID ?? "",
+      id: clientId,
       username: "DimbyBot",
     },
     sources: {

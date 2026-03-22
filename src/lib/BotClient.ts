@@ -35,23 +35,6 @@ export default class BotClient extends Client {
 
     this.commands = new Collection<string, Command>()
 
-    this.info("BotClient constructor: Loading events...")
-    loadEvents(this)
-      .then(() => {
-        this.debug("BotClient constructor: All events loaded successfully.")
-      })
-      .catch((err: unknown) => {
-        this.error("BotClient constructor: Error loading events:", err)
-      })
-
-    this.info("BotClient constructor: Loading commands...")
-    loadCommands(this)
-      .then(() => {
-        this.debug("BotClient constructor: All commands loaded successfully.")
-      })
-      .catch((err: unknown) => {
-        this.error("BotClient constructor: Error loading commands:", err)
-      })
     this.info("BotClient constructor: Finished.")
   }
 
@@ -76,6 +59,21 @@ export default class BotClient extends Client {
     if (!token) {
       this.error("BotClient start: Bot token is missing. Ensure BOT_TOKEN is set in .env")
       throw new Error("Bot token is required.")
+    }
+    this.info("BotClient start: Loading events and commands...")
+    try {
+      await loadEvents(this)
+      this.debug("BotClient start: All events loaded successfully.")
+    } catch (err: unknown) {
+      this.error("BotClient start: Error loading events:", err)
+      throw err
+    }
+    try {
+      await loadCommands(this)
+      this.debug("BotClient start: All commands loaded successfully.")
+    } catch (err: unknown) {
+      this.error("BotClient start: Error loading commands:", err)
+      throw err
     }
     try {
       await this.login(token)

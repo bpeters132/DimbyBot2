@@ -487,7 +487,7 @@ export async function getSimilarTracks(
           await spotifySimilarTracksFromRelatedAndTop(token, trackId, market, limit, a)
 
         if (rateLimited) return empty("spotify_rate_limited")
-        if (tracks.length > 0) return { tracks: tracks as { artist: string; title: string }[] }
+        if (tracks.length > 0) return { tracks }
         if (apiFailed) {
           spotifyNotes.push(
             [httpStatus, errorSnippet].filter(Boolean).join(" ").trim() || "spotify_catalog_http_error"

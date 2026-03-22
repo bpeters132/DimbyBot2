@@ -1,16 +1,31 @@
-import { SlashCommandBuilder} from "discord.js"
+import { SlashCommandBuilder, type Message } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 
+const DELETE_REPLY_DELAY_MS = 1000 * 10
+const DELETE_REPLY_RETRY_MS = 2000
+
+/** Deletes the deferred reply after a delay, with one network retry on transient errors. */
+function deleteWithRetry(msg: Message, client: BotClient) {
+  setTimeout(() => {
+    msg.delete().catch((e: unknown) => {
+      client.error("[LeaveCmd] Failed to delete reply (attempt 1):", e)
+      const err = e as { code?: string; message?: string }
+      if (err.code === "EAI_AGAIN" || err.message?.includes("ECONNRESET")) {
+        setTimeout(() => {
+          msg.delete().catch((e2: unknown) =>
+            client.error("[LeaveCmd] Failed to delete reply (attempt 2):", e2)
+          )
+        }, DELETE_REPLY_RETRY_MS)
+      }
+    })
+  }, DELETE_REPLY_DELAY_MS)
+}
 
 export default {
   data: new SlashCommandBuilder().setName("leave").setDescription("Tell the bot to leave"),
-  /**
-   * Executes the /leave command to make the bot leave the voice channel and destroy the player.
-   * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
-   * @param {import('../../lib/BotClient.js').default} client The bot client instance.
-   */
+  /** Disconnects the bot from voice and tears down the Lavalink player for this guild. */
   async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
     const guild = interaction.guild
     if (!guild) {
@@ -43,25 +58,11 @@ export default {
         if (botVoiceState?.channel) {
             client.debug(`Bot is in voice channel ${botVoiceState.channel.id}. Attempting to leave.`)
             try {
-                client.lavalink.destroyPlayer(guild.id) // Use Lavalink's destroy method
-                // Use fetchReply to get the message object
+                await client.lavalink.destroyPlayer(guild.id)
                 await interaction.editReply({ content: "Left the voice channel." })
                 const msg = await interaction.fetchReply()
                 client.debug("Successfully left voice channel via destroyPlayer.")
-                // Delete after delay with retry
-                setTimeout(() => {
-                  msg.delete().catch((e: unknown) => {
-                    client.error("[LeaveCmd] Failed to delete reply (attempt 1):", e)
-                    const err = e as { code?: string; message?: string }
-                    if (err.code === "EAI_AGAIN" || err.message?.includes("ECONNRESET")) {
-                      setTimeout(() => {
-                        msg.delete().catch((e2: unknown) =>
-                          client.error("[LeaveCmd] Failed to delete reply (attempt 2):", e2)
-                        )
-                      }, 2000)
-                    }
-                  })
-                }, 1000 * 10)
+                deleteWithRetry(msg, client)
             } catch (error) {
                 client.error("Error trying to leave voice channel without active player:", error)
                 await interaction.editReply("Couldn't leave the channel cleanly. Please disconnect me manually.")
@@ -85,19 +86,7 @@ export default {
         await interaction.editReply({ content: "BYE!" })
         const msg = await interaction.fetchReply()
         client.debug("Leave command successfully executed")
-        setTimeout(() => {
-          msg.delete().catch((e: unknown) => {
-            client.error("[LeaveCmd] Failed to delete reply (attempt 1):", e)
-            const err = e as { code?: string; message?: string }
-            if (err.code === "EAI_AGAIN" || err.message?.includes("ECONNRESET")) {
-              setTimeout(() => {
-                msg.delete().catch((e2: unknown) =>
-                  client.error("[LeaveCmd] Failed to delete reply (attempt 2):", e2)
-                )
-              }, 2000)
-            }
-          })
-        }, 1000 * 10)
+        deleteWithRetry(msg, client)
     } catch(error) {
         client.error(`Error destroying player for guild ${guild.id}:`, error)
         await interaction.editReply("An error occurred while trying to leave.")

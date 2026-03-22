@@ -60,7 +60,7 @@ export default async (client: BotClient) => {
          */
         // Emitted when an error occurs related to a specific Lavalink node.
         // Includes the error object and potentially the payload associated with the error.
-        .on("error", (node: LavalinkNode, error: Error | unknown, payload: unknown) => {
+        .on("error", (node: LavalinkNode, error: unknown, payload: unknown) => {
             const msg = error instanceof Error ? error.message : String(error)
             client.error(
                 `Lavalink Node ${node.id} ERRORED: ${msg}${payload ? ` Payload: ${JSON.stringify(payload)}` : ""}`

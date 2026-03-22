@@ -36,13 +36,13 @@ export default {
     }
 
     try {
-      const messages = await channel.messages.fetch({ limit: clear_amount + 1 })
+      const messages = await channel.messages.fetch({ limit: clear_amount })
       const deletableMessages = messages.filter((m) => !m.interaction)
 
       if (deletableMessages.size > 0) {
         await channel.bulkDelete(deletableMessages, true)
         return interaction.reply({
-          content: `Cleared ${deletableMessages.size - 1} messages!`,
+          content: `Cleared ${deletableMessages.size} messages!`,
           ephemeral: true,
         })
       }

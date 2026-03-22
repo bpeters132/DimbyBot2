@@ -9,13 +9,12 @@ export default {
     .setName("seek")
     .setDescription("Seek through the currently playing song")
     .addIntegerOption((option) =>
-      option.setName("position").setDescription("Time to seek to").setRequired(true)
+      option
+        .setName("position")
+        .setDescription("Time to seek to (seconds)")
+        .setRequired(true)
+        .setMinValue(0)
     ),
-  /**
-   * Executes the /seek command to jump to a specific position in the current track.
-   * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
-   * @param {import('../../lib/BotClient.js').default} client The bot client instance.
-   */
   async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
     const position = interaction.options.getInteger("position", true)
     const guild = interaction.guild
@@ -39,7 +38,24 @@ export default {
       return interaction.reply("Nothing is playing.")
     }
 
-    await player.seek(position)
+    const current = player.queue.current
+    if (!current) {
+      return interaction.reply("Nothing is playing.")
+    }
+
+    const durationMs = current.info.duration ?? 0
+    const durationSec = Math.max(0, Math.floor(durationMs / 1000))
+    if (durationSec > 0 && position > durationSec) {
+      return interaction.reply(
+        `That position is past the end of the track (~${durationSec}s).`
+      )
+    }
+
+    const seekMs = Math.min(
+      Math.max(0, position * 1000),
+      durationMs > 0 ? durationMs : Number.MAX_SAFE_INTEGER
+    )
+    await player.seek(seekMs)
     await interaction.reply("Seek complete.")
   },
 }

@@ -12,12 +12,6 @@ export default {
       option.setName("query").setDescription("The song name or URL").setRequired(true)
     ),
 
-
-  /**
-   * Executes the /play command to search for and play a track.
-   * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
-   * @param {import('../../lib/BotClient.js').default} client The bot client instance.
-   */
   async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
     const query = interaction.options.getString("query", true)
     const guild = interaction.guild
@@ -36,7 +30,7 @@ export default {
     }
 
     // Use getPlayer first to potentially reuse existing player
-    let player = client.lavalink?.getPlayer(guild.id)
+    let player = client.lavalink.getPlayer(guild.id)
 
     if (!player) {
         player = await client.lavalink.createPlayer({

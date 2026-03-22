@@ -7,10 +7,6 @@ export default {
   data: new SlashCommandBuilder()
     .setName("playerstats")
     .setDescription("Lists guilds with active Lavalink players (Developer Only)"),
-  /**
-   * @param {import('../../lib/BotClient.js').default} client
-   * @param {import('discord.js').CommandInteraction} interaction
-   */
   async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
     // --- Developer Check ---
     const ownerId = process.env.OWNER_ID

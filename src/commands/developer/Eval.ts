@@ -16,16 +16,13 @@ function getSensitiveValues(client: BotClient): Map<string, string> {
     sensitive.set(client.token, '[REDACTED TOKEN]')
   }
 
-  // Add environment variables containing "PASSWORD"
+  const sensitiveKey = /\b(PASSWORD|SECRET|TOKEN|CREDENTIAL|API_KEY|PRIVATE|ACCESS)\b|_KEY$/i
   for (const key in process.env) {
-    if (key.toUpperCase().includes("PASSWORD")) {
-      const value = process.env[key]
-      // Only redact non-empty strings to avoid issues
-      if (value && typeof value === 'string') {
-        // Avoid adding the token twice if it's also in env
-        if (!sensitive.has(value)) { 
-          sensitive.set(value, `[REDACTED ENV: ${key}]`)
-        }
+    if (!sensitiveKey.test(key)) continue
+    const value = process.env[key]
+    if (value && typeof value === "string") {
+      if (!sensitive.has(value)) {
+        sensitive.set(value, `[REDACTED ENV: ${key}]`)
       }
     }
   }

@@ -4,11 +4,12 @@ import path from "node:path"
 const root = path.join(import.meta.dirname, "..")
 const musicDir = path.join(root, "src", "commands", "music")
 
+// Whitespace-tolerant: files may use different blank lines or indentation.
 const block =
-  /const guild = interaction\.guild\r?\n\s*const member = interaction\.member\r?\n\r?\n\s*\/\/ Check if user is in a voice channel\r?\n\s*const voiceChannel = member\.voice\.channel/
+  /const\s+guild\s*=\s*interaction\.guild\s+[\s\S]*?const\s+member\s*=\s*interaction\.member\s+[\s\S]*?\/\/\s*Check if user is in a voice channel\s+[\s\S]*?const\s+voiceChannel\s*=\s*member\.voice\.channel/s
 
 const block2 =
-  /const guild = interaction\.guild\r?\n\s*const member = interaction\.member\r?\n\r?\n\s*const voiceChannel = member\.voice\.channel/
+  /const\s+guild\s*=\s*interaction\.guild\s+[\s\S]*?const\s+member\s*=\s*interaction\.member\s+[\s\S]*?const\s+voiceChannel\s*=\s*member\.voice\.channel/s
 
 const replacement = `const guild = interaction.guild
     if (!guild) {
@@ -32,13 +33,14 @@ for (const name of fs.readdirSync(musicDir)) {
   const insertImport = () => {
     if (s.includes("guildMemberFromInteraction")) return
     s = s.replace(
-      /import type \{ ChatInputCommandInteraction \} from "discord\.js"\r?\n/,
+      /import\s+type\s+\{\s*ChatInputCommandInteraction\s*\}\s+from\s+["']discord\.js["']\s*\r?\n/,
       'import type { ChatInputCommandInteraction } from "discord.js"\nimport { guildMemberFromInteraction } from "../../util/guildMember.js"\n'
     )
   }
   insertImport()
   if (block.test(s)) s = s.replace(block, replacement)
-  else if (block2.test(s)) s = s.replace(block2, replacement.replace(/\s*\/\/ Check if user is in a voice channel\r?\n\s*/, ""))
+  else if (block2.test(s))
+    s = s.replace(block2, replacement.replace(/\s*\/\/\s*Check if user is in a voice channel\s+/, ""))
   else {
     console.warn("no match", file)
     continue

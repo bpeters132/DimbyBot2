@@ -12,7 +12,7 @@ import {
   type User,
   type VoiceBasedChannel,
 } from "discord.js"
-import type { Player, Track, UnresolvedTrack } from "lavalink-client"
+import type { Player, PlayerJson, Track, UnresolvedTrack } from "lavalink-client"
 import type BotClient from "../lib/BotClient.js"
 import type { LocalFile, QueryPlayResult } from "../types/index.js"
 
@@ -20,9 +20,16 @@ type SearchAttempt =
   | { source: string; success: true; loadType?: string }
   | { source: string; success: false; error?: string }
 
-type TrackWithLegacy = Track & { track?: string }
-
 type PlayerSearchResult = Awaited<ReturnType<Player["search"]>>
+
+function syntheticTrackResult(track: Track | UnresolvedTrack): PlayerSearchResult {
+  return {
+    loadType: "TRACK_LOADED",
+    tracks: [track],
+    playlist: null,
+    exception: null,
+  } as unknown as PlayerSearchResult
+}
 
 async function ensurePlayerConnected(
   client: BotClient,
@@ -51,7 +58,7 @@ async function ensurePlayerConnected(
                     resolve()
                 }
             }
-            const onPlayerUpdate = (oldPlayerJson: unknown, updatedPlayer: Player) => {
+            const onPlayerUpdate = (oldPlayerJson: PlayerJson, updatedPlayer: Player) => {
                 if (
                     updatedPlayer.guildId === player.guildId &&
                     updatedPlayer.connected &&
@@ -346,12 +353,7 @@ export async function handleQueryAndPlay(
                         `[MusicManager] User ${requester.id} chose to search online/use URL instead of local file: ${matchingFile.title}`
                     )
                     if (localMatchSourceIsUrlTitle && potentialUrlTrackInfo) {
-                        searchResult = {
-                            loadType: "TRACK_LOADED",
-                            tracks: [potentialUrlTrackInfo],
-                            playlist: null,
-                            exception: null,
-                        } as unknown as PlayerSearchResult
+                        searchResult = syntheticTrackResult(potentialUrlTrackInfo)
                         client.debug(
                             `[MusicManager] Using pre-fetched track info for URL: ${potentialUrlTrackInfo.info.title}`
                         )
@@ -373,12 +375,7 @@ export async function handleQueryAndPlay(
                         )
                     )
                 if (localMatchSourceIsUrlTitle && potentialUrlTrackInfo) {
-                    searchResult = {
-                        loadType: "TRACK_LOADED",
-                        tracks: [potentialUrlTrackInfo],
-                        playlist: null,
-                        exception: null,
-                    } as unknown as PlayerSearchResult
+                    searchResult = syntheticTrackResult(potentialUrlTrackInfo)
                     feedbackText = `${requester}, No selection made. Proceeding with content from URL: [${potentialUrlTrackInfo.info.title}](${potentialUrlTrackInfo.info.uri})`
                     client.debug(
                         `[MusicManager] Timeout. Using pre-fetched track info for URL: ${potentialUrlTrackInfo.info.title}`
@@ -527,8 +524,9 @@ export async function handleQueryAndPlay(
                 client.debug(
                     `[MusicManager] Loaded single track: ${trackToAdd.info.title}. Adding to queue.`
                 )
-                const tw1 = trackToAdd as TrackWithLegacy
-                if (!tw1.track && trackToAdd.info?.uri) tw1.track = trackToAdd.info.uri
+                if (!trackToAdd.encoded && trackToAdd.info?.uri?.trim()) {
+                  trackToAdd.encoded = trackToAdd.info.uri.trim() as Track["encoded"]
+                }
                 player.queue.add(trackToAdd)
                 if (!feedbackText)
                     feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`
@@ -541,8 +539,9 @@ export async function handleQueryAndPlay(
                 client.debug(
                     `[MusicManager] Found search result: ${trackToAdd.info.title}. Adding first track to queue.`
                 )
-                const tw2 = trackToAdd as TrackWithLegacy
-                if (!tw2.track && trackToAdd.info?.uri) tw2.track = trackToAdd.info.uri
+                if (!trackToAdd.encoded && trackToAdd.info?.uri?.trim()) {
+                  trackToAdd.encoded = trackToAdd.info.uri.trim() as Track["encoded"]
+                }
                 player.queue.add(trackToAdd)
                 if (!feedbackText)
                     feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`

@@ -1,4 +1,4 @@
-import fs from "fs"
+import { promises as fsPromises } from "fs"
 import path from "path"
 import { pathToFileURL } from "url"
 import type { RESTPostAPIChatInputApplicationCommandsJSONBody } from "discord.js"
@@ -18,7 +18,7 @@ export default async function getCommandData(): Promise<
 
   const loadCommandsRecursive = async (directoryPath: string) => {
     try {
-      const entries = fs.readdirSync(directoryPath, { withFileTypes: true })
+      const entries = await fsPromises.readdir(directoryPath, { withFileTypes: true })
       console.log(`[DeployUtil] Scanning directory: ${directoryPath}`)
 
       for (const entry of entries) {
@@ -56,12 +56,7 @@ export default async function getCommandData(): Promise<
     }
   }
 
-  try {
-    await loadCommandsRecursive(commandsBasePath)
-    console.log(`[DeployUtil] Finished loading command data. Total found: ${commandDataList.length}`)
-    return commandDataList
-  } catch (error: unknown) {
-    console.error(`[DeployUtil] Failed to initiate command data loading from ${commandsBasePath}:`, error)
-    return []
-  }
+  await loadCommandsRecursive(commandsBasePath)
+  console.log(`[DeployUtil] Finished loading command data. Total found: ${commandDataList.length}`)
+  return commandDataList
 }

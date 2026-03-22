@@ -32,17 +32,17 @@ if (logger.getDebugEnabled()) {
     logger.info("Debug logging is disabled. Set LOG_LEVEL=debug to enable it.")
 }
 
-try {
-  logger.debug("Initializing BotClient...")
-  // Pass the logger instance to the client constructor
-  const client = new BotClient(logger)
-  logger.debug("BotClient initialized.")
+;(async () => {
+  try {
+    logger.debug("Initializing BotClient...")
+    const client = new BotClient(logger)
+    logger.debug("BotClient initialized.")
 
-  logger.debug("Starting BotClient...")
-  void client.start()
-  logger.info("BotClient started successfully.")
-
-} catch (error) {
-  logger.error("Fatal error during application startup:", error)
-  process.exit(1) // Exit if core initialization fails
-}
+    logger.debug("Starting BotClient...")
+    await client.start()
+    logger.info("BotClient started successfully.")
+  } catch (error) {
+    logger.error("Fatal error during application startup:", error)
+    process.exit(1)
+  }
+})()

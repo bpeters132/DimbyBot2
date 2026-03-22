@@ -35,7 +35,7 @@ function formatDuration(milliseconds: number | null | undefined) {
 /**
  * Creates the embed for the player control message.
  * @param {import("../../lib/BotClient").default} client The bot client instance for logging.
- * @param {import("@lavaclient/queue").QueuePlayer | null} player The player instance.
+ * @param {import("lavalink-client").Player | null | undefined} player The Lavalink player (if any).
  * @returns {EmbedBuilder} The created embed.
  */
 function requesterMention(req: unknown): string | null {
@@ -117,7 +117,7 @@ export function createControlEmbed(client: BotClient, player: Player | null | un
 /**
  * Creates the action row with buttons for the player control message.
  * @param {import("../../lib/BotClient").default} client The bot client instance for logging.
- * @param {import("@lavaclient/queue").QueuePlayer | null} player The player instance.
+ * @param {import("lavalink-client").Player | null | undefined} player The Lavalink player (if any).
  * @returns {ActionRowBuilder<ButtonBuilder>} The created action row.
  */
 // Pass client for logging

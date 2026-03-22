@@ -77,6 +77,9 @@ export async function playLocalFile(
     const oldPlayer = activeLocalPlayers.get(voiceChannel.guild.id)!
     oldPlayer.audioPlayer.stop(true)
     if (oldPlayer.connection && oldPlayer.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+      if (oldPlayer.onDisconnected) {
+        oldPlayer.connection.off(VoiceConnectionStatus.Disconnected, oldPlayer.onDisconnected)
+      }
       oldPlayer.connection.destroy()
     }
     activeLocalPlayers.delete(voiceChannel.guild.id)
@@ -113,10 +116,36 @@ export async function playLocalFile(
     }
   }
 
+  const conn = connection!
   const audioPlayer = createAudioPlayer()
+  const onDisconnected = () => {
+    void (async () => {
+      client.warn(
+        `[LocalPlayer] Voice connection Disconnected in guild ${voiceChannel.guild.id}. Attempting to rejoin if possible.`
+      )
+      try {
+        await Promise.race([
+          entersState(conn, VoiceConnectionStatus.Signalling, 5_000),
+          entersState(conn, VoiceConnectionStatus.Connecting, 5_000),
+        ])
+      } catch (error: unknown) {
+        client.error(
+          `[LocalPlayer] Voice connection lost or could not reconnect in guild ${voiceChannel.guild.id}:`,
+          error
+        )
+        if (conn.state.status !== VoiceConnectionStatus.Destroyed) {
+          conn.destroy()
+        }
+        audioPlayer.stop(true)
+        activeLocalPlayers.delete(voiceChannel.guild.id)
+      }
+    })()
+  }
+
   activeLocalPlayers.set(voiceChannel.guild.id, {
     audioPlayer,
-    connection: connection!,
+    connection: conn,
+    onDisconnected,
     currentTrack: localFile,
     requesterId: requester?.id,
     startedAt: Date.now(),
@@ -125,7 +154,7 @@ export async function playLocalFile(
   const resource = createAudioResource(fs.createReadStream(localFile.path))
 
   audioPlayer.play(resource)
-  connection!.subscribe(audioPlayer)
+  conn.subscribe(audioPlayer)
 
   client.debug(
     `[LocalPlayer] Started playing local file: "${localFile.title}" in guild ${voiceChannel.guild.id}`
@@ -133,8 +162,6 @@ export async function playLocalFile(
 
   const safeRequester = requester ?? "someone"
   const feedbackText = `Now playing local file: **${localFile.title}** (requested by ${safeRequester})`
-
-  const conn = connection!
 
   audioPlayer.once(AudioPlayerStatus.Idle, () => {
     client.debug(
@@ -146,29 +173,10 @@ export async function playLocalFile(
     activeLocalPlayers.delete(voiceChannel.guild.id)
   })
 
-  conn.on(VoiceConnectionStatus.Disconnected, async () => {
-    client.warn(
-      `[LocalPlayer] Voice connection Disconnected in guild ${voiceChannel.guild.id}. Attempting to rejoin if possible.`
-    )
-    try {
-      await Promise.race([
-        entersState(conn, VoiceConnectionStatus.Signalling, 5_000),
-        entersState(conn, VoiceConnectionStatus.Connecting, 5_000),
-      ])
-    } catch (error: unknown) {
-      client.error(
-        `[LocalPlayer] Voice connection lost or could not reconnect in guild ${voiceChannel.guild.id}:`,
-        error
-      )
-      if (conn.state.status !== VoiceConnectionStatus.Destroyed) {
-        conn.destroy()
-      }
-      audioPlayer.stop(true)
-      activeLocalPlayers.delete(voiceChannel.guild.id)
-    }
-  })
+  conn.on(VoiceConnectionStatus.Disconnected, onDisconnected)
 
-  conn.on(VoiceConnectionStatus.Destroyed, () => {
+  conn.once(VoiceConnectionStatus.Destroyed, () => {
+    conn.off(VoiceConnectionStatus.Disconnected, onDisconnected)
     client.debug(`[LocalPlayer] Voice connection Destroyed in guild ${voiceChannel.guild.id}. Cleaning up.`)
     audioPlayer.stop(true)
     activeLocalPlayers.delete(voiceChannel.guild.id)
@@ -183,7 +191,10 @@ export async function playLocalFile(
       conn.destroy()
     }
     activeLocalPlayers.delete(voiceChannel.guild.id)
-    ;(textChannel as import("discord.js").TextChannel)
+    const sendable = textChannel as TextBasedChannel & {
+      send: (content: string) => Promise<unknown>
+    }
+    sendable
       .send(`Error playing local file **${localFile.title}**: ${error.message}`)
       .catch((e: unknown) => client.error("Failed to send error message to text channel", e))
   })
@@ -199,6 +210,12 @@ export function stopLocalPlayer(client: BotClient, guildId: string) {
       playerInstance.connection &&
       playerInstance.connection.state.status !== VoiceConnectionStatus.Destroyed
     ) {
+      if (playerInstance.onDisconnected) {
+        playerInstance.connection.off(
+          VoiceConnectionStatus.Disconnected,
+          playerInstance.onDisconnected
+        )
+      }
       playerInstance.connection.destroy()
     }
     activeLocalPlayers.delete(guildId)

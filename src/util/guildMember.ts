@@ -7,7 +7,7 @@ import type { ChatInputCommandInteraction, GuildMember } from "discord.js"
 export function guildMemberFromInteraction(
   interaction: ChatInputCommandInteraction
 ): GuildMember | null {
-  if (!interaction.inGuild()) return null
+  if (!interaction.inCachedGuild()) return null
   const m = interaction.member
   if (!m) return null
   return m as GuildMember

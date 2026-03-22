@@ -58,6 +58,8 @@ export interface LocalPlayerState {
 export interface ActiveLocalPlayer {
   audioPlayer: AudioPlayer
   connection: VoiceConnection
+  /** Registered `VoiceConnectionStatus.Disconnected` listener (removed on destroy / replace). */
+  onDisconnected?: () => void
   currentTrack: LocalFile
   requesterId?: string
   startedAt: number
