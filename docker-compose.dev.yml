@@ -35,4 +35,4 @@ services:
 # Keep volumes definition if it's not already in the base file or needs overrides
 # volumes:
 #   postgres-data:
-#   node_modules: 
+#   node_modules:

@@ -19,6 +19,8 @@ const LEVEL_COLORS: Record<DiscordLogLevelName, ColorResolvable> = {
 
 const MAX_EMBED_DESC = 3900
 
+const TRUNCATE_SUFFIX = "\n… (truncated)"
+
 /** Resolves the text channel id to send `level` to, or null if this guild has no target for that level. */
 export function resolveDiscordLogChannelId(
   cfg: GuildDiscordLogSettings,
@@ -47,7 +49,8 @@ function truncateForDiscord(text: string): string {
   if (text.length <= MAX_EMBED_DESC) {
     return text
   }
-  return text.slice(0, MAX_EMBED_DESC - 20) + "\n… (truncated)"
+  const keep = MAX_EMBED_DESC - TRUNCATE_SUFFIX.length
+  return text.slice(0, Math.max(0, keep)) + TRUNCATE_SUFFIX
 }
 
 /**

@@ -68,7 +68,14 @@ export default class Logger implements LoggerInterface {
   }
 
   private _notifyDiscord(level: DiscordLogLevelName, fullMessage: string) {
-    this.discordForwarder?.(level, fullMessage)
+    if (!this.discordForwarder) {
+      return
+    }
+    try {
+      this.discordForwarder(level, fullMessage)
+    } catch (err: unknown) {
+      console.error("[Logger] discordForwarder threw (swallowed):", err)
+    }
   }
 
   private _getTimestamp() {

@@ -9,6 +9,7 @@ import type { ChatInputCommandInteraction } from "discord.js"
 import type {
   DiscordLogLevelName,
   GuildDiscordLogSettings,
+  GuildSettings,
 } from "../../types/index.js"
 import {
   discordLogLevelAllowed,
@@ -32,6 +33,16 @@ function normalizeDiscordLog(cfg: GuildDiscordLogSettings): GuildDiscordLogSetti
     return undefined
   }
   return out
+}
+
+/** Writes normalized `next` to `guildRow.discordLog`, or removes the key if empty. */
+function applyNormalizedDiscordLog(next: GuildDiscordLogSettings, guildRow: GuildSettings): void {
+  const normalized = normalizeDiscordLog(next)
+  if (normalized) {
+    guildRow.discordLog = normalized
+  } else {
+    delete guildRow.discordLog
+  }
 }
 
 function formatConfig(cfg: GuildDiscordLogSettings): string {
@@ -175,12 +186,7 @@ export default {
       } else {
         next.minLevel = raw as DiscordLogLevelName
       }
-      const normalized = normalizeDiscordLog(next)
-      if (normalized) {
-        guildRow.discordLog = normalized
-      } else {
-        delete guildRow.discordLog
-      }
+      applyNormalizedDiscordLog(next, guildRow)
       if (Object.keys(guildRow).length === 0) {
         delete store[guild.id]
       }
@@ -214,31 +220,16 @@ export default {
         delete guildRow.discordLog
       } else if (target === "all") {
         delete next.allChannelId
-        const normalized = normalizeDiscordLog(next)
-        if (normalized) {
-          guildRow.discordLog = normalized
-        } else {
-          delete guildRow.discordLog
-        }
+        applyNormalizedDiscordLog(next, guildRow)
       } else if (target === "min-level") {
         delete next.minLevel
-        const normalized = normalizeDiscordLog(next)
-        if (normalized) {
-          guildRow.discordLog = normalized
-        } else {
-          delete guildRow.discordLog
-        }
+        applyNormalizedDiscordLog(next, guildRow)
       } else {
         const lvl = target as DiscordLogLevelName
         if (next.byLevel?.[lvl]) {
           delete next.byLevel[lvl]
         }
-        const normalized = normalizeDiscordLog(next)
-        if (normalized) {
-          guildRow.discordLog = normalized
-        } else {
-          delete guildRow.discordLog
-        }
+        applyNormalizedDiscordLog(next, guildRow)
       }
 
       if (Object.keys(guildRow).length === 0) {

@@ -15,7 +15,11 @@ export default async (client: BotClient) => {
 
     client.info(`Logged in as ${user.tag}! (${user.id})`)
 
-    attachDiscordLogForwarding(client)
+    try {
+      attachDiscordLogForwarding(client)
+    } catch (err: unknown) {
+      client.error("[onReady] attachDiscordLogForwarding failed:", err)
+    }
 
     refreshAllControlMessages(client).catch((err: unknown) =>
       client.error("[ControlHandler] refreshAllControlMessages failed:", err)
