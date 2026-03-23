@@ -1,7 +1,7 @@
 import type { AudioPlayer, VoiceConnection } from "@discordjs/voice"
 import type {
-  ChatInputCommandInteraction,
-  RESTPostAPIChatInputApplicationCommandsJSONBody,
+    ChatInputCommandInteraction,
+    RESTPostAPIChatInputApplicationCommandsJSONBody,
 } from "discord.js"
 
 /** Bot client type alias for command / event handlers (avoids circular imports in docs). */
@@ -12,21 +12,21 @@ export type BotClient = import("../lib/BotClient.js").default
  * (Fluent APIs return narrowed builder types, not the root SlashCommandBuilder class.)
  */
 export interface SlashCommandData {
-  readonly name: string
-  toJSON(): RESTPostAPIChatInputApplicationCommandsJSONBody
+    readonly name: string
+    toJSON(): RESTPostAPIChatInputApplicationCommandsJSONBody
 }
 
 /** Slash command `execute` — may return Discord.js reply handles; callers should not rely on them. */
 export type SlashCommandExecute = (
-  interaction: ChatInputCommandInteraction,
-  client: BotClient
+    interaction: ChatInputCommandInteraction,
+    client: BotClient
 ) => Promise<unknown>
 
 export interface Command {
-  data: SlashCommandData
-  execute: SlashCommandExecute
-  category?: string
-  aliases?: string[]
+    data: SlashCommandData
+    execute: SlashCommandExecute
+    category?: string
+    aliases?: string[]
 }
 
 export type EventSetup = (client: BotClient) => void | Promise<void>
@@ -39,76 +39,73 @@ export type DiscordLogLevelName = "debug" | "info" | "warn" | "error"
  * overrides per level (`byLevel`). `minLevel` drops lower severities before any channel is chosen.
  */
 export interface GuildDiscordLogSettings {
-  allChannelId?: string
-  byLevel?: Partial<Record<DiscordLogLevelName, string>>
-  minLevel?: DiscordLogLevelName
+    allChannelId?: string
+    byLevel?: Partial<Record<DiscordLogLevelName, string>>
+    minLevel?: DiscordLogLevelName
 }
 
 /** Per-guild fields persisted in `storage/guild_settings.json`. */
 export interface GuildSettings {
-  controlChannelId?: string
-  controlMessageId?: string
-  /** Optional per-guild cap for the downloads folder (MB). */
-  downloadsMaxMb?: number
-  /** Optional forwarding of bot log lines to Discord channels in this guild. */
-  discordLog?: GuildDiscordLogSettings
+    controlChannelId?: string
+    controlMessageId?: string
+    /** Optional per-guild cap for the downloads folder (MB). */
+    downloadsMaxMb?: number
+    /** Optional forwarding of bot log lines to Discord channels in this guild. */
+    discordLog?: GuildDiscordLogSettings
 }
 
 /** Map of Discord guild id → settings for that guild. */
 export type GuildSettingsStore = Record<string, GuildSettings>
 
 export interface LocalFile {
-  name: string
-  path: string
-  title: string
+    name: string
+    path: string
+    title: string
 }
 
 export interface LocalPlayerState {
-  isPlaying: boolean
-  trackTitle?: string
-  requesterId?: string
-  startedAt?: number
+    isPlaying: boolean
+    trackTitle?: string
+    requesterId?: string
+    startedAt?: number
 }
 
 export interface ActiveLocalPlayer {
-  audioPlayer: AudioPlayer
-  connection: VoiceConnection
-  /** Registered `VoiceConnectionStatus.Disconnected` listener (removed on destroy / replace). */
-  onDisconnected?: () => void
-  currentTrack: LocalFile
-  requesterId?: string
-  startedAt: number
+    audioPlayer: AudioPlayer
+    connection: VoiceConnection
+    /** Registered `VoiceConnectionStatus.Disconnected` listener (removed on destroy / replace). */
+    onDisconnected?: () => void
+    currentTrack: LocalFile
+    requesterId?: string
+    startedAt: number
 }
 
 export interface QueryPlayResult {
-  success: boolean
-  feedbackText: string
-  error?: Error
+    success: boolean
+    feedbackText: string
+    error?: Error
 }
 
 /** Entry in `downloads/.metadata.json` for a single `.wav` file. */
 export interface DownloadFileMetadata {
-  guildId?: string
-  downloadDate?: number | string
-  originalUrl?: string
-  filePath?: string
+    guildId?: string
+    downloadDate?: number | string
+    originalUrl?: string
+    filePath?: string
 }
 
 export type DownloadsMetadataStore = Record<string, DownloadFileMetadata>
 
-export type DiscordLogForwarder = (
-  level: DiscordLogLevelName,
-  message: string
-) => void
+export type DiscordLogForwarder = (level: DiscordLogLevelName, message: string) => void
 
 export interface LoggerInterface {
-  info(text: string, ...args: unknown[]): void
-  warn(text: string, ...args: unknown[]): void
-  error(text: string, ...args: unknown[]): void
-  debug(text: string, ...args: unknown[]): void
-  setDebugEnabled(enabled: boolean): void
-  getDebugEnabled(): boolean
-  getLogFilePath(): string | null
-  /** When set, each log line is forwarded (e.g. to Discord) after console/file logging. */
-  setDiscordForwarder?(callback: DiscordLogForwarder | null): void
+    info(text: string, ...args: unknown[]): void
+    warn(text: string, ...args: unknown[]): void
+    error(text: string, ...args: unknown[]): void
+    debug(text: string, ...args: unknown[]): void
+    setDebugEnabled(enabled: boolean): void
+    getDebugEnabled(): boolean
+    getLogFilePath(): string | null
+    /** When set, each log line is forwarded (e.g. to Discord) after console/file logging. */
+    setDiscordForwarder?(callback: DiscordLogForwarder | null): void
 }

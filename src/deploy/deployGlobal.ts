@@ -9,45 +9,43 @@ dotenv.config()
  * @returns {Promise<void>}
  */
 async function deployGlobalCommands() {
-  const appID = process.env.CLIENT_ID
-  const token = process.env.BOT_TOKEN
+    const appID = process.env.CLIENT_ID
+    const token = process.env.BOT_TOKEN
 
-  const missing: string[] = []
-  if (!appID) missing.push("CLIENT_ID")
-  if (!token) missing.push("BOT_TOKEN")
-  if (missing.length > 0) {
-    console.error(`Missing required environment variable(s): ${missing.join(", ")}`)
-    process.exit(1)
-  }
+    const missing: string[] = []
+    if (!appID) missing.push("CLIENT_ID")
+    if (!token) missing.push("BOT_TOKEN")
+    if (missing.length > 0) {
+        console.error(`Missing required environment variable(s): ${missing.join(", ")}`)
+        process.exit(1)
+    }
 
-  const rest = new REST({ version: "10" }).setToken(token as string)
+    const rest = new REST({ version: "10" }).setToken(token as string)
 
-  console.log("Gathering command data...")
-  const commandsToDeploy = await getCommandData()
+    console.log("Gathering command data...")
+    const commandsToDeploy = await getCommandData()
 
-  if (!commandsToDeploy || commandsToDeploy.length === 0) {
-    console.error("No command data found to deploy. Exiting.")
-    process.exitCode = 1
-    return
-  }
+    if (!commandsToDeploy || commandsToDeploy.length === 0) {
+        console.error("No command data found to deploy. Exiting.")
+        process.exitCode = 1
+        return
+    }
 
-  console.log(
-    `Started refreshing ${commandsToDeploy.length} application (/) commands globally.`,
-  )
+    console.log(`Started refreshing ${commandsToDeploy.length} application (/) commands globally.`)
 
-  try {
-    const data = (await rest.put(Routes.applicationCommands(appID as string), {
-      body: commandsToDeploy,
-    })) as unknown[]
+    try {
+        const data = (await rest.put(Routes.applicationCommands(appID as string), {
+            body: commandsToDeploy,
+        })) as unknown[]
 
-    console.log(`Successfully reloaded ${data.length} application (/) commands globally.`)
-  } catch (error) {
-    console.error("Failed to register global application commands:", error)
-    process.exit(1)
-  }
+        console.log(`Successfully reloaded ${data.length} application (/) commands globally.`)
+    } catch (error) {
+        console.error("Failed to register global application commands:", error)
+        process.exit(1)
+    }
 }
 
 deployGlobalCommands().catch((error) => {
-  console.error("Failed to deploy global application commands:", error)
-  process.exitCode = 1
+    console.error("Failed to deploy global application commands:", error)
+    process.exitCode = 1
 })

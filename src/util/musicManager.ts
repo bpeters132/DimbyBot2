@@ -3,37 +3,37 @@ import path from "path"
 import fs from "fs"
 import { playLocalFile, getLocalPlayerState, stopLocalPlayer } from "./localPlayer.js"
 import {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  ComponentType,
-  type GuildTextBasedChannel,
-  type User,
-  type VoiceBasedChannel,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ComponentType,
+    type GuildTextBasedChannel,
+    type User,
+    type VoiceBasedChannel,
 } from "discord.js"
 import type { Player, PlayerJson, Track, UnresolvedTrack } from "lavalink-client"
 import type BotClient from "../lib/BotClient.js"
 import type { LocalFile, QueryPlayResult } from "../types/index.js"
 
 type SearchAttempt =
-  | { source: string; success: true; loadType?: string }
-  | { source: string; success: false; error?: string }
+    | { source: string; success: true; loadType?: string }
+    | { source: string; success: false; error?: string }
 
 type PlayerSearchResult = Awaited<ReturnType<Player["search"]>>
 
 function syntheticTrackResult(track: Track | UnresolvedTrack): PlayerSearchResult {
-  return {
-    loadType: "TRACK_LOADED",
-    tracks: [track],
-    playlist: null,
-    exception: null,
-  } as unknown as PlayerSearchResult
+    return {
+        loadType: "TRACK_LOADED",
+        tracks: [track],
+        playlist: null,
+        exception: null,
+    } as unknown as PlayerSearchResult
 }
 
 async function ensurePlayerConnected(
-  client: BotClient,
-  player: Player,
-  voiceChannel: VoiceBasedChannel
+    client: BotClient,
+    player: Player,
+    voiceChannel: VoiceBasedChannel
 ): Promise<void> {
     if (!player.connected || player.voiceChannelId !== voiceChannel.id) {
         client.debug(
@@ -44,9 +44,9 @@ async function ensurePlayerConnected(
         const movePromise = new Promise<void>((resolve, reject) => {
             let timeoutId: ReturnType<typeof setTimeout> | null = null
             const onPlayerMove = (
-              movedPlayer: Player,
-              _oldChannelId: string | null,
-              newChannelId: string | null
+                movedPlayer: Player,
+                _oldChannelId: string | null,
+                newChannelId: string | null
             ) => {
                 if (movedPlayer.guildId === player.guildId && newChannelId === voiceChannel.id) {
                     disposeMoveWait?.()
@@ -103,13 +103,13 @@ async function ensurePlayerConnected(
 }
 
 export async function handleQueryAndPlay(
-  client: BotClient,
-  guildId: string,
-  voiceChannel: VoiceBasedChannel,
-  textChannel: GuildTextBasedChannel,
-  query: string,
-  requester: User,
-  player: Player
+    client: BotClient,
+    guildId: string,
+    voiceChannel: VoiceBasedChannel,
+    textChannel: GuildTextBasedChannel,
+    query: string,
+    requester: User,
+    player: Player
 ): Promise<QueryPlayResult> {
     client.debug(`[MusicManager] handleQueryAndPlay called for guild ${guildId}. Query: "${query}"`)
     const queueSize = player?.queue?.tracks?.length ?? 0
@@ -173,7 +173,8 @@ export async function handleQueryAndPlay(
                     stringForLocalSearch = query
                 }
             } catch (urlProbeError: unknown) {
-                const um = urlProbeError instanceof Error ? urlProbeError.message : String(urlProbeError)
+                const um =
+                    urlProbeError instanceof Error ? urlProbeError.message : String(urlProbeError)
                 client.warn(
                     `[MusicManager] Error probing URL "${query}" for title: ${um}. Will use original URL.`
                 )
@@ -252,17 +253,17 @@ export async function handleQueryAndPlay(
                 const queryWords = queryLower.split(/\s+/).filter((word) => word.length > 0)
                 if (queryWords.length > 0) {
                     matchingFile =
-                      files.find((fileEntry) => {
-                        const titleWords = fileEntry.title
-                            .split(/\s+/)
-                            .filter((word) => word.length > 0)
-                        return queryWords.every((qw) =>
-                            titleWords.some((tw) => {
-                                if (qw.length < 3) return tw === qw
-                                return tw.includes(qw) || qw.includes(tw)
-                            })
-                        )
-                    }) ?? null
+                        files.find((fileEntry) => {
+                            const titleWords = fileEntry.title
+                                .split(/\s+/)
+                                .filter((word) => word.length > 0)
+                            return queryWords.every((qw) =>
+                                titleWords.some((tw) => {
+                                    if (qw.length < 3) return tw === qw
+                                    return tw.includes(qw) || qw.includes(tw)
+                                })
+                            )
+                        }) ?? null
                 }
             }
         }
@@ -280,10 +281,8 @@ export async function handleQueryAndPlay(
             }
 
             const lavalinkPlayerActive =
-              player &&
-              (player.playing ||
-                player.queue.tracks.length > 0 ||
-                Boolean(player.queue.current))
+                player &&
+                (player.playing || player.queue.tracks.length > 0 || Boolean(player.queue.current))
 
             if (lavalinkPlayerActive) {
                 confirmationContent += `\n\nChoosing **Play Local File** will **stop the current online music and clear its queue**.`
@@ -462,7 +461,9 @@ export async function handleQueryAndPlay(
                         success: false,
                         error: em,
                     })
-                    client.warn(`[MusicManager] Direct search (non-URL) failed for query "${query}". Error: ${em}`)
+                    client.warn(
+                        `[MusicManager] Direct search (non-URL) failed for query "${query}". Error: ${em}`
+                    )
                 }
             } else {
                 try {
@@ -483,7 +484,9 @@ export async function handleQueryAndPlay(
                         success: false,
                         error: em,
                     })
-                    client.warn(`[MusicManager] Direct search (URL) failed for URL "${query}". Error: ${em}`)
+                    client.warn(
+                        `[MusicManager] Direct search (URL) failed for URL "${query}". Error: ${em}`
+                    )
                 }
             }
             searchAttempts = [...preSearchAttempts, ...mainSearchAttempts]
@@ -502,7 +505,7 @@ export async function handleQueryAndPlay(
             searchAttempts.forEach((attempt, index) => {
                 errorDetails += `${index + 1}. ${attempt.source}: ${attempt.success ? `Success (${attempt.loadType || ""})` : "Failed"}`
                 if (!attempt.success && "error" in attempt && attempt.error)
-                  errorDetails += ` (${attempt.error})`
+                    errorDetails += ` (${attempt.error})`
                 errorDetails += "\n"
             })
             feedbackText = `${requester}, I couldn't find any playable tracks for "${query}".\n${errorDetails}`
@@ -528,7 +531,9 @@ export async function handleQueryAndPlay(
             case "track":
             case "TRACK_LOADED": {
                 trackToAdd = searchResult.tracks[0]
-                client.debug(`[MusicManager] Loaded single track: ${trackToAdd.info.title}. Will enqueue after connection.`)
+                client.debug(
+                    `[MusicManager] Loaded single track: ${trackToAdd.info.title}. Will enqueue after connection.`
+                )
                 success = true
                 break
             }
@@ -631,17 +636,15 @@ export async function handleQueryAndPlay(
             )
         }
 
-        if (
-            trackToAdd ||
-            loadT === "PLAYLIST_LOADED" ||
-            loadT === "playlist"
-        ) {
+        if (trackToAdd || loadT === "PLAYLIST_LOADED" || loadT === "playlist") {
             client.debug(`[MusicManager] Triggering control message update for guild ${guildId}.`)
             try {
                 await updateControlMessage(client, guildId)
             } catch (error: unknown) {
                 const em = error instanceof Error ? error.message : String(error)
-                client.warn(`[MusicManager] Control message update failed for guild ${guildId}: ${em}`)
+                client.warn(
+                    `[MusicManager] Control message update failed for guild ${guildId}: ${em}`
+                )
             }
         }
 

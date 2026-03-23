@@ -5,10 +5,10 @@ import type { ChatInputCommandInteraction, GuildMember } from "discord.js"
  * Casts from the interaction payload; the bot expects cached members in typical guild use.
  */
 export function guildMemberFromInteraction(
-  interaction: ChatInputCommandInteraction
+    interaction: ChatInputCommandInteraction
 ): GuildMember | null {
-  if (!interaction.inCachedGuild()) return null
-  const m = interaction.member
-  if (!m) return null
-  return m as GuildMember
+    if (!interaction.inCachedGuild()) return null
+    const m = interaction.member
+    if (!m) return null
+    return m as GuildMember
 }

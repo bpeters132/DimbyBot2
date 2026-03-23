@@ -2,7 +2,6 @@ import { SlashCommandBuilder, MessageFlags } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 
-
 export default {
     data: new SlashCommandBuilder()
         .setName("verboselogging")

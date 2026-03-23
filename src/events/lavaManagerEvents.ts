@@ -7,12 +7,12 @@
 
 import type { Message } from "discord.js"
 import type {
-  Player,
-  Track,
-  TrackEndEvent,
-  TrackExceptionEvent,
-  TrackStuckEvent,
-  UnresolvedTrack,
+    Player,
+    Track,
+    TrackEndEvent,
+    TrackExceptionEvent,
+    TrackStuckEvent,
+    UnresolvedTrack,
 } from "lavalink-client"
 import type BotClient from "../lib/BotClient.js"
 import { getGuildSettings } from "../util/saveControlChannel.js"
@@ -22,12 +22,12 @@ import { updateControlMessage } from "./handlers/handleControlChannel.js"
 type GuildTextSendable = { send: (content: string) => Promise<Message<boolean>> }
 
 function isTextSendable(channel: unknown): channel is GuildTextSendable {
-  return (
-    typeof channel === "object" &&
-    channel !== null &&
-    "send" in channel &&
-    typeof (channel as { send?: unknown }).send === "function"
-  )
+    return (
+        typeof channel === "object" &&
+        channel !== null &&
+        "send" in channel &&
+        typeof (channel as { send?: unknown }).send === "function"
+    )
 }
 
 export default async (client: BotClient) => {
@@ -50,12 +50,15 @@ export default async (client: BotClient) => {
             )
             updateControlMessage(client, player.guildId)
         })
-        .on("playerMove", (player: Player, oldChannelId: string | null, newChannelId: string | null) => {
-            client.debug(
-                `[LavaMgrEvents] Player moved in Guild: ${player.guildId}, Old: ${oldChannelId}, New: ${newChannelId}`
-            )
-            // updateControlMessage(client, player.guildId) // Optional update
-        })
+        .on(
+            "playerMove",
+            (player: Player, oldChannelId: string | null, newChannelId: string | null) => {
+                client.debug(
+                    `[LavaMgrEvents] Player moved in Guild: ${player.guildId}, Old: ${oldChannelId}, New: ${newChannelId}`
+                )
+                // updateControlMessage(client, player.guildId) // Optional update
+            }
+        )
 
         /**
          * Track Playback Events
@@ -70,10 +73,7 @@ export default async (client: BotClient) => {
             const prev = player.queue.previous?.[0]
             const prevAuthor = prev?.info?.author?.trim()
             const prevTitle = prev?.info?.title?.trim()
-            const previousInsufficient =
-                !prevTitle ||
-                !prevAuthor ||
-                /^unknown$/i.test(prevAuthor)
+            const previousInsufficient = !prevTitle || !prevAuthor || /^unknown$/i.test(prevAuthor)
             if (previousInsufficient && track?.info?.title) {
                 player.set("lastTrack", {
                     artist: track.info.author?.trim() || "Unknown Artist",
@@ -94,31 +94,34 @@ export default async (client: BotClient) => {
                     `[LavaMgrEvents] Sending trackStart message to non-control channel ${player.textChannelId} in guild ${player.guildId}.`
                 )
                 channel
-                  .send(`Now playing: **${track.info.title}**`)
-                  .then((msg: Message) => {
-                    setTimeout(() => {
-                      msg.delete().catch((e: unknown) => {
-                        client.error(
-                          "[LavaMgrEvents] Failed to delete trackStart message (attempt 1):",
-                          e
-                        )
-                        const err = e as { code?: string; message?: string }
-                        if (err.code === "EAI_AGAIN" || err.message?.includes("ECONNRESET")) {
-                          setTimeout(() => {
-                            msg.delete().catch((e2: unknown) =>
-                              client.error(
-                                "[LavaMgrEvents] Failed to delete trackStart message (attempt 2):",
-                                e2
-                              )
-                            )
-                          }, 2000)
-                        }
-                      })
-                    }, 1000 * 10)
-                  })
-                  .catch((e: unknown) =>
-                    client.error("[LavaMgrEvents] Failed to send trackStart message:", e)
-                  )
+                    .send(`Now playing: **${track.info.title}**`)
+                    .then((msg: Message) => {
+                        setTimeout(() => {
+                            msg.delete().catch((e: unknown) => {
+                                client.error(
+                                    "[LavaMgrEvents] Failed to delete trackStart message (attempt 1):",
+                                    e
+                                )
+                                const err = e as { code?: string; message?: string }
+                                if (
+                                    err.code === "EAI_AGAIN" ||
+                                    err.message?.includes("ECONNRESET")
+                                ) {
+                                    setTimeout(() => {
+                                        msg.delete().catch((e2: unknown) =>
+                                            client.error(
+                                                "[LavaMgrEvents] Failed to delete trackStart message (attempt 2):",
+                                                e2
+                                            )
+                                        )
+                                    }, 2000)
+                                }
+                            })
+                        }, 1000 * 10)
+                    })
+                    .catch((e: unknown) =>
+                        client.error("[LavaMgrEvents] Failed to send trackStart message:", e)
+                    )
             } else {
                 client.debug(
                     `[LavaMgrEvents] Not sending trackStart message for guild ${player.guildId} (channel ${player.textChannelId}, control ${controlChannelId}).`
@@ -140,12 +143,13 @@ export default async (client: BotClient) => {
             const textIdStuck = player.textChannelId
             const channelStuck = textIdStuck ? client.channels.cache.get(textIdStuck) : undefined
             const currentGuildSettingsStuck = getGuildSettings(client)
-            const controlChannelIdStuck = currentGuildSettingsStuck[player.guildId]?.controlChannelId
+            const controlChannelIdStuck =
+                currentGuildSettingsStuck[player.guildId]?.controlChannelId
             if (
-              channelStuck &&
-              textIdStuck !== controlChannelIdStuck &&
-              track &&
-              isTextSendable(channelStuck)
+                channelStuck &&
+                textIdStuck !== controlChannelIdStuck &&
+                track &&
+                isTextSendable(channelStuck)
             ) {
                 client.debug(
                     `[LavaMgrEvents] Sending trackStuck message to non-control channel ${textIdStuck} in guild ${player.guildId}.`
@@ -162,86 +166,99 @@ export default async (client: BotClient) => {
             await player.skip()
         })
         .on(
-          "trackError",
-          async (player: Player, track: Track | UnresolvedTrack | null, payload: TrackExceptionEvent) => {
-            client.error(
-                `[LavaMgrEvents] Track error in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "Unknown Track"}`,
-                payload
-            )
-            updateControlMessage(client, player.guildId)
-
-            const textIdErr = player.textChannelId
-            const channelErr = textIdErr ? client.channels.cache.get(textIdErr) : undefined
-            const currentGuildSettingsErr = getGuildSettings(client)
-            const controlChannelIdErr = currentGuildSettingsErr[player.guildId]?.controlChannelId
-            const tInfo = track?.info
-            if (channelErr && textIdErr !== controlChannelIdErr && tInfo && isTextSendable(channelErr)) {
-                client.debug(
-                    `[LavaMgrEvents] Sending trackError message to non-control channel ${textIdErr} in guild ${player.guildId}.`
+            "trackError",
+            async (
+                player: Player,
+                track: Track | UnresolvedTrack | null,
+                payload: TrackExceptionEvent
+            ) => {
+                client.error(
+                    `[LavaMgrEvents] Track error in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "Unknown Track"}`,
+                    payload
                 )
+                updateControlMessage(client, player.guildId)
 
-                let errorMessage = `Error playing **${tInfo.title ?? "the track"}**\n\n`
+                const textIdErr = player.textChannelId
+                const channelErr = textIdErr ? client.channels.cache.get(textIdErr) : undefined
+                const currentGuildSettingsErr = getGuildSettings(client)
+                const controlChannelIdErr =
+                    currentGuildSettingsErr[player.guildId]?.controlChannelId
+                const tInfo = track?.info
+                if (
+                    channelErr &&
+                    textIdErr !== controlChannelIdErr &&
+                    tInfo &&
+                    isTextSendable(channelErr)
+                ) {
+                    client.debug(
+                        `[LavaMgrEvents] Sending trackError message to non-control channel ${textIdErr} in guild ${player.guildId}.`
+                    )
 
-                if (payload.exception?.cause?.includes("No supported audio streams available")) {
-                    errorMessage += "**Possible reasons:**\n"
-                    errorMessage += "• Video is age-restricted\n"
-                    errorMessage += "• Video is region-locked\n"
-                    errorMessage += "• Video has been removed or made private\n"
-                    errorMessage += "• Video's audio format is not supported\n\n"
-                    errorMessage += "**Track info:**\n"
-                    errorMessage += `• Title: ${tInfo.title}\n`
-                    errorMessage += `• Source: ${tInfo.sourceName}\n`
-                    errorMessage += `• URI: ${tInfo.uri}\n\n`
+                    let errorMessage = `Error playing **${tInfo.title ?? "the track"}**\n\n`
 
-                    if (tInfo.sourceName === "youtube") {
-                        errorMessage += "**Alternative options:**\n"
-                        errorMessage +=
-                            "• Use `/download` command to download and play this video locally\n"
-                        errorMessage += "• Try a different source for this track\n\n"
+                    if (
+                        payload.exception?.cause?.includes("No supported audio streams available")
+                    ) {
+                        errorMessage += "**Possible reasons:**\n"
+                        errorMessage += "• Video is age-restricted\n"
+                        errorMessage += "• Video is region-locked\n"
+                        errorMessage += "• Video has been removed or made private\n"
+                        errorMessage += "• Video's audio format is not supported\n\n"
+                        errorMessage += "**Track info:**\n"
+                        errorMessage += `• Title: ${tInfo.title}\n`
+                        errorMessage += `• Source: ${tInfo.sourceName}\n`
+                        errorMessage += `• URI: ${tInfo.uri}\n\n`
+
+                        if (tInfo.sourceName === "youtube") {
+                            errorMessage += "**Alternative options:**\n"
+                            errorMessage +=
+                                "• Use `/download` command to download and play this video locally\n"
+                            errorMessage += "• Try a different source for this track\n\n"
+                        } else {
+                            errorMessage += "**Alternative options:**\n"
+                            errorMessage +=
+                                "• Check if this track is available in the local downloads using `/play`\n"
+                            errorMessage += "• Try a different source for this track\n\n"
+                        }
+
+                        if (player.queue.tracks.length > 0) {
+                            errorMessage += "Skipping to next track in queue..."
+                        } else {
+                            errorMessage += "No more tracks in queue."
+                        }
                     } else {
-                        errorMessage += "**Alternative options:**\n"
-                        errorMessage +=
-                            "• Check if this track is available in the local downloads using `/play`\n"
-                        errorMessage += "• Try a different source for this track\n\n"
+                        // Generic error handling
+                        errorMessage += `**Error details:**\n`
+                        errorMessage += `• Message: ${payload.exception?.message || "Unknown error"}\n`
+                        if (payload.exception?.cause) {
+                            errorMessage += `• Cause: ${payload.exception.cause}\n`
+                        }
+                        errorMessage += `\n**Track info:**\n`
+                        errorMessage += `• Title: ${tInfo.title}\n`
+                        errorMessage += `• Source: ${tInfo.sourceName}\n`
+                        errorMessage += `• URI: ${tInfo.uri}`
                     }
 
-                    if (player.queue.tracks.length > 0) {
-                        errorMessage += "Skipping to next track in queue..."
-                    } else {
-                        errorMessage += "No more tracks in queue."
-                    }
-                } else {
-                    // Generic error handling
-                    errorMessage += `**Error details:**\n`
-                    errorMessage += `• Message: ${payload.exception?.message || "Unknown error"}\n`
-                    if (payload.exception?.cause) {
-                        errorMessage += `• Cause: ${payload.exception.cause}\n`
-                    }
-                    errorMessage += `\n**Track info:**\n`
-                    errorMessage += `• Title: ${tInfo.title}\n`
-                    errorMessage += `• Source: ${tInfo.sourceName}\n`
-                    errorMessage += `• URI: ${tInfo.uri}`
+                    channelErr
+                        .send(errorMessage)
+                        .catch((e: unknown) =>
+                            client.error("[LavaMgrEvents] Failed to send trackError message:", e)
+                        )
                 }
 
-                channelErr
-                    .send(errorMessage)
-                    .catch((e: unknown) =>
-                        client.error("[LavaMgrEvents] Failed to send trackError message:", e)
-                    )
-            }
-
-            client.debug(
-                `[LavaMgrEvents] Attempting to skip track after error in guild ${player.guildId}.`
-            )
-            if (player.queue.tracks.length > 0) {
-                await player.skip()
-            } else {
                 client.debug(
-                    `[LavaMgrEvents] Queue is empty, not skipping after error in guild ${player.guildId}.`
+                    `[LavaMgrEvents] Attempting to skip track after error in guild ${player.guildId}.`
                 )
-                await player.destroy()
+                if (player.queue.tracks.length > 0) {
+                    await player.skip()
+                } else {
+                    client.debug(
+                        `[LavaMgrEvents] Queue is empty, not skipping after error in guild ${player.guildId}.`
+                    )
+                    await player.destroy()
+                }
             }
-        })
+        )
 
         /**
          * Queue Events
@@ -302,8 +319,8 @@ export default async (client: BotClient) => {
                 `[LavaMgrEvents] User left player's channel: Guild ${player.guildId}, User: ${userId}`
             )
             const voiceChannel = player.voiceChannelId
-              ? client.channels.cache.get(player.voiceChannelId)
-              : undefined
+                ? client.channels.cache.get(player.voiceChannelId)
+                : undefined
             if (voiceChannel) {
                 client.debug(
                     `[LavaMgrEvents] Setting timeout to check if bot is alone in VC ${player.voiceChannelId} for guild ${player.guildId}.`
@@ -315,7 +332,9 @@ export default async (client: BotClient) => {
                     try {
                         const vcId = player.voiceChannelId
                         if (!vcId) return
-                        const updatedVoiceChannel = await client.channels.fetch(vcId).catch(() => null)
+                        const updatedVoiceChannel = await client.channels
+                            .fetch(vcId)
+                            .catch(() => null)
                         if (updatedVoiceChannel && updatedVoiceChannel.isVoiceBased()) {
                             const humanMembers = updatedVoiceChannel.members.filter(
                                 (m) => !m.user.bot
