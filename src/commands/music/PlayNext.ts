@@ -47,23 +47,21 @@ export default {
             })
         }
 
+        await interaction.deferReply({ ephemeral: true })
+
         const res = await player.search(query, { requester: interaction.user })
 
         if (!res || !res.tracks?.length) {
-            return interaction.reply({
+            return interaction.editReply({
                 content: "No tracks found or an error occurred.",
-                ephemeral: true,
             })
         }
 
         if (res.loadType === "playlist") {
-            return interaction.reply({
+            return interaction.editReply({
                 content: "Playlists are not supported for this command.",
-                ephemeral: true,
             })
         }
-
-        await interaction.deferReply()
 
         const track = res.tracks[0]
         player.queue.add(track, 0)

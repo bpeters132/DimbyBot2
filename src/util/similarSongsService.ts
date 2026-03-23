@@ -219,14 +219,15 @@ async function spotifySimilarTracksFromRelatedAndTop(
     const seedCtx = await fetchTrackSeedContext(accessToken, seedTrackId, market)
     const hintLabel = String(artistNameHint || "").trim()
 
-    if (seedCtx.ok === false) {
-        if (seedCtx.httpStatus === 429) {
+    if (!seedCtx.ok) {
+        const failedSeed = seedCtx as TrackSeedContextErr
+        if (failedSeed.httpStatus === 429) {
             return {
                 tracks: [],
                 apiFailed: true,
                 rateLimited: true,
                 httpStatus: 429,
-                errorSnippet: seedCtx.errorSnippet,
+                errorSnippet: failedSeed.errorSnippet,
             }
         }
         if (hintLabel) {
@@ -250,8 +251,8 @@ async function spotifySimilarTracksFromRelatedAndTop(
             tracks: [],
             apiFailed: true,
             rateLimited: false,
-            httpStatus: seedCtx.httpStatus ?? 0,
-            errorSnippet: seedCtx.errorSnippet,
+            httpStatus: failedSeed.httpStatus ?? 0,
+            errorSnippet: failedSeed.errorSnippet,
         }
     }
 

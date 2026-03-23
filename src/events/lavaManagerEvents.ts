@@ -18,6 +18,7 @@ import type BotClient from "../lib/BotClient.js"
 import { getGuildSettings } from "../util/saveControlChannel.js"
 import { rememberAutoplayPlayed } from "../util/autoplayHistory.js"
 import { updateControlMessage } from "./handlers/handleControlChannel.js"
+import { discordDeleteErrorDetails } from "../util/discordErrorDetails.js"
 
 type GuildTextSendable = { send: (content: string) => Promise<Message<boolean>> }
 
@@ -102,10 +103,10 @@ export default async (client: BotClient) => {
                                     "[LavaMgrEvents] Failed to delete trackStart message (attempt 1):",
                                     e
                                 )
-                                const err = e as { code?: string; message?: string }
+                                const err = discordDeleteErrorDetails(e)
                                 if (
                                     err.code === "EAI_AGAIN" ||
-                                    err.message?.includes("ECONNRESET")
+                                    err.message.includes("ECONNRESET")
                                 ) {
                                     setTimeout(() => {
                                         msg.delete().catch((e2: unknown) =>

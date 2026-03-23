@@ -2,16 +2,7 @@ import { SlashCommandBuilder } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
-
-function discordDeleteErrorDetails(err: unknown): { code?: string; message: string } {
-    const message = err instanceof Error ? err.message : String(err)
-    let code: string | undefined
-    if (typeof err === "object" && err !== null && "code" in err) {
-        const raw = (err as { code: unknown }).code
-        code = typeof raw === "string" ? raw : raw != null ? String(raw) : undefined
-    }
-    return { code, message }
-}
+import { discordDeleteErrorDetails } from "../../util/discordErrorDetails.js"
 
 export default {
     data: new SlashCommandBuilder().setName("skip").setDescription("Skip the song"),
