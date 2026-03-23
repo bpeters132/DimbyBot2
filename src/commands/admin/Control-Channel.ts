@@ -30,16 +30,17 @@ export default {
 
     /** Set or clear the guild music control channel. */
     async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
-        const guild = interaction.guild
-        const channel = interaction.channel
-        const options = interaction.options
-        const subcommand = options.getSubcommand()
-        if (!guild) {
-            return interaction.reply({
+        if (!interaction.inGuild()) {
+            // With `setDMPermission(false)`, typings can treat this branch as `never`; widen so we can still reply safely.
+            return (interaction as ChatInputCommandInteraction).reply({
                 content: "Use this command in a server.",
                 ephemeral: true,
             })
         }
+        const guild = interaction.guild
+        const channel = interaction.channel
+        const options = interaction.options
+        const subcommand = options.getSubcommand()
         client.debug(`[Control-Channel] Executing subcommand: ${subcommand} in guild ${guild.id}`)
 
         const guildSettings = getGuildSettings(client)

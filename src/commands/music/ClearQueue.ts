@@ -19,7 +19,7 @@ export default {
         }
         const guild = interaction.guild
         if (!guild) {
-            return (interaction as ChatInputCommandInteraction).reply({
+            return interaction.reply({
                 content: "Use this command in a server.",
                 ephemeral: true,
             })
