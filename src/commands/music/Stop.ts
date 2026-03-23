@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
-import type { ChatInputCommandInteraction } from "discord.js"
+import type { ChatInputCommandInteraction, Message } from "discord.js"
 import { stopLocalPlayer, getLocalPlayerState } from "../../util/localPlayer.js"
 
 export default {
@@ -11,15 +11,18 @@ export default {
     async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
         const guild = interaction.guild
         if (!guild) {
-            return interaction.reply({ content: "Use this command in a server." })
+            return interaction.reply({
+                content: "Use this command in a server.",
+                ephemeral: true,
+            })
         }
 
         let stoppedLocal = false
         let stoppedLavalink = false
 
-        // Attempt to stop local player
-        const localPlayerWasActive = getLocalPlayerState(guild.id)?.isPlaying || false
-        if (localPlayerWasActive) {
+        const localState = getLocalPlayerState(guild.id)
+        const localPlayerWasActive = localState?.isPlaying || false
+        if (localState != null) {
             if (stopLocalPlayer(client, guild.id)) {
                 client.debug(`[StopCmd] Stopped local player for guild ${guild.id}`)
                 stoppedLocal = true
@@ -57,20 +60,31 @@ export default {
             replyContent = "Could not stop the local player. Please check logs."
         }
 
-        // Use fetchReply to get the message object for potential deletion
-        const msg = await interaction.reply({
-            content: replyContent,
-            fetchReply: true,
-        })
+        let msg: Message<boolean> | undefined
+        try {
+            msg = await interaction.reply({
+                content: replyContent,
+                fetchReply: true,
+            })
+        } catch (replyErr: unknown) {
+            client.error("[StopCmd] Failed to send reply:", replyErr)
+            try {
+                await interaction.followUp({ content: replyContent })
+            } catch (followErr: unknown) {
+                client.error("[StopCmd] followUp after reply failure also failed:", followErr)
+            }
+            return
+        }
 
         // Auto-delete reply only if something was actually stopped
-        if (stoppedLocal || stoppedLavalink) {
+        if ((stoppedLocal || stoppedLavalink) && msg) {
             setTimeout(() => {
-                msg.delete().catch((e) => {
+                msg.delete().catch((e: unknown) => {
+                    const err = e as { code?: string; message?: string }
                     client.error("[StopCmd] Failed to delete reply (attempt 1):", e)
-                    if (e.code === "EAI_AGAIN" || e.message.includes("ECONNRESET")) {
+                    if (err.code === "EAI_AGAIN" || err.message?.includes("ECONNRESET")) {
                         setTimeout(() => {
-                            msg.delete().catch((e2) =>
+                            msg.delete().catch((e2: unknown) =>
                                 client.error("[StopCmd] Failed to delete reply (attempt 2):", e2)
                             )
                         }, 2000)

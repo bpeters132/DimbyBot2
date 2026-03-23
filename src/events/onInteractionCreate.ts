@@ -73,6 +73,7 @@ export default (client: BotClient) => {
                         )
                         await interaction.reply({
                             content: "Commands cannot be used in the control channel.",
+                            flags: [MessageFlags.Ephemeral],
                         })
                         const ch = interaction.channel
                         const msgId = guildSettings.controlMessageId

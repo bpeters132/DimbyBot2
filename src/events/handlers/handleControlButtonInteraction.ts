@@ -85,6 +85,7 @@ export async function handleControlButtonInteraction(
         try {
             await interaction.followUp({
                 content: "Player not found. It might have been stopped or disconnected.",
+                ephemeral: true,
             })
         } catch {
             /* Ignore */
@@ -103,7 +104,10 @@ export async function handleControlButtonInteraction(
                 `[ControlButtonHandler] User ${interaction.user.id} not in VC for autoplay toggle.`
             )
             try {
-                await interaction.followUp({ content: "Join a voice channel first!" })
+                await interaction.followUp({
+                    content: "Join a voice channel first!",
+                    ephemeral: true,
+                })
             } catch (e: unknown) {
                 client.error("Error sending VC check follow-up:", e)
             }
@@ -113,6 +117,7 @@ export async function handleControlButtonInteraction(
             try {
                 await interaction.followUp({
                     content: "You need to be in the same voice channel as the bot!",
+                    ephemeral: true,
                 })
             } catch (e: unknown) {
                 client.error("Error sending VC mismatch follow-up:", e)
@@ -127,6 +132,7 @@ export async function handleControlButtonInteraction(
             try {
                 await interaction.followUp({
                     content: "You must be in a voice channel to use the controls!",
+                    ephemeral: true,
                 })
             } catch (e: unknown) {
                 client.error("Error sending VC check follow-up:", e)
@@ -140,6 +146,7 @@ export async function handleControlButtonInteraction(
             try {
                 await interaction.followUp({
                     content: "Cannot verify player's voice channel. Controls unavailable.",
+                    ephemeral: true,
                 })
             } catch (e: unknown) {
                 client.error("Error sending player VC check follow-up:", e)
@@ -154,6 +161,7 @@ export async function handleControlButtonInteraction(
                 await interaction.followUp({
                     content:
                         "You must be in the same voice channel as the bot to use the controls!",
+                    ephemeral: true,
                 })
             } catch (e: unknown) {
                 client.error("Error sending mismatched VC follow-up:", e)
@@ -177,6 +185,7 @@ export async function handleControlButtonInteraction(
         try {
             await interaction.followUp({
                 content: "An error occurred while controlling the player.",
+                ephemeral: true,
             })
         } catch (followUpError) {
             client.error(
@@ -272,6 +281,7 @@ export async function handleControlButtonInteraction(
                                     await interaction.followUp({
                                         content:
                                             "I seem to be disconnected or you're not in my channel. Please try adding a song again or use /join.",
+                                        ephemeral: true,
                                     })
                                     break // Don't try to play
                                 }
@@ -290,7 +300,7 @@ export async function handleControlButtonInteraction(
             case "control_stop": {
                 try {
                     await player.destroy()
-                    await interaction.followUp("BYE!")
+                    await interaction.followUp({ content: "BYE!", ephemeral: true })
                     client.debug("[ControlButtonHandler] Player stopped")
                     actionTaken = true
                 } catch (destroyError: unknown) {
@@ -305,6 +315,7 @@ export async function handleControlButtonInteraction(
                     )
                     await interaction.followUp({
                         content: "Nothing is currently playing to skip.",
+                        ephemeral: true,
                     })
                     break
                 }
@@ -320,7 +331,7 @@ export async function handleControlButtonInteraction(
                         await player.skip(0, false)
                     }
                     actionTaken = true
-                    await interaction.followUp({ content: "Skipped." })
+                    await interaction.followUp({ content: "Skipped.", ephemeral: true })
                 } catch (skipError: unknown) {
                     await handleActionError(skipError)
                     return
@@ -336,19 +347,23 @@ export async function handleControlButtonInteraction(
                     )
                     await interaction.followUp({
                         content: "Not enough songs in the queue to shuffle.",
+                        ephemeral: true,
                     })
                     break // Don't set actionTaken
                 }
                 try {
                     await player.queue.shuffle()
                     client.debug("[ControlButtonHandler] Queue shuffled.")
-                    await interaction.followUp({ content: "Queue shuffled." })
+                    await interaction.followUp({ content: "Queue shuffled.", ephemeral: true })
                     actionTaken = true
                 } catch (shuffleError: unknown) {
                     client.error("[ControlButtonHandler] Error shuffling queue:", shuffleError)
                     // Optionally, inform the user about the error
                     await interaction
-                        .followUp({ content: "An error occurred while trying to shuffle." })
+                        .followUp({
+                            content: "An error occurred while trying to shuffle.",
+                            ephemeral: true,
+                        })
                         .catch(() => {})
                     // Don't re-throw here unless it's critical, let the control message update attempt happen
                 }
@@ -373,12 +388,15 @@ export async function handleControlButtonInteraction(
                 try {
                     await player.setRepeatMode(newMode)
                     client.debug(`[ControlButtonHandler] Repeat mode set to ${newMode}.`)
-                    await interaction.followUp({ content: feedback })
+                    await interaction.followUp({ content: feedback, ephemeral: true })
                     actionTaken = true
                 } catch (loopError: unknown) {
                     client.error("[ControlButtonHandler] Error setting loop mode:", loopError)
                     await interaction
-                        .followUp({ content: "An error occurred while setting loop mode." })
+                        .followUp({
+                            content: "An error occurred while setting loop mode.",
+                            ephemeral: true,
+                        })
                         .catch(() => {})
                 }
                 break
@@ -387,6 +405,7 @@ export async function handleControlButtonInteraction(
                 const enabled = toggleAutoplay(player)
                 await interaction.followUp({
                     content: enabled ? "Autoplay **enabled**." : "Autoplay **disabled**.",
+                    ephemeral: true,
                 })
                 actionTaken = true
                 break

@@ -622,17 +622,17 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         })
     } catch (error: unknown) {
         client.error(`[Download] Error downloading video:`, error)
-        const msg = error instanceof Error ? error.message : String(error)
+        const userMsg = "Failed to download video. Please try again or contact support."
         if (interaction.replied || interaction.deferred) {
             await interaction
                 .editReply({
-                    content: `Failed to download video: ${msg}`,
+                    content: userMsg,
                 })
                 .catch((e: unknown) => client.error("Failed to edit reply on main catch block", e))
         } else {
             await interaction
                 .reply({
-                    content: `Failed to download video: ${msg}`,
+                    content: userMsg,
                 })
                 .catch((e: unknown) => client.error("Failed to reply on main catch block", e))
         }

@@ -9,8 +9,24 @@ import type { ChatInputCommandInteraction } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import fs from "fs"
 import path from "path"
+import { pathToFileURL } from "node:url"
 
 const __dirname = import.meta.dirname
+
+function isSlashCommandModule(mod: unknown): mod is {
+    data: { name: string; toJSON: () => RESTPostAPIChatInputApplicationCommandsJSONBody }
+    execute: (...args: unknown[]) => unknown
+} {
+    if (!mod || typeof mod !== "object") return false
+    const rec = mod as Record<string, unknown>
+    const data = rec.data
+    if (!data || typeof data !== "object") return false
+    const d = data as Record<string, unknown>
+    if (typeof d.name !== "string") return false
+    if (typeof d.toJSON !== "function") return false
+    if (typeof rec.execute !== "function") return false
+    return true
+}
 
 async function loadCommands(
     client: BotClient,
@@ -24,18 +40,16 @@ async function loadCommands(
             await loadCommands(client, resPath, commands)
         } else if (dirent.isFile() && dirent.name.endsWith(".js")) {
             try {
-                const commandModule = (await import(`file://${resPath}`)) as {
-                    default?: { data: SlashCommandBuilder }
+                const commandModule = (await import(pathToFileURL(resPath).href)) as {
+                    default?: unknown
                 }
-                if (
-                    commandModule.default &&
-                    commandModule.default.data instanceof SlashCommandBuilder
-                ) {
-                    commands.push(commandModule.default.data.toJSON())
-                    client.debug(`[DeployCmd] Loaded command: ${commandModule.default.data.name}`)
+                if (isSlashCommandModule(commandModule.default)) {
+                    const cmd = commandModule.default
+                    commands.push(cmd.data.toJSON())
+                    client.debug(`[DeployCmd] Loaded command: ${cmd.data.name}`)
                 } else {
                     client.warn(
-                        `[DeployCmd] Command file ${resPath} is missing a default export or valid 'data' property.`
+                        `[DeployCmd] Command file ${resPath} is missing a default export with data (name + toJSON) and execute.`
                     )
                 }
             } catch (error: unknown) {

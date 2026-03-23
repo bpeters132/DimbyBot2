@@ -16,7 +16,7 @@ RUN apk add --no-cache \
 # Pin Lavalink version for reproducible builds; override at build time, e.g.:
 #   docker build --build-arg LAVALINK_VERSION=4.2.1 -f Lavalink/Dockerfile Lavalink
 ARG LAVALINK_VERSION=4.2.2
-RUN curl -L "https://github.com/lavalink-devs/Lavalink/releases/download/${LAVALINK_VERSION}/Lavalink.jar" -o Lavalink.jar
+RUN curl --fail -L "https://github.com/lavalink-devs/Lavalink/releases/download/${LAVALINK_VERSION}/Lavalink.jar" -o Lavalink.jar
 
 # Copy the entrypoint script
 COPY entrypoint.sh entrypoint.sh

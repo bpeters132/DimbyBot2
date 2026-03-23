@@ -80,7 +80,18 @@ export default class Logger implements LoggerInterface {
         try {
             this.discordForwarder(level, fullMessage)
         } catch (err: unknown) {
-            console.error("[Logger] discordForwarder threw (swallowed):", err)
+            const safe =
+                err instanceof Error
+                    ? `${err.name}: ${err.message}`
+                    : (() => {
+                          try {
+                              const s = String(err)
+                              return s.length > 500 ? `${s.slice(0, 500)}…` : s
+                          } catch {
+                              return "[unstringifiable error]"
+                          }
+                      })()
+            console.error(`[Logger] discordForwarder threw (swallowed): ${safe}`)
         }
     }
 
@@ -134,7 +145,11 @@ export default class Logger implements LoggerInterface {
         const messageArgs = this._formatArgs(argsForMessage)
         const fullMessage = text + (messageArgs ? " " + messageArgs : "")
         if (errorArg) {
-            this.logger.error(fullMessage, { error: errorArg })
+            this.logger.log({
+                level: "error",
+                message: fullMessage,
+                stack: errorArg.stack,
+            })
         } else {
             this.logger.error(fullMessage)
         }
