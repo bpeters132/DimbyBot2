@@ -60,24 +60,37 @@ export default {
             replyContent = "Could not stop the local player. Please check logs."
         }
 
+        const stoppedSomething = stoppedLocal || stoppedLavalink
+
         let msg: Message<boolean> | undefined
         try {
-            msg = await interaction.reply({
-                content: replyContent,
-                fetchReply: true,
-            })
+            if (stoppedSomething) {
+                msg = await interaction.reply({
+                    content: replyContent,
+                    fetchReply: true,
+                })
+            } else {
+                await interaction.reply({
+                    content: replyContent,
+                    ephemeral: true,
+                })
+                return
+            }
         } catch (replyErr: unknown) {
             client.error("[StopCmd] Failed to send reply:", replyErr)
             try {
-                await interaction.followUp({ content: replyContent })
+                await interaction.followUp({
+                    content: replyContent,
+                    ephemeral: !stoppedSomething,
+                })
             } catch (followErr: unknown) {
                 client.error("[StopCmd] followUp after reply failure also failed:", followErr)
             }
             return
         }
 
-        // Auto-delete reply only if something was actually stopped
-        if ((stoppedLocal || stoppedLavalink) && msg) {
+        // Auto-delete reply only if something was actually stopped (public confirmation)
+        if (stoppedSomething && msg) {
             setTimeout(() => {
                 msg.delete().catch((e: unknown) => {
                     const err = e as { code?: string; message?: string }

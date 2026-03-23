@@ -5,12 +5,22 @@ import type { Command } from "../../types/index.js"
 
 import { Buffer } from "node:buffer" // For creating file buffers
 import { createHash } from "node:crypto"
+import fs from "node:fs"
 import { Worker } from "node:worker_threads"
 import { fileURLToPath } from "node:url"
-import path from "node:path"
 
 const MAX_FIELD_LENGTH = 1024 // Discord embed field limit
 const EVAL_WORKER_WALL_MS = 15_000
+
+/** Resolved once at load; ESM URL works on Windows and with special path characters. */
+const EVAL_WORKER_PATH = fileURLToPath(new URL("../workers/evalSnippetWorker.js", import.meta.url))
+try {
+    fs.accessSync(EVAL_WORKER_PATH, fs.constants.R_OK)
+} catch {
+    throw new Error(
+        `[EvalCmd] eval worker missing or unreadable at ${EVAL_WORKER_PATH} (run yarn build).`
+    )
+}
 
 /** Non-reversible fingerprint for correlating eval logs without storing the raw snippet. */
 function evalCodeFingerprint(code: string, userTag: string): string {
@@ -67,15 +77,8 @@ type EvalWorkerMessage = { ok: true; result: string } | { ok: false; error: stri
 /** Runs the snippet in a worker thread (VM + wall-clock timeout); does not execute on the main thread. */
 function runSnippetInWorker(code: string): Promise<EvalWorkerMessage> {
     return new Promise((resolve) => {
-        const workerPath = path.join(
-            path.dirname(fileURLToPath(import.meta.url)),
-            "..",
-            "..",
-            "workers",
-            "evalSnippetWorker.js"
-        )
         let settled = false
-        const worker = new Worker(workerPath)
+        const worker = new Worker(EVAL_WORKER_PATH)
         const finish = (out: EvalWorkerMessage) => {
             if (settled) return
             settled = true

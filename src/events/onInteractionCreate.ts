@@ -97,6 +97,7 @@ export default (client: BotClient) => {
                 try {
                     await interaction.reply({
                         content: `Error: Command "${commandName}" not found!`,
+                        flags: [MessageFlags.Ephemeral],
                     })
                 } catch (replyError: unknown) {
                     client.error(
@@ -117,27 +118,43 @@ export default (client: BotClient) => {
                 // Log the core error regardless
                 client.error(`[InteractionCreate] Error executing command "${commandName}":`, error)
 
-                // Attempt to send a generic error reply ONLY if the interaction is still valid
-                // and hasn't already been replied to or deferred by the command itself.
-                // Commands like eval might handle their own specific error feedback.
-                if (!interaction.replied && !interaction.deferred) {
+                const genericContent = `There was an error executing \`/${commandName}\`. Please check the logs or contact the developer.`
+
+                if (interaction.deferred && !interaction.replied) {
                     try {
-                        // Use reply if no response has been attempted yet
+                        await interaction.editReply({ content: genericContent })
+                    } catch (editErr: unknown) {
+                        client.error(
+                            `[InteractionCreate] Failed to editReply after ${commandName} error (deferred):`,
+                            editErr
+                        )
+                        try {
+                            await interaction.followUp({
+                                content: genericContent,
+                                flags: [MessageFlags.Ephemeral],
+                            })
+                        } catch (followErr: unknown) {
+                            client.error(
+                                `[InteractionCreate] Failed to followUp after editReply failure for ${commandName}:`,
+                                followErr
+                            )
+                        }
+                    }
+                } else if (!interaction.replied && !interaction.deferred) {
+                    try {
                         await interaction.reply({
-                            content: `There was an error executing \`/${commandName}\`. Please check the logs or contact the developer.`,
+                            content: genericContent,
+                            flags: [MessageFlags.Ephemeral],
                         })
                     } catch (replyError: unknown) {
-                        // Log if even the initial reply fails (e.g., interaction truly invalid for some reason)
                         client.error(
                             `[InteractionCreate] Failed to send generic error reply for ${commandName} (Interaction likely invalid):`,
                             replyError
                         )
                     }
                 } else {
-                    // If replied or deferred, the command likely tried to handle its own response/error.
-                    // We just log the error above and don't try to interact further to avoid conflicts or Unknown Interaction errors.
                     client.debug(
-                        `[InteractionCreate] Interaction for ${commandName} was already replied/deferred. Skipping generic error reply.`
+                        `[InteractionCreate] Interaction for ${commandName} was already replied. Skipping generic error reply.`
                     )
                 }
             }

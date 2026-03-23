@@ -105,6 +105,61 @@ export default class Logger implements LoggerInterface {
         return `[${y}-${month}-${day} ${hour}:${minute}]`
     }
 
+    /** Normalized keys (underscores removed, lowercased) we never log verbatim. */
+    private static readonly _SENSITIVE_LOG_KEYS = new Set([
+        "token",
+        "accesstoken",
+        "refreshtoken",
+        "apikey",
+        "apisecret",
+        "clientsecret",
+        "secret",
+        "password",
+        "auth",
+        "credentials",
+        "config",
+        "authorization",
+    ])
+
+    private _normalizedLogKey(key: string): string {
+        return key.replace(/[_-]/g, "").toLowerCase()
+    }
+
+    private _isSensitiveLogKey(key: string): boolean {
+        return Logger._SENSITIVE_LOG_KEYS.has(this._normalizedLogKey(key))
+    }
+
+    /** Deep-clone-ish snapshot with sensitive keys redacted (does not mutate `arg`). */
+    private _redactObjectForLog(value: unknown, seen: WeakSet<object>, depth: number): unknown {
+        if (depth > 8) {
+            return "[MaxDepth]"
+        }
+        if (value === null) {
+            return null
+        }
+        const t = typeof value
+        if (t !== "object") {
+            return value
+        }
+        if (seen.has(value as object)) {
+            return "[Circular]"
+        }
+        seen.add(value as object)
+        if (Array.isArray(value)) {
+            return value.map((item) => this._redactObjectForLog(item, seen, depth + 1))
+        }
+        const src = value as Record<string, unknown>
+        const out: Record<string, unknown> = {}
+        for (const key of Object.keys(src)) {
+            if (this._isSensitiveLogKey(key)) {
+                out[key] = "[REDACTED]"
+            } else {
+                out[key] = this._redactObjectForLog(src[key], seen, depth + 1)
+            }
+        }
+        return out
+    }
+
     private _formatArgs(args: unknown[]) {
         return args
             .map((arg) => {
@@ -113,7 +168,8 @@ export default class Logger implements LoggerInterface {
                 }
                 if (typeof arg === "object" && arg !== null) {
                     try {
-                        return JSON.stringify(arg)
+                        const safe = this._redactObjectForLog(arg, new WeakSet(), 0)
+                        return JSON.stringify(safe)
                     } catch {
                         return "[Unserializable Object]"
                     }

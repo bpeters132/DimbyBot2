@@ -340,10 +340,10 @@ export async function handleControlButtonInteraction(
                 break
             }
             case "control_shuffle": {
-                // player.queue.size is the number of tracks *upcoming*, doesn't include current
-                if (!player.queue || player.queue.tracks.length < 1) {
+                // Upcoming queue only; need at least two tracks to shuffle meaningfully
+                if (!player.queue || player.queue.tracks.length < 2) {
                     client.debug(
-                        "[ControlButtonHandler] Shuffle clicked but not enough tracks in queue."
+                        "[ControlButtonHandler] Shuffle clicked but not enough upcoming tracks to shuffle."
                     )
                     await interaction.followUp({
                         content: "Not enough songs in the queue to shuffle.",

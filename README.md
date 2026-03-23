@@ -92,4 +92,4 @@ src/
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details (if one exists) or refer to `package.json`.
+This project is licensed under the MIT License; see the [LICENSE](LICENSE) file.
