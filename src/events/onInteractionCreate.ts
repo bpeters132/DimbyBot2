@@ -1,5 +1,6 @@
 import { MessageFlags, type GuildTextBasedChannel, type Interaction } from "discord.js"
 import type BotClient from "../lib/BotClient.js"
+import type { GuildSettings } from "../types/index.js"
 import { getGuildSettings } from "../util/saveControlChannel.js"
 import { handleControlButtonInteraction } from "./handlers/handleControlButtonInteraction.js"
 import { cleanupControlChannel } from "./handlers/handleControlChannel.js"
@@ -63,30 +64,46 @@ export default (client: BotClient) => {
             )
 
             if (interaction.inGuild() && guildId) {
+                let guildSettings: GuildSettings | undefined
                 try {
                     const allSettings = getGuildSettings(client)
-                    const guildSettings = allSettings[guildId]
-
-                    if (guildSettings && guildSettings.controlChannelId === channelId) {
-                        client.warn(
-                            `[InteractionCreate] User ${user.tag} (${user.id}) attempted to use command /${commandName} in the control channel (${channelId}) of guild ${guildId}. Rejecting.`
-                        )
-                        await interaction.reply({
-                            content: "Commands cannot be used in the control channel.",
-                            flags: [MessageFlags.Ephemeral],
-                        })
-                        const ch = interaction.channel
-                        const msgId = guildSettings.controlMessageId
-                        if (ch?.isTextBased() && msgId) {
-                            await cleanupControlChannel(ch as GuildTextBasedChannel, msgId, client)
-                        }
-                        return
-                    }
+                    guildSettings = allSettings[guildId]
                 } catch (error: unknown) {
                     client.error(
                         `[InteractionCreate] Error fetching guild settings for guild ${guildId} during control channel check:`,
                         error
                     )
+                    return
+                }
+
+                if (guildSettings && guildSettings.controlChannelId === channelId) {
+                    client.warn(
+                        `[InteractionCreate] User ${user.tag} (${user.id}) attempted to use command /${commandName} in the control channel (${channelId}) of guild ${guildId}. Rejecting.`
+                    )
+                    try {
+                        await interaction.reply({
+                            content: "Commands cannot be used in the control channel.",
+                            flags: [MessageFlags.Ephemeral],
+                        })
+                    } catch (replyErr: unknown) {
+                        client.error(
+                            `[InteractionCreate] Failed to reply when rejecting control-channel command /${commandName}:`,
+                            replyErr
+                        )
+                    }
+                    const ch = interaction.channel
+                    const msgId = guildSettings.controlMessageId
+                    if (ch?.isTextBased() && msgId) {
+                        try {
+                            await cleanupControlChannel(ch as GuildTextBasedChannel, msgId, client)
+                        } catch (cleanupErr: unknown) {
+                            client.error(
+                                `[InteractionCreate] cleanupControlChannel failed after control-channel rejection:`,
+                                cleanupErr
+                            )
+                        }
+                    }
+                    return
                 }
             }
 

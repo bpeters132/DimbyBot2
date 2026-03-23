@@ -88,7 +88,6 @@ function runSnippetInWorker(code: string): Promise<EvalWorkerMessage> {
         }
         const timer = setTimeout(() => {
             finish({ ok: false, error: "Eval timed out (worker wall clock)." })
-            void worker.terminate()
         }, EVAL_WORKER_WALL_MS)
         worker.on("message", (msg: unknown) => {
             if (msg && typeof msg === "object" && "ok" in msg) {
@@ -186,51 +185,8 @@ const evalCommand: Command = {
             return
         }
 
-        if (workerOut.ok) {
-            const cleanedEvaled = redact(workerOut.result)
-
-            const outputEmbed = new EmbedBuilder()
-                .setTitle("Eval Result ✅")
-                .setColor(0x00ff00)
-                .addFields({
-                    name: "Input Code",
-                    value: toCodeBlock("js", code),
-                })
-                .setTimestamp()
-
-            const replyOptions: { embeds: EmbedBuilder[]; files: AttachmentBuilder[] } = {
-                embeds: [outputEmbed],
-                files: [],
-            }
-
-            const outputFenceBudget = MAX_FIELD_LENGTH - 20
-            if (cleanedEvaled.length > outputFenceBudget) {
-                outputEmbed.addFields({
-                    name: "Output",
-                    value: "Output was too long. See attached file.",
-                })
-                const outputBuffer = Buffer.from(cleanedEvaled, "utf8")
-                const attachment = new AttachmentBuilder(outputBuffer, { name: "eval_output.js" })
-                replyOptions.files.push(attachment)
-            } else {
-                outputEmbed.addFields({
-                    name: "Output",
-                    value: toCodeBlock("js", cleanedEvaled),
-                })
-            }
-
-            if (code.length > MAX_FIELD_LENGTH - 10) {
-                outputEmbed.setFooter({ text: "Note: Input code was truncated in embed." })
-            }
-
-            try {
-                await interaction.editReply(replyOptions)
-            } catch (ioErr: unknown) {
-                client.error("[EvalCmd] editReply failed (success path, transport):", ioErr)
-            }
-        } else {
-            const failed = workerOut as Extract<EvalWorkerMessage, { ok: false }>
-            const errorString = redact(failed.error)
+        if (workerOut.ok === false) {
+            const errorString = redact(workerOut.error)
             client.error(
                 `[EvalCmd] Error executing code [redacted] user=${interaction.user.tag} fingerprint=${evalCodeFingerprint(code, interaction.user.tag)}:`,
                 errorString
@@ -272,6 +228,49 @@ const evalCommand: Command = {
             } catch (ioErr: unknown) {
                 client.error("[EvalCmd] editReply failed (error path, transport):", ioErr)
             }
+            return
+        }
+
+        const cleanedEvaled = redact(workerOut.result)
+
+        const outputEmbed = new EmbedBuilder()
+            .setTitle("Eval Result ✅")
+            .setColor(0x00ff00)
+            .addFields({
+                name: "Input Code",
+                value: toCodeBlock("js", code),
+            })
+            .setTimestamp()
+
+        const replyOptions: { embeds: EmbedBuilder[]; files: AttachmentBuilder[] } = {
+            embeds: [outputEmbed],
+            files: [],
+        }
+
+        const outputFenceBudget = MAX_FIELD_LENGTH - 20
+        if (cleanedEvaled.length > outputFenceBudget) {
+            outputEmbed.addFields({
+                name: "Output",
+                value: "Output was too long. See attached file.",
+            })
+            const outputBuffer = Buffer.from(cleanedEvaled, "utf8")
+            const attachment = new AttachmentBuilder(outputBuffer, { name: "eval_output.js" })
+            replyOptions.files.push(attachment)
+        } else {
+            outputEmbed.addFields({
+                name: "Output",
+                value: toCodeBlock("js", cleanedEvaled),
+            })
+        }
+
+        if (code.length > MAX_FIELD_LENGTH - 10) {
+            outputEmbed.setFooter({ text: "Note: Input code was truncated in embed." })
+        }
+
+        try {
+            await interaction.editReply(replyOptions)
+        } catch (ioErr: unknown) {
+            client.error("[EvalCmd] editReply failed (success path, transport):", ioErr)
         }
     },
 }

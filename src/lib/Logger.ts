@@ -200,6 +200,11 @@ export default class Logger implements LoggerInterface {
         const argsForMessage = errorArg ? args.filter((a) => !(a instanceof Error)) : args
         const messageArgs = this._formatArgs(argsForMessage)
         const fullMessage = text + (messageArgs ? " " + messageArgs : "")
+        const errorDetail =
+            errorArg && (errorArg.stack || errorArg.message)
+                ? `\n${errorArg.stack || errorArg.message}`
+                : ""
+        const consoleAndDiscordMessage = fullMessage + errorDetail
         if (errorArg) {
             this.logger.log({
                 level: "error",
@@ -209,8 +214,10 @@ export default class Logger implements LoggerInterface {
         } else {
             this.logger.error(fullMessage)
         }
-        console.log(colors.gray(this._getTimestamp()) + colors.red(` | ERROR | ${fullMessage}`))
-        this._notifyDiscord("error", fullMessage)
+        console.log(
+            colors.gray(this._getTimestamp()) + colors.red(` | ERROR | ${consoleAndDiscordMessage}`)
+        )
+        this._notifyDiscord("error", consoleAndDiscordMessage)
     }
 
     debug(text: string, ...args: unknown[]) {

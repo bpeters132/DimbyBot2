@@ -19,6 +19,8 @@ export default {
 
         let stoppedLocal = false
         let stoppedLavalink = false
+        /** Destroyed an idle Lavalink player (no current track / queue / playback). */
+        let lavalinkIdleCleaned = false
 
         const localState = getLocalPlayerState(guild.id)
         const localPlayerWasActive = localState?.isPlaying || false
@@ -42,9 +44,8 @@ export default {
                 client.debug(`[StopCmd] Destroyed Lavalink player for guild ${guild.id}`)
                 stoppedLavalink = true
             } else {
-                // If Lavalink player exists but isn't active and has no queue, still destroy to clean up resources if desired,
-                // or just note it wasn't actively playing.
                 lavalinkPlayer.destroy()
+                lavalinkIdleCleaned = true
                 client.debug(`[StopCmd] Cleaned up inactive Lavalink player for guild ${guild.id}`)
             }
         }
@@ -52,15 +53,19 @@ export default {
         let replyContent = "Nothing was playing."
         if (stoppedLocal && stoppedLavalink) {
             replyContent = "All playback stopped and the queue was cleared."
+        } else if (stoppedLocal && lavalinkIdleCleaned) {
+            replyContent = "Local playback stopped and idle Lavalink resources were cleaned up."
         } else if (stoppedLocal) {
             replyContent = "Local playback stopped."
         } else if (stoppedLavalink) {
             replyContent = "Lavalink playback stopped and the queue was cleared."
+        } else if (lavalinkIdleCleaned) {
+            replyContent = "Lavalink player was idle; resources cleaned up."
         } else if (localPlayerWasActive && !stoppedLocal) {
             replyContent = "Could not stop the local player. Please check logs."
         }
 
-        const stoppedSomething = stoppedLocal || stoppedLavalink
+        const stoppedSomething = stoppedLocal || stoppedLavalink || lavalinkIdleCleaned
 
         let msg: Message<boolean> | undefined
         try {

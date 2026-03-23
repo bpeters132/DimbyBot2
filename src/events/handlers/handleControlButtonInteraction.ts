@@ -59,16 +59,8 @@ export async function handleControlButtonInteraction(
     const guild = interaction.guild
     if (!guild) return
 
-    try {
-        await interaction.deferUpdate()
-        client.debug(`[ControlButtonHandler] Interaction ${customId} deferred successfully.`)
-    } catch (deferError: unknown) {
-        client.error(
-            `[ControlButtonHandler] Error deferring update for ${customId} interaction:`,
-            deferError
-        )
-        return
-    }
+    await interaction.deferUpdate()
+    client.debug(`[ControlButtonHandler] Interaction ${customId} deferred successfully.`)
 
     const member =
         interaction.member && "voice" in interaction.member
@@ -300,9 +292,16 @@ export async function handleControlButtonInteraction(
             case "control_stop": {
                 try {
                     await player.destroy()
-                    await interaction.followUp({ content: "BYE!", ephemeral: true })
-                    client.debug("[ControlButtonHandler] Player stopped")
                     actionTaken = true
+                    client.debug("[ControlButtonHandler] Player stopped")
+                    try {
+                        await interaction.followUp({ content: "BYE!", ephemeral: true })
+                    } catch (followErr: unknown) {
+                        client.error(
+                            `[ControlButtonHandler] followUp failed after stop for ${customId}:`,
+                            followErr
+                        )
+                    }
                 } catch (destroyError: unknown) {
                     await handleActionError(destroyError)
                 }
@@ -331,7 +330,14 @@ export async function handleControlButtonInteraction(
                         await player.skip(0, false)
                     }
                     actionTaken = true
-                    await interaction.followUp({ content: "Skipped.", ephemeral: true })
+                    try {
+                        await interaction.followUp({ content: "Skipped.", ephemeral: true })
+                    } catch (followErr: unknown) {
+                        client.error(
+                            `[ControlButtonHandler] followUp failed after skip for ${customId}:`,
+                            followErr
+                        )
+                    }
                 } catch (skipError: unknown) {
                     await handleActionError(skipError)
                     return
@@ -353,19 +359,24 @@ export async function handleControlButtonInteraction(
                 }
                 try {
                     await player.queue.shuffle()
-                    client.debug("[ControlButtonHandler] Queue shuffled.")
-                    await interaction.followUp({ content: "Queue shuffled.", ephemeral: true })
                     actionTaken = true
+                    client.debug("[ControlButtonHandler] Queue shuffled.")
+                    try {
+                        await interaction.followUp({ content: "Queue shuffled.", ephemeral: true })
+                    } catch (followErr: unknown) {
+                        client.error(
+                            `[ControlButtonHandler] followUp failed after shuffle for ${customId}:`,
+                            followErr
+                        )
+                    }
                 } catch (shuffleError: unknown) {
                     client.error("[ControlButtonHandler] Error shuffling queue:", shuffleError)
-                    // Optionally, inform the user about the error
                     await interaction
                         .followUp({
                             content: "An error occurred while trying to shuffle.",
                             ephemeral: true,
                         })
                         .catch(() => {})
-                    // Don't re-throw here unless it's critical, let the control message update attempt happen
                 }
                 break
             }
@@ -387,9 +398,16 @@ export async function handleControlButtonInteraction(
 
                 try {
                     await player.setRepeatMode(newMode)
-                    client.debug(`[ControlButtonHandler] Repeat mode set to ${newMode}.`)
-                    await interaction.followUp({ content: feedback, ephemeral: true })
                     actionTaken = true
+                    client.debug(`[ControlButtonHandler] Repeat mode set to ${newMode}.`)
+                    try {
+                        await interaction.followUp({ content: feedback, ephemeral: true })
+                    } catch (followErr: unknown) {
+                        client.error(
+                            `[ControlButtonHandler] followUp failed after loop toggle for ${customId}:`,
+                            followErr
+                        )
+                    }
                 } catch (loopError: unknown) {
                     client.error("[ControlButtonHandler] Error setting loop mode:", loopError)
                     await interaction
@@ -403,11 +421,18 @@ export async function handleControlButtonInteraction(
             }
             case "control_autoplay": {
                 const enabled = toggleAutoplay(player)
-                await interaction.followUp({
-                    content: enabled ? "Autoplay **enabled**." : "Autoplay **disabled**.",
-                    ephemeral: true,
-                })
                 actionTaken = true
+                try {
+                    await interaction.followUp({
+                        content: enabled ? "Autoplay **enabled**." : "Autoplay **disabled**.",
+                        ephemeral: true,
+                    })
+                } catch (followErr: unknown) {
+                    client.error(
+                        `[ControlButtonHandler] followUp failed after autoplay toggle for ${customId}:`,
+                        followErr
+                    )
+                }
                 break
             }
             default: {
