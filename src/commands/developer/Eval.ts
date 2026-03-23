@@ -13,7 +13,10 @@ const MAX_FIELD_LENGTH = 1024 // Discord embed field limit
 const EVAL_WORKER_WALL_MS = 15_000
 
 /** Resolved once at load; ESM URL works on Windows and with special path characters. */
-const EVAL_WORKER_PATH = fileURLToPath(new URL("../workers/evalSnippetWorker.js", import.meta.url))
+// `developer/` → `commands/` → `dist/` root, then `workers/` (not `commands/workers/`).
+const EVAL_WORKER_PATH = fileURLToPath(
+    new URL("../../workers/evalSnippetWorker.js", import.meta.url)
+)
 try {
     fs.accessSync(EVAL_WORKER_PATH, fs.constants.R_OK)
 } catch {
