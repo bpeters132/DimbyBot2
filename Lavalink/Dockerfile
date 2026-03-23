@@ -4,11 +4,13 @@ FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
 # Install required system libraries and utilities
+# eudev-libs: satisfies OSHI/LinuxOperatingSystem’s libudev probe (harmless if missing for Lavalink itself).
 RUN apk add --no-cache \
     libgcc \
     gcompat \
     dos2unix \
-    curl
+    curl \
+    eudev-libs
 
 # Download the latest Lavalink.jar
 RUN curl -L https://github.com/lavalink-devs/Lavalink/releases/latest/download/Lavalink.jar -o Lavalink.jar

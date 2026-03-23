@@ -25,15 +25,15 @@
         "node": ">=20.11.0"
     },
     "dependencies": {
-        "@discordjs/voice": "0.19.0",
+        "@discordjs/voice": "0.19.2",
         "@snazzah/davey": "^0.1.10",
         "colors": "^1.4.0",
         "date-fns": "^4.1.0",
         "discord.js": "^14.25.1",
         "dotenv": "^17.3.1",
         "ffmpeg-static": "^5.3.0",
-        "lavalink-client": "^2.9.7",
-        "nodemailer": "^8.0.1",
+        "lavalink-client": "^2.9.9",
+        "nodemailer": "^8.0.3",
         "opusscript": "^0.1.1",
         "sodium": "^3.0.2",
         "winston": "^3.19.0"
@@ -43,7 +43,7 @@
         "@types/node": "^22.13.10",
         "@types/ws": "^8.18.1",
         "concurrently": "^9.1.2",
-        "eslint": "^10.0.3",
+        "eslint": "^10.1.0",
         "eslint-config-prettier": "10.1.8",
         "eslint-plugin-prettier": "^5.5.5",
         "globals": "^17.4.0",
