@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction, Message } from "discord.js"
+import { discordDeleteErrorDetails } from "../../util/discordErrorDetails.js"
 import { stopLocalPlayer, getLocalPlayerState } from "../../util/localPlayer.js"
 
 export default {
@@ -98,9 +99,9 @@ export default {
         if (stoppedSomething && msg) {
             setTimeout(() => {
                 msg.delete().catch((e: unknown) => {
-                    const err = e as { code?: string; message?: string }
                     client.error("[StopCmd] Failed to delete reply (attempt 1):", e)
-                    if (err.code === "EAI_AGAIN" || err.message?.includes("ECONNRESET")) {
+                    const d = discordDeleteErrorDetails(e)
+                    if (d.code === "EAI_AGAIN" || d.message.includes("ECONNRESET")) {
                         setTimeout(() => {
                             msg.delete().catch((e2: unknown) =>
                                 client.error("[StopCmd] Failed to delete reply (attempt 2):", e2)
