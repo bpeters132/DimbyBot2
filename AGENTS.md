@@ -49,6 +49,7 @@
 
 - No enforced commit convention found; keep messages short and descriptive (e.g., "fix lavalink reconnect").
 - PRs should include a clear summary, relevant config changes, and screenshots/logs if behavior changes.
+- **CodeRabbit:** Configuration lives in `.coderabbit.yaml`. Draft PRs, titles containing `WIP` / `DO NOT MERGE` / `[skip review]`, or the GitHub label **`wip`** skip automatic reviews. Remove the label or mark the PR ready when you want a review, or comment `@coderabbitai review`. Ensure the repo has a `wip` label (create it under Issues → Labels if missing).
 
 ## Configuration & Secrets
 

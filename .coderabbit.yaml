@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-US"
+early_access: false
+
+reviews:
+    profile: "assertive"
+    request_changes_workflow: false
+    high_level_summary: false
+    poem: false
+    review_status: true
+    review_details: false
+
+    path_filters:
+        - "!dist/**"
+        - "!downloads/**"
+        - "!logs/**"
+        - "!storage/**"
+        - "!**/node_modules/**"
+
+    path_instructions:
+        - path: "src/**/*.ts"
+          instructions: |
+              TypeScript for a Discord.js (v14) bot on Node ESM. Follow AGENTS.md and .prettierrc.json.
+              - Local imports use `.js` extensions (NodeNext). Indent with 4 spaces; no semicolons; print width 100; double quotes.
+              - Prefer interaction.inGuild(), proper GuildMember vs API payload handling, and guards where strictNullChecks is still loose.
+              - Never log tokens, secrets, or full config. Use try/catch on user-facing async paths. Respect Discord rate limits.
+        - path: "src/commands/**/*.ts"
+          instructions: |
+              Slash command handlers: validate options, defer when work is non-trivial, use consistent ephemeral error replies,
+              check permissions and voice/guild context as needed, and avoid blocking the gateway thread.
+        - path: "src/events/**/*.ts"
+          instructions: |
+              Event handlers: use appropriate narrow types where possible, handle partials and missing data, and avoid unhandled promise rejections.
+        - path: "src/lib/**/*.ts"
+          instructions: |
+              Core libraries and services: pay attention to Lavalink/player lifecycle, voice connection cleanup, and clear ownership of client extensions.
+
+    auto_review:
+        enabled: true
+        drafts: false
+        auto_incremental_review: true
+        auto_pause_after_reviewed_commits: 5
+        ignore_title_keywords:
+            - "WIP"
+            - "DO NOT MERGE"
+            - "[skip review]"
+        labels:
+            - "!wip"
+        ignore_usernames:
+            - "dependabot[bot]"
+            - "renovate[bot]"
+
+chat:
+    auto_reply: true
