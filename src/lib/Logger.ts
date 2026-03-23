@@ -49,6 +49,12 @@ export default class Logger implements LoggerInterface {
         this.logger.level = this.debugEnabled ? "debug" : "info"
     }
 
+    /**
+     * Enables or disables debug logging for this logger instance.
+     * Also assigns `process.env.LOG_LEVEL` to `"debug"` or `"info"` so other modules that read
+     * the environment stay aligned; be aware that mutating `process.env` is a global side effect.
+     * `_applyDebugLevel()` updates the Winston logger level locally.
+     */
     setDebugEnabled(enabled: boolean) {
         this.debugEnabled = Boolean(enabled)
         process.env.LOG_LEVEL = this.debugEnabled ? "debug" : "info"

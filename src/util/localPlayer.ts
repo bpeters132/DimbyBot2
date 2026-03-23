@@ -193,6 +193,9 @@ export async function playLocalFile(
                         entersState(conn, VoiceConnectionStatus.Signalling, 5_000),
                         entersState(conn, VoiceConnectionStatus.Connecting, 5_000),
                     ])
+                    client.debug(
+                        `[LocalPlayer] Voice connection re-entered Signalling/Connecting for guild ${guildId}; rejoin in progress.`
+                    )
                 } catch (error: unknown) {
                     client.error(
                         `[LocalPlayer] Voice connection lost or could not reconnect in guild ${guildId}:`,

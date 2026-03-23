@@ -89,13 +89,12 @@ export default {
 
             // Add the list of upcoming tracks for the current page
             if (currentTracks.length > 0) {
-                let fieldValue =
-                    currentTracks // Make fieldValue mutable
-                        .map(
-                            (track, index) =>
-                                `**${start + index + 1}.** [${track.info.title}](${track.info.uri}) - \`${formatDuration(track.info.duration ?? 0)}\``
-                        )
-                        .join("\n") || "_No tracks on this page._" // Ensure value is never empty
+                let fieldValue = currentTracks
+                    .map(
+                        (track, index) =>
+                            `**${start + index + 1}.** [${track.info.title}](${track.info.uri}) - \`${formatDuration(track.info.duration ?? 0)}\``
+                    )
+                    .join("\n")
 
                 // Ensure the field value does not exceed Discord's limit (1024 chars)
                 if (fieldValue.length > 1024) {
@@ -172,7 +171,14 @@ export default {
             const updatedButtons = generateButtons(currentPage)
 
             // Edit the original reply message with the updated content
-            await interaction.editReply({ embeds: [updatedEmbed], components: [updatedButtons] })
+            try {
+                await interaction.editReply({
+                    embeds: [updatedEmbed],
+                    components: [updatedButtons],
+                })
+            } catch (error: unknown) {
+                client.error("Queue command: Failed to edit reply on pagination:", error)
+            }
         })
 
         // Handle the end of the collection (e.g., timeout)

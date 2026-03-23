@@ -66,7 +66,7 @@ If you want to run the bot locally for development or testing:
 
 ## Project Structure
 
-```
+```text
 src/
 ├── commands/      # Slash command definitions
 ├── deploy/        # Scripts for deploying/destroying commands

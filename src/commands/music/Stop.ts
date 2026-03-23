@@ -58,12 +58,6 @@ export default {
             replyContent = "Lavalink playback stopped and the queue was cleared."
         } else if (localPlayerWasActive && !stoppedLocal) {
             replyContent = "Could not stop the local player. Please check logs."
-        } else if (
-            lavalinkPlayer &&
-            !stoppedLavalink &&
-            (lavalinkPlayer.playing || lavalinkPlayer.queue.current)
-        ) {
-            replyContent = "Could not stop the Lavalink player. Please check logs."
         }
 
         // Use fetchReply to get the message object for potential deletion

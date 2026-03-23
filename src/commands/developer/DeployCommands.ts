@@ -17,7 +17,7 @@ async function loadCommands(
     dir: string,
     commands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = []
 ): Promise<RESTPostAPIChatInputApplicationCommandsJSONBody[]> {
-    const dirents = fs.readdirSync(dir, { withFileTypes: true })
+    const dirents = await fs.promises.readdir(dir, { withFileTypes: true })
     for (const dirent of dirents) {
         const resPath = path.resolve(dir, dirent.name)
         if (dirent.isDirectory()) {

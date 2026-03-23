@@ -18,25 +18,29 @@ export default {
         const position = interaction.options.getInteger("position", true)
         const guild = interaction.guild
         if (!guild) {
-            return interaction.reply({ content: "Use this command in a server." })
+            return interaction.reply({
+                content: "Use this command in a server.",
+                ephemeral: true,
+            })
         }
         const member = guildMemberFromInteraction(interaction)
         if (!member) {
             return interaction.reply({
                 content: "Could not resolve your member profile. Try again.",
+                ephemeral: true,
             })
         }
 
         // Check if user is in a voice channel
         const voiceChannel = member.voice.channel
         if (!voiceChannel) {
-            return interaction.reply({ content: "Join a voice channel first!" })
+            return interaction.reply({ content: "Join a voice channel first!", ephemeral: true })
         }
 
         const player = client.lavalink.players.get(guild.id)
 
         if (!player || !player.queue.current) {
-            return interaction.reply("Nothing is playing.")
+            return interaction.reply({ content: "Nothing is playing.", ephemeral: true })
         }
 
         const current = player.queue.current
@@ -44,9 +48,10 @@ export default {
         const durationMs = current.info.duration ?? 0
         const durationSec = Math.max(0, Math.floor(durationMs / 1000))
         if (durationSec > 0 && position > durationSec) {
-            return interaction.reply(
-                `That position is past the end of the track (~${durationSec}s).`
-            )
+            return interaction.reply({
+                content: `That position is past the end of the track (~${durationSec}s).`,
+                ephemeral: true,
+            })
         }
 
         const seekMs = Math.min(

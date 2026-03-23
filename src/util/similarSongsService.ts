@@ -219,7 +219,7 @@ async function spotifySimilarTracksFromRelatedAndTop(
     const seedCtx = await fetchTrackSeedContext(accessToken, seedTrackId, market)
     const hintLabel = String(artistNameHint || "").trim()
 
-    if (!seedCtx.ok) {
+    if (seedCtx.ok === false) {
         if (seedCtx.httpStatus === 429) {
             return {
                 tracks: [],

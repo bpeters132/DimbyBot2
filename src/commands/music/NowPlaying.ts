@@ -9,11 +9,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName("nowplaying")
         .setDescription("View the currently playing song"),
-    /**
-     * Executes the /nowplaying command to display the currently playing track.
-     * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
-     * @param {import('../../lib/BotClient.js').default} client The bot client instance.
-     */
+    /** Shows the current track from the local player or Lavalink queue. */
     async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
         const guild = interaction.guild
         if (!guild) {

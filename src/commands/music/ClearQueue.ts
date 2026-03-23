@@ -10,14 +10,19 @@ export default {
             "Clears all upcoming tracks from the queue, leaving the current song playing."
         ),
     async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
-        const guild = interaction.guild
-        if (!guild) {
-            return interaction.reply({ content: "Use this command in a server." })
+        if (!interaction.inGuild()) {
+            // discord.js typings: the negated `inGuild()` branch is `never` for the default cache generic; widen so we can reply in DM/non-guild contexts.
+            return (interaction as ChatInputCommandInteraction).reply({
+                content: "Use this command in a server.",
+                ephemeral: true,
+            })
         }
+        const guild = interaction.guild
         const member = guildMemberFromInteraction(interaction)
         if (!member) {
             return interaction.reply({
                 content: "Could not resolve your member profile. Try again.",
+                ephemeral: true,
             })
         }
 
@@ -27,6 +32,7 @@ export default {
             client.debug("[ClearQueue] User not in a voice channel.")
             return interaction.reply({
                 content: "Join a voice channel first!",
+                ephemeral: true,
             })
         }
 
@@ -36,6 +42,7 @@ export default {
             client.debug("[ClearQueue] Bot not in a voice channel.")
             return interaction.reply({
                 content: "I'm not in a voice channel!",
+                ephemeral: true,
             })
         }
 
@@ -44,6 +51,7 @@ export default {
             client.debug("[ClearQueue] User not in the same voice channel as the bot.")
             return interaction.reply({
                 content: "You must be in the same voice channel as me!",
+                ephemeral: true,
             })
         }
 
@@ -53,6 +61,7 @@ export default {
             client.debug("[ClearQueue] No player found for this guild.")
             return interaction.reply({
                 content: "Nothing is playing right now.",
+                ephemeral: true,
             })
         }
 
@@ -60,6 +69,7 @@ export default {
             client.debug("[ClearQueue] Queue is already empty.")
             return interaction.reply({
                 content: "The queue is already empty.",
+                ephemeral: true,
             })
         }
 
@@ -77,6 +87,7 @@ export default {
             client.error("[ClearQueue] Error clearing the queue:", error)
             await interaction.reply({
                 content: "An error occurred while trying to clear the queue.",
+                ephemeral: true,
             })
         }
     },

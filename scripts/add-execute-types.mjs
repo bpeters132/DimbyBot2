@@ -38,7 +38,7 @@ for (const file of walk(commandsDir)) {
     }
     s = s.replace(
         /(\s*)async execute\(interaction, client\)/g,
-        "$1async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<void>"
+        "$1async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown>"
     )
     fs.writeFileSync(file, s)
     console.log(file)

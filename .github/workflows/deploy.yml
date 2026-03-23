@@ -28,7 +28,7 @@ jobs:
             IMAGE_LAVALINK: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:latest
         steps:
             - name: Checkout code
-              uses: actions/checkout@v3
+              uses: actions/checkout@v4
 
             - name: Log in to GitHub Container Registry
               uses: docker/login-action@v3
@@ -67,7 +67,7 @@ jobs:
             IMAGE_LAVALINK: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:latest
         steps:
             - name: Checkout code
-              uses: actions/checkout@v3
+              uses: actions/checkout@v4
 
             # .env is loaded by docker compose; dimbybot receives Spotify + MusicBrainz vars via docker-compose.yml (autoplay).
             - name: Generate .env file

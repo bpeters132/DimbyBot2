@@ -286,8 +286,8 @@ export async function handleControlButtonInteraction(
                 break
             }
             case "control_stop": {
-                await player.destroy()
                 await interaction.followUp("BYE!")
+                await player.destroy()
                 client.debug("[ControlButtonHandler] Player stopped")
                 actionTaken = true
                 break

@@ -88,6 +88,7 @@ export default {
         if (!player) {
             return interaction.reply({
                 content: `❌ No active player found for Guild ID: ${guildId}`,
+                flags: [MessageFlags.Ephemeral],
             })
         }
 

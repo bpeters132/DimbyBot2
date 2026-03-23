@@ -3,13 +3,19 @@ import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 
+function discordDeleteErrorDetails(err: unknown): { code?: string; message: string } {
+    const message = err instanceof Error ? err.message : String(err)
+    let code: string | undefined
+    if (typeof err === "object" && err !== null && "code" in err) {
+        const raw = (err as { code: unknown }).code
+        code = typeof raw === "string" ? raw : raw != null ? String(raw) : undefined
+    }
+    return { code, message }
+}
+
 export default {
     data: new SlashCommandBuilder().setName("skip").setDescription("Skip the song"),
-    /**
-     * Executes the /skip command to skip the current track.
-     * @param {import('discord.js').CommandInteraction} interaction The interaction that triggered the command.
-     * @param {import('../../lib/BotClient.js').default} client The bot client instance.
-     */
+    /** Skips the current Lavalink track (or ends autoplay when the queue is empty). */
     async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
         const guild = interaction.guild
         if (!guild) {
@@ -65,13 +71,14 @@ export default {
 
         const msg = await interaction.editReply({ content: "Skipped!" })
         setTimeout(() => {
-            msg.delete().catch((e) => {
+            msg.delete().catch((e: unknown) => {
+                const d1 = discordDeleteErrorDetails(e)
                 client.error("[SkipCmd] Failed to delete reply (attempt 1):", e)
-                if (e.code === "EAI_AGAIN" || e.message.includes("ECONNRESET")) {
+                if (d1.code === "EAI_AGAIN" || d1.message.includes("ECONNRESET")) {
                     setTimeout(() => {
-                        msg.delete().catch((e2) =>
+                        msg.delete().catch((e2: unknown) => {
                             client.error("[SkipCmd] Failed to delete reply (attempt 2):", e2)
-                        )
+                        })
                     }, 2000)
                 }
             })

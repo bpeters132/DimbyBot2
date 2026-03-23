@@ -16,19 +16,23 @@ export default {
         const query = interaction.options.getString("query", true)
         const guild = interaction.guild
         if (!guild) {
-            return interaction.reply({ content: "Use this command in a server." })
+            return interaction.reply({
+                content: "Use this command in a server.",
+                ephemeral: true,
+            })
         }
         const member = guildMemberFromInteraction(interaction)
         if (!member) {
             return interaction.reply({
                 content: "Could not resolve your member profile. Try again.",
+                ephemeral: true,
             })
         }
 
         // Check if user is in a voice channel
         const voiceChannel = member.voice.channel
         if (!voiceChannel) {
-            return interaction.reply({ content: "Join a voice channel first!" })
+            return interaction.reply({ content: "Join a voice channel first!", ephemeral: true })
         }
 
         // Use getPlayer first to potentially reuse existing player
@@ -49,12 +53,16 @@ export default {
             // Optional: Handle user being in a different channel than the bot
             return interaction.reply({
                 content: "You need to be in the same voice channel as the bot!",
+                ephemeral: true,
             })
         }
 
         const textChannel = interaction.channel
         if (!textChannel?.isTextBased() || textChannel.isDMBased()) {
-            return interaction.reply({ content: "Use this command in a server text channel." })
+            return interaction.reply({
+                content: "Use this command in a server text channel.",
+                ephemeral: true,
+            })
         }
 
         await interaction.deferReply()

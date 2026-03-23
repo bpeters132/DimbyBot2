@@ -14,10 +14,7 @@ export default {
             option.setName("name").setDescription('e.g. "lo-fi", "metal", "jazz"').setRequired(true)
         ),
 
-    /**
-     * @param {import('discord.js').CommandInteraction} interaction
-     * @param {import('../../lib/BotClient.js').default} client
-     */
+    /** Search by genre/mood, queue results, and enable autoplay. */
     async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
         const noMentions = { allowedMentions: { parse: [] } }
 
@@ -55,7 +52,7 @@ export default {
 
         const voiceChannel = member.voice.channel
 
-        let player = client.lavalink?.getPlayer(guild.id)
+        let player = client.lavalink.getPlayer(guild.id)
 
         if (!player) {
             try {
@@ -101,9 +98,8 @@ export default {
         )
 
         if (result.success) {
-            const p = client.lavalink.getPlayer(guild.id)
-            p?.set("autoplay", true)
-            if (p) seedAutoplayHistoryFromPlayer(p)
+            player.set("autoplay", true)
+            seedAutoplayHistoryFromPlayer(player)
             await interaction.editReply({
                 content: `Autoplay enabled for **${genreName}**. ${result.feedbackText ?? "Queued."}`,
                 ...noMentions,

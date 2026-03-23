@@ -32,19 +32,30 @@ export default async (client: BotClient) => {
 
         setInterval(
             async () => {
-                client.debug("Status update interval triggered.") // Debug log
-                if (showGuildCount) {
-                    const guildCount = client.guilds.cache.size
-                    client.debug(`Setting status to watch ${guildCount} servers.`) // Debug log
-                    user.setActivity(`${guildCount} servers`, { type: ActivityType.Watching })
-                    client.info(`Set status to ${guildCount} servers`)
-                } else {
-                    client.debug("Setting status to 'I hate that Pancake guy!'.") // Debug log
-                    user.setActivity("I hate that Pancake guy!", { type: ActivityType.Custom })
-                    client.info("I hate that Pancake guy!")
+                try {
+                    client.debug("Status update interval triggered.") // Debug log
+                    if (showGuildCount) {
+                        const guildCount = client.guilds.cache.size
+                        client.debug(`Setting status to watch ${guildCount} servers.`) // Debug log
+                        await user.setActivity(`${guildCount} servers`, {
+                            type: ActivityType.Watching,
+                        })
+                        client.info(`Set status to ${guildCount} servers`)
+                    } else {
+                        client.debug("Setting status to 'I hate that Pancake guy!'.") // Debug log
+                        await user.setActivity("I hate that Pancake guy!", {
+                            type: ActivityType.Custom,
+                        })
+                        client.info("I hate that Pancake guy!")
+                    }
+                    showGuildCount = !showGuildCount
+                    client.debug(`showGuildCount toggled to: ${showGuildCount}`) // Debug log
+                } catch (err: unknown) {
+                    client.error(
+                        `[onReady] setActivity failed (showGuildCount was ${showGuildCount}, guildCount=${client.guilds.cache.size}):`,
+                        err
+                    )
                 }
-                showGuildCount = !showGuildCount
-                client.debug(`showGuildCount toggled to: ${showGuildCount}`) // Debug log
             },
             10 * 60 * 1000
         ) // Change status every 10 minutes

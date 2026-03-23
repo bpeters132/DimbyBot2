@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, PermissionFlagsBits, ChannelType } from "discord.js"
+import { SlashCommandBuilder, PermissionFlagsBits, ChannelType, MessageFlags } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 // Import functions from the utility file using ESM
@@ -35,7 +35,10 @@ export default {
         const options = interaction.options
         const subcommand = options.getSubcommand()
         if (!guild) {
-            return interaction.reply({ content: "Use this command in a server." })
+            return interaction.reply({
+                content: "Use this command in a server.",
+                flags: [MessageFlags.Ephemeral],
+            })
         }
         client.debug(`[Control-Channel] Executing subcommand: ${subcommand} in guild ${guild.id}`)
 
@@ -54,6 +57,7 @@ export default {
                 return interaction.reply({
                     content:
                         "Control channel must be a server text channel. Run this command from that channel.",
+                    flags: [MessageFlags.Ephemeral],
                 })
             }
             const targetChannel = channel
@@ -63,7 +67,10 @@ export default {
 
             const botUser = client.user
             if (!botUser) {
-                return interaction.reply({ content: "Bot user is not available yet." })
+                return interaction.reply({
+                    content: "Bot user is not available yet.",
+                    flags: [MessageFlags.Ephemeral],
+                })
             }
             const botPermissions = targetChannel.permissionsFor(botUser)
             const requiredPerms = [
@@ -81,6 +88,7 @@ export default {
                 return interaction.reply({
                     content:
                         "I need permissions to View Channel, Send Messages, Embed Links, and Manage Messages in the designated control channel.",
+                    flags: [MessageFlags.Ephemeral],
                 })
             }
             client.debug(
@@ -155,6 +163,7 @@ export default {
                 if (!persisted) {
                     return interaction.reply({
                         content: `Posted the control message in ${targetChannel}, but **could not save settings to disk** (check that \`/app/storage\` is writable in Docker). Controls work until the bot restarts; fix volume permissions and run \`/control-channel set\` again.`,
+                        flags: [MessageFlags.Ephemeral],
                     })
                 }
 
@@ -168,6 +177,7 @@ export default {
                 return interaction.reply({
                     content:
                         "Failed to create the control message. Please check my permissions in this channel.",
+                    flags: [MessageFlags.Ephemeral],
                 })
             }
         } else if (subcommand === "unset") {
@@ -179,6 +189,7 @@ export default {
                 )
                 return interaction.reply({
                     content: "No control channel is currently set for this guild.",
+                    flags: [MessageFlags.Ephemeral],
                 })
             }
 
@@ -241,6 +252,7 @@ export default {
                 return interaction.reply({
                     content:
                         "Removed the control channel in memory, but **could not save** `guild_settings.json`. After a restart the old channel may return until `/app/storage` is writable.",
+                    flags: [MessageFlags.Ephemeral],
                 })
             }
 
@@ -248,5 +260,10 @@ export default {
                 content: "Music control channel configuration removed.",
             })
         }
+
+        return interaction.reply({
+            content: "Unknown or missing subcommand.",
+            flags: [MessageFlags.Ephemeral],
+        })
     },
 }

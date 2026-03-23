@@ -38,20 +38,20 @@ export default class BotClient extends Client {
         this.info("BotClient constructor: Finished.")
     }
 
-    info(Text: string, ...args: unknown[]) {
-        this.logger.info(Text, ...args)
+    info(text: string, ...args: unknown[]) {
+        this.logger.info(text, ...args)
     }
 
-    error(Text: string, ...args: unknown[]) {
-        this.logger.error(Text, ...args)
+    error(text: string, ...args: unknown[]) {
+        this.logger.error(text, ...args)
     }
 
-    warn(Text: string, ...args: unknown[]) {
-        this.logger.warn(Text, ...args)
+    warn(text: string, ...args: unknown[]) {
+        this.logger.warn(text, ...args)
     }
 
-    debug(Text: string, ...args: unknown[]) {
-        this.logger.debug(Text, ...args)
+    debug(text: string, ...args: unknown[]) {
+        this.logger.debug(text, ...args)
     }
 
     async start(token: string | undefined = process.env.BOT_TOKEN): Promise<void> {
