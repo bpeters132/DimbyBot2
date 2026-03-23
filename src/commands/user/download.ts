@@ -439,7 +439,9 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     client.error(`[Download] yt-dlp process exited with code ${code}`)
                     await interaction
                         .editReply({ content: "Error downloading video. Please try again later." })
-                        .catch((e: unknown) => client.error("Failed to edit reply on download error", e))
+                        .catch((e: unknown) =>
+                            client.error("Failed to edit reply on download error", e)
+                        )
                     return
                 }
 
@@ -490,7 +492,9 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                         .editReply(
                             "Could not find the downloaded file after the download process. Please check logs."
                         )
-                        .catch((e: unknown) => client.error("Failed to edit reply on file not found", e))
+                        .catch((e: unknown) =>
+                            client.error("Failed to edit reply on file not found", e)
+                        )
                     return
                 }
 
@@ -503,7 +507,9 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 let metadata: DownloadsMetadataStore = {}
                 if (fs.existsSync(metadataPath)) {
                     try {
-                        metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8")) as DownloadsMetadataStore
+                        metadata = JSON.parse(
+                            fs.readFileSync(metadataPath, "utf8")
+                        ) as DownloadsMetadataStore
                     } catch (error: unknown) {
                         client.error(`[Download] Error reading metadata file:`, error)
                     }
@@ -559,7 +565,9 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                         })
                     }
                     if (!player) {
-                        await interaction.editReply({ content: "Could not start the music player." })
+                        await interaction.editReply({
+                            content: "Could not start the music player.",
+                        })
                         return
                     }
 
@@ -576,7 +584,8 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     await interaction
                         .editReply({
                             content:
-                                playResult.feedbackText || "Download complete. Playback status updated.",
+                                playResult.feedbackText ||
+                                "Download complete. Playback status updated.",
                         })
                         .catch((e: unknown) =>
                             client.error(
@@ -586,13 +595,12 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                         )
                 } catch (playError: unknown) {
                     client.error("[Download] Error during auto-play setup or HQP call:", playError)
-                    const playMsg = playError instanceof Error ? playError.message : String(playError)
                     const baseName = (downloadedFile ?? "").replace(".wav", "")
                     await interaction
                         .editReply({
                             content:
                                 `Downloaded: **${baseName}**\n` +
-                                `Could not automatically play the song: ${playMsg}\n` +
+                                `Could not automatically play the song: An error occurred while processing your request.\n` +
                                 `Use \`/play ${baseName}\` to play it.`,
                         })
                         .catch((e: unknown) =>
@@ -607,22 +615,24 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 await updateReply(
                     "An unexpected error occurred while finalizing the download. Please try again later.",
                     true
-                ).catch((e: unknown) => client.error("Failed to edit reply on close handler error", e))
+                ).catch((e: unknown) =>
+                    client.error("Failed to edit reply on close handler error", e)
+                )
             }
         })
     } catch (error: unknown) {
         client.error(`[Download] Error downloading video:`, error)
-        const msg = error instanceof Error ? error.message : String(error)
+        const userMsg = "Failed to download video. Please try again or contact support."
         if (interaction.replied || interaction.deferred) {
             await interaction
                 .editReply({
-                    content: `Failed to download video: ${msg}`,
+                    content: userMsg,
                 })
                 .catch((e: unknown) => client.error("Failed to edit reply on main catch block", e))
         } else {
             await interaction
                 .reply({
-                    content: `Failed to download video: ${msg}`,
+                    content: userMsg,
                 })
                 .catch((e: unknown) => client.error("Failed to reply on main catch block", e))
         }

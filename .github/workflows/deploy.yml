@@ -1,153 +1,153 @@
 name: CI/CD
 
 permissions:
-  contents: read
+    contents: read
 
 on:
-  push:
-    branches:
-      - master
-  workflow_dispatch:
-    inputs:
-      skip_build:
-        description: 'Skip building images (use existing ones)'
-        required: true
-        default: false
-        type: boolean
+    push:
+        branches:
+            - master
+    workflow_dispatch:
+        inputs:
+            skip_build:
+                description: "Skip building images (use existing ones)"
+                required: true
+                default: false
+                type: boolean
 
 jobs:
-  build-and-push:
-    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.skip_build }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    env:
-      REGISTRY: ghcr.io
-      IMAGE_BOT: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:latest
-      IMAGE_LAVALINK: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    build-and-push:
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.skip_build }}
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: write
+        env:
+            REGISTRY: ghcr.io
+            IMAGE_BOT: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:latest
+            IMAGE_LAVALINK: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v6
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+            - name: Log in to GitHub Container Registry
+              uses: docker/login-action@v3
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build bot image
-        run: |
-          # Dockerfile is multi-stage: yarn install + yarn build (TypeScript → dist/), then runtime yarn install --production + copied dist/
-          docker build -t $IMAGE_BOT -f Dockerfile .
+            - name: Build bot image
+              run: |
+                  # Dockerfile is multi-stage: yarn install + yarn build (TypeScript → dist/), then runtime yarn install --production + copied dist/
+                  docker build -t $IMAGE_BOT -f Dockerfile .
 
-      - name: Build lavalink image
-        run: |
-          docker build -t $IMAGE_LAVALINK -f Lavalink/Dockerfile ./Lavalink
+            - name: Build lavalink image
+              run: |
+                  docker build -t $IMAGE_LAVALINK -f Lavalink/Dockerfile ./Lavalink
 
-      - name: Push bot image
-        run: |
-          docker push $IMAGE_BOT
+            - name: Push bot image
+              run: |
+                  docker push $IMAGE_BOT
 
-      - name: Push lavalink image
-        run: |
-          docker push $IMAGE_LAVALINK
+            - name: Push lavalink image
+              run: |
+                  docker push $IMAGE_LAVALINK
 
-  deploy:
-    needs: build-and-push
-    if: always() && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
-    env:
-      REGISTRY: ghcr.io
-      IMAGE_BOT: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:latest
-      IMAGE_LAVALINK: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    deploy:
+        needs: build-and-push
+        if: always() && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: read
+        env:
+            REGISTRY: ghcr.io
+            IMAGE_BOT: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:latest
+            IMAGE_LAVALINK: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v6
 
-      # .env is loaded by docker compose; dimbybot receives Spotify + MusicBrainz vars via docker-compose.yml (autoplay).
-      - name: Generate .env file
-        run: |
-          cat << EOF > .env
-          BOT_TOKEN=${{ secrets.BOT_TOKEN }}
-          CLIENT_ID=${{ secrets.CLIENT_ID }}
-          GUILD_ID=${{ secrets.GUILD_ID }}
-          OWNER_ID=${{ secrets.OWNER_ID }}
-          DEV_MODE=${{ secrets.DEV_MODE }}
-          LOG_LEVEL=${{ secrets.LOG_LEVEL }}
-          LAVALINK_HOST=${{ secrets.LAVALINK_HOST }}
-          LAVALINK_PORT=${{ secrets.LAVALINK_PORT }}
-          LAVALINK_PASSWORD=${{ secrets.LAVALINK_PASSWORD }}
-          LAVALINK_NODE_ID=${{ secrets.LAVALINK_NODE_ID }}
-          LAVALINK_SECURE=${{ secrets.LAVALINK_SECURE }}
-          LAVALINK_YOUTUBE_POT_TOKEN=${{ secrets.LAVALINK_YOUTUBE_POT_TOKEN }}
-          LAVALINK_YOUTUBE_POT_VISITORDATA=${{ secrets.LAVALINK_YOUTUBE_POT_VISITORDATA }}
-          LAVALINK_SPOTIFY_ENABLED=${{ secrets.LAVALINK_SPOTIFY_ENABLED }}
-          LAVALINK_SPOTIFY_CLIENT_ID=${{ secrets.LAVALINK_SPOTIFY_CLIENT_ID }}
-          LAVALINK_SPOTIFY_CLIENT_SECRET=${{ secrets.LAVALINK_SPOTIFY_CLIENT_SECRET }}
-          LAVALINK_SPOTIFY_COUNTRY_CODE=${{ secrets.LAVALINK_SPOTIFY_COUNTRY_CODE }}
-          LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT=${{ secrets.LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT }}
-          LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT=${{ secrets.LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT }}
-          SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID }}
-          SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET }}
-          MUSICBRAINZ_CONTACT=${{ secrets.MUSICBRAINZ_CONTACT }}
-          MUSICBRAINZ_CONTACT_URL=${{ secrets.MUSICBRAINZ_CONTACT_URL }}
-          MUSICBRAINZ_SIMILAR=${{ secrets.MUSICBRAINZ_SIMILAR }}
-          EMAIL_USER=${{ secrets.EMAIL_USER }}
-          EMAIL_PASS=${{ secrets.EMAIL_PASS }}
-          FEEDBACK_EMAIL=${{ secrets.FEEDBACK_EMAIL }}
-          BOT_IMAGE=${{ env.IMAGE_BOT }}
-          LAVALINK_IMAGE=${{ env.IMAGE_LAVALINK }}
-          GH_ACTOR=${{ github.actor }}
-          GH_TOKEN=${{ secrets.GITHUB_TOKEN }}
-          EOF
+            # .env is loaded by docker compose; dimbybot receives Spotify + MusicBrainz vars via docker-compose.yml (autoplay).
+            - name: Generate .env file
+              run: |
+                  cat << EOF > .env
+                  BOT_TOKEN=${{ secrets.BOT_TOKEN }}
+                  CLIENT_ID=${{ secrets.CLIENT_ID }}
+                  GUILD_ID=${{ secrets.GUILD_ID }}
+                  OWNER_ID=${{ secrets.OWNER_ID }}
+                  DEV_MODE=${{ secrets.DEV_MODE }}
+                  LOG_LEVEL=${{ secrets.LOG_LEVEL }}
+                  LAVALINK_HOST=${{ secrets.LAVALINK_HOST }}
+                  LAVALINK_PORT=${{ secrets.LAVALINK_PORT }}
+                  LAVALINK_PASSWORD=${{ secrets.LAVALINK_PASSWORD }}
+                  LAVALINK_NODE_ID=${{ secrets.LAVALINK_NODE_ID }}
+                  LAVALINK_SECURE=${{ secrets.LAVALINK_SECURE }}
+                  LAVALINK_YOUTUBE_POT_TOKEN=${{ secrets.LAVALINK_YOUTUBE_POT_TOKEN }}
+                  LAVALINK_YOUTUBE_POT_VISITORDATA=${{ secrets.LAVALINK_YOUTUBE_POT_VISITORDATA }}
+                  LAVALINK_SPOTIFY_ENABLED=${{ secrets.LAVALINK_SPOTIFY_ENABLED }}
+                  LAVALINK_SPOTIFY_CLIENT_ID=${{ secrets.LAVALINK_SPOTIFY_CLIENT_ID }}
+                  LAVALINK_SPOTIFY_CLIENT_SECRET=${{ secrets.LAVALINK_SPOTIFY_CLIENT_SECRET }}
+                  LAVALINK_SPOTIFY_COUNTRY_CODE=${{ secrets.LAVALINK_SPOTIFY_COUNTRY_CODE }}
+                  LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT=${{ secrets.LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT }}
+                  LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT=${{ secrets.LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT }}
+                  SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID }}
+                  SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET }}
+                  MUSICBRAINZ_CONTACT=${{ secrets.MUSICBRAINZ_CONTACT }}
+                  MUSICBRAINZ_CONTACT_URL=${{ secrets.MUSICBRAINZ_CONTACT_URL }}
+                  MUSICBRAINZ_SIMILAR=${{ secrets.MUSICBRAINZ_SIMILAR }}
+                  EMAIL_USER=${{ secrets.EMAIL_USER }}
+                  EMAIL_PASS=${{ secrets.EMAIL_PASS }}
+                  FEEDBACK_EMAIL=${{ secrets.FEEDBACK_EMAIL }}
+                  BOT_IMAGE=${{ env.IMAGE_BOT }}
+                  LAVALINK_IMAGE=${{ env.IMAGE_LAVALINK }}
+                  GH_ACTOR=${{ github.actor }}
+                  GH_TOKEN=${{ secrets.GITHUB_TOKEN }}
+                  EOF
 
-      - name: Copy files to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.DEPLOY_SERVER_HOST }}
-          username: ${{ secrets.DEPLOY_SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.DEPLOY_SERVER_SSH_PORT }}
-          # Production stack only — do not add docker-compose.dev.yml (local bind mounts / Dockerfile.dev).
-          source: ".env,docker-compose.yml"
-          target: "/home/bot/"
+            - name: Copy files to server
+              uses: appleboy/scp-action@v0.1.7
+              with:
+                  host: ${{ secrets.DEPLOY_SERVER_HOST }}
+                  username: ${{ secrets.DEPLOY_SERVER_USER }}
+                  key: ${{ secrets.SSH_PRIVATE_KEY }}
+                  port: ${{ secrets.DEPLOY_SERVER_SSH_PORT }}
+                  # Production stack only — do not add docker-compose.dev.yml (local bind mounts / Dockerfile.dev).
+                  source: ".env,docker-compose.yml"
+                  target: "/home/bot/"
 
-      - name: Copy deployment script to server
-        run: |
-          cat << 'EOS' > ci_deploy.sh
-          #!/bin/bash
-          set -e
-          cd /home/bot
-          export $(grep -v '^#' .env | xargs)
-          sed -i "s|image: .*bot.*|image: $BOT_IMAGE|" docker-compose.yml
-          sed -i "s|image: .*lavalink.*|image: $LAVALINK_IMAGE|" docker-compose.yml
-          echo "$GH_TOKEN" | /usr/bin/docker login ghcr.io -u "$GH_ACTOR" --password-stdin
-          /usr/bin/docker compose down
-          /usr/bin/docker compose pull
-          /usr/bin/docker compose up -d
-          EOS
-          
-          # Create SSH key file with proper permissions
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > deploy_key
-          chmod 600 deploy_key
-          
-          # Use the key file for SCP
-          scp -i deploy_key -P ${{ secrets.DEPLOY_SERVER_SSH_PORT }} -o StrictHostKeyChecking=accept-new ci_deploy.sh ${{ secrets.DEPLOY_SERVER_USER }}@${{ secrets.DEPLOY_SERVER_HOST }}:/home/bot/ci_deploy.sh
-          
-          # Clean up the key file
-          rm -f deploy_key
+            - name: Copy deployment script to server
+              run: |
+                  cat << 'EOS' > ci_deploy.sh
+                  #!/bin/bash
+                  set -e
+                  cd /home/bot
+                  export $(grep -v '^#' .env | xargs)
+                  sed -i "s|image: .*bot.*|image: $BOT_IMAGE|" docker-compose.yml
+                  sed -i "s|image: .*lavalink.*|image: $LAVALINK_IMAGE|" docker-compose.yml
+                  echo "$GH_TOKEN" | /usr/bin/docker login ghcr.io -u "$GH_ACTOR" --password-stdin
+                  /usr/bin/docker compose down
+                  /usr/bin/docker compose pull
+                  /usr/bin/docker compose up -d
+                  EOS
 
-      - name: Run deployment script on server
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DEPLOY_SERVER_HOST }}
-          username: ${{ secrets.DEPLOY_SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.DEPLOY_SERVER_SSH_PORT }}
-          script: |
-            bash /home/bot/ci_deploy.sh 
+                  # Create SSH key file with proper permissions
+                  echo "${{ secrets.SSH_PRIVATE_KEY }}" > deploy_key
+                  chmod 600 deploy_key
+
+                  # Use the key file for SCP
+                  scp -i deploy_key -P ${{ secrets.DEPLOY_SERVER_SSH_PORT }} -o StrictHostKeyChecking=accept-new ci_deploy.sh ${{ secrets.DEPLOY_SERVER_USER }}@${{ secrets.DEPLOY_SERVER_HOST }}:/home/bot/ci_deploy.sh
+
+                  # Clean up the key file
+                  rm -f deploy_key
+
+            - name: Run deployment script on server
+              uses: appleboy/ssh-action@v1.0.3
+              with:
+                  host: ${{ secrets.DEPLOY_SERVER_HOST }}
+                  username: ${{ secrets.DEPLOY_SERVER_USER }}
+                  key: ${{ secrets.SSH_PRIVATE_KEY }}
+                  port: ${{ secrets.DEPLOY_SERVER_SSH_PORT }}
+                  script: |
+                      bash /home/bot/ci_deploy.sh

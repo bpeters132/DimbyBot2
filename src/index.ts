@@ -33,16 +33,16 @@ if (logger.getDebugEnabled()) {
 }
 
 ;(async () => {
-  try {
-    logger.debug("Initializing BotClient...")
-    const client = new BotClient(logger)
-    logger.debug("BotClient initialized.")
+    try {
+        logger.debug("Initializing BotClient...")
+        const client = new BotClient(logger)
+        logger.debug("BotClient initialized.")
 
-    logger.debug("Starting BotClient...")
-    await client.start()
-    logger.info("BotClient started successfully.")
-  } catch (error) {
-    logger.error("Fatal error during application startup:", error)
-    process.exit(1)
-  }
+        logger.debug("Starting BotClient...")
+        await client.start()
+        logger.info("BotClient started successfully.")
+    } catch (error) {
+        logger.error("Fatal error during application startup:", error)
+        process.exit(1)
+    }
 })()

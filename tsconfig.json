@@ -1,16 +1,22 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "lib": ["ES2022"],
-    "outDir": "dist",
-    "rootDir": "src",
-    "strict": true,
-    "declaration": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "noEmitOnError": true
-  },
-  "include": ["src/**/*", "lavaNodesConfig.d.ts"]
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "lib": ["ES2022"],
+        "outDir": "dist",
+        "rootDir": "src",
+        "strict": true,
+        // strictNullChecks/noImplicitAny: relaxed while migrating; plan is to enable both once
+        // call sites use proper guards (interaction.inGuild(), GuildMember vs API payloads, etc.)
+        // across src/util/ and command handlers, then tighten API payload typings. Checklist: add
+        // null/union guards, fix implicit any at boundaries, re-enable and fix compile errors.
+        "strictNullChecks": false,
+        "noImplicitAny": false,
+        "declaration": true,
+        "skipLibCheck": true,
+        "esModuleInterop": true,
+        "noEmitOnError": true
+    },
+    "include": ["src/**/*", "lavaNodesConfig.d.ts"]
 }

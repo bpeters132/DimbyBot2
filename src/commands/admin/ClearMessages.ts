@@ -3,77 +3,73 @@ import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 
 function isGuildBulkDeletableChannel(
-  ch: NonNullable<ChatInputCommandInteraction["channel"]>
+    ch: NonNullable<ChatInputCommandInteraction["channel"]>
 ): ch is import("discord.js").GuildTextBasedChannel {
-  return "bulkDelete" in ch && typeof (ch as { bulkDelete?: unknown }).bulkDelete === "function"
+    return "bulkDelete" in ch && typeof (ch as { bulkDelete?: unknown }).bulkDelete === "function"
 }
 
 export default {
-  data: new SlashCommandBuilder()
-    .setName("clearmessages")
-    .setDescription("Clear up to 30 messages")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
-    .addIntegerOption((option) =>
-      option
-        .setName("count")
-        .setDescription("The number of messages to clear")
-        .setRequired(true)
-        .setMinValue(1)
-        .setMaxValue(30)
-    ),
+    data: new SlashCommandBuilder()
+        .setName("clearmessages")
+        .setDescription("Clear up to 30 messages")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+        .addIntegerOption((option) =>
+            option
+                .setName("count")
+                .setDescription("The number of messages to clear")
+                .setRequired(true)
+                .setMinValue(1)
+                .setMaxValue(30)
+        ),
 
-  async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
-    const clear_amount = interaction.options.getInteger("count", true)
-    const channel = interaction.channel
+    async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
+        const clear_amount = interaction.options.getInteger("count", true)
+        const channel = interaction.channel
 
-    if (!interaction.inGuild() || !channel || !isGuildBulkDeletableChannel(channel)) {
-      return interaction.reply({
-        content: "Use this command in a server text channel where bulk delete is available.",
-        ephemeral: true,
-      })
-    }
+        if (!interaction.inGuild() || !channel || !isGuildBulkDeletableChannel(channel)) {
+            return interaction.reply({
+                content:
+                    "Use this command in a server text channel where bulk delete is available.",
+                ephemeral: true,
+            })
+        }
 
-    if (clear_amount <= 0 || clear_amount > 30) {
-      return interaction.reply({
-        content: "Count must be between 1 and 30 messages.",
-        ephemeral: true,
-      })
-    }
+        if (clear_amount <= 0 || clear_amount > 30) {
+            return interaction.reply({
+                content: "Count must be between 1 and 30 messages.",
+                ephemeral: true,
+            })
+        }
 
-    try {
-      const messages = await channel.messages.fetch({ limit: clear_amount })
-      const deletableMessages = messages.filter((m) => !m.interaction)
+        await interaction.deferReply({ ephemeral: true })
 
-      if (deletableMessages.size > 0) {
-        await channel.bulkDelete(deletableMessages, true)
-        return interaction.reply({
-          content: `Cleared ${deletableMessages.size} messages!`,
-          ephemeral: true,
-        })
-      }
+        try {
+            const messages = await channel.messages.fetch({ limit: clear_amount })
+            const deletableMessages = messages.filter((m) => !m.interaction)
 
-      return interaction.reply({
-        content:
-          "No deletable messages found (or only the command itself). Messages older than 14 days or other interaction replies cannot be bulk deleted.",
-        ephemeral: true,
-      })
-    } catch (error) {
-      client.error("Error during bulk delete in clearmessages command:", error)
-      const replyOptions = {
-        content:
-          "An error occurred while clearing messages. Ensure the bot has Manage Messages permission and messages are not older than 14 days.",
-        ephemeral: true as const,
-      }
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp(replyOptions).catch((e: unknown) =>
-          client.error("Failed to follow up error reply for clearmessages:", e)
-        )
-      } else {
-        await interaction.reply(replyOptions).catch((e: unknown) =>
-          client.error("Failed to send error reply for clearmessages:", e)
-        )
-      }
-      return
-    }
-  },
+            if (deletableMessages.size > 0) {
+                await channel.bulkDelete(deletableMessages, true)
+                return interaction.editReply({
+                    content: `Cleared ${deletableMessages.size} messages!`,
+                })
+            }
+
+            return interaction.editReply({
+                content:
+                    "No deletable messages found (or only the command itself). Messages older than 14 days or other interaction replies cannot be bulk deleted.",
+            })
+        } catch (error) {
+            client.error("Error during bulk delete in clearmessages command:", error)
+            const replyOptions = {
+                content:
+                    "An error occurred while clearing messages. Ensure the bot has Manage Messages permission and messages are not older than 14 days.",
+            }
+            await interaction
+                .editReply(replyOptions)
+                .catch((e: unknown) =>
+                    client.error("Failed to edit error reply for clearmessages:", e)
+                )
+            return
+        }
+    },
 }
