@@ -1,6 +1,6 @@
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/bpeters132/DimbyBot2?utm_source=oss&utm_medium=github&utm_campaign=bpeters132%2FDimbyBot2&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
-
 # DimbyBot2
+
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/bpeters132/DimbyBot2?utm_source=oss&utm_medium=github&utm_campaign=bpeters132%2FDimbyBot2&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 A Discord bot for friends! Rewritten in Node.js.
 

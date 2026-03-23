@@ -22,34 +22,48 @@ export default {
     async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
         const guild = interaction.guild
         if (!guild) {
-            return interaction.reply({ content: "Use this command in a server." })
+            return interaction.reply({
+                content: "Use this command in a server.",
+                ephemeral: true,
+            })
         }
         const member = guildMemberFromInteraction(interaction)
         if (!member) {
             return interaction.reply({
                 content: "Could not resolve your member profile. Try again.",
+                ephemeral: true,
             })
         }
 
         const voiceChannel = member.voice.channel
         if (!voiceChannel) {
-            return interaction.reply({ content: "Join a voice channel first!" })
+            return interaction.reply({
+                content: "Join a voice channel first!",
+                ephemeral: true,
+            })
         }
 
         const player = client.lavalink.players.get(guild.id)
 
         if (!player) {
-            return interaction.reply({ content: "There is no player for this guild." })
+            return interaction.reply({
+                content: "There is no player for this guild.",
+                ephemeral: true,
+            })
         }
 
         if (player.voiceChannelId && player.voiceChannelId !== voiceChannel.id) {
             return interaction.reply({
                 content: "You must be in the player's voice channel to change repeat mode.",
+                ephemeral: true,
             })
         }
 
         if (!player.playing) {
-            return interaction.reply({ content: "There is nothing playing." })
+            return interaction.reply({
+                content: "There is nothing playing.",
+                ephemeral: true,
+            })
         }
 
         const mode = interaction.options.getString("mode", true)
@@ -64,7 +78,7 @@ export default {
                 await player.setRepeatMode("queue")
                 return interaction.reply({ content: "Now looping the queue." })
             default:
-                return interaction.reply({ content: "Invalid loop mode." })
+                return interaction.reply({ content: "Invalid loop mode.", ephemeral: true })
         }
     },
 }

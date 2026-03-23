@@ -7,10 +7,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName("stop")
         .setDescription("Stop the player and clear the queue"),
-    /**
-     * @param {import('../../lib/BotClient.js').default} client
-     * @param {import('discord.js').CommandInteraction} interaction
-     */
+    /** Stops local and/or Lavalink playback and clears queue state for the guild. */
     async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
         const guild = interaction.guild
         if (!guild) {

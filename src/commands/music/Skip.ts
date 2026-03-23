@@ -10,29 +10,37 @@ export default {
     async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
         const guild = interaction.guild
         if (!guild) {
-            return interaction.reply({ content: "Use this command in a server." })
+            return interaction.reply({
+                content: "Use this command in a server.",
+                ephemeral: true,
+            })
         }
         const member = guildMemberFromInteraction(interaction)
         if (!member) {
             return interaction.reply({
                 content: "Could not resolve your member profile. Try again.",
+                ephemeral: true,
             })
         }
 
         const voiceChannel = member.voice.channel
         if (!voiceChannel) {
-            return interaction.reply({ content: "Join a voice channel first!" })
+            return interaction.reply({
+                content: "Join a voice channel first!",
+                ephemeral: true,
+            })
         }
 
         const player = client.lavalink.getPlayer(guild.id)
 
         if (!player) {
-            return interaction.reply({ content: "Nothing is playing." })
+            return interaction.reply({ content: "Nothing is playing.", ephemeral: true })
         }
 
         if (player.voiceChannelId && player.voiceChannelId !== voiceChannel.id) {
             return interaction.reply({
                 content: "You need to be in the same voice channel as the bot!",
+                ephemeral: true,
             })
         }
 
@@ -40,7 +48,7 @@ export default {
         const hasQueued = player.queue.tracks.length > 0
 
         if (!hasCurrent && !hasQueued) {
-            return interaction.reply({ content: "Nothing is playing." })
+            return interaction.reply({ content: "Nothing is playing.", ephemeral: true })
         }
 
         await interaction.deferReply()

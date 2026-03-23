@@ -595,14 +595,12 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                         )
                 } catch (playError: unknown) {
                     client.error("[Download] Error during auto-play setup or HQP call:", playError)
-                    const playMsg =
-                        playError instanceof Error ? playError.message : String(playError)
                     const baseName = (downloadedFile ?? "").replace(".wav", "")
                     await interaction
                         .editReply({
                             content:
                                 `Downloaded: **${baseName}**\n` +
-                                `Could not automatically play the song: ${playMsg}\n` +
+                                `Could not automatically play the song: An error occurred while processing your request.\n` +
                                 `Use \`/play ${baseName}\` to play it.`,
                         })
                         .catch((e: unknown) =>

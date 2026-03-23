@@ -102,9 +102,14 @@ export default {
                 return
             }
 
-            const token = process.env.BOT_TOKEN
+            const token =
+                interaction.client.token && interaction.client.token.length > 0
+                    ? interaction.client.token
+                    : process.env.BOT_TOKEN
             if (!token) {
-                await interaction.editReply("❌ BOT_TOKEN is not set.")
+                await interaction.editReply(
+                    "❌ Bot token is not available (client token unset and BOT_TOKEN missing)."
+                )
                 return
             }
             const rest = new REST().setToken(token)

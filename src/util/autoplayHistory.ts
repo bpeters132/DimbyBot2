@@ -18,10 +18,7 @@ const RECENT_SONGS_KEY = "autoplayRecentSongs"
 const TITLE_TRAILER_RE =
     /\b(official\s*)?(music\s*)?video\b|\bofficial\s*audio\b|\b(audio\s*)?only\b|\blyrics?\s*(video)?\b|\bvisuali[sz]er\b|\b(full\s*)?album\b|\bremaster(ed)?\s*\(?\d*\)?\b|\bmv\b|\bhd\b|\b4k\b|\bupgrad(e|ed)\b|\bexplicit\s*version\b|\bclean\s*version\b|\bperformance\b|\bacoustic\b|\blive\s+at\b|\blive\s+from\b|\bfrom\s+the\s+album\b|\btheme\s+from\b|\bsoundtrack\b|\bost\b|\bcover\b|\bversion\b/gi
 
-/**
- * @param {string | undefined} uri
- * @returns {string | null}
- */
+/** Extracts a YouTube video id from common URL shapes, or null. */
 export function youtubeVideoIdFromUri(uri: string | undefined) {
     if (!uri || typeof uri !== "string") return null
     try {
@@ -43,10 +40,7 @@ export function youtubeVideoIdFromUri(uri: string | undefined) {
     }
 }
 
-/**
- * @param {string | undefined} s
- * @returns {string}
- */
+/** Lowercase, NFKD-normalized comparable string for title/artist matching. */
 export function normalizeAutoplayComparable(s: string | undefined) {
     return String(s || "")
         .toLowerCase()
@@ -59,11 +53,7 @@ export function normalizeAutoplayComparable(s: string | undefined) {
         .trim()
 }
 
-/**
- * Title with promo noise removed — closer to the “real” song name for fuzzy match.
- * @param {string | undefined} title
- * @returns {string}
- */
+/** Title with promo noise removed — closer to the “real” song name for fuzzy match. */
 export function coreTrackTitle(title: string | undefined) {
     let s = normalizeAutoplayComparable(title)
     s = s.replace(TITLE_TRAILER_RE, " ")
@@ -71,11 +61,7 @@ export function coreTrackTitle(title: string | undefined) {
     return s
 }
 
-/**
- * Primary name for comparison (strips "feat." tail on channel/title-style strings).
- * @param {string | undefined} s
- * @returns {string}
- */
+/** Primary artist string for comparison (strips "feat." tail). */
 export function primaryArtistKey(s: string | undefined) {
     let x = normalizeAutoplayComparable(s)
     x = x.replace(/\s+(feat\.?|ft\.?|featuring)\s+.+$/i, "").trim()
@@ -83,10 +69,7 @@ export function primaryArtistKey(s: string | undefined) {
 }
 
 /**
- * Song title for identity when Lavalink puts "Artist - Song" in the title field (YouTube).
- * @param {string | undefined} author
- * @param {string | undefined} title
- * @returns {string}
+ * Song title core when Lavalink puts "Artist - Song" in the title field (YouTube).
  */
 export function canonicalSongCore(author: string | undefined, title: string | undefined) {
     const a = primaryArtistKey(author)
@@ -106,11 +89,7 @@ export function canonicalSongCore(author: string | undefined, title: string | un
     return c.trim()
 }
 
-/**
- * @param {string | undefined} seedArtist
- * @param {string | undefined} candidateArtist
- * @returns {boolean}
- */
+/** True when primary-artist keys match (non-empty). */
 export function isSamePrimaryArtist(
     seedArtist: string | undefined,
     candidateArtist: string | undefined
@@ -153,20 +132,11 @@ export function isPlausibleAutoplayMusicTrack(info: TrackInfo | UnresolvedTrackI
     return true
 }
 
-/**
- * @param {string | undefined} a
- * @returns {boolean}
- */
 function isWeakArtistKey(a: string | undefined) {
     const x = primaryArtistKey(a)
     return !x || x === "unknown artist" || x === "unknown"
 }
 
-/**
- * @param {string} a
- * @param {string} b
- * @returns {number}
- */
 function levenshtein(a: string, b: string) {
     if (a === b) return 0
     const m = a.length
@@ -188,11 +158,6 @@ function levenshtein(a: string, b: string) {
     return row[n]
 }
 
-/**
- * @param {string} a
- * @param {string} b
- * @returns {number}
- */
 function tokenJaccard(a: string, b: string) {
     const ta = new Set(a.split(" ").filter((w) => w.length > 2))
     const tb = new Set(b.split(" ").filter((w) => w.length > 2))
@@ -203,12 +168,7 @@ function tokenJaccard(a: string, b: string) {
     return union === 0 ? 0 : inter / union
 }
 
-/**
- * Compare two already-normalized core title strings.
- * @param {string} ca
- * @param {string} cb
- * @returns {boolean}
- */
+/** Compare two already-normalized core title strings. */
 function coresLikelySame(ca: string, cb: string) {
     if (!ca || !cb) return false
     if (ca === cb) return true
@@ -271,8 +231,6 @@ const COMPOSITION_HEAD_STOP = new Set([
 /**
  * First few Latin words of a title core (stops at promo / lyric noise — not "filter all",
  * so text after "lyrics" does not widen the head).
- * @param {string} core
- * @returns {string}
  */
 function latinTitleHead(core: string) {
     const words = latinWordBlob(core)
@@ -290,12 +248,6 @@ function latinTitleHead(core: string) {
 /**
  * Same track identity for dedupe: full core match, or same primary artist + matching Latin title head
  * (US/UK spelling, lyric/translation uploads).
- * @param {string} ca
- * @param {string} cb
- * @param {string | undefined} authorA
- * @param {string | undefined} authorB primary key from history or raw author
- * @param {{ strictShortCrossArtist?: boolean }} [opts]
- * @returns {boolean}
  */
 function compositionMatchFromCores(
     ca: string,
@@ -344,14 +296,7 @@ function compositionMatchFromCores(
     return false
 }
 
-/**
- * Whether two display titles likely refer to the same musical work (not exact string match).
- * @param {string | undefined} titleA
- * @param {string | undefined} titleB
- * @param {string | undefined} authorA
- * @param {string | undefined} authorB
- * @returns {boolean}
- */
+/** Whether two display titles likely refer to the same musical work (not exact string match). */
 export function titlesLikelySameSong(
     titleA: string | undefined,
     titleB: string | undefined,
@@ -415,11 +360,6 @@ export function matchesCatalogCandidate(
 
 /**
  * Same musical work as the seed (covers, remixes, lyric uploads), for filtering recommendations / autoplay.
- * @param {string | undefined} seedArtist
- * @param {string | undefined} seedTitle
- * @param {string | undefined} candArtist
- * @param {string | undefined} candTitle
- * @returns {boolean}
  */
 export function autoplaySameComposition(
     seedArtist: string | undefined,
@@ -433,11 +373,6 @@ export function autoplaySameComposition(
     return compositionMatchFromCores(a, b, seedArtist, candArtist, { strictShortCrossArtist: true })
 }
 
-/**
- * @param {string | undefined} authorA
- * @param {string | undefined} authorB
- * @returns {boolean}
- */
 function artistsCompatibleForSameSong(authorA: string | undefined, authorB: string | undefined) {
     if (isSamePrimaryArtist(authorA, authorB)) return true
     if (isWeakArtistKey(authorA) || isWeakArtistKey(authorB)) return false
@@ -447,11 +382,7 @@ function artistsCompatibleForSameSong(authorA: string | undefined, authorB: stri
     return false
 }
 
-/**
- * @param {string | undefined} author
- * @param {string | undefined} title
- * @returns {string}
- */
+/** Stable per-song key for history (artist + canonical core). */
 export function songIdentityKey(author: string | undefined, title: string | undefined) {
     const a = primaryArtistKey(author)
     const c = canonicalSongCore(author, title)
@@ -484,8 +415,6 @@ export function autoplayTrackFingerprint(info: TrackInfo | UnresolvedTrackInfo |
     return `t:${primaryArtistKey(info.author)}|${normalizeAutoplayComparable(info.title)}`
 }
 
-/**
- */
 function getRecentSongLines(player: Player) {
     const raw = player.get(RECENT_SONGS_KEY)
     return Array.isArray(raw) ? raw.filter((x) => typeof x === "string") : []
@@ -507,8 +436,6 @@ export function rememberAutoplayPlayed(
     player.set(RECENT_SONGS_KEY, songs)
 }
 
-/**
- */
 export function isAutoplayRecentlyPlayed(
     player: Player,
     info: TrackInfo | UnresolvedTrackInfo | undefined
@@ -626,12 +553,7 @@ export function isDuplicateAutoplayCandidate(
     return false
 }
 
-/**
- * Spotify / metadata list: prefer other artists before same-artist recommendations.
- * @param {{ artist: string, title: string }[]} similar
- * @param {string} seedArtist
- * @returns {{ artist: string, title: string }[]}
- */
+/** Spotify / metadata list: prefer other artists before same-artist recommendations. */
 export function orderSimilarByArtistVariety(
     similar: { artist: string; title: string }[],
     seedArtist: string

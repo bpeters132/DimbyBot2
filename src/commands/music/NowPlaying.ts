@@ -13,19 +13,26 @@ export default {
     async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
         const guild = interaction.guild
         if (!guild) {
-            return interaction.reply({ content: "Use this command in a server." })
+            return interaction.reply({
+                content: "Use this command in a server.",
+                ephemeral: true,
+            })
         }
         const member = guildMemberFromInteraction(interaction)
         if (!member) {
             return interaction.reply({
                 content: "Could not resolve your member profile. Try again.",
+                ephemeral: true,
             })
         }
 
         // Check if user is in a voice channel
         const voiceChannel = member.voice.channel
         if (!voiceChannel) {
-            return interaction.reply({ content: "Join a voice channel first!" })
+            return interaction.reply({
+                content: "Join a voice channel first!",
+                ephemeral: true,
+            })
         }
 
         // 1. Check local player state first
@@ -61,6 +68,7 @@ export default {
             // Simplified check
             return interaction.reply({
                 content: "Nothing is playing.",
+                ephemeral: true,
             })
         }
 

@@ -5,6 +5,7 @@ import {
     type Message,
 } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
+import { discordDeleteErrorDetails } from "../../util/discordErrorDetails.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
 
 export default async function handleControlMessages(client: BotClient, message: Message) {
@@ -187,15 +188,14 @@ export default async function handleControlMessages(client: BotClient, message: 
                 )
             }
         } catch (deleteError: unknown) {
-            const de = deleteError as { code?: number; message?: string }
-            if (de.code === 10008) {
+            const { code, message: errMsg } = discordDeleteErrorDetails(deleteError)
+            if (code === "10008") {
                 client.debug(
                     `[ControlHandler] User query message ${message.id} already deleted or missing in guild ${guildId}.`
                 )
             } else {
                 client.warn(
-                    `[ControlHandler] Failed to delete query message ${message.id} in guild ${guildId}:`,
-                    deleteError
+                    `[ControlHandler] Failed to delete query message ${message.id} in guild ${guildId}: ${errMsg}`
                 )
             }
         }

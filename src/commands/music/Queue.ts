@@ -20,12 +20,16 @@ export default {
     async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
         const guild = interaction.guild
         if (!guild) {
-            return interaction.reply({ content: "Use this command in a server." })
+            return interaction.reply({
+                content: "Use this command in a server.",
+                ephemeral: true,
+            })
         }
         const member = guildMemberFromInteraction(interaction)
         if (!member) {
             return interaction.reply({
                 content: "Could not resolve your member profile. Try again.",
+                ephemeral: true,
             })
         }
 
@@ -33,13 +37,16 @@ export default {
         const voiceChannel = member.voice.channel
         if (!voiceChannel) {
             // User must be in a voice channel
-            return interaction.reply({ content: "Join a voice channel first!" })
+            return interaction.reply({
+                content: "Join a voice channel first!",
+                ephemeral: true,
+            })
         }
 
         const player = client.lavalink.players.get(guild.id)
         if (!player || (!player.queue.current && player.queue.tracks.length === 0)) {
             // Player must exist and have something playing or queued
-            return interaction.reply({ content: "Nothing is playing." })
+            return interaction.reply({ content: "Nothing is playing.", ephemeral: true })
         }
 
         // Queue data and pagination setup
@@ -156,28 +163,24 @@ export default {
 
         // Handle collected button interactions
         collector.on("collect", async (i) => {
-            // Acknowledge the button click visually without sending a new message
-            await i.deferUpdate()
-
-            // Update the current page based on which button was clicked
-            if (i.customId === "prev_page") {
-                currentPage--
-            } else if (i.customId === "next_page") {
-                currentPage++
-            }
-
-            // Regenerate the embed and buttons for the new page
-            const updatedEmbed = generateEmbed(currentPage)
-            const updatedButtons = generateButtons(currentPage)
-
-            // Edit the original reply message with the updated content
             try {
+                await i.deferUpdate()
+
+                if (i.customId === "prev_page") {
+                    currentPage--
+                } else if (i.customId === "next_page") {
+                    currentPage++
+                }
+
+                const updatedEmbed = generateEmbed(currentPage)
+                const updatedButtons = generateButtons(currentPage)
+
                 await interaction.editReply({
                     embeds: [updatedEmbed],
                     components: [updatedButtons],
                 })
             } catch (error: unknown) {
-                client.error("Queue command: Failed to edit reply on pagination:", error)
+                client.error("Queue command: Pagination handler failed:", error)
             }
         })
 

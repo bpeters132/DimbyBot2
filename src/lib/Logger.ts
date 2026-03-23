@@ -129,9 +129,10 @@ export default class Logger implements LoggerInterface {
     }
 
     error(text: string, ...args: unknown[]) {
-        const messageArgs = this._formatArgs(args)
-        const fullMessage = text + (messageArgs ? " " + messageArgs : "")
         const errorArg = args.find((arg): arg is Error => arg instanceof Error)
+        const argsForMessage = errorArg ? args.filter((a) => !(a instanceof Error)) : args
+        const messageArgs = this._formatArgs(argsForMessage)
+        const fullMessage = text + (messageArgs ? " " + messageArgs : "")
         if (errorArg) {
             this.logger.error(fullMessage, { error: errorArg })
         } else {

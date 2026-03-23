@@ -1,4 +1,4 @@
-import type { GuildTextBasedChannel, Interaction } from "discord.js"
+import { MessageFlags, type GuildTextBasedChannel, type Interaction } from "discord.js"
 import type BotClient from "../lib/BotClient.js"
 import { getGuildSettings } from "../util/saveControlChannel.js"
 import { handleControlButtonInteraction } from "./handlers/handleControlButtonInteraction.js"
@@ -14,7 +14,34 @@ export default (client: BotClient) => {
             )
 
             if (customId.startsWith("control_")) {
-                await handleControlButtonInteraction(interaction, client)
+                try {
+                    await handleControlButtonInteraction(interaction, client)
+                } catch (error: unknown) {
+                    client.error(
+                        `[InteractionCreate] Error in handleControlButtonInteraction customId=${customId} interactionId=${interaction.id}:`,
+                        error
+                    )
+                    try {
+                        if (!interaction.replied && !interaction.deferred) {
+                            await interaction.reply({
+                                content:
+                                    "Something went wrong with that control. Try again or use slash commands.",
+                                flags: [MessageFlags.Ephemeral],
+                            })
+                        } else {
+                            await interaction.followUp({
+                                content:
+                                    "Something went wrong with that control. Try again or use slash commands.",
+                                flags: [MessageFlags.Ephemeral],
+                            })
+                        }
+                    } catch (notifyErr: unknown) {
+                        client.error(
+                            `[InteractionCreate] Failed to notify user after control button error (customId=${customId}):`,
+                            notifyErr
+                        )
+                    }
+                }
                 return
             }
 

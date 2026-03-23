@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, MessageFlags } from "discord.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
+import type { Command } from "../../types/index.js"
 
 import { inspect } from "util" // Used for formatting output
 import { Buffer } from "node:buffer" // For creating file buffers
@@ -41,7 +42,7 @@ function getSensitiveValues(client: BotClient): Map<string, string> {
     return sensitive
 }
 
-export default {
+const evalCommand: Command = {
     data: new SlashCommandBuilder()
         .setName("eval")
         .setDescription("Executes arbitrary JavaScript code (Developer Only)")
@@ -55,19 +56,29 @@ export default {
             client.error(
                 "[EvalCmd] Developer ID is not configured as OWNER_ID in environment variables!"
             )
-            return interaction.reply({
-                content: "Command configuration error: Developer ID not set.",
-                flags: [MessageFlags.Ephemeral],
-            })
+            try {
+                await interaction.reply({
+                    content: "Command configuration error: Developer ID not set.",
+                    flags: [MessageFlags.Ephemeral],
+                })
+            } catch (e: unknown) {
+                client.error("[EvalCmd] Failed to send configuration error reply:", e)
+            }
+            return
         }
         if (interaction.user.id !== ownerId) {
             client.debug(
                 `[EvalCmd] Denied access to user ${interaction.user.tag} (${interaction.user.id})`
             )
-            return interaction.reply({
-                content: "Sorry, this command can only be used by the bot developer.",
-                flags: [MessageFlags.Ephemeral],
-            })
+            try {
+                await interaction.reply({
+                    content: "Sorry, this command can only be used by the bot developer.",
+                    flags: [MessageFlags.Ephemeral],
+                })
+            } catch (e: unknown) {
+                client.error("[EvalCmd] Failed to send access denied reply:", e)
+            }
+            return
         }
         // --- End Developer Check ---
 
@@ -183,3 +194,5 @@ export default {
         }
     },
 }
+
+export default evalCommand

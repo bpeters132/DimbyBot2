@@ -5,12 +5,13 @@ WORKDIR /app
 
 # Install required system libraries and utilities
 # eudev-libs: satisfies OSHI/LinuxOperatingSystem’s libudev probe (harmless if missing for Lavalink itself).
+# Versions from `docker run --rm eclipse-temurin:17-jre-alpine sh -c "apk update -q && apk search -e ..."` — bump when rebasing the JRE image.
 RUN apk add --no-cache \
-    libgcc \
-    gcompat \
-    dos2unix \
-    curl \
-    eudev-libs
+    libgcc=15.2.0-r2 \
+    gcompat=1.1.0-r4 \
+    dos2unix=7.5.3-r0 \
+    curl=8.17.0-r1 \
+    eudev-libs=3.2.14-r6
 
 # Pin Lavalink version for reproducible builds; override at build time, e.g.:
 #   docker build --build-arg LAVALINK_VERSION=4.2.1 -f Lavalink/Dockerfile Lavalink

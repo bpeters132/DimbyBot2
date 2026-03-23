@@ -25,6 +25,7 @@ export async function handleControlButtonInteraction(
         try {
             await interaction.reply({
                 content: "Please use player controls in the designated channel.",
+                ephemeral: true,
             })
         } catch {
             /* Ignore */
@@ -44,6 +45,7 @@ export async function handleControlButtonInteraction(
             await interaction.reply({
                 content:
                     "This control message seems outdated. Try running /control-channel set again.",
+                ephemeral: true,
             })
         } catch {
             /* Ignore */

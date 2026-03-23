@@ -26,7 +26,8 @@ services:
             - spotify-tokener
 
     spotify-tokener:
-        image: ghcr.io/topi314/spotify-tokener:master
+        # Pinned multi-arch manifest digest (replaces floating :master) — refresh with: docker buildx imagetools inspect ghcr.io/topi314/spotify-tokener:master --format "{{json .Manifest.Digest}}"
+        image: ghcr.io/topi314/spotify-tokener@sha256:7841fa6144bd27b75b3ffc5d89c8201f833e0b9e2d3e8b4d5af8371504fd43f8
         container_name: spotify-tokener
         restart: unless-stopped
         networks:

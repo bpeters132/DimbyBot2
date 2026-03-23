@@ -10,6 +10,7 @@ import {
 import type { Player } from "lavalink-client"
 import { setTimeout as sleep } from "node:timers/promises"
 import type BotClient from "../../lib/BotClient.js"
+import { getDiscordErrorCode } from "../../util/discordErrorDetails.js"
 import { getGuildSettings, ensureStorageDir } from "../../util/saveControlChannel.js"
 
 /**
@@ -245,10 +246,7 @@ export async function cleanupControlChannel(
         }
     } catch (error: unknown) {
         // Ignore "Unknown Message" errors (10008) as they are expected if messages were deleted during the delay
-        const code =
-            typeof error === "object" && error !== null && "code" in error
-                ? (error as { code?: number }).code
-                : undefined
+        const code = getDiscordErrorCode(error)
         if (code === 10008) {
             client.warn(
                 `[ControlCleanup] Encountered known issue (10008: Unknown Message) during cleanup for channel ${channel.id}. Likely due to race condition. Ignoring.`
@@ -341,10 +339,7 @@ export async function updateControlMessage(
             )
         }
     } catch (error: unknown) {
-        const code =
-            typeof error === "object" && error !== null && "code" in error
-                ? (error as { code?: number }).code
-                : undefined
+        const code = getDiscordErrorCode(error)
         if (code === 50001 || code === 10008 || code === 50013) {
             client.warn(
                 `[ControlHandler] Failed to update control message for guild ${guildId} (Code: ${code}). Might be missing permissions or message/channel deleted.`
