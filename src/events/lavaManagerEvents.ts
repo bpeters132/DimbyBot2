@@ -40,6 +40,31 @@ function isTextSendable(channel: unknown): channel is GuildTextSendable {
     )
 }
 
+function escapeDiscordMarkdown(text: string): string {
+    return text
+        .replace(/\\/g, "\\\\")
+        .replace(/\*/g, "\\*")
+        .replace(/_/g, "\\_")
+        .replace(/`/g, "\\`")
+}
+
+/** Guild nickname if cached/fetchable, else global/username — plain text, no @ mention. */
+async function displayNameForRRQMessage(
+    client: BotClient,
+    guildId: string,
+    userId: string
+): Promise<string> {
+    const guild =
+        client.guilds.cache.get(guildId) ?? (await client.guilds.fetch(guildId).catch(() => null))
+    if (guild) {
+        const member = await guild.members.fetch(userId).catch(() => null)
+        if (member) return escapeDiscordMarkdown(member.displayName)
+    }
+    const user = await client.users.fetch(userId).catch(() => null)
+    if (user) return escapeDiscordMarkdown(user.globalName ?? user.username)
+    return "someone"
+}
+
 export default async (client: BotClient) => {
     client.lavalink
         /**
@@ -415,9 +440,14 @@ export default async (client: BotClient) => {
                                 client.debug(
                                     `[LavaMgrEvents] Sending RRQ disconnect cleanup to non-control channel ${textIdRrq} in guild ${p.guildId}.`
                                 )
+                                const who = await displayNameForRRQMessage(
+                                    client,
+                                    p.guildId,
+                                    userId
+                                )
                                 channelRrq
                                     .send(
-                                        `Removed **${removedCount}** track(s) queued by <@${userId}> (left voice channel).`
+                                        `Removed **${removedCount}** track(s) queued by ${who} (left voice channel).`
                                     )
                                     .catch((e: unknown) =>
                                         client.error(
