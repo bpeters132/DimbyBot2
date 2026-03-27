@@ -24,6 +24,7 @@ import {
 } from "../util/autoplayHistory.js"
 import { updateControlMessage } from "../events/handlers/handleControlChannel.js"
 import { getGuildSettings } from "../util/saveControlChannel.js"
+import { isRRQActive, rebalancePlayerQueueRoundRobin } from "../util/rrqDisconnect.js"
 import type BotClient from "./BotClient.js"
 
 /** If title starts with artist then a separator (-–—:|), returns the rest; otherwise null (no dynamic RegExp from user data). */
@@ -272,6 +273,9 @@ async function tryQueueAndPlayAutoplay(
         if (!shouldStillInjectAutoplayTrack(player)) return false
 
         player.queue.add(lavalinkTrack)
+        if (isRRQActive(player)) {
+            await rebalancePlayerQueueRoundRobin(player)
+        }
         try {
             await player.play()
         } catch (playErr: unknown) {

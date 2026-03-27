@@ -19,6 +19,15 @@ import { getGuildSettings } from "../util/saveControlChannel.js"
 import { rememberAutoplayPlayed } from "../util/autoplayHistory.js"
 import { updateControlMessage } from "./handlers/handleControlChannel.js"
 import { discordDeleteErrorDetails } from "../util/discordErrorDetails.js"
+import {
+    clearDisconnectedUser,
+    hasTrackedDisconnect,
+    isDisconnectTimeoutCurrent,
+    isRRQActive,
+    removeUserTracksFromQueue,
+    trackDisconnectedUser,
+    userHasQueuedTracks,
+} from "../util/rrqDisconnect.js"
 
 type GuildTextSendable = { send: (content: string) => Promise<Message<boolean>> }
 
@@ -314,6 +323,12 @@ export default async (client: BotClient) => {
             client.debug(
                 `[LavaMgrEvents] User joined player's channel: Guild ${player.guildId}, User: ${userId}`
             )
+            if (isRRQActive(player) && hasTrackedDisconnect(player, userId)) {
+                clearDisconnectedUser(player, userId)
+                client.debug(
+                    `[LavaMgrEvents] User ${userId} rejoined VC in guild ${player.guildId}; RRQ queue removal cancelled.`
+                )
+            }
         })
         .on("playerVoiceLeave", (player: Player, userId: string) => {
             client.debug(
@@ -362,6 +377,59 @@ export default async (client: BotClient) => {
                         )
                     }
                 }, 5000)
+            }
+
+            if (isRRQActive(player) && userHasQueuedTracks(player, userId)) {
+                const guildId = player.guildId
+                const timeoutHandle = setTimeout(() => {
+                    void (async () => {
+                        const p = client.lavalink.getPlayer(guildId)
+                        if (!p) return
+                        if (!isDisconnectTimeoutCurrent(p, userId, timeoutHandle)) return
+
+                        let removedCount = 0
+                        try {
+                            removedCount = await removeUserTracksFromQueue(p, userId)
+                        } catch (err: unknown) {
+                            client.error(
+                                "[LavaMgrEvents] RRQ removeUserTracksFromQueue failed:",
+                                err
+                            )
+                        } finally {
+                            clearDisconnectedUser(p, userId)
+                        }
+
+                        if (removedCount > 0) {
+                            const textIdRrq = p.textChannelId
+                            const channelRrq = textIdRrq
+                                ? client.channels.cache.get(textIdRrq)
+                                : undefined
+                            const currentGuildSettingsRrq = getGuildSettings(client)
+                            const controlChannelIdRrq =
+                                currentGuildSettingsRrq[p.guildId]?.controlChannelId
+                            if (
+                                channelRrq &&
+                                textIdRrq !== controlChannelIdRrq &&
+                                isTextSendable(channelRrq)
+                            ) {
+                                client.debug(
+                                    `[LavaMgrEvents] Sending RRQ disconnect cleanup to non-control channel ${textIdRrq} in guild ${p.guildId}.`
+                                )
+                                channelRrq
+                                    .send(
+                                        `Removed **${removedCount}** track(s) queued by <@${userId}> (left voice channel).`
+                                    )
+                                    .catch((e: unknown) =>
+                                        client.error(
+                                            "[LavaMgrEvents] Failed to send RRQ cleanup message:",
+                                            e
+                                        )
+                                    )
+                            }
+                        }
+                    })()
+                }, 60_000)
+                trackDisconnectedUser(player, userId, timeoutHandle)
             }
         })
 
