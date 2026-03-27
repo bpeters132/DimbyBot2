@@ -24,6 +24,7 @@ import {
     hasTrackedDisconnect,
     isDisconnectTimeoutCurrent,
     isRRQActive,
+    rebalancePlayerQueueRoundRobin,
     removeUserTracksFromQueue,
     trackDisconnectedUser,
     userHasQueuedTracks,
@@ -410,6 +411,10 @@ export default async (client: BotClient) => {
                     void (async () => {
                         const p = client.lavalink.getPlayer(guildId)
                         if (!p) return
+                        if (!isRRQActive(p)) {
+                            clearDisconnectedUser(p, userId)
+                            return
+                        }
                         if (!isDisconnectTimeoutCurrent(p, userId, timeoutHandle)) return
 
                         let removedCount = 0
@@ -425,6 +430,26 @@ export default async (client: BotClient) => {
                         }
 
                         if (removedCount > 0) {
+                            if (isRRQActive(p)) {
+                                try {
+                                    await rebalancePlayerQueueRoundRobin(p)
+                                } catch (rebalErr: unknown) {
+                                    client.warn(
+                                        "[LavaMgrEvents] RRQ rebalance after disconnect cleanup failed:",
+                                        rebalErr
+                                    )
+                                }
+                            }
+                            try {
+                                await updateControlMessage(client, p.guildId)
+                            } catch (ctrlErr: unknown) {
+                                const msg =
+                                    ctrlErr instanceof Error ? ctrlErr.message : String(ctrlErr)
+                                client.warn(
+                                    `[LavaMgrEvents] updateControlMessage after RRQ cleanup failed: ${msg}`
+                                )
+                            }
+
                             const textIdRrq = p.textChannelId
                             const channelRrq = textIdRrq
                                 ? client.channels.cache.get(textIdRrq)
