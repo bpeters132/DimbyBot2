@@ -349,7 +349,7 @@ export default async (client: BotClient) => {
             client.debug(
                 `[LavaMgrEvents] User joined player's channel: Guild ${player.guildId}, User: ${userId}`
             )
-            if (isRRQActive(player) && hasTrackedDisconnect(player, userId)) {
+            if (hasTrackedDisconnect(player, userId)) {
                 clearDisconnectedUser(player, userId)
                 client.debug(
                     `[LavaMgrEvents] User ${userId} rejoined VC in guild ${player.guildId}; RRQ queue removal cancelled.`
@@ -471,9 +471,10 @@ export default async (client: BotClient) => {
                                     userId
                                 )
                                 channelRrq
-                                    .send(
-                                        `Removed **${removedCount}** track(s) queued by ${who} (left voice channel).`
-                                    )
+                                    .send({
+                                        content: `Removed **${removedCount}** track(s) queued by ${who} (left voice channel).`,
+                                        allowedMentions: { parse: [] },
+                                    })
                                     .catch((e: unknown) =>
                                         client.error(
                                             "[LavaMgrEvents] Failed to send RRQ cleanup message:",
