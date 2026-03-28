@@ -4,6 +4,9 @@ import type { RRQDisconnectedUsersMap } from "../types/index.js"
 const RRQ_DISCONNECTED_USERS_KEY = "rrqDisconnectedUsers"
 const RRQ_ENABLED_KEY = "rrqEnabled"
 
+/** Discord user id or Lavalink-style requester payload; RRQ stamps string ids for stable reads via getRequesterUserId. */
+export type RrqRequester = string | { id: string }
+
 /** Discord user id from a Lavalink requester (string id or object with `id`). */
 const UNKNOWN_REQUESTER_KEY = "__unknown__"
 
@@ -23,14 +26,17 @@ function requesterMatchesUser(requester: unknown, userId: string): boolean {
     return getRequesterUserId(requester) === userId
 }
 
-/** Sets `track.requester` to the Discord user id so RRQ logic always has a stable string id. */
+/** Sets `track.requester` to the Discord user id so RRQ logic always has a stable string id (see getRequesterUserId). */
+function setRequesterUserId(track: Track | UnresolvedTrack, userId: string): void {
+    const requester: RrqRequester = userId
+    ;(track as (Track | UnresolvedTrack) & { requester?: RrqRequester }).requester = requester
+}
+
 export function stampRequesterUserIdOnTracks(
     tracks: (Track | UnresolvedTrack)[],
     userId: string
 ): void {
-    for (const t of tracks) {
-        ;(t as unknown as { requester?: string }).requester = userId
-    }
+    for (const t of tracks) setRequesterUserId(t, userId)
 }
 
 /**
@@ -78,8 +84,8 @@ export function roundRobinReorderTracks(
     return result
 }
 
-/** Re-sorts `player.queue.tracks` for round-robin fairness when RRQ mode is on. */
-export async function rebalancePlayerQueueRoundRobin(player: Player): Promise<void> {
+/** Core reorder; must run inside enqueueRrqMutation (or call exported rebalancePlayerQueueRoundRobin). */
+async function rebalancePlayerQueueRoundRobinImpl(player: Player): Promise<void> {
     if (!isRRQActive(player)) return
     const tracks = player.queue.tracks
     const n = tracks.length
@@ -95,6 +101,14 @@ export async function rebalancePlayerQueueRoundRobin(player: Player): Promise<vo
     if (unchanged) return
 
     await player.queue.splice(0, n, ordered)
+}
+
+/**
+ * Re-sorts `player.queue.tracks` for round-robin fairness when RRQ mode is on.
+ * Serialized per guild with other RRQ queue mutations so snapshot/reorder cannot race concurrent splices.
+ */
+export async function rebalancePlayerQueueRoundRobin(player: Player): Promise<void> {
+    return enqueueRrqMutation(player.guildId, () => rebalancePlayerQueueRoundRobinImpl(player))
 }
 
 /** Returns the per-player map of users pending RRQ disconnect cleanup, creating it if missing. */
@@ -238,7 +252,7 @@ export async function removeAndRebalanceRrqAfterDisconnect(
 
         if (removedCount > 0 && isRRQActive(player)) {
             try {
-                await rebalancePlayerQueueRoundRobin(player)
+                await rebalancePlayerQueueRoundRobinImpl(player)
             } catch (rebalErr: unknown) {
                 hooks?.onRebalanceError?.(rebalErr)
             }
