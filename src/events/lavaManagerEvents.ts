@@ -5,7 +5,7 @@
  * @see https://tomato6966.github.io/lavalink-client/api/types/manager/interfaces/lavalinkmanagerevents/
  */
 
-import type { Message } from "discord.js"
+import type { Message, MessageCreateOptions, MessagePayload } from "discord.js"
 import type {
     Player,
     Track,
@@ -24,13 +24,14 @@ import {
     hasTrackedDisconnect,
     isDisconnectTimeoutCurrent,
     isRRQActive,
-    rebalancePlayerQueueRoundRobin,
-    removeUserTracksFromQueue,
+    removeAndRebalanceRrqAfterDisconnect,
     trackDisconnectedUser,
     userHasQueuedTracks,
 } from "../util/rrqDisconnect.js"
 
-type GuildTextSendable = { send: (content: string) => Promise<Message<boolean>> }
+type GuildTextSendable = {
+    send: (content: string | MessagePayload | MessageCreateOptions) => Promise<Message<boolean>>
+}
 
 function isTextSendable(channel: unknown): channel is GuildTextSendable {
     return (
@@ -417,29 +418,20 @@ export default async (client: BotClient) => {
                         }
                         if (!isDisconnectTimeoutCurrent(p, userId, timeoutHandle)) return
 
-                        let removedCount = 0
-                        try {
-                            removedCount = await removeUserTracksFromQueue(p, userId)
-                        } catch (err: unknown) {
-                            client.error(
-                                "[LavaMgrEvents] RRQ removeUserTracksFromQueue failed:",
-                                err
-                            )
-                        } finally {
-                            clearDisconnectedUser(p, userId)
-                        }
+                        const removedCount = await removeAndRebalanceRrqAfterDisconnect(p, userId, {
+                            onRemoveError: (err: unknown) =>
+                                client.error(
+                                    "[LavaMgrEvents] RRQ removeUserTracksFromQueue failed:",
+                                    err
+                                ),
+                            onRebalanceError: (rebalErr: unknown) =>
+                                client.warn(
+                                    "[LavaMgrEvents] RRQ rebalance after disconnect cleanup failed:",
+                                    rebalErr
+                                ),
+                        })
 
                         if (removedCount > 0) {
-                            if (isRRQActive(p)) {
-                                try {
-                                    await rebalancePlayerQueueRoundRobin(p)
-                                } catch (rebalErr: unknown) {
-                                    client.warn(
-                                        "[LavaMgrEvents] RRQ rebalance after disconnect cleanup failed:",
-                                        rebalErr
-                                    )
-                                }
-                            }
                             try {
                                 await updateControlMessage(client, p.guildId)
                             } catch (ctrlErr: unknown) {

@@ -196,3 +196,54 @@ export async function removeUserTracksFromQueue(player: Player, userId: string):
     }
     return removed
 }
+
+const rrqMutationChainByGuild = new Map<string, Promise<unknown>>()
+
+function enqueueRrqMutation<T>(guildId: string, work: () => Promise<T>): Promise<T> {
+    const prior = rrqMutationChainByGuild.get(guildId) ?? Promise.resolve()
+    const result = prior.then(() => work())
+    rrqMutationChainByGuild.set(
+        guildId,
+        result.then(
+            () => undefined,
+            () => undefined
+        )
+    )
+    return result
+}
+
+export type RemoveAndRebalanceRrqHooks = {
+    onRemoveError?: (err: unknown) => void
+    onRebalanceError?: (err: unknown) => void
+}
+
+/**
+ * Runs disconnect cleanup (remove user’s queued tracks, clear disconnect tracking, optional rebalance)
+ * serialized per guild so reordering cannot race with other RRQ queue mutations for that player.
+ */
+export async function removeAndRebalanceRrqAfterDisconnect(
+    player: Player,
+    userId: string,
+    hooks?: RemoveAndRebalanceRrqHooks
+): Promise<number> {
+    return enqueueRrqMutation(player.guildId, async () => {
+        let removedCount = 0
+        try {
+            removedCount = await removeUserTracksFromQueue(player, userId)
+        } catch (err: unknown) {
+            hooks?.onRemoveError?.(err)
+        } finally {
+            clearDisconnectedUser(player, userId)
+        }
+
+        if (removedCount > 0 && isRRQActive(player)) {
+            try {
+                await rebalancePlayerQueueRoundRobin(player)
+            } catch (rebalErr: unknown) {
+                hooks?.onRebalanceError?.(rebalErr)
+            }
+        }
+
+        return removedCount
+    })
+}
