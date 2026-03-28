@@ -14,6 +14,11 @@ import {
 import type { Player, PlayerJson, Track, UnresolvedTrack } from "lavalink-client"
 import type BotClient from "../lib/BotClient.js"
 import type { LocalFile, QueryPlayResult } from "../types/index.js"
+import {
+    isRRQActive,
+    rebalancePlayerQueueRoundRobin,
+    stampRequesterUserIdOnTracks,
+} from "./rrqDisconnect.js"
 
 type SearchAttempt =
     | { source: string; success: true; loadType?: string }
@@ -581,13 +586,19 @@ export async function handleQueryAndPlay(
                 await ensurePlayerConnected(client, player, voiceChannel)
 
                 if (isPlaylistEnqueue && searchResult.tracks.length > 0) {
+                    stampRequesterUserIdOnTracks(searchResult.tracks, requester.id)
                     player.queue.add(searchResult.tracks)
                     client.debug(
                         `[MusicManager] Enqueued playlist (${searchResult.tracks.length} tracks) for guild ${guildId}.`
                     )
                 } else {
+                    stampRequesterUserIdOnTracks([trackToAdd], requester.id)
                     player.queue.add(trackToAdd)
                     client.debug(`[MusicManager] Enqueued single track [${trackToAdd.info.title}].`)
+                }
+
+                if (isRRQActive(player)) {
+                    await rebalancePlayerQueueRoundRobin(player)
                 }
 
                 if (!feedbackText) {

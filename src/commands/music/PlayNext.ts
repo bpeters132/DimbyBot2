@@ -2,6 +2,11 @@ import { SlashCommandBuilder } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
+import {
+    isRRQActive,
+    rebalancePlayerQueueRoundRobin,
+    stampRequesterUserIdOnTracks,
+} from "../../util/rrqDisconnect.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -64,7 +69,11 @@ export default {
         }
 
         const track = res.tracks[0]
+        stampRequesterUserIdOnTracks([track], interaction.user.id)
         player.queue.add(track, 0)
+        if (isRRQActive(player)) {
+            await rebalancePlayerQueueRoundRobin(player)
+        }
         return interaction.editReply(
             `Added [${track.info.title}](${track.info.uri}) to the top of the queue.`
         )

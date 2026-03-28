@@ -5,7 +5,7 @@
  * @see https://tomato6966.github.io/lavalink-client/api/types/manager/interfaces/lavalinkmanagerevents/
  */
 
-import type { Message } from "discord.js"
+import type { Message, MessageCreateOptions, MessagePayload } from "discord.js"
 import type {
     Player,
     Track,
@@ -19,8 +19,19 @@ import { getGuildSettings } from "../util/saveControlChannel.js"
 import { rememberAutoplayPlayed } from "../util/autoplayHistory.js"
 import { updateControlMessage } from "./handlers/handleControlChannel.js"
 import { discordDeleteErrorDetails } from "../util/discordErrorDetails.js"
+import {
+    clearDisconnectedUser,
+    hasTrackedDisconnect,
+    isDisconnectTimeoutCurrent,
+    isRRQActive,
+    removeAndRebalanceRrqAfterDisconnect,
+    trackDisconnectedUser,
+    userHasQueuedTracks,
+} from "../util/rrqDisconnect.js"
 
-type GuildTextSendable = { send: (content: string) => Promise<Message<boolean>> }
+type GuildTextSendable = {
+    send: (content: string | MessagePayload | MessageCreateOptions) => Promise<Message<boolean>>
+}
 
 function isTextSendable(channel: unknown): channel is GuildTextSendable {
     return (
@@ -29,6 +40,31 @@ function isTextSendable(channel: unknown): channel is GuildTextSendable {
         "send" in channel &&
         typeof (channel as { send?: unknown }).send === "function"
     )
+}
+
+function escapeDiscordMarkdown(text: string): string {
+    return text
+        .replace(/\\/g, "\\\\")
+        .replace(/\*/g, "\\*")
+        .replace(/_/g, "\\_")
+        .replace(/`/g, "\\`")
+}
+
+/** Guild nickname if cached/fetchable, else global/username — plain text, no @ mention. */
+async function displayNameForRRQMessage(
+    client: BotClient,
+    guildId: string,
+    userId: string
+): Promise<string> {
+    const guild =
+        client.guilds.cache.get(guildId) ?? (await client.guilds.fetch(guildId).catch(() => null))
+    if (guild) {
+        const member = await guild.members.fetch(userId).catch(() => null)
+        if (member) return escapeDiscordMarkdown(member.displayName)
+    }
+    const user = await client.users.fetch(userId).catch(() => null)
+    if (user) return escapeDiscordMarkdown(user.globalName ?? user.username)
+    return "someone"
 }
 
 export default async (client: BotClient) => {
@@ -314,6 +350,12 @@ export default async (client: BotClient) => {
             client.debug(
                 `[LavaMgrEvents] User joined player's channel: Guild ${player.guildId}, User: ${userId}`
             )
+            if (hasTrackedDisconnect(player, userId)) {
+                clearDisconnectedUser(player, userId)
+                client.debug(
+                    `[LavaMgrEvents] User ${userId} rejoined VC in guild ${player.guildId}; RRQ queue removal cancelled.`
+                )
+            }
         })
         .on("playerVoiceLeave", (player: Player, userId: string) => {
             client.debug(
@@ -362,6 +404,80 @@ export default async (client: BotClient) => {
                         )
                     }
                 }, 5000)
+            }
+
+            if (isRRQActive(player) && userHasQueuedTracks(player, userId)) {
+                const guildId = player.guildId
+                const timeoutHandle = setTimeout(() => {
+                    void (async () => {
+                        const p = client.lavalink.getPlayer(guildId)
+                        if (!p) return
+                        if (!isRRQActive(p)) {
+                            clearDisconnectedUser(p, userId)
+                            return
+                        }
+                        if (!isDisconnectTimeoutCurrent(p, userId, timeoutHandle)) return
+
+                        const removedCount = await removeAndRebalanceRrqAfterDisconnect(p, userId, {
+                            onRemoveError: (err: unknown) =>
+                                client.error(
+                                    "[LavaMgrEvents] RRQ removeUserTracksFromQueue failed:",
+                                    err
+                                ),
+                            onRebalanceError: (rebalErr: unknown) =>
+                                client.warn(
+                                    "[LavaMgrEvents] RRQ rebalance after disconnect cleanup failed:",
+                                    rebalErr
+                                ),
+                        })
+
+                        if (removedCount > 0) {
+                            try {
+                                await updateControlMessage(client, p.guildId)
+                            } catch (ctrlErr: unknown) {
+                                const msg =
+                                    ctrlErr instanceof Error ? ctrlErr.message : String(ctrlErr)
+                                client.warn(
+                                    `[LavaMgrEvents] updateControlMessage after RRQ cleanup failed: ${msg}`
+                                )
+                            }
+
+                            const textIdRrq = p.textChannelId
+                            const channelRrq = textIdRrq
+                                ? client.channels.cache.get(textIdRrq)
+                                : undefined
+                            const currentGuildSettingsRrq = getGuildSettings(client)
+                            const controlChannelIdRrq =
+                                currentGuildSettingsRrq[p.guildId]?.controlChannelId
+                            if (
+                                channelRrq &&
+                                textIdRrq !== controlChannelIdRrq &&
+                                isTextSendable(channelRrq)
+                            ) {
+                                client.debug(
+                                    `[LavaMgrEvents] Sending RRQ disconnect cleanup to non-control channel ${textIdRrq} in guild ${p.guildId}.`
+                                )
+                                const who = await displayNameForRRQMessage(
+                                    client,
+                                    p.guildId,
+                                    userId
+                                )
+                                channelRrq
+                                    .send({
+                                        content: `Removed **${removedCount}** track(s) queued by ${who} (left voice channel).`,
+                                        allowedMentions: { parse: [] },
+                                    })
+                                    .catch((e: unknown) =>
+                                        client.error(
+                                            "[LavaMgrEvents] Failed to send RRQ cleanup message:",
+                                            e
+                                        )
+                                    )
+                            }
+                        }
+                    })()
+                }, 60_000)
+                trackDisconnectedUser(player, userId, timeoutHandle)
             }
         })
 

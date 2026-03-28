@@ -109,3 +109,17 @@ export interface LoggerInterface {
     /** When set, each log line is forwarded (e.g. to Discord) after console/file logging. */
     setDiscordForwarder?(callback: DiscordLogForwarder | null): void
 }
+
+/** Tracks a user who left voice while RRQ is active and has queued tracks. */
+export interface DisconnectedRRQUser {
+    userId: string
+    /** Epoch ms when the user left the voice channel. */
+    leftAt: number
+    timeoutHandle: NodeJS.Timeout
+}
+
+/**
+ * Per-player map of disconnected users pending queue cleanup.
+ * Stored on the player via `player.set("rrqDisconnectedUsers", map)`.
+ */
+export type RRQDisconnectedUsersMap = Map<string, DisconnectedRRQUser>
