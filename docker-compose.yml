@@ -33,20 +33,23 @@ services:
         networks:
             - internal
 
-    # postgres-db:
-    #   image: postgres:15 # Or your preferred version
-    #   container_name: postgres-db
-    #   restart: unless-stopped
-    #   environment:
-    #     POSTGRES_DB: ${POSTGRES_DB} # Default: bot_db
-    #     POSTGRES_USER: ${POSTGRES_USER} # Default: bot_user
-    #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} # Required in .env
-    #   volumes:
-    #     - postgres-data:/var/lib/postgresql/data
-    #   networks:
-    #     - internal
-    #   ports:
-    #     - "5433:5432" # Map host port 5433 to container port 5432 for dev access
+    postgres-db:
+        image: postgres:15
+        container_name: postgres-db
+        restart: unless-stopped
+        environment:
+            - POSTGRES_DB=${POSTGRES_DB}
+            - POSTGRES_USER=${POSTGRES_USER}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+        volumes:
+            - postgres-data:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+            interval: 10s
+            timeout: 5s
+            retries: 10
+        networks:
+            - internal
 
     dimbybot:
         image: placeholder-bot # This will be replaced by the deploy script
@@ -55,7 +58,8 @@ services:
         depends_on:
             lavalink:
                 condition: service_healthy # Wait for lavalink to pass its health check
-            # - postgres-db # Add dependency on the database
+            postgres-db:
+                condition: service_healthy
         environment:
             # These will be picked up by entrypoint.sh for lavaNodesConfig.js
             - LAVALINK_HOST=lavalink # Service name in this compose file
@@ -102,3 +106,4 @@ volumes:
     dimbybot-logs: {} # Define the new named volume for bot logs
     dimbybot-downloads: {} # Define the new named volume for downloaded music files
     lavalink-plugins: {} # Define the new named volume for lavalink plugins
+    postgres-data: {}

@@ -100,6 +100,9 @@ jobs:
                   EMAIL_USER=${{ secrets.EMAIL_USER }}
                   EMAIL_PASS=${{ secrets.EMAIL_PASS }}
                   FEEDBACK_EMAIL=${{ secrets.FEEDBACK_EMAIL }}
+                  POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+                  POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+                  POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
                   BOT_IMAGE=${{ env.IMAGE_BOT }}
                   LAVALINK_IMAGE=${{ env.IMAGE_LAVALINK }}
                   GH_ACTOR=${{ github.actor }}

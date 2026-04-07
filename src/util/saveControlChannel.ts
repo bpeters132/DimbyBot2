@@ -2,14 +2,17 @@ import fs from "fs"
 import path from "path"
 import type { GuildSettingsStore } from "../types/index.js"
 import type { LoggerInterface } from "../types/index.js"
+import {
+    getGuildSettingsStoreFromDatabase,
+    replaceGuildSettingsStoreInDatabase,
+} from "../repositories/guildSettingsRepository.js"
 
 const __dirname = import.meta.dirname
 
 const storageDir = path.join(__dirname, "..", "..", "storage")
-const settingsFile = path.join(storageDir, "guild_settings.json")
-
-/** In-memory store; synced from disk once at cold start. Updated only after a successful save. */
-let guildSettingsCache: GuildSettingsStore | null = null
+/** In-memory store loaded from database at startup. */
+let guildSettingsCache: GuildSettingsStore = {}
+let guildSettingsInitialized = false
 
 function getLogger(logger: Partial<LoggerInterface> | undefined): LoggerInterface {
     if (
@@ -62,61 +65,63 @@ export function ensureStorageDir(loggerInstance?: Partial<LoggerInterface>) {
     }
 }
 
-function readGuildSettingsFromDisk(loggerInstance?: Partial<LoggerInterface>): GuildSettingsStore {
+async function readGuildSettingsFromDatabase(
+    loggerInstance?: Partial<LoggerInterface>
+): Promise<GuildSettingsStore> {
     const logger = getLogger(loggerInstance)
-    ensureStorageDir(loggerInstance)
-    logger.debug(`[guildSettings] Attempting to read settings from: ${settingsFile}`)
+    logger.debug("[guildSettings] Attempting to load settings from database.")
     try {
-        if (fs.existsSync(settingsFile)) {
-            const data = fs.readFileSync(settingsFile, "utf8")
-            const parsed: unknown = JSON.parse(data)
-            if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-                logger.debug(`[guildSettings] Successfully read and parsed settings file.`)
-                return parsed as GuildSettingsStore
-            }
-            logger.warn(`[guildSettings] Parsed settings file is not a valid object.`)
-            return {}
-        }
-        logger.debug(`[guildSettings] Settings file does not exist.`)
-        return {}
-    } catch (error: unknown) {
-        logger.error(
-            `[guildSettings] Error reading or parsing guild settings from ${settingsFile}: ${error}`
+        const store = await getGuildSettingsStoreFromDatabase()
+        logger.debug(
+            `[guildSettings] Successfully loaded ${Object.keys(store).length} guild settings rows.`
         )
+        return store
+    } catch (error: unknown) {
+        logger.error(`[guildSettings] Error reading guild settings from database: ${error}`)
         return {}
     }
 }
 
+/** Loads guild settings from the database into the in-memory cache. */
+export async function initializeGuildSettingsStore(
+    loggerInstance?: Partial<LoggerInterface>
+): Promise<void> {
+    guildSettingsCache = await readGuildSettingsFromDatabase(loggerInstance)
+    guildSettingsInitialized = true
+}
+
 /**
- * Returns the mutable guild settings map, loading from disk on first use in this process.
- * After a successful {@link saveGuildSettings}, the cache is replaced by the object that was saved.
+ * Returns the mutable guild settings map loaded from database at startup.
+ * If accessed before initialization, this returns an empty object.
  */
 export function getGuildSettings(loggerInstance?: Partial<LoggerInterface>): GuildSettingsStore {
-    if (guildSettingsCache === null) {
-        guildSettingsCache = readGuildSettingsFromDisk(loggerInstance)
+    if (!guildSettingsInitialized) {
+        const logger = getLogger(loggerInstance)
+        logger.warn(
+            "[guildSettings] getGuildSettings called before initialization; returning current cache."
+        )
     }
     return guildSettingsCache
 }
 
 /**
- * Persists guild settings to disk. On success, replaces the in-memory cache with `settings`.
- * @returns whether the file was written successfully
+ * Persists guild settings to database. On success, replaces the in-memory cache with `settings`.
+ * @returns whether the database write succeeded
  */
-export function saveGuildSettings(
+export async function saveGuildSettings(
     settings: GuildSettingsStore,
     loggerInstance?: Partial<LoggerInterface>
-): boolean {
+): Promise<boolean> {
     const logger = getLogger(loggerInstance)
-    ensureStorageDir(loggerInstance)
-    logger.debug(`[guildSettings] Attempting to save settings to: ${settingsFile}`)
+    logger.debug("[guildSettings] Attempting to save settings to database.")
     try {
-        const data = JSON.stringify(settings, null, 4)
-        fs.writeFileSync(settingsFile, data, "utf8")
+        const result = await replaceGuildSettingsStoreInDatabase(settings)
         guildSettingsCache = settings
-        logger.debug(`[guildSettings] Successfully saved settings to: ${settingsFile}`)
+        guildSettingsInitialized = true
+        logger.debug(`[guildSettings] Successfully saved ${result.rowsWritten} rows to database.`)
         return true
     } catch (error: unknown) {
-        logger.error(`[guildSettings] Error writing guild settings to ${settingsFile}: ${error}`)
+        logger.error(`[guildSettings] Error writing guild settings to database: ${error}`)
         return false
     }
 }

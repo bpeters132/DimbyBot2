@@ -1,0 +1,23 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+}
+
+model GuildSettings {
+    guildId          String  @id
+    controlChannelId String?
+    controlMessageId String?
+    downloadsMaxMb   Float?
+    discordLog       Json?
+}
+
+model DownloadMetadata {
+    fileName     String  @id
+    guildId      String?
+    downloadDate String?
+    originalUrl  String?
+    filePath     String?
+}

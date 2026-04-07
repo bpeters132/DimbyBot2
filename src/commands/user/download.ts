@@ -8,6 +8,10 @@ import { handleQueryAndPlay } from "../../util/musicManager.js"
 import { getGuildSettings } from "../../util/saveControlChannel.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import type { DownloadsMetadataStore } from "../../types/index.js"
+import {
+    getDownloadMetadataStore,
+    saveDownloadMetadataStore,
+} from "../../util/downloadMetadataStore.js"
 
 // Maximum age of files in days before automatic cleanup
 const MAX_FILE_AGE_DAYS = 7
@@ -49,23 +53,14 @@ function createProgressBar(progress: number, length = 20) {
  * @param {string} guildId The guild ID used to scope cleanup.
  * @returns {{deletedCount: number, totalSize: number}} The number of deleted files and their total size.
  */
-function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId: string) {
+async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId: string) {
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - MAX_FILE_AGE_DAYS)
     let deletedCount = 0
     let totalSize = 0
     let metadataDirty = false
 
-    const metadataPath = path.join(downloadsDir, ".metadata.json")
-    let metadata: DownloadsMetadataStore = {}
-    if (fs.existsSync(metadataPath)) {
-        try {
-            metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8")) as DownloadsMetadataStore
-        } catch (error: unknown) {
-            client.error(`[Download Cleanup] Error reading metadata file for cleanup:`, error)
-            return { deletedCount, totalSize } // Can't proceed reliably
-        }
-    }
+    const metadata: DownloadsMetadataStore = getDownloadMetadataStore()
 
     const entries = Object.entries(metadata).filter(
         ([, info]) => info && (info.guildId === guildId || info.guildId === undefined)
@@ -130,13 +125,12 @@ function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId: strin
         }
     }
 
-    // Update metadata if changes were made
     if (metadataDirty) {
-        try {
-            fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
-            client.debug("[Download Cleanup] Updated metadata file after deleting old entries.")
-        } catch (error: unknown) {
-            client.error("[Download Cleanup] Error writing updated metadata file:", error)
+        const ok = await saveDownloadMetadataStore(metadata, client)
+        if (ok) {
+            client.debug("[Download Cleanup] Updated metadata store after deleting old entries.")
+        } else {
+            client.error("[Download Cleanup] Error writing updated metadata store.")
         }
     }
 
@@ -154,23 +148,14 @@ function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId: strin
  */
 type SizedFile = { name: string; path: string; date: Date; size: number }
 
-function enforceDirectoryLimit(
+async function enforceDirectoryLimit(
     downloadsDir: string,
     client: BotClient,
     guildId: string,
     maxDirSizeMb: number,
     protectedFileName: string | null = null
 ) {
-    const metadataPath = path.join(downloadsDir, ".metadata.json")
-    let metadata: DownloadsMetadataStore = {}
-    if (fs.existsSync(metadataPath)) {
-        try {
-            metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8")) as DownloadsMetadataStore
-        } catch (error: unknown) {
-            client.error(`[Download Cleanup] Error reading metadata file for size cleanup:`, error)
-            return { deletedCount: 0, deletedSize: 0 }
-        }
-    }
+    const metadata: DownloadsMetadataStore = getDownloadMetadataStore()
 
     const files: SizedFile[] = Object.entries(metadata)
         .filter(([, info]) => info && (info.guildId === guildId || info.guildId === undefined))
@@ -226,14 +211,11 @@ function enforceDirectoryLimit(
         }
 
         if (metadataDirty) {
-            try {
-                fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
+            const ok = await saveDownloadMetadataStore(metadata, client)
+            if (ok) {
                 client.debug("[Download Cleanup] Updated metadata after size cleanup.")
-            } catch (error: unknown) {
-                client.error(
-                    "[Download Cleanup] Error writing metadata file after size cleanup:",
-                    error
-                )
+            } else {
+                client.error("[Download Cleanup] Error writing metadata after size cleanup.")
             }
         }
 
@@ -319,13 +301,13 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         // Cleanup old files
         await updateReply("Cleaning old downloads...", true)
         const maxDirSizeMb = getMaxDirSizeMb(client, guildId)
-        const { deletedCount: ageDeletedCount, totalSize: ageDeletedSize } = cleanupOldFiles(
+        const { deletedCount: ageDeletedCount, totalSize: ageDeletedSize } = await cleanupOldFiles(
             downloadsDir,
             client,
             guildId
         )
         const { deletedCount: sizeLimitDeletedCount, deletedSize: sizeLimitDeletedSize } =
-            enforceDirectoryLimit(downloadsDir, client, guildId, maxDirSizeMb)
+            await enforceDirectoryLimit(downloadsDir, client, guildId, maxDirSizeMb)
 
         if (ageDeletedCount > 0) {
             client.debug(
@@ -503,17 +485,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     true
                 )
 
-                const metadataPath = path.join(downloadsDir, ".metadata.json")
-                let metadata: DownloadsMetadataStore = {}
-                if (fs.existsSync(metadataPath)) {
-                    try {
-                        metadata = JSON.parse(
-                            fs.readFileSync(metadataPath, "utf8")
-                        ) as DownloadsMetadataStore
-                    } catch (error: unknown) {
-                        client.error(`[Download] Error reading metadata file:`, error)
-                    }
-                }
+                const metadata: DownloadsMetadataStore = getDownloadMetadataStore()
 
                 metadata[downloadedFile] = {
                     downloadDate: new Date().toISOString(),
@@ -522,16 +494,16 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     guildId: guildId,
                 }
 
-                try {
-                    fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
+                const metadataSaved = await saveDownloadMetadataStore(metadata, client)
+                if (metadataSaved) {
                     client.debug(`[Download] Updated metadata for ${downloadedFile}`)
-                } catch (error: unknown) {
-                    client.error(`[Download] Error writing metadata file:`, error)
+                } else {
+                    client.error(`[Download] Error writing metadata store.`)
                 }
 
                 client.debug(`[Download] Successfully downloaded: ${filePath}`)
 
-                const postCleanup = enforceDirectoryLimit(
+                const postCleanup = await enforceDirectoryLimit(
                     downloadsDir,
                     client,
                     guildId,

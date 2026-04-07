@@ -225,10 +225,10 @@ export default {
             }
             applyNormalizedDiscordLog(next, working)
             const nextStore = storeWithGuildRow(store, guild.id, working)
-            const ok = saveGuildSettings(nextStore, client)
+            const ok = await saveGuildSettings(nextStore, client)
             if (!ok) {
                 return interaction.reply({
-                    content: "Could not save settings to disk. Check that `storage/` is writable.",
+                    content: "Could not save settings to database. Check database connectivity.",
                     flags: [MessageFlags.Ephemeral],
                 })
             }
@@ -271,10 +271,10 @@ export default {
             }
 
             const nextStore = storeWithGuildRow(store, guild.id, working)
-            const ok = saveGuildSettings(nextStore, client)
+            const ok = await saveGuildSettings(nextStore, client)
             if (!ok) {
                 return interaction.reply({
-                    content: "Could not save settings to disk. Check that `storage/` is writable.",
+                    content: "Could not save settings to database. Check database connectivity.",
                     flags: [MessageFlags.Ephemeral],
                 })
             }
@@ -333,10 +333,10 @@ export default {
 
             applyNormalizedDiscordLog(next, working)
             const nextStore = storeWithGuildRow(latestStore, guild.id, working)
-            const ok = saveGuildSettings(nextStore, client)
+            const ok = await saveGuildSettings(nextStore, client)
             if (!ok) {
                 return interaction.reply({
-                    content: "Could not save settings to disk. Check that `storage/` is writable.",
+                    content: "Could not save settings to database. Check database connectivity.",
                     flags: [MessageFlags.Ephemeral],
                 })
             }

@@ -5,6 +5,10 @@ import loadCommands from "../util/loadCommands.js"
 import createLavalinkManager from "./LavalinkManager.js"
 import type { Command } from "../types/index.js"
 import type Logger from "./Logger.js"
+import { initializeDatabaseConnection, runPrismaMigrateDeploy } from "./database.js"
+import { migrateDownloadMetadata, migrateGuildSettings } from "../util/migrateJsonToDatabase.js"
+import { initializeGuildSettingsStore } from "../util/saveControlChannel.js"
+import { initializeDownloadMetadataStore } from "../util/downloadMetadataStore.js"
 
 export default class BotClient extends Client {
     logger: Logger
@@ -59,6 +63,41 @@ export default class BotClient extends Client {
         if (!token) {
             this.error("BotClient start: Bot token is missing. Ensure BOT_TOKEN is set in .env")
             throw new Error("Bot token is required.")
+        }
+        try {
+            await initializeDatabaseConnection(this)
+        } catch (err: unknown) {
+            this.error("BotClient start: Database connection failed; startup aborted.", err)
+            throw err
+        }
+        try {
+            await runPrismaMigrateDeploy(this)
+        } catch (err: unknown) {
+            this.error("BotClient start: Prisma migration deploy failed; startup aborted.", err)
+            throw err
+        }
+        try {
+            const guildSettingsMigration = await migrateGuildSettings(this)
+            this.info(
+                `BotClient start: Guild settings migration status attempted=${guildSettingsMigration.attempted} skipped=${guildSettingsMigration.skipped} migrated=${guildSettingsMigration.migratedCount} failed=${guildSettingsMigration.failedCount}`
+            )
+            const downloadsMigration = await migrateDownloadMetadata(this)
+            this.info(
+                `BotClient start: Download metadata migration status attempted=${downloadsMigration.attempted} skipped=${downloadsMigration.skipped} migrated=${downloadsMigration.migratedCount} failed=${downloadsMigration.failedCount}`
+            )
+        } catch (err: unknown) {
+            this.error("BotClient start: JSON-to-database migration failed; startup aborted.", err)
+            throw err
+        }
+        try {
+            await initializeGuildSettingsStore(this)
+            await initializeDownloadMetadataStore(this)
+            this.info(
+                "BotClient start: Runtime settings/metadata caches initialized from database."
+            )
+        } catch (err: unknown) {
+            this.error("BotClient start: Failed to initialize runtime caches from database.", err)
+            throw err
         }
         this.info("BotClient start: Loading events and commands...")
         try {

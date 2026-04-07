@@ -6,6 +6,10 @@ import { formatDistanceToNow } from "date-fns"
 import type BotClient from "../../lib/BotClient.js"
 import { getGuildSettings } from "../../util/saveControlChannel.js"
 import type { DownloadsMetadataStore } from "../../types/index.js"
+import {
+    getDownloadMetadataStore,
+    saveDownloadMetadataStore,
+} from "../../util/downloadMetadataStore.js"
 
 const DEFAULT_MAX_DIR_SIZE_MB = 1000
 
@@ -67,16 +71,8 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         })
     }
 
-    // Load metadata
-    const metadataPath = path.join(downloadsDir, ".metadata.json")
-    let metadata: DownloadsMetadataStore = {}
-    if (fs.existsSync(metadataPath)) {
-        try {
-            metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8")) as DownloadsMetadataStore
-        } catch (error: unknown) {
-            client.error(`[Downloads] Error reading metadata file:`, error)
-        }
-    }
+    // Load metadata from the database-backed cache.
+    const metadata: DownloadsMetadataStore = getDownloadMetadataStore()
 
     const subcommand = interaction.options.getSubcommand()
     client.debug(`[Downloads] Executing ${subcommand} subcommand`)
@@ -219,11 +215,9 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             }
         }
 
-        // Save updated metadata
-        try {
-            fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
-        } catch (error: unknown) {
-            client.error(`[Downloads] Error writing metadata file:`, error)
+        const metadataSaved = await saveDownloadMetadataStore(metadata, client)
+        if (!metadataSaved) {
+            client.error(`[Downloads] Failed to persist metadata cleanup updates to database.`)
         }
 
         const sizeMB = (totalSize / (1024 * 1024)).toFixed(2)

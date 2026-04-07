@@ -96,6 +96,35 @@ export interface DownloadFileMetadata {
 
 export type DownloadsMetadataStore = Record<string, DownloadFileMetadata>
 
+/** Canonical database row shape for guild settings persistence. */
+export interface GuildSettingsRecord {
+    guildId: string
+    settings: GuildSettings
+}
+
+/** Canonical database row shape for downloaded-file metadata persistence. */
+export interface DownloadMetadataRecord {
+    fileName: string
+    metadata: DownloadFileMetadata
+}
+
+/** Result summary for one JSON-to-database migration source. */
+export interface JsonMigrationResult {
+    source: "guildSettings" | "downloadMetadata"
+    attempted: boolean
+    skipped: boolean
+    migratedCount: number
+    failedCount: number
+    reason?: string
+}
+
+export type ReplaceGuildSettingsStoreFn = (
+    store: GuildSettingsStore
+) => Promise<{ rowsWritten: number }>
+export type ReplaceDownloadMetadataStoreFn = (
+    store: DownloadsMetadataStore
+) => Promise<{ rowsWritten: number }>
+
 export type DiscordLogForwarder = (level: DiscordLogLevelName, message: string) => void
 
 export interface LoggerInterface {
