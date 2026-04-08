@@ -113,7 +113,7 @@ export async function forwardLogToDiscordChannels(
     level: DiscordLogLevelName,
     message: string
 ): Promise<void> {
-    const settings = getGuildSettings(client)
+    const settings = getGuildSettings()
     const description = truncateForDiscord(message)
 
     for (const [guildId, guildSettings] of Object.entries(settings)) {

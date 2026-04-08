@@ -43,7 +43,7 @@ export default {
         const subcommand = options.getSubcommand()
         client.debug(`[Control-Channel] Executing subcommand: ${subcommand} in guild ${guild.id}`)
 
-        const guildSettings = getGuildSettings(client)
+        const guildSettings = getGuildSettings()
 
         if (!guildSettings[guild.id]) {
             client.debug(`[Control-Channel] Initializing settings for guild ${guild.id}`)
@@ -96,42 +96,8 @@ export default {
                 `[Control-Channel] Bot has required permissions in channel ${targetChannel.id}.`
             )
 
-            // Delete old control message if one exists
             const oldChannelId = guildSettings[guild.id]?.controlChannelId
             const oldMessageId = guildSettings[guild.id]?.controlMessageId
-            if (oldChannelId && oldMessageId) {
-                client.debug(
-                    `[Control-Channel] Found old control message settings: Channel ${oldChannelId}, Message ${oldMessageId}. Attempting deletion.`
-                )
-                try {
-                    const oldChannel = await client.channels
-                        .fetch(oldChannelId)
-                        .catch((): null => null)
-                    if (oldChannel && "messages" in oldChannel) {
-                        const oldMessage = await oldChannel.messages
-                            .fetch(oldMessageId)
-                            .catch((): null => null)
-                        if (oldMessage) {
-                            await oldMessage.delete()
-                            client.debug(
-                                `[Control-Channel] Successfully deleted old control message ${oldMessageId} in channel ${oldChannelId}.`
-                            )
-                        } else {
-                            client.debug(
-                                `[Control-Channel] Old control message ${oldMessageId} not found in channel ${oldChannelId}.`
-                            )
-                        }
-                    } else {
-                        client.debug(
-                            `[Control-Channel] Old control channel ${oldChannelId} not found.`
-                        )
-                    }
-                } catch (error) {
-                    client.warn(
-                        `[Control-Channel] Could not delete old control message ${oldMessageId} in guild ${guild.id}: ${error}`
-                    )
-                }
-            }
 
             // Send the new control message
             try {
@@ -160,12 +126,52 @@ export default {
                 client.debug(
                     `[Control-Channel] Saving new settings for guild ${guild.id}: Channel ${targetChannel.id}, Message ${controlMessage.id}.`
                 )
-                const persisted = saveGuildSettings(guildSettings, client)
+                const persisted = await saveGuildSettings(guildSettings, client)
                 if (!persisted) {
+                    await controlMessage.delete().catch((rollbackErr: unknown) => {
+                        client.warn(
+                            `[Control-Channel] Failed to roll back newly posted control message ${controlMessage.id} after save failure in guild ${guild.id}: ${rollbackErr}`
+                        )
+                    })
                     return interaction.reply({
-                        content: `Posted the control message in ${targetChannel}, but **could not save settings to disk** (check that \`/app/storage\` is writable in Docker). Controls work until the bot restarts; fix volume permissions and run \`/control-channel set\` again.`,
+                        content:
+                            "Failed to save control-channel settings to database, and the new control message was rolled back. Please fix database access and run `/control-channel set` again.",
                         ephemeral: true,
                     })
+                }
+
+                if (oldChannelId && oldMessageId) {
+                    client.debug(
+                        `[Control-Channel] Found old control message settings: Channel ${oldChannelId}, Message ${oldMessageId}. Attempting best-effort deletion.`
+                    )
+                    try {
+                        const oldChannel = await client.channels
+                            .fetch(oldChannelId)
+                            .catch((): null => null)
+                        if (oldChannel && "messages" in oldChannel) {
+                            const oldMessage = await oldChannel.messages
+                                .fetch(oldMessageId)
+                                .catch((): null => null)
+                            if (oldMessage) {
+                                await oldMessage.delete()
+                                client.debug(
+                                    `[Control-Channel] Successfully deleted old control message ${oldMessageId} in channel ${oldChannelId}.`
+                                )
+                            } else {
+                                client.debug(
+                                    `[Control-Channel] Old control message ${oldMessageId} not found in channel ${oldChannelId}.`
+                                )
+                            }
+                        } else {
+                            client.debug(
+                                `[Control-Channel] Old control channel ${oldChannelId} not found.`
+                            )
+                        }
+                    } catch (error) {
+                        client.warn(
+                            `[Control-Channel] Could not delete old control message ${oldMessageId} in guild ${guild.id}: ${error}`
+                        )
+                    }
                 }
 
                 return interaction.reply({
@@ -194,12 +200,36 @@ export default {
                 })
             }
 
-            // Attempt to delete the control message
             const controlChannelId = settings.controlChannelId
             const controlMessageId = settings.controlMessageId
+            delete settings.controlChannelId
+            delete settings.controlMessageId
+            client.debug(
+                `[Control-Channel] Removed control channel settings for guild ${guild.id}.`
+            )
+
+            if (Object.keys(settings).length === 0) {
+                client.debug(
+                    `[Control-Channel] Removing empty settings entry for guild ${guild.id}.`
+                )
+                delete guildSettings[guild.id]
+            }
+            const persisted = await saveGuildSettings(guildSettings, client)
+            client.debug(
+                `[Control-Channel] Persist settings after unset for guild ${guild.id}: ${persisted ? "ok" : "failed"}.`
+            )
+
+            if (!persisted) {
+                return interaction.reply({
+                    content:
+                        "Could not save control-channel removal to the database. The previous control channel remains configured.",
+                    ephemeral: true,
+                })
+            }
+
             if (controlMessageId) {
                 client.debug(
-                    `[Control-Channel] Attempting to delete control message ${controlMessageId} in channel ${controlChannelId}.`
+                    `[Control-Channel] Attempting best-effort deletion of control message ${controlMessageId} in channel ${controlChannelId}.`
                 )
                 try {
                     const controlChannel = await client.channels
@@ -229,32 +259,6 @@ export default {
                         `[Control-Channel] Could not delete control message ${controlMessageId} in guild ${guild.id} during unset: ${error}`
                     )
                 }
-            }
-
-            // Remove settings
-            delete settings.controlChannelId
-            delete settings.controlMessageId
-            client.debug(
-                `[Control-Channel] Removed control channel settings for guild ${guild.id}.`
-            )
-
-            if (Object.keys(settings).length === 0) {
-                client.debug(
-                    `[Control-Channel] Removing empty settings entry for guild ${guild.id}.`
-                )
-                delete guildSettings[guild.id]
-            }
-            const persisted = saveGuildSettings(guildSettings, client)
-            client.debug(
-                `[Control-Channel] Persist settings after unset for guild ${guild.id}: ${persisted ? "ok" : "failed"}.`
-            )
-
-            if (!persisted) {
-                return interaction.reply({
-                    content:
-                        "Removed the control channel in memory, but **could not save** `guild_settings.json`. After a restart the old channel may return until `/app/storage` is writable.",
-                    ephemeral: true,
-                })
             }
 
             return interaction.reply({

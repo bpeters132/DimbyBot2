@@ -66,9 +66,28 @@ export default (client: BotClient) => {
             if (interaction.inGuild() && guildId) {
                 let guildSettings: GuildSettings | undefined
                 try {
-                    const allSettings = getGuildSettings(client)
+                    const allSettings = getGuildSettings()
                     guildSettings = allSettings[guildId]
                 } catch (error: unknown) {
+                    try {
+                        if (!interaction.deferred && !interaction.replied) {
+                            await interaction.reply({
+                                content:
+                                    "I could not load server settings right now. Please try again in a moment.",
+                                flags: [MessageFlags.Ephemeral],
+                            })
+                        } else if (interaction.deferred && !interaction.replied) {
+                            await interaction.editReply({
+                                content:
+                                    "I could not load server settings right now. Please try again in a moment.",
+                            })
+                        }
+                    } catch (notifyErr: unknown) {
+                        client.error(
+                            `[InteractionCreate] Failed to notify user after guild settings lookup failure in guild ${guildId}:`,
+                            notifyErr
+                        )
+                    }
                     client.error(
                         `[InteractionCreate] Error fetching guild settings for guild ${guildId} during control channel check:`,
                         error

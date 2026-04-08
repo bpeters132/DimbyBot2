@@ -179,7 +179,7 @@ function sendAutoplayChannelMessage(client: BotClient, player: Player, line: str
     const textId = player.textChannelId
     if (textId == null) return
     const channel = client.channels.cache.get(textId)
-    const controlChannelId = getGuildSettings(client)[player.guildId]?.controlChannelId
+    const controlChannelId = getGuildSettings()[player.guildId]?.controlChannelId
     if (!channel || !channel.isTextBased() || textId === controlChannelId) return
 
     const textCh = channel as import("discord.js").TextChannel

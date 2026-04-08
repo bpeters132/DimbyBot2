@@ -50,6 +50,18 @@ function escapeDiscordMarkdown(text: string): string {
         .replace(/`/g, "\\`")
 }
 
+function getControlChannelIdSafe(client: BotClient, guildId: string): string | undefined {
+    try {
+        const currentGuildSettings = getGuildSettings()
+        return currentGuildSettings[guildId]?.controlChannelId
+    } catch (error: unknown) {
+        client.warn(
+            `[LavaMgrEvents] Failed to read guild settings for guild ${guildId}; treating as no control channel. Error: ${error}`
+        )
+        return undefined
+    }
+}
+
 /** Guild nickname if cached/fetchable, else global/username — plain text, no @ mention. */
 async function displayNameForRRQMessage(
     client: BotClient,
@@ -124,8 +136,7 @@ export default async (client: BotClient) => {
 
             const textId = player.textChannelId
             const channel = textId ? client.channels.cache.get(textId) : undefined
-            const currentGuildSettings = getGuildSettings(client)
-            const controlChannelId = currentGuildSettings[player.guildId]?.controlChannelId
+            const controlChannelId = getControlChannelIdSafe(client, player.guildId)
             if (channel && textId !== controlChannelId && isTextSendable(channel)) {
                 client.debug(
                     `[LavaMgrEvents] Sending trackStart message to non-control channel ${player.textChannelId} in guild ${player.guildId}.`
@@ -179,9 +190,7 @@ export default async (client: BotClient) => {
 
             const textIdStuck = player.textChannelId
             const channelStuck = textIdStuck ? client.channels.cache.get(textIdStuck) : undefined
-            const currentGuildSettingsStuck = getGuildSettings(client)
-            const controlChannelIdStuck =
-                currentGuildSettingsStuck[player.guildId]?.controlChannelId
+            const controlChannelIdStuck = getControlChannelIdSafe(client, player.guildId)
             if (
                 channelStuck &&
                 textIdStuck !== controlChannelIdStuck &&
@@ -217,9 +226,7 @@ export default async (client: BotClient) => {
 
                 const textIdErr = player.textChannelId
                 const channelErr = textIdErr ? client.channels.cache.get(textIdErr) : undefined
-                const currentGuildSettingsErr = getGuildSettings(client)
-                const controlChannelIdErr =
-                    currentGuildSettingsErr[player.guildId]?.controlChannelId
+                const controlChannelIdErr = getControlChannelIdSafe(client, player.guildId)
                 const tInfo = track?.info
                 if (
                     channelErr &&
@@ -307,8 +314,7 @@ export default async (client: BotClient) => {
             // Send message to non-control channel
             const textIdQ = player.textChannelId
             const channelQ = textIdQ ? client.channels.cache.get(textIdQ) : undefined
-            const currentGuildSettingsQ = getGuildSettings(client)
-            const controlChannelIdQ = currentGuildSettingsQ[player.guildId]?.controlChannelId
+            const controlChannelIdQ = getControlChannelIdSafe(client, player.guildId)
             if (channelQ && textIdQ !== controlChannelIdQ && isTextSendable(channelQ)) {
                 client.debug(
                     `[LavaMgrEvents] Sending queueEnd message to non-control channel ${textIdQ} in guild ${player.guildId}.`
@@ -446,9 +452,7 @@ export default async (client: BotClient) => {
                             const channelRrq = textIdRrq
                                 ? client.channels.cache.get(textIdRrq)
                                 : undefined
-                            const currentGuildSettingsRrq = getGuildSettings(client)
-                            const controlChannelIdRrq =
-                                currentGuildSettingsRrq[p.guildId]?.controlChannelId
+                            const controlChannelIdRrq = getControlChannelIdSafe(client, p.guildId)
                             if (
                                 channelRrq &&
                                 textIdRrq !== controlChannelIdRrq &&

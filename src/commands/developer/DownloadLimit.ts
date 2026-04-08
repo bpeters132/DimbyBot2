@@ -81,7 +81,7 @@ export default {
             })
         }
 
-        const settings = getGuildSettings(client)
+        const settings = getGuildSettings()
         if (!settings[targetGuildId]) {
             settings[targetGuildId] = {}
         }
@@ -101,11 +101,11 @@ export default {
         if (subcommand === "set") {
             const sizeMb = interaction.options.getNumber("size_mb", true)
             settings[targetGuildId].downloadsMaxMb = sizeMb
-            const ok = saveGuildSettings(settings, client)
+            const ok = await saveGuildSettings(settings, client)
             if (!ok) {
-                client.error("[DownloadLimit] Failed to persist guild_settings.json after set.")
+                client.error("[DownloadLimit] Failed to persist guild settings after set.")
                 return interaction.reply({
-                    content: `Updated limit in memory for guild ${targetGuildId} to ${sizeMb}MB, but **could not save** settings to disk.`,
+                    content: `Updated limit in memory for guild ${targetGuildId} to ${sizeMb}MB, but **could not save** settings to database.`,
                     flags: [MessageFlags.Ephemeral],
                 })
             }
@@ -121,13 +121,11 @@ export default {
                 if (Object.keys(settings[targetGuildId]).length === 0) {
                     delete settings[targetGuildId]
                 }
-                const ok = saveGuildSettings(settings, client)
+                const ok = await saveGuildSettings(settings, client)
                 if (!ok) {
-                    client.error(
-                        "[DownloadLimit] Failed to persist guild_settings.json after clear."
-                    )
+                    client.error("[DownloadLimit] Failed to persist guild settings after clear.")
                     return interaction.reply({
-                        content: `Cleared limit in memory for guild ${targetGuildId}, but **could not save** settings to disk.`,
+                        content: `Cleared limit in memory for guild ${targetGuildId}, but **could not save** settings to database.`,
                         flags: [MessageFlags.Ephemeral],
                     })
                 }

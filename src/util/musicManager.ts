@@ -19,6 +19,7 @@ import {
     rebalancePlayerQueueRoundRobin,
     stampRequesterUserIdOnTracks,
 } from "./rrqDisconnect.js"
+import { getDownloadMetadataStore } from "./downloadMetadataStore.js"
 
 type SearchAttempt =
     | { source: string; success: true; loadType?: string }
@@ -229,15 +230,7 @@ export async function handleQueryAndPlay(
             }
 
             if (downloadsAccessible) {
-                const metadataPath = path.join(downloadsDir, ".metadata.json")
-                try {
-                    const metadataContents = await fs.promises.readFile(metadataPath, "utf8")
-                    metadata = JSON.parse(metadataContents)
-                } catch (error: unknown) {
-                    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-                        client.error(`[MusicManager] Error reading downloads metadata:`, error)
-                    }
-                }
+                metadata = getDownloadMetadataStore()
 
                 let files: LocalFile[] = []
                 try {

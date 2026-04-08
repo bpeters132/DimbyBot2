@@ -89,6 +89,11 @@ echo "Bot Entrypoint: lavaNodesConfig.js generated successfully."
 mkdir -p /app/storage
 chown -R node:node /app/storage 2>/dev/null || true
 
+# Dev bind mounts + anonymous /app/node_modules volumes can leave Prisma client artifacts root-owned.
+# `yarn dev` runs `prisma generate` during build, which needs write access to these directories.
+mkdir -p /app/node_modules/.prisma /app/node_modules/@prisma
+chown -R node:node /app/node_modules/.prisma /app/node_modules/@prisma 2>/dev/null || true
+
 # ==============================================================================
 # Start the Bot Application
 # ==============================================================================
