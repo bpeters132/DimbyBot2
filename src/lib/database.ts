@@ -1,7 +1,10 @@
-import { PrismaClient } from "@prisma/client"
+import prismaClientPkg from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
 import { spawn } from "child_process"
 import type { LoggerInterface } from "../types/index.js"
+import type { PrismaClient as PrismaClientType } from "@prisma/client"
+
+const { PrismaClient } = prismaClientPkg
 
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl || databaseUrl.trim() === "") {
@@ -39,7 +42,7 @@ function getLogger(loggerInstance?: Partial<LoggerInterface>): LoggerInterface {
 }
 
 /** Returns the process-wide Prisma client singleton. */
-export function getPrismaClient(): PrismaClient {
+export function getPrismaClient(): PrismaClientType {
     return prisma
 }
 
