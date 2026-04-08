@@ -81,7 +81,7 @@ export default {
             })
         }
 
-        const settings = getGuildSettings(client)
+        const settings = getGuildSettings()
         if (!settings[targetGuildId]) {
             settings[targetGuildId] = {}
         }

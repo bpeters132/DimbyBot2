@@ -66,7 +66,7 @@ export default (client: BotClient) => {
             if (interaction.inGuild() && guildId) {
                 let guildSettings: GuildSettings | undefined
                 try {
-                    const allSettings = getGuildSettings(client)
+                    const allSettings = getGuildSettings()
                     guildSettings = allSettings[guildId]
                 } catch (error: unknown) {
                     client.error(

@@ -37,7 +37,7 @@ export default (client: BotClient) => {
             `[MessageCreate] Received message in guild ${guildId}, channel ${channel.id} from user ${member.id}. Content: "${content.substring(0, 50)}..."`
         )
 
-        const guildSettings = getGuildSettings(client)
+        const guildSettings = getGuildSettings()
         const settings = guildSettings[guildId]
         if (!settings || !settings.controlChannelId || channel.id !== settings.controlChannelId) {
             // client.debug(`[MessageCreate] Message not in control channel for guild ${guildId}. Configured: ${settings?.controlChannelId ?? 'None'}.`) // Can be noisy

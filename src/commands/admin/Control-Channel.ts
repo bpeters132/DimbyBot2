@@ -43,7 +43,7 @@ export default {
         const subcommand = options.getSubcommand()
         client.debug(`[Control-Channel] Executing subcommand: ${subcommand} in guild ${guild.id}`)
 
-        const guildSettings = getGuildSettings(client)
+        const guildSettings = getGuildSettings()
 
         if (!guildSettings[guild.id]) {
             client.debug(`[Control-Channel] Initializing settings for guild ${guild.id}`)

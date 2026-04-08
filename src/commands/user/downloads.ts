@@ -20,7 +20,7 @@ const DEFAULT_MAX_DIR_SIZE_MB = 1000
  * @returns {number} The max directory size in MB.
  */
 function getMaxDirSizeMb(client: BotClient, guildId: string) {
-    const settings = getGuildSettings(client)
+    const settings = getGuildSettings()
     const guildSettings = settings[guildId] || {}
     const configured = guildSettings.downloadsMaxMb
     const parsed = Number.parseFloat(String(configured ?? ""))

@@ -45,7 +45,7 @@ export async function replaceDownloadMetadataStoreInDatabase(
             const downloadDate =
                 metadata?.downloadDate === undefined
                     ? null
-                    : new Date(metadata.downloadDate as string)
+                    : new Date(metadata.downloadDate)
 
             await tx.downloadMetadata.upsert({
                 where: { fileName },

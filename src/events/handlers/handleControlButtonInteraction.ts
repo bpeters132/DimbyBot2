@@ -14,7 +14,7 @@ export async function handleControlButtonInteraction(
         `[ControlButtonHandler] Handling button interaction: ${customId} in guild ${guildId}`
     )
 
-    const guildSettings = getGuildSettings(client)
+    const guildSettings = getGuildSettings()
     const settings = guildSettings[guildId]
 
     // 1. Check if it's the correct control channel

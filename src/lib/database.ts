@@ -74,13 +74,13 @@ export async function runPrismaMigrateDeploy(
     child.stdout.on("data", (chunk: Buffer) => {
         const text = chunk.toString()
         stdout += text
-        logger.info("[Database][migrate] %s", text.trimEnd())
+        logger.info(`[Database][migrate] ${text.trimEnd()}`)
     })
 
     child.stderr.on("data", (chunk: Buffer) => {
         const text = chunk.toString()
         stderr += text
-        logger.warn("[Database][migrate] %s", text.trimEnd())
+        logger.warn(`[Database][migrate] ${text.trimEnd()}`)
     })
 
     await new Promise<void>((resolve, reject) => {

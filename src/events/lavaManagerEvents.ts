@@ -124,7 +124,7 @@ export default async (client: BotClient) => {
 
             const textId = player.textChannelId
             const channel = textId ? client.channels.cache.get(textId) : undefined
-            const currentGuildSettings = getGuildSettings(client)
+            const currentGuildSettings = getGuildSettings()
             const controlChannelId = currentGuildSettings[player.guildId]?.controlChannelId
             if (channel && textId !== controlChannelId && isTextSendable(channel)) {
                 client.debug(
@@ -179,7 +179,7 @@ export default async (client: BotClient) => {
 
             const textIdStuck = player.textChannelId
             const channelStuck = textIdStuck ? client.channels.cache.get(textIdStuck) : undefined
-            const currentGuildSettingsStuck = getGuildSettings(client)
+            const currentGuildSettingsStuck = getGuildSettings()
             const controlChannelIdStuck =
                 currentGuildSettingsStuck[player.guildId]?.controlChannelId
             if (
@@ -217,7 +217,7 @@ export default async (client: BotClient) => {
 
                 const textIdErr = player.textChannelId
                 const channelErr = textIdErr ? client.channels.cache.get(textIdErr) : undefined
-                const currentGuildSettingsErr = getGuildSettings(client)
+                const currentGuildSettingsErr = getGuildSettings()
                 const controlChannelIdErr =
                     currentGuildSettingsErr[player.guildId]?.controlChannelId
                 const tInfo = track?.info
@@ -307,7 +307,7 @@ export default async (client: BotClient) => {
             // Send message to non-control channel
             const textIdQ = player.textChannelId
             const channelQ = textIdQ ? client.channels.cache.get(textIdQ) : undefined
-            const currentGuildSettingsQ = getGuildSettings(client)
+            const currentGuildSettingsQ = getGuildSettings()
             const controlChannelIdQ = currentGuildSettingsQ[player.guildId]?.controlChannelId
             if (channelQ && textIdQ !== controlChannelIdQ && isTextSendable(channelQ)) {
                 client.debug(
@@ -446,7 +446,7 @@ export default async (client: BotClient) => {
                             const channelRrq = textIdRrq
                                 ? client.channels.cache.get(textIdRrq)
                                 : undefined
-                            const currentGuildSettingsRrq = getGuildSettings(client)
+                            const currentGuildSettingsRrq = getGuildSettings()
                             const controlChannelIdRrq =
                                 currentGuildSettingsRrq[p.guildId]?.controlChannelId
                             if (

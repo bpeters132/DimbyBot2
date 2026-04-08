@@ -197,7 +197,7 @@ export default {
         }
 
         const sub = interaction.options.getSubcommand()
-        const store = getGuildSettings(client)
+        const store = getGuildSettings()
 
         if (sub === "show") {
             const cfg = store[guild.id]?.discordLog
@@ -320,7 +320,7 @@ export default {
                 })
             }
 
-            const latestStore = getGuildSettings(client)
+            const latestStore = getGuildSettings()
             const working = detachGuildRow(latestStore[guild.id])
             const next = detachGuildDiscordLog(working.discordLog)
             const channelId = channel.id

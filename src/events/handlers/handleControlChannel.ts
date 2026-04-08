@@ -272,7 +272,7 @@ export async function updateControlMessage(
     performCleanup = true
 ) {
     client.debug(`[ControlHandler] Attempting to update control message for guild ${guildId}`)
-    const guildSettings = getGuildSettings(client)
+    const guildSettings = getGuildSettings()
     const settings = guildSettings[guildId]
 
     if (!settings || !settings.controlChannelId || !settings.controlMessageId) {
@@ -358,7 +358,7 @@ export async function updateControlMessage(
  * Called once after login; staggered to reduce rate limits.
  */
 export async function refreshAllControlMessages(client: BotClient): Promise<void> {
-    const store = getGuildSettings(client)
+    const store = getGuildSettings()
     const guildIds = Object.keys(store).filter(
         (id) => store[id]?.controlChannelId && store[id]?.controlMessageId
     )

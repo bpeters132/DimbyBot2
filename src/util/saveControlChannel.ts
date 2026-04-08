@@ -95,7 +95,7 @@ export async function initializeGuildSettingsStore(
  * Returns the mutable guild settings map loaded from database at startup.
  * If accessed before initialization, this throws an error.
  */
-export function getGuildSettings(loggerInstance?: Partial<LoggerInterface>): GuildSettingsStore {
+export function getGuildSettings(): GuildSettingsStore {
     if (!guildSettingsInitialized) {
         throw new Error(
             "Guild settings accessed before initialization. Call initializeGuildSettingsStore() first. Check that guildSettingsInitialized is true before calling getGuildSettings."
@@ -117,7 +117,6 @@ export async function saveGuildSettings(
     try {
         const result = await replaceGuildSettingsStoreInDatabase(settings)
         guildSettingsCache = settings
-        guildSettingsInitialized = true
         logger.debug(`[guildSettings] Successfully saved ${result.rowsWritten} rows to database.`)
         return true
     } catch (error: unknown) {
