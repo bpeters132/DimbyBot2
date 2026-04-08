@@ -3,7 +3,7 @@
 # Simple script to manage the development environment
 
 # Ensure we are in the script's directory (project root)
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 
 # Function to display usage
 usage() {
@@ -68,13 +68,17 @@ case $COMMAND in
   exec)
     SERVICE=$1
     shift # Remove service name argument
-    CMD=${@:-sh} # Default to 'sh' if no command provided
+    if [ $# -eq 0 ]; then
+      CMD=(sh)
+    else
+      CMD=("$@")
+    fi
     if [ -z "$SERVICE" ]; then
       echo "Error: Please specify a service to execute command in (e.g., 'bot')."
       exit 1
     fi
-    echo "Executing '$CMD' in service '$SERVICE'..."
-    $DC exec "$SERVICE" $CMD
+    echo "Executing '${CMD[*]}' in service '$SERVICE'..."
+    $DC exec "$SERVICE" "${CMD[@]}"
     ;;
   *)
     usage

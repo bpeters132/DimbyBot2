@@ -96,8 +96,9 @@ export async function initializeGuildSettingsStore(
 }
 
 /**
- * Returns the mutable guild settings map loaded from database at startup.
- * If accessed before initialization, this throws an error.
+ * Returns a cloned snapshot of the guild settings loaded at startup.
+ * This throws until `guildSettingsInitialized` is true, and never exposes a live mutable reference.
+ * The returned value is a clone produced by `cloneGuildSettingsStore(guildSettingsCache)`.
  */
 export function getGuildSettings(): GuildSettingsStore {
     if (!guildSettingsInitialized) {

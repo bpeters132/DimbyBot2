@@ -47,11 +47,10 @@ export async function replaceDownloadMetadataStoreInDatabase(
 
     await prisma.$transaction(async (tx) => {
         const existingRows = await tx.downloadMetadata.findMany({
-            select: { fileName: true },
+            select: { fileName: true, downloadDate: true },
         })
-        const existingFileNames = existingRows.map((row) => row.fileName)
         const fileNameSet = new Set(fileNames)
-        const toDelete = existingFileNames.filter((name) => !fileNameSet.has(name))
+        const toDelete = existingRows.filter((row) => !fileNameSet.has(row.fileName))
 
         for (const fileName of fileNames) {
             const metadata = store[fileName]
@@ -81,11 +80,13 @@ export async function replaceDownloadMetadataStoreInDatabase(
         }
 
         if (toDelete.length > 0) {
+            const deleteGuards = toDelete.map((row) => ({
+                fileName: row.fileName,
+                downloadDate: row.downloadDate,
+            }))
             await tx.downloadMetadata.deleteMany({
                 where: {
-                    fileName: {
-                        in: toDelete,
-                    },
+                    OR: deleteGuards,
                 },
             })
         }
