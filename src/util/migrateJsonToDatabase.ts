@@ -15,8 +15,24 @@ import {
     replaceDownloadMetadataStoreInDatabase,
 } from "../repositories/downloadMetadataRepository.js"
 
-const guildSettingsJsonPath = path.join(process.cwd(), "storage", "guild_settings.json")
-const downloadMetadataJsonPath = path.join(process.cwd(), "downloads", ".metadata.json")
+const __dirname = import.meta.dirname
+
+function resolveJsonPath(moduleRelativePath: string, cwdRelativePath: string): string | null {
+    const moduleBasedPath = path.join(__dirname, "..", "..", ...moduleRelativePath.split("/"))
+    if (fs.existsSync(moduleBasedPath)) {
+        return moduleBasedPath
+    }
+    const cwdBasedPath = path.join(process.cwd(), cwdRelativePath)
+    if (fs.existsSync(cwdBasedPath)) {
+        return cwdBasedPath
+    }
+    return null
+}
+
+const guildSettingsJsonPath =
+    resolveJsonPath("storage/guild_settings.json", "storage/guild_settings.json") ?? ""
+const downloadMetadataJsonPath =
+    resolveJsonPath("downloads/.metadata.json", "downloads/.metadata.json") ?? ""
 
 function getLogger(loggerInstance: Partial<LoggerInterface> | undefined): LoggerInterface {
     if (
@@ -84,7 +100,7 @@ export async function migrateGuildSettings(
         return result
     }
 
-    if (!fs.existsSync(guildSettingsJsonPath)) {
+    if (!guildSettingsJsonPath || !fs.existsSync(guildSettingsJsonPath)) {
         logger.info("[JsonMigration] Skipping guild settings migration: JSON file does not exist.")
         result.skipped = true
         result.reason = "source-file-missing"
@@ -112,27 +128,27 @@ export async function migrateGuildSettings(
             logger.debug(`[JsonMigration] Prepared guild settings entry ${guildId} for migration.`)
         }
 
+        if (result.failedCount > 0) {
+            logger.error(
+                `[JsonMigration] Guild settings validation failed: ${result.failedCount} entries invalid. Aborting migration.`
+            )
+            result.skipped = true
+            result.reason = "validation-failed"
+            return result
+        }
+
         const writeResult = await replaceGuildSettingsStoreInDatabase(validEntries)
         result.migratedCount = writeResult.rowsWritten
 
-        if (result.failedCount === 0) {
-            renameJsonAsMigrated(guildSettingsJsonPath, logger)
-        } else {
-            logger.warn(
-                "[JsonMigration] Guild settings migration had skipped entries; source JSON was not renamed."
-            )
-        }
+        renameJsonAsMigrated(guildSettingsJsonPath, logger)
 
         logger.info(
             `[JsonMigration] Guild settings migration complete. Migrated=${result.migratedCount} Failed=${result.failedCount}`
         )
         return result
     } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error)
         logger.error("[JsonMigration] Guild settings migration failed:", error)
-        result.reason = message
-        result.failedCount = result.failedCount || 1
-        return result
+        throw error
     }
 }
 
@@ -157,7 +173,7 @@ export async function migrateDownloadMetadata(
         return result
     }
 
-    if (!fs.existsSync(downloadMetadataJsonPath)) {
+    if (!downloadMetadataJsonPath || !fs.existsSync(downloadMetadataJsonPath)) {
         logger.info(
             "[JsonMigration] Skipping download metadata migration: JSON file does not exist."
         )
@@ -191,26 +207,26 @@ export async function migrateDownloadMetadata(
             )
         }
 
+        if (result.failedCount > 0) {
+            logger.error(
+                `[JsonMigration] Download metadata validation failed: ${result.failedCount} entries invalid. Aborting migration.`
+            )
+            result.skipped = true
+            result.reason = "validation-failed"
+            return result
+        }
+
         const writeResult = await replaceDownloadMetadataStoreInDatabase(validEntries)
         result.migratedCount = writeResult.rowsWritten
 
-        if (result.failedCount === 0) {
-            renameJsonAsMigrated(downloadMetadataJsonPath, logger)
-        } else {
-            logger.warn(
-                "[JsonMigration] Download metadata migration had skipped entries; source JSON was not renamed."
-            )
-        }
+        renameJsonAsMigrated(downloadMetadataJsonPath, logger)
 
         logger.info(
             `[JsonMigration] Download metadata migration complete. Migrated=${result.migratedCount} Failed=${result.failedCount}`
         )
         return result
     } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error)
         logger.error("[JsonMigration] Download metadata migration failed:", error)
-        result.reason = message
-        result.failedCount = result.failedCount || 1
-        return result
+        throw error
     }
 }

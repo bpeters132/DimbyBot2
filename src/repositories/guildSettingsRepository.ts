@@ -49,23 +49,34 @@ export async function replaceGuildSettingsStoreInDatabase(
     const guildIds = Object.keys(store)
 
     await prisma.$transaction(async (tx) => {
-        await tx.guildSettings.deleteMany()
-        if (guildIds.length === 0) {
-            return
+        for (const guildId of guildIds) {
+            const settings = store[guildId]
+            await tx.guildSettings.upsert({
+                where: { guildId },
+                create: {
+                    guildId,
+                    controlChannelId: settings?.controlChannelId ?? null,
+                    controlMessageId: settings?.controlMessageId ?? null,
+                    downloadsMaxMb:
+                        typeof settings?.downloadsMaxMb === "number" ? settings.downloadsMaxMb : null,
+                    discordLog: (settings?.discordLog as Prisma.InputJsonValue | undefined) ?? null,
+                },
+                update: {
+                    controlChannelId: settings?.controlChannelId ?? null,
+                    controlMessageId: settings?.controlMessageId ?? null,
+                    downloadsMaxMb:
+                        typeof settings?.downloadsMaxMb === "number" ? settings.downloadsMaxMb : null,
+                    discordLog: (settings?.discordLog as Prisma.InputJsonValue | undefined) ?? null,
+                },
+            })
         }
 
-        await tx.guildSettings.createMany({
-            data: guildIds.map((guildId) => ({
-                guildId,
-                controlChannelId: store[guildId]?.controlChannelId ?? null,
-                controlMessageId: store[guildId]?.controlMessageId ?? null,
-                downloadsMaxMb:
-                    typeof store[guildId]?.downloadsMaxMb === "number"
-                        ? store[guildId].downloadsMaxMb
-                        : null,
-                discordLog:
-                    (store[guildId]?.discordLog as Prisma.InputJsonValue | undefined) ?? null,
-            })),
+        await tx.guildSettings.deleteMany({
+            where: {
+                guildId: {
+                    notIn: guildIds.length > 0 ? guildIds : ["__never__"],
+                },
+            },
         })
     })
 

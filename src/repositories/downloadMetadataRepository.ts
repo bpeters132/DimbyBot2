@@ -3,13 +3,13 @@ import type { DownloadFileMetadata, DownloadsMetadataStore } from "../types/inde
 
 function toDownloadMetadataEntry(row: {
     guildId: string | null
-    downloadDate: string | null
+    downloadDate: Date | null
     originalUrl: string | null
     filePath: string | null
 }): DownloadFileMetadata {
     const entry: DownloadFileMetadata = {}
     if (row.guildId) entry.guildId = row.guildId
-    if (row.downloadDate) entry.downloadDate = row.downloadDate
+    if (row.downloadDate) entry.downloadDate = row.downloadDate.toISOString()
     if (row.originalUrl) entry.originalUrl = row.originalUrl
     if (row.filePath) entry.filePath = row.filePath
     return entry
@@ -40,22 +40,37 @@ export async function replaceDownloadMetadataStoreInDatabase(
     const fileNames = Object.keys(store)
 
     await prisma.$transaction(async (tx) => {
-        await tx.downloadMetadata.deleteMany()
-        if (fileNames.length === 0) {
-            return
+        for (const fileName of fileNames) {
+            const metadata = store[fileName]
+            const downloadDate =
+                metadata?.downloadDate === undefined
+                    ? null
+                    : new Date(metadata.downloadDate as string)
+
+            await tx.downloadMetadata.upsert({
+                where: { fileName },
+                create: {
+                    fileName,
+                    guildId: metadata?.guildId ?? null,
+                    downloadDate,
+                    originalUrl: metadata?.originalUrl ?? null,
+                    filePath: metadata?.filePath ?? null,
+                },
+                update: {
+                    guildId: metadata?.guildId ?? null,
+                    downloadDate,
+                    originalUrl: metadata?.originalUrl ?? null,
+                    filePath: metadata?.filePath ?? null,
+                },
+            })
         }
 
-        await tx.downloadMetadata.createMany({
-            data: fileNames.map((fileName) => ({
-                fileName,
-                guildId: store[fileName]?.guildId ?? null,
-                downloadDate:
-                    store[fileName]?.downloadDate === undefined
-                        ? null
-                        : String(store[fileName]?.downloadDate),
-                originalUrl: store[fileName]?.originalUrl ?? null,
-                filePath: store[fileName]?.filePath ?? null,
-            })),
+        await tx.downloadMetadata.deleteMany({
+            where: {
+                fileName: {
+                    notIn: fileNames.length > 0 ? fileNames : ["__never__"],
+                },
+            },
         })
     })
 

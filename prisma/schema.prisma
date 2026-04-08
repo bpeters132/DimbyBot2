@@ -15,9 +15,11 @@ model GuildSettings {
 }
 
 model DownloadMetadata {
-    fileName     String  @id
+    fileName     String    @id
     guildId      String?
-    downloadDate String?
+    downloadDate DateTime?
     originalUrl  String?
     filePath     String?
+
+    @@index([guildId], name: "DownloadMetadata_guildId_idx")
 }

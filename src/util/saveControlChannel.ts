@@ -78,7 +78,7 @@ async function readGuildSettingsFromDatabase(
         return store
     } catch (error: unknown) {
         logger.error(`[guildSettings] Error reading guild settings from database: ${error}`)
-        return {}
+        throw error
     }
 }
 
@@ -86,19 +86,19 @@ async function readGuildSettingsFromDatabase(
 export async function initializeGuildSettingsStore(
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<void> {
-    guildSettingsCache = await readGuildSettingsFromDatabase(loggerInstance)
+    const store = await readGuildSettingsFromDatabase(loggerInstance)
+    guildSettingsCache = store
     guildSettingsInitialized = true
 }
 
 /**
  * Returns the mutable guild settings map loaded from database at startup.
- * If accessed before initialization, this returns an empty object.
+ * If accessed before initialization, this throws an error.
  */
 export function getGuildSettings(loggerInstance?: Partial<LoggerInterface>): GuildSettingsStore {
     if (!guildSettingsInitialized) {
-        const logger = getLogger(loggerInstance)
-        logger.warn(
-            "[guildSettings] getGuildSettings called before initialization; returning current cache."
+        throw new Error(
+            "Guild settings accessed before initialization. Call initializeGuildSettingsStore() first. Check that guildSettingsInitialized is true before calling getGuildSettings."
         )
     }
     return guildSettingsCache

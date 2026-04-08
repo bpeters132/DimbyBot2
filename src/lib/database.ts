@@ -3,9 +3,15 @@ import { PrismaPg } from "@prisma/adapter-pg"
 import { spawn } from "child_process"
 import type { LoggerInterface } from "../types/index.js"
 
-const defaultDatabaseUrl = "postgresql://postgres:postgres@localhost:5432/postgres"
+const databaseUrl = process.env.DATABASE_URL
+if (!databaseUrl || databaseUrl.trim() === "") {
+    throw new Error(
+        "DATABASE_URL environment variable is required but not set. Please configure DATABASE_URL before starting the application."
+    )
+}
+
 const adapter = new PrismaPg({
-    connectionString: process.env.DATABASE_URL ?? defaultDatabaseUrl,
+    connectionString: databaseUrl,
 })
 const prisma = new PrismaClient({ adapter })
 
