@@ -3,13 +3,19 @@ import type { DownloadFileMetadata, DownloadsMetadataStore } from "../types/inde
 
 function toDownloadMetadataEntry(row: {
     guildId: string | null
-    downloadDate: Date | null
+    downloadDate: Date | string | null
     originalUrl: string | null
     filePath: string | null
 }): DownloadFileMetadata {
     const entry: DownloadFileMetadata = {}
     if (row.guildId) entry.guildId = row.guildId
-    if (row.downloadDate) entry.downloadDate = row.downloadDate.toISOString()
+    if (row.downloadDate) {
+        const parsedDate =
+            row.downloadDate instanceof Date ? row.downloadDate : new Date(row.downloadDate)
+        if (Number.isFinite(parsedDate.getTime())) {
+            entry.downloadDate = parsedDate.toISOString()
+        }
+    }
     if (row.originalUrl) entry.originalUrl = row.originalUrl
     if (row.filePath) entry.filePath = row.filePath
     return entry
@@ -40,12 +46,21 @@ export async function replaceDownloadMetadataStoreInDatabase(
     const fileNames = Object.keys(store)
 
     await prisma.$transaction(async (tx) => {
+        const existingRows = await tx.downloadMetadata.findMany({
+            select: { fileName: true },
+        })
+        const existingFileNames = existingRows.map((row) => row.fileName)
+        const fileNameSet = new Set(fileNames)
+        const toDelete = existingFileNames.filter((name) => !fileNameSet.has(name))
+
         for (const fileName of fileNames) {
             const metadata = store[fileName]
+            const parsedDownloadDate =
+                metadata?.downloadDate === undefined ? null : new Date(metadata.downloadDate)
             const downloadDate =
-                metadata?.downloadDate === undefined
-                    ? null
-                    : new Date(metadata.downloadDate)
+                parsedDownloadDate && Number.isFinite(parsedDownloadDate.getTime())
+                    ? parsedDownloadDate.toISOString()
+                    : null
 
             await tx.downloadMetadata.upsert({
                 where: { fileName },
@@ -65,13 +80,15 @@ export async function replaceDownloadMetadataStoreInDatabase(
             })
         }
 
-        await tx.downloadMetadata.deleteMany({
-            where: {
-                fileName: {
-                    notIn: fileNames.length > 0 ? fileNames : ["__never__"],
+        if (toDelete.length > 0) {
+            await tx.downloadMetadata.deleteMany({
+                where: {
+                    fileName: {
+                        in: toDelete,
+                    },
                 },
-            },
-        })
+            })
+        }
     })
 
     return { rowsWritten: fileNames.length }

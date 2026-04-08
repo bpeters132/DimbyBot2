@@ -14,6 +14,10 @@ const storageDir = path.join(__dirname, "..", "..", "storage")
 let guildSettingsCache: GuildSettingsStore = {}
 let guildSettingsInitialized = false
 
+function cloneGuildSettingsStore(store: GuildSettingsStore): GuildSettingsStore {
+    return structuredClone(store)
+}
+
 function getLogger(logger: Partial<LoggerInterface> | undefined): LoggerInterface {
     if (
         logger &&
@@ -87,7 +91,7 @@ export async function initializeGuildSettingsStore(
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<void> {
     const store = await readGuildSettingsFromDatabase(loggerInstance)
-    guildSettingsCache = store
+    guildSettingsCache = cloneGuildSettingsStore(store)
     guildSettingsInitialized = true
 }
 
@@ -101,7 +105,7 @@ export function getGuildSettings(): GuildSettingsStore {
             "Guild settings accessed before initialization. Call initializeGuildSettingsStore() first. Check that guildSettingsInitialized is true before calling getGuildSettings."
         )
     }
-    return guildSettingsCache
+    return cloneGuildSettingsStore(guildSettingsCache)
 }
 
 /**
@@ -116,7 +120,7 @@ export async function saveGuildSettings(
     logger.debug("[guildSettings] Attempting to save settings to database.")
     try {
         const result = await replaceGuildSettingsStoreInDatabase(settings)
-        guildSettingsCache = settings
+        guildSettingsCache = cloneGuildSettingsStore(settings)
         logger.debug(`[guildSettings] Successfully saved ${result.rowsWritten} rows to database.`)
         return true
     } catch (error: unknown) {

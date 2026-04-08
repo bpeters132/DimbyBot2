@@ -163,6 +163,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
     }
 
     if (subcommand === "cleanup") {
+        await interaction.deferReply()
         const removeAll = interaction.options.getBoolean("all") || false
         const days = interaction.options.getInteger("days") || 7
         const cutoffDate = new Date()
@@ -186,7 +187,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             .filter((file) => (removeAll ? true : file.date && file.date < cutoffDate))
 
         if (files.length === 0) {
-            return interaction.reply(
+            return interaction.editReply(
                 removeAll
                     ? "No downloaded files found for this server."
                     : `No files older than ${days} days found for this server.`
@@ -229,7 +230,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             response += `\n\nFailed to delete ${errors.length} files:\n${errors.join("\n")}`
         }
 
-        return interaction.reply({
+        return interaction.editReply({
             content: response,
         })
     }

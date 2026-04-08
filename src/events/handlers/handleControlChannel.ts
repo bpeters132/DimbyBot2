@@ -272,22 +272,23 @@ export async function updateControlMessage(
     performCleanup = true
 ) {
     client.debug(`[ControlHandler] Attempting to update control message for guild ${guildId}`)
-    const guildSettings = getGuildSettings()
-    const settings = guildSettings[guildId]
-
-    if (!settings || !settings.controlChannelId || !settings.controlMessageId) {
-        client.debug(
-            `[ControlHandler] No control channel/message configured for guild ${guildId}, skipping update.`
-        )
-        return
-    }
-    client.debug(
-        `[ControlHandler] Found settings for guild ${guildId}: Channel ${settings.controlChannelId}, Message ${settings.controlMessageId}`
-    )
 
     let controlChannel: GuildTextBasedChannel | null = null
 
     try {
+        const guildSettings = getGuildSettings()
+        const settings = guildSettings[guildId]
+
+        if (!settings || !settings.controlChannelId || !settings.controlMessageId) {
+            client.debug(
+                `[ControlHandler] No control channel/message configured for guild ${guildId}, skipping update.`
+            )
+            return
+        }
+        client.debug(
+            `[ControlHandler] Found settings for guild ${guildId}: Channel ${settings.controlChannelId}, Message ${settings.controlMessageId}`
+        )
+
         ensureStorageDir(client)
         const fetched = await client.channels.fetch(settings.controlChannelId).catch(() => null)
         if (!fetched || !fetched.isTextBased()) {
