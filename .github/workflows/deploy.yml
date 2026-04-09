@@ -70,6 +70,12 @@ jobs:
                   # Dockerfile is multi-stage: yarn install + yarn build (TypeScript → dist/), then runtime yarn install --production + copied dist/
                   docker build -t $IMAGE_BOT -f Dockerfile .
 
+            - name: Verify bot image contains Prisma runtime assets
+              run: |
+                  docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -f /app/dist/index.js"
+                  docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -f /app/prisma/schema.prisma"
+                  docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -d /app/prisma/migrations"
+
             - name: Build lavalink image
               run: |
                   docker build -t $IMAGE_LAVALINK -f Lavalink/Dockerfile ./Lavalink

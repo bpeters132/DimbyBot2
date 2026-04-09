@@ -44,6 +44,7 @@ RUN ln -sf /opt/venv/bin/yt-dlp /usr/bin/yt-dlp
 COPY package.json yarn.lock ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/prisma ./prisma
 
 # Runtime environment (inject via compose/K8s; do not bake secrets into the image):
 #   Required for Lavalink: LAVALINK_HOST, LAVALINK_PORT, LAVALINK_PASSWORD, LAVALINK_NODE_ID, LAVALINK_SECURE
