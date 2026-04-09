@@ -57,7 +57,7 @@ export async function initializeDatabaseConnection(
     logger.info("[Database] Database connection verified.")
 }
 
-/** Runs `prisma migrate deploy` from the project root. */
+/** Runs `prisma migrate deploy` from the project root with an explicit schema path. */
 export async function runPrismaMigrateDeploy(
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<void> {
@@ -65,7 +65,7 @@ export async function runPrismaMigrateDeploy(
     logger.info("[Database] Running Prisma migrations (deploy)...")
 
     const yarnCommand = process.platform === "win32" ? "yarn.cmd" : "yarn"
-    const child = spawn(yarnCommand, ["prisma", "migrate", "deploy"], {
+    const child = spawn(yarnCommand, ["prisma", "migrate", "deploy", "--schema", "prisma/schema.prisma"], {
         cwd: process.cwd(),
         env: process.env,
         stdio: ["ignore", "pipe", "pipe"],
