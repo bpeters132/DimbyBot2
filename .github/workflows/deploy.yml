@@ -75,6 +75,7 @@ jobs:
                   docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -f /app/dist/index.js"
                   docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -f /app/prisma/schema.prisma"
                   docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -d /app/prisma/migrations"
+                  docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -f /app/prisma.config.ts"
 
             - name: Build lavalink image
               run: |
