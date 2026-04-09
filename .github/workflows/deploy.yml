@@ -2,6 +2,9 @@ name: CI/CD
 
 env:
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    REGISTRY: ghcr.io
+    IMAGE_BOT: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:latest
+    IMAGE_LAVALINK: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:latest
 
 permissions:
     contents: read
@@ -21,6 +24,8 @@ on:
 jobs:
     validate-node-lts:
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
         steps:
             - name: Checkout code
               uses: actions/checkout@v6
@@ -52,20 +57,13 @@ jobs:
         permissions:
             contents: read
             packages: write
-        env:
-            REGISTRY: ghcr.io
-            IMAGE_BOT: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:latest
-            IMAGE_LAVALINK: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:latest
         steps:
             - name: Checkout code
               uses: actions/checkout@v6
 
             - name: Log in to GitHub Container Registry
-              uses: docker/login-action@v3
-              with:
-                  registry: ${{ env.REGISTRY }}
-                  username: ${{ github.actor }}
-                  password: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u "${{ github.actor }}" --password-stdin
 
             - name: Build bot image
               run: |
@@ -93,10 +91,6 @@ jobs:
         permissions:
             contents: read
             packages: read
-        env:
-            REGISTRY: ghcr.io
-            IMAGE_BOT: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:latest
-            IMAGE_LAVALINK: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:latest
         steps:
             - name: Checkout code
               uses: actions/checkout@v6
