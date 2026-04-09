@@ -65,11 +65,15 @@ export async function runPrismaMigrateDeploy(
     logger.info("[Database] Running Prisma migrations (deploy)...")
 
     const yarnCommand = process.platform === "win32" ? "yarn.cmd" : "yarn"
-    const child = spawn(yarnCommand, ["prisma", "migrate", "deploy", "--schema", "prisma/schema.prisma"], {
-        cwd: process.cwd(),
-        env: process.env,
-        stdio: ["ignore", "pipe", "pipe"],
-    })
+    const child = spawn(
+        yarnCommand,
+        ["prisma", "migrate", "deploy", "--schema", "prisma/schema.prisma"],
+        {
+            cwd: process.cwd(),
+            env: process.env,
+            stdio: ["ignore", "pipe", "pipe"],
+        }
+    )
 
     let stdout = ""
     let stderr = ""
