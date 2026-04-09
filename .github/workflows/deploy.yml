@@ -16,7 +16,34 @@ on:
                 type: boolean
 
 jobs:
+    validate-node-lts:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v6
+
+            - name: Set up Node.js (latest LTS)
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "lts/*"
+                  cache: "yarn"
+
+            - name: Enable Corepack
+              run: corepack enable
+
+            - name: Install dependencies
+              run: yarn install --frozen-lockfile
+
+            - name: Generate Prisma client
+              run: yarn db:generate
+
+            - name: Validate build inputs
+              run: |
+                  yarn typecheck
+                  yarn lint
+
     build-and-push:
+        needs: validate-node-lts
         if: ${{ github.event_name != 'workflow_dispatch' || !inputs.skip_build }}
         runs-on: ubuntu-latest
         permissions:
@@ -55,8 +82,10 @@ jobs:
                   docker push $IMAGE_LAVALINK
 
     deploy:
-        needs: build-and-push
-        if: always() && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
+        needs:
+            - validate-node-lts
+            - build-and-push
+        if: always() && needs.validate-node-lts.result == 'success' && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
         runs-on: ubuntu-latest
         permissions:
             contents: read

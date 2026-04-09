@@ -24,8 +24,8 @@ RUN yarn install --frozen-lockfile
 
 COPY . .
 RUN yarn build \
-    && rm -rf node_modules \
-    && yarn install --production --frozen-lockfile
+    && yarn install --production --frozen-lockfile \
+    && test -f node_modules/.prisma/client/default.js
 
 # --- runtime image ---
 FROM node:22-alpine3.22
