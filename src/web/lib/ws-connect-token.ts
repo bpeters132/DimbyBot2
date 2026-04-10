@@ -21,7 +21,13 @@ export function parseWsConnectToken(token: string, secret: string): string | nul
     const sig = token.slice(i + 1)
     const expected = createHmac("sha256", secret).update(payload).digest("base64url")
     try {
-        if (sig.length !== expected.length || !timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+        if (
+            sig.length !== expected.length ||
+            !timingSafeEqual(
+                Buffer.from(sig, "base64url"),
+                Buffer.from(expected, "base64url")
+            )
+        ) {
             return null
         }
     } catch {

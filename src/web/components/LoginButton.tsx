@@ -4,10 +4,15 @@ import { authClient } from "@/auth-client"
 
 export function LoginButton() {
     const onSignIn = async () => {
-        await authClient.signIn.social({
-            provider: "discord",
-            callbackURL: "/dashboard",
-        })
+        try {
+            await authClient.signIn.social({
+                provider: "discord",
+                callbackURL: "/dashboard",
+            })
+        } catch (error) {
+            console.error("[LoginButton] Discord sign-in failed", error)
+            window.alert("Sign-in failed. Please try again.")
+        }
     }
 
     return (

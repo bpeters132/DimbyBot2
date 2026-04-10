@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo } from "react"
 import type { PlayerStateResponse } from "@/types/web"
 import {
     type PlayerCommand,
@@ -20,24 +21,29 @@ async function runCommand(
 }
 
 export function usePlayerActions(guildId: string, requesterDiscordUserId: string | undefined) {
-    return {
-        playPause: () => runCommand(guildId, "pause"),
-        stop: () => runCommand(guildId, "stop"),
-        skip: () => runCommand(guildId, "skip"),
-        shuffle: () => runCommand(guildId, "shuffle"),
-        toggleLoop: () => runCommand(guildId, "loop"),
-        toggleAutoplay: () => runCommand(guildId, "autoplay"),
-        seek: (positionMs: number) => runCommand(guildId, "seek", positionMs),
-        addTrack: async (query: string) => {
-            const requesterId = requesterDiscordUserId?.trim()
-            if (!requesterId) {
-                throw new Error("Missing Discord user id for this session. Refresh the page or sign in again.")
-            }
-            const result = await postPlayerPlayAction(guildId, query, requesterId)
-            if (!result.ok) {
-                throw new Error(result.error)
-            }
-            return result.data
-        },
-    }
+    return useMemo(
+        () => ({
+            playPause: () => runCommand(guildId, "pause"),
+            stop: () => runCommand(guildId, "stop"),
+            skip: () => runCommand(guildId, "skip"),
+            shuffle: () => runCommand(guildId, "shuffle"),
+            toggleLoop: () => runCommand(guildId, "loop"),
+            toggleAutoplay: () => runCommand(guildId, "autoplay"),
+            seek: (positionMs: number) => runCommand(guildId, "seek", positionMs),
+            addTrack: async (query: string) => {
+                const requesterId = requesterDiscordUserId?.trim()
+                if (!requesterId) {
+                    throw new Error(
+                        "Missing Discord user id for this session. Refresh the page or sign in again."
+                    )
+                }
+                const result = await postPlayerPlayAction(guildId, query, requesterId)
+                if (!result.ok) {
+                    throw new Error(result.error)
+                }
+                return result.data
+            },
+        }),
+        [guildId, requesterDiscordUserId]
+    )
 }

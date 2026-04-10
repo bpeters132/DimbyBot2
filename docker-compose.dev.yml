@@ -7,7 +7,7 @@ services:
             dockerfile: Dockerfile.dev # Use the development Dockerfile
             args:
                 - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:3000}
-                - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-f4b8e3c1d92a7b60f15e8c4379ab2d56e0c4f1a7b3d9e8c6a1f2b4d6e8c0a3f5}
+                - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
                 - CLIENT_ID=${CLIENT_ID:-000000000000000000}
                 - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-build-time-discord-client-secret}
         image: dimbybot-dev # Optional: Give the dev image a distinct name

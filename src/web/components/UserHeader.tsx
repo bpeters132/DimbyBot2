@@ -1,22 +1,30 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { authClient } from "@/auth-client"
 import { ModeToggle } from "@/components/ModeToggle"
 
 async function signOutAndGoHome() {
-    await authClient.signOut({
-        fetchOptions: {
-            onSuccess: () => {
-                // Full navigation so RSC/layout re-runs with cleared cookies (client-only session clear leaves /dashboard mounted).
-                window.location.assign("/")
+    try {
+        await authClient.signOut({
+            fetchOptions: {
+                onSuccess: () => {
+                    // Full navigation so RSC/layout re-runs with cleared cookies (client-only session clear leaves /dashboard mounted).
+                    window.location.assign("/")
+                },
             },
-        },
-    })
+        })
+        return true
+    } catch (error) {
+        console.error("[UserHeader] sign out failed", error)
+        return false
+    }
 }
 
 export function UserHeader() {
     const { data: session } = authClient.useSession()
+    const [signOutError, setSignOutError] = useState<string | null>(null)
 
     return (
         <div className="flex items-center justify-between">
@@ -38,11 +46,20 @@ export function UserHeader() {
                 ) : null}
                 <button
                     type="button"
-                    onClick={() => void signOutAndGoHome()}
+                    onClick={() => {
+                        void (async () => {
+                            setSignOutError(null)
+                            const ok = await signOutAndGoHome()
+                            if (!ok) {
+                                setSignOutError("Log out failed. Please try again.")
+                            }
+                        })()
+                    }}
                     className="rounded border px-3 py-1 text-sm hover:bg-accent hover:text-accent-foreground"
                 >
                     Log out
                 </button>
+                {signOutError ? <span className="text-xs text-destructive">{signOutError}</span> : null}
             </div>
         </div>
     )

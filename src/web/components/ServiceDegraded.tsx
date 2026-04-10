@@ -8,13 +8,21 @@ type ServiceDegradedProps = {
 
 /** Shown when auth/session or another dependency fails instead of erroring the whole segment. */
 export function ServiceDegraded({ title, description, detail }: ServiceDegradedProps) {
+    const sanitizedDetail = detail
+        ?.replace(/[A-Z]:\\[^\s]+/g, "[path]")
+        .replace(/\/[^\s]+/g, "[path]")
+        .replace(/\b[A-Z_]*ERROR_[A-Z_0-9]+\b/g, "[error-code]")
+        .slice(0, 300)
+    const detailForRender =
+        process.env.NODE_ENV === "production" ? "Technical details hidden." : sanitizedDetail
+
     return (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-6 text-left">
             <h2 className="text-lg font-semibold text-foreground">{title}</h2>
             <p className="mt-2 text-sm text-muted-foreground">{description}</p>
-            {detail ? (
+            {detailForRender ? (
                 <pre className="mt-4 max-h-40 overflow-auto rounded bg-muted/50 p-3 text-xs text-muted-foreground">
-                    {detail}
+                    {detailForRender}
                 </pre>
             ) : null}
             <div className="mt-6 flex flex-wrap gap-3">

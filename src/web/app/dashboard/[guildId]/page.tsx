@@ -19,11 +19,14 @@ export default async function GuildPage({ params }: GuildPageProps) {
             : undefined
     const headerList = await headers()
     const sessionHeaders = new Headers()
-    headerList.forEach((value, key) => {
-        sessionHeaders.append(key, value)
-    })
+    for (const headerName of ["cookie", "authorization"] as const) {
+        const value = headerList.get(headerName)
+        if (value) {
+            sessionHeaders.append(headerName, value)
+        }
+    }
     const discordUserId = betterAuthUserId
-        ? ((await resolveDiscordUserSnowflake(betterAuthUserId, sessionHeaders)) ?? undefined)
+        ? (await resolveDiscordUserSnowflake(betterAuthUserId, sessionHeaders)) || undefined
         : undefined
 
     const permResult = await getGuildDashboardSnapshotAction(guildId)

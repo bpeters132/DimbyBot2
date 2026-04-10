@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Optional build-time placeholders (Better Auth loads at runtime from real env in compose).
 ARG BETTER_AUTH_URL=http://localhost:3000
-ARG BETTER_AUTH_SECRET=f4b8e3c1d92a7b60f15e8c4379ab2d56e0c4f1a7b3d9e8c6a1f2b4d6e8c0a3f5
+ARG BETTER_AUTH_SECRET=fake-better-auth-secret
 ARG CLIENT_ID=000000000000000000
 ARG DISCORD_CLIENT_SECRET=build-time-discord-client-secret
 ENV BETTER_AUTH_URL=${BETTER_AUTH_URL}

@@ -2,6 +2,15 @@ import type BotClient from "../../lib/BotClient.js"
 
 let botClient: BotClient | null = null
 
+export class BotClientNotInitializedError extends Error {
+    code = "BOT_CLIENT_NOT_INITIALIZED"
+
+    constructor() {
+        super("Bot client is not initialized yet.")
+        this.name = "BotClientNotInitializedError"
+    }
+}
+
 /** Stores the process-wide bot client for web API/websocket access. */
 export function setBotClient(client: BotClient): void {
     botClient = client
@@ -15,7 +24,7 @@ export function tryGetBotClient(): BotClient | null {
 /** Returns the initialized bot client instance, or throws if not started yet. */
 export function getBotClient(): BotClient {
     if (!botClient) {
-        throw new Error("Bot client is not initialized yet.")
+        throw new BotClientNotInitializedError()
     }
     return botClient
 }

@@ -8,6 +8,7 @@
 import type { Message, MessageCreateOptions, MessagePayload } from "discord.js"
 import type {
     Player,
+    PlayerJson,
     Track,
     TrackEndEvent,
     TrackExceptionEvent,
@@ -508,14 +509,9 @@ export default async (client: BotClient) => {
                 `[LavaMgrEvents] Player suppress state changed for Guild: ${player.guildId}, Suppressed: ${suppress}`
             )
         })
-        .on("playerUpdate", (oldPlayerJson: unknown, newPlayer: Player) => {
-            const oldPaused =
-                typeof oldPlayerJson === "object" &&
-                oldPlayerJson !== null &&
-                "paused" in oldPlayerJson
-                    ? Boolean((oldPlayerJson as { paused?: unknown }).paused)
-                    : null
-            if (oldPaused !== null && oldPaused !== newPlayer.paused) {
+        .on("playerUpdate", (oldPlayerJson: PlayerJson, newPlayer: Player) => {
+            const oldPaused = Boolean(oldPlayerJson.paused)
+            if (oldPaused !== newPlayer.paused) {
                 playerBroadcaster.broadcastPlayerEvent(
                     newPlayer.guildId,
                     newPlayer,

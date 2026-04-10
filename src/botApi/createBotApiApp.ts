@@ -5,6 +5,7 @@ import { playerGET, playerPOST } from "./handlers/player.js"
 import { playerPlayPOST } from "./handlers/playerPlay.js"
 import { queueDELETE, queueGET, queuePOST } from "./handlers/queue.js"
 import { queueIndexDELETE, queueIndexPATCH } from "./handlers/queueIndex.js"
+import { BotClientNotInitializedError } from "../web/lib/botClient.js"
 
 /** Same env as Next `bot-api-verbose.ts`: log each `/api/guilds/*` request when enabled. */
 export function isBotApiRequestVerbose(): boolean {
@@ -147,7 +148,25 @@ export function createBotApiApp(): express.Express {
         ) => {
             void next
             console.error("[botApi]", err)
-            if (err instanceof Error && err.message.includes("Bot client is not initialized")) {
+            const parseError =
+                err instanceof SyntaxError &&
+                typeof err === "object" &&
+                err !== null &&
+                "status" in err &&
+                "type" in err &&
+                (err as { status?: unknown; type?: unknown }).status === 400 &&
+                (err as { type?: unknown }).type === "entity.parse.failed"
+            if (parseError) {
+                res.status(400).json({
+                    ok: false,
+                    error: {
+                        error: "Malformed JSON",
+                        details: (err as Error).message,
+                    },
+                })
+                return
+            }
+            if (err instanceof BotClientNotInitializedError) {
                 res.status(503).json({
                     ok: false,
                     error: {

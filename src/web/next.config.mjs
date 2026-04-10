@@ -14,6 +14,10 @@ const nextConfig = {
             ".mjs": [".mts", ".mjs"],
             ".cjs": [".cts", ".cjs"],
         }
+        config.resolve.alias = {
+            ...(config.resolve.alias ?? {}),
+            "zlib-sync": false,
+        }
         return config
     },
     typescript: {
@@ -21,20 +25,6 @@ const nextConfig = {
     },
     turbopack: {
         root: path.resolve(import.meta.dirname),
-    },
-    async rewrites() {
-        const apiProxyTarget =
-            process.env.API_PROXY_TARGET ||
-            (process.env.NODE_ENV === "development" ? "http://localhost:3001" : "")
-        if (!apiProxyTarget) {
-            return []
-        }
-        return [
-            {
-                source: "/api/guilds/:path*",
-                destination: `${apiProxyTarget}/api/guilds/:path*`,
-            },
-        ]
     },
 }
 

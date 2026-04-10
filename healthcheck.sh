@@ -5,8 +5,8 @@
 set -e
 
 if [ "${WEB_ENABLED:-false}" = "true" ]; then
-  PORT="${WEB_PORT:-3000}"
-  if wget -qO- "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
+  PORT="${WEB_PORT:-3001}"
+  if wget --timeout=5 --tries=1 -qO- "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
     exit 0
   fi
   echo "healthcheck: /health not reachable on port ${PORT}" >&2

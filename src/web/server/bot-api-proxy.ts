@@ -57,8 +57,11 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
         })
     }
 
+    const controller = new AbortController()
+    const timeoutMs = 4000
+    const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs)
     try {
-        const upstream = await fetch(targetUrl, init)
+        const upstream = await fetch(targetUrl, { ...init, signal: controller.signal })
         const contentType = upstream.headers.get("content-type") || "application/json"
         const body = await upstream.arrayBuffer()
         if (isBotApiVerbose()) {
@@ -77,22 +80,29 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
             headers: { "content-type": contentType },
         })
     } catch (e) {
+        const isAbort =
+            e instanceof DOMException
+                ? e.name === "AbortError"
+                : e instanceof Error && e.name === "AbortError"
         const message = e instanceof Error ? e.message : "Fetch failed"
         logBotApiVerbose("proxyBotApi ✖ fetch threw", {
             method,
             targetUrl,
             ms: Date.now() - started,
             error: message,
+            timeout: isAbort,
         })
         return NextResponse.json(
             {
                 ok: false,
                 error: {
-                    error: "Bot API unreachable",
-                    details: message,
+                    error: isAbort ? "Bot API timeout" : "Bot API unreachable",
+                    details: isAbort ? "Upstream bot API request timed out." : message,
                 },
             },
-            { status: 502 }
+            { status: isAbort ? 504 : 502 }
         )
+    } finally {
+        clearTimeout(timeoutHandle)
     }
 }
