@@ -162,6 +162,19 @@ async function run(): Promise<void> {
             }
         })
 
+        client.on("guildMemberUpdate", (_oldMember, newMember) => {
+            invalidatePermissionCache(newMember.guild.id, newMember.id)
+        })
+        client.on("guildMemberRemove", (member) => {
+            invalidatePermissionCache(member.guild.id, member.id)
+        })
+        client.on("roleUpdate", (_oldRole, newRole) => {
+            invalidatePermissionCache(newRole.guild.id)
+        })
+        client.on("roleDelete", (role) => {
+            invalidatePermissionCache(role.guild.id)
+        })
+
         await new Promise<void>((resolve, reject) => {
             server?.once("error", reject)
             server?.listen(webPort, () => resolve())
@@ -171,7 +184,6 @@ async function run(): Promise<void> {
         logger.error("Fatal error during application startup:", error)
         process.exit(1)
     }
-
 }
 
 void run()

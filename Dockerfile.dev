@@ -14,13 +14,14 @@ ENV CLIENT_ID=${CLIENT_ID}
 # Use pipx to install yt-dlp to avoid PEP 668 issues
 RUN apk add --no-cache python3 py3-pip ffmpeg build-base autoconf automake libtool g++ pipx su-exec wget \
     && pipx install yt-dlp \
-    && if [ -f /root/.local/bin/yt-dlp ]; then ln -sf /root/.local/bin/yt-dlp /usr/local/bin/yt-dlp; fi \
-    && if ! command -v yt-dlp >/dev/null 2>&1; then echo "yt-dlp not found after pipx install"; exit 1; fi \
+    && YTDLP_BIN="$(command -v yt-dlp 2>/dev/null || true)" \
+    && if [ -z "$YTDLP_BIN" ]; then echo "yt-dlp not found in PATH after pipx install"; exit 1; fi \
+    && ln -sf "$YTDLP_BIN" /usr/local/bin/yt-dlp \
     && yt-dlp --version
 
 # Copy package files and install ALL dependencies (including dev)
 COPY package.json yarn.lock ./
-RUN yarn install
+RUN yarn install && yarn cache clean --all
 
 # Copy the rest of the application code (will be overridden by mounts in dev)
 COPY . .

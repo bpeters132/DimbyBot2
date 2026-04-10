@@ -77,6 +77,15 @@ function asHeaders(headers: Headers | Record<string, string>): Headers {
     return new Headers(headers)
 }
 
+/** Permissions that mutate playback, queue, or guild settings — require bot-backed resolution, not OAuth-only. */
+const WRITE_DASHBOARD_PERMISSIONS: WebPermission[] = [
+    WebPermission.CONTROL_PLAYBACK,
+    WebPermission.MANAGE_QUEUE,
+    WebPermission.MANAGE_GUILD_SETTINGS,
+    WebPermission.MANAGE_MESSAGES,
+    WebPermission.DEVELOPER_ACCESS,
+]
+
 /**
  * Resolves the authenticated Better Auth session from request headers.
  */
@@ -84,21 +93,31 @@ export async function getAuthenticatedSession(
     headers: Headers | Record<string, string>
 ): Promise<SessionGuardResult> {
     const resolvedHeaders = asHeaders(headers)
-    const session = (await auth.api.getSession({
-        headers: resolvedHeaders,
-    })) as AuthenticatedSession | null
+    try {
+        const session = (await auth.api.getSession({
+            headers: resolvedHeaders,
+        })) as AuthenticatedSession | null
 
-    if (!session?.user?.id) {
+        if (!session?.user?.id) {
+            return {
+                ok: false,
+                status: 401,
+                error: "Unauthorized",
+            }
+        }
+
+        return {
+            ok: true,
+            session,
+        }
+    } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        console.error("[api-auth] getSession failed:", msg)
         return {
             ok: false,
             status: 401,
             error: "Unauthorized",
         }
-    }
-
-    return {
-        ok: true,
-        session,
     }
 }
 
@@ -113,49 +132,61 @@ export async function verifyGuildAccess(
     headers: Headers | Record<string, string>,
     discordUserId: string
 ): Promise<GuildAccessResult> {
-    async function verifyMembershipViaOAuth(): Promise<GuildAccessResult> {
-        const accessTokenResult = (await auth.api.getAccessToken({
-            body: { providerId: "discord" },
-            headers: asHeaders(headers),
-        })) as { accessToken?: string } | null
+    try {
+        async function verifyMembershipViaOAuth(): Promise<GuildAccessResult> {
+            try {
+                const accessTokenResult = (await auth.api.getAccessToken({
+                    body: { providerId: "discord" },
+                    headers: asHeaders(headers),
+                })) as { accessToken?: string } | null
 
-        const accessToken = accessTokenResult?.accessToken
-        if (!accessToken) {
-            return { ok: false }
+                const accessToken = accessTokenResult?.accessToken
+                if (!accessToken) {
+                    return { ok: false }
+                }
+
+                const discordGuilds = await fetchDiscordUserGuilds(accessToken)
+                if (!discordGuilds.ok) {
+                    return { ok: false }
+                }
+
+                if (discordGuilds.guilds.some((guildEntry) => guildEntry.id === guildId)) {
+                    return { ok: true, memberResolved: false }
+                }
+
+                return { ok: false }
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e)
+                console.error("[api-auth] verifyMembershipViaOAuth failed:", msg)
+                return { ok: false }
+            }
         }
 
-        const discordGuilds = await fetchDiscordUserGuilds(accessToken)
-        if (!discordGuilds.ok) {
-            return { ok: false }
+        const client = tryGetBotClient()
+        if (!client) {
+            return verifyMembershipViaOAuth()
         }
 
-        if (discordGuilds.guilds.some((guildEntry) => guildEntry.id === guildId)) {
+        const guild = client.guilds.cache.get(guildId) as import("discord.js").Guild | undefined
+        if (!guild) {
+            return verifyMembershipViaOAuth()
+        }
+
+        if (guild.ownerId === discordUserId) {
             return { ok: true, memberResolved: false }
         }
 
+        const member = await resolveGuildMemberForPermissions(guild, discordUserId)
+        if (member) {
+            return { ok: true, memberResolved: true }
+        }
+
+        return verifyMembershipViaOAuth()
+    } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        console.error("[api-auth] verifyGuildAccess failed:", msg)
         return { ok: false }
     }
-
-    const client = tryGetBotClient()
-    if (!client) {
-        return verifyMembershipViaOAuth()
-    }
-
-    const guild = client.guilds.cache.get(guildId) as import("discord.js").Guild | undefined
-    if (!guild) {
-        return verifyMembershipViaOAuth()
-    }
-
-    if (guild.ownerId === discordUserId) {
-        return { ok: true, memberResolved: false }
-    }
-
-    const member = await resolveGuildMemberForPermissions(guild, discordUserId)
-    if (member) {
-        return { ok: true, memberResolved: true }
-    }
-
-    return verifyMembershipViaOAuth()
 }
 
 /**
@@ -231,19 +262,10 @@ export async function getGuildDashboardPermissionSnapshot(
     const botClient = tryGetBotClient()
     if (!botClient) {
         /**
-         * Next.js-only dev (or any process without `setBotClient`): RSC cannot call
-         * `resolveUserPermissions`, but the browser still talks to the bot API for player state.
-         *
-         * **Important:** `ctx.memberResolved === false` is normal for **server owners** (see
-         * `verifyGuildAccess`) and for OAuth-only membership — it does *not* mean “no permissions.”
-         * Always put the default member web tier on `primaryPermissions` here so `dashboardHasWebPermission`
-         * sees VIEW / CONTROL / MANAGE_QUEUE; the bot HTTP API still enforces real roles.
+         * Without `setBotClient`, the server cannot resolve Discord roles or voice state. Expose
+         * read-only UI hints; the bot HTTP API still enforces mutations.
          */
-        const defaultMemberWebPerms: WebPermission[] = [
-            WebPermission.VIEW_PLAYER,
-            WebPermission.CONTROL_PLAYBACK,
-            WebPermission.MANAGE_QUEUE,
-        ]
+        const defaultMemberWebPerms: WebPermission[] = [WebPermission.VIEW_PLAYER]
         return {
             ok: true,
             snapshot: {
@@ -293,7 +315,11 @@ export async function requirePermissions(
         ctx.memberResolved === false
     ) {
         const fallback = resolveOauthGuildPermissionFallback(botClient, guildId, ctx.discordUserId)
-        if (hasRequiredPermissions(fallback.permissions, requiredPerms)) {
+        const needsWrite = requiredPerms.some((p) => WRITE_DASHBOARD_PERMISSIONS.includes(p))
+        if (
+            (!needsWrite || botClient) &&
+            hasRequiredPermissions(fallback.permissions, requiredPerms)
+        ) {
             permissionResolution = fallback
         }
     }

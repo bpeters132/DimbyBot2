@@ -35,6 +35,10 @@ function isPlayer(value: unknown): value is Player {
 }
 
 export function toQueueTrackSummary(track: Track | UnresolvedTrack): QueueTrackSummary {
+    const encoded =
+        typeof (track as { encoded?: unknown }).encoded === "string"
+            ? (track as { encoded: string }).encoded
+            : null
     return {
         title: track.info.title,
         uri: track.info.uri ?? null,
@@ -44,6 +48,7 @@ export function toQueueTrackSummary(track: Track | UnresolvedTrack): QueueTrackS
         author: track.info.author?.trim() || null,
         sourceName: track.info.sourceName ?? null,
         requesterId: requesterId(track),
+        encoded,
     }
 }
 

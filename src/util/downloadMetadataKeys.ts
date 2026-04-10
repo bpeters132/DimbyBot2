@@ -25,7 +25,7 @@ export function parseDownloadMetadataStoreKey(key: string): {
 export function effectiveDownloadMetadataGuildId(
     storeKey: string,
     meta: { guildId?: string } | undefined
-): string {
+): string | null {
     const parsed = parseDownloadMetadataStoreKey(storeKey)
     if (parsed.guildId !== null && parsed.guildId.length > 0) {
         return parsed.guildId
@@ -34,7 +34,7 @@ export function effectiveDownloadMetadataGuildId(
     if (fromMeta) {
         return fromMeta
     }
-    return ""
+    return null
 }
 
 /** Whether a `.wav` file in the flat downloads directory is associated with the guild in metadata. */
@@ -48,11 +48,12 @@ export function downloadMetadataFileBelongsToGuild(
         return true
     }
     const legacy = metadata[fileName]
+    // Temporary migration fallback: legacy JSON keys were fileName-only with optional guildId.
+    // Matching undefined/"" lets old rows be attributed during one-time migration; remove once all
+    // stores use composite keys so we never treat cross-guild legacy rows as belonging to "any" guild.
     return Boolean(
         legacy &&
-            (legacy.guildId === guildId ||
-                legacy.guildId === undefined ||
-                legacy.guildId === "")
+        (legacy.guildId === guildId || legacy.guildId === undefined || legacy.guildId === "")
     )
 }
 
@@ -85,9 +86,7 @@ export function downloadMetadataKeysForFile(
         const legacy = metadata[fileName] as { guildId?: string } | undefined
         if (
             legacy &&
-            (legacy.guildId === guildId ||
-                legacy.guildId === undefined ||
-                legacy.guildId === "")
+            (legacy.guildId === guildId || legacy.guildId === undefined || legacy.guildId === "")
         ) {
             keys.push(fileName)
         }

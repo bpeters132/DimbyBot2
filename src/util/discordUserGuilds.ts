@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto"
+
 /** Identifies this app to Discord REST (recommended for debugging; not the bot gateway user-agent). */
 const DISCORD_USER_API_UA = "DimbyBotDashboard/1.0 (OAuth user token)"
 
@@ -18,8 +20,22 @@ export type FetchUserGuildsResult =
 
 type SuccessCacheEntry = { expiresAt: number; guilds: DiscordUserGuild[] }
 
+/** Hash OAuth tokens for map keys — avoids retaining raw secrets in memory. */
+function accessTokenCacheKey(accessToken: string): string {
+    return createHash("sha256").update(accessToken, "utf8").digest("hex")
+}
+
+const MAX_GUILD_LIST_CACHE_ENTRIES = 500
+
 const successCache = new Map<string, SuccessCacheEntry>()
 const inflight = new Map<string, Promise<FetchUserGuildsResult>>()
+
+function evictOldestCacheEntry(): void {
+    const first = successCache.keys().next().value as string | undefined
+    if (first !== undefined) {
+        successCache.delete(first)
+    }
+}
 
 const SUCCESS_CACHE_SWEEP_MS = 60_000
 const sweepInterval = setInterval(() => {
@@ -50,17 +66,21 @@ function delay(ms: number): Promise<void> {
 }
 
 function readSuccessCache(accessToken: string): DiscordUserGuild[] | null {
-    const entry = successCache.get(accessToken)
+    const entry = successCache.get(accessTokenCacheKey(accessToken))
     if (!entry) return null
     if (Date.now() > entry.expiresAt) {
-        successCache.delete(accessToken)
+        successCache.delete(accessTokenCacheKey(accessToken))
         return null
     }
     return entry.guilds
 }
 
 function writeSuccessCache(accessToken: string, guilds: DiscordUserGuild[]): void {
-    successCache.set(accessToken, {
+    const key = accessTokenCacheKey(accessToken)
+    while (successCache.size >= MAX_GUILD_LIST_CACHE_ENTRIES && !successCache.has(key)) {
+        evictOldestCacheEntry()
+    }
+    successCache.set(key, {
         expiresAt: Date.now() + GUILD_LIST_SUCCESS_CACHE_TTL_MS,
         guilds,
     })
@@ -186,7 +206,8 @@ export async function fetchDiscordUserGuilds(accessToken: string): Promise<Fetch
         return { ok: true, guilds: cached }
     }
 
-    const existing = inflight.get(accessToken)
+    const cacheKey = accessTokenCacheKey(accessToken)
+    const existing = inflight.get(cacheKey)
     if (existing) {
         return existing
     }
@@ -198,9 +219,9 @@ export async function fetchDiscordUserGuilds(accessToken: string): Promise<Fetch
         }
         return result
     })().finally(() => {
-        inflight.delete(accessToken)
+        inflight.delete(cacheKey)
     })
 
-    inflight.set(accessToken, run)
+    inflight.set(cacheKey, run)
     return run
 }

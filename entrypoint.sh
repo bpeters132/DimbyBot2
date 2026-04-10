@@ -85,27 +85,31 @@ export { nodes };
 EOF
 echo "Bot Entrypoint: lavaNodesConfig.js generated successfully."
 
-# Named volumes (e.g. dimbybot-storage) are often root-owned; the bot runs as `node` and must write guild_settings.json.
-mkdir -p /app/storage
-chown -R node:node /app/storage 2>/dev/null || true
-
-# Dev bind mounts + anonymous /app/node_modules volumes can leave Prisma client artifacts root-owned.
-# `predev` runs `prisma generate`, which needs write access to these directories.
-mkdir -p /app/node_modules/.prisma /app/node_modules/@prisma
-chown -R node:node /app/node_modules/.prisma /app/node_modules/@prisma 2>/dev/null || true
-
 # ==============================================================================
 # Start the Bot Application
 # ==============================================================================
-# The 'exec' command replaces the current shell process with the 'yarn start' process.
-# This ensures that 'yarn start' becomes the main process (PID 1) in the container,
-# which is important for signal handling (like stopping the container).
-# su-exec drops from root (entrypoint) to `node` after fixing storage permissions.
+# When the container user is root (e.g. one-off `docker run --user 0`), fix volume ownership
+# then drop to `node`. Default image user is `node` (see Dockerfile) — then chown is skipped.
+# The 'exec' replaces this shell so the bot becomes PID 1 for signal handling.
 
+if [ "$(id -u)" -eq 0 ]; then
+  mkdir -p /app/storage
+  chown -R node:node /app/storage 2>/dev/null || true
+  mkdir -p /app/node_modules/.prisma /app/node_modules/@prisma
+  chown -R node:node /app/node_modules/.prisma /app/node_modules/@prisma 2>/dev/null || true
+  if [ "$#" -gt 0 ]; then
+    echo "Bot Entrypoint: Executing '$*' as node..."
+    exec su-exec node "$@"
+  fi
+  echo "Bot Entrypoint: Executing 'yarn start' as node..."
+  exec su-exec node yarn start
+fi
+
+mkdir -p /app/storage /app/node_modules/.prisma /app/node_modules/@prisma
 if [ "$#" -gt 0 ]; then
   echo "Bot Entrypoint: Executing '$*'..."
-  exec su-exec node "$@"
+  exec "$@"
 fi
 
 echo "Bot Entrypoint: Executing 'yarn start'..."
-exec su-exec node yarn start
+exec yarn start

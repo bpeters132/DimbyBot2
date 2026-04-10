@@ -23,7 +23,11 @@ async function parseGuildListBotResponse(res: Response): Promise<GuildListAction
         }
     }
 
-    if (!payload || typeof payload !== "object" || typeof (payload as { ok?: unknown }).ok !== "boolean") {
+    if (
+        !payload ||
+        typeof payload !== "object" ||
+        typeof (payload as { ok?: unknown }).ok !== "boolean"
+    ) {
         return {
             ok: false,
             error: "Bot API returned an unexpected response shape.",
@@ -34,7 +38,9 @@ async function parseGuildListBotResponse(res: Response): Promise<GuildListAction
 
     if (!res.ok || typedPayload.ok === false) {
         const errorPayload =
-            typedPayload.ok === false && typedPayload.error && typeof typedPayload.error === "object"
+            typedPayload.ok === false &&
+            typedPayload.error &&
+            typeof typedPayload.error === "object"
                 ? typedPayload.error
                 : null
         const baseError =
@@ -42,10 +48,19 @@ async function parseGuildListBotResponse(res: Response): Promise<GuildListAction
                 ? errorPayload.error
                 : "Failed to load guilds."
         const details =
-            errorPayload && typeof errorPayload.details === "string" ? errorPayload.details : undefined
+            errorPayload && typeof errorPayload.details === "string"
+                ? errorPayload.details
+                : undefined
         const msg =
             typedPayload.ok === false ? [baseError, details].filter(Boolean).join(" — ") : baseError
         return { ok: false, error: msg }
+    }
+
+    if (typedPayload.data === undefined || typedPayload.data === null) {
+        return {
+            ok: false,
+            error: "Bot API returned success without guild list data.",
+        }
     }
 
     return { ok: true, data: typedPayload.data }

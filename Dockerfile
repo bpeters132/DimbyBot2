@@ -74,7 +74,9 @@ RUN apk add --no-cache dos2unix \
     && apk del dos2unix \
     && chown -R node:node /app
 
-# Run as root so entrypoint can chown the mounted storage volume, then drop to `node` via su-exec.
+# Default non-root; entrypoint still supports `docker run --user 0` for one-time volume chown + su-exec.
+USER node
+
 ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
 
 # When WEB_ENABLED=true, healthcheck.sh probes GET /health on WEB_PORT.

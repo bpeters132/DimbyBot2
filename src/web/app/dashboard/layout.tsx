@@ -28,7 +28,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
                     <ServiceDegraded
                         title="Dashboard is temporarily unavailable"
                         description="We could not load your session. Usually this means the database is not running or DATABASE_URL is wrong. Fix the connection, then refresh this page."
-                        detail={sessionResult.message}
+                        detail="Please try again later or contact support if this persists."
                     />
                 </main>
             </div>

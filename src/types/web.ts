@@ -5,6 +5,14 @@ export type {
     ApiSuccessPayload,
 } from "./apiPayloads.js"
 
+/** Response shape for `GET /api/status` (database + bot HTTP probes). */
+export interface StatusPayload {
+    ok: boolean
+    checkedAt: string
+    database: { ok: boolean; message?: string }
+    botApi: { ok: boolean; message?: string }
+}
+
 export interface GuildListItem {
     id: string
     name: string
@@ -16,6 +24,21 @@ export interface GuildListResponse {
     guilds: GuildListItem[]
     botInviteUrl?: string
 }
+
+/**
+ * Serialized guild permission state for the dashboard UI (mirrors bot API checks, including OAuth
+ * fallback when the bot has not resolved a {@link GuildMember} yet).
+ */
+export interface GuildDashboardPermissionSnapshot {
+    memberResolved: boolean
+    primaryPermissions: string[]
+    oauthPermissions: string[]
+}
+
+/** Result of loading {@link GuildDashboardPermissionSnapshot} in a server action or RSC. */
+export type GuildDashboardSnapshotResult =
+    | { ok: false; status: number; error: string; details?: string }
+    | { ok: true; snapshot: GuildDashboardPermissionSnapshot }
 
 export interface PlayerTrackSummary {
     title: string
@@ -29,6 +52,8 @@ export interface PlayerTrackSummary {
 export interface QueueTrackSummary extends PlayerTrackSummary {
     author: string | null
     sourceName: string | null
+    /** Lavalink track identifier when present (stable list keys for the dashboard). */
+    encoded?: string | null
 }
 
 export interface PlayerStateResponse {
@@ -41,7 +66,9 @@ export interface PlayerStateResponse {
     volume: number
     queueCount: number
     inVoiceWithBot: boolean
+    /** Bot is connected to a voice channel in this guild (Lavalink or Discord.js). */
     botInVoiceChannel: boolean
+    /** User may add/play-from-search when in a VC (any if bot is not in voice; same VC if bot is). */
     canQueueTracks: boolean
     currentTrack: PlayerTrackSummary | null
 }

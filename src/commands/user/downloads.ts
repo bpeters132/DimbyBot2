@@ -216,13 +216,12 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
             for (const file of files) {
                 try {
-                    if (!fs.existsSync(file.path)) {
-                        continue
+                    if (fs.existsSync(file.path)) {
+                        const stats = fs.statSync(file.path)
+                        fs.unlinkSync(file.path)
+                        totalSize += stats.size
+                        deletedCount++
                     }
-                    const stats = fs.statSync(file.path)
-                    fs.unlinkSync(file.path)
-                    totalSize += stats.size
-                    deletedCount++
                     for (const metaKey of downloadMetadataKeysForFile(
                         metadata,
                         file.name,

@@ -178,7 +178,7 @@ export async function migrateDownloadMetadata(
             const storeKey = downloadMetadataStoreKey(gid, fileName)
             validEntries[storeKey] = {
                 ...metadata,
-                guildId: gid || metadata.guildId,
+                guildId: gid,
             }
             logger.debug(
                 `[JsonMigration] Prepared download metadata entry "${storeKey}" for migration.`

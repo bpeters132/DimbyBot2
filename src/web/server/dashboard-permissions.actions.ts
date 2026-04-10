@@ -19,5 +19,19 @@ export async function getGuildDashboardSnapshotAction(
             details: "Expected a non-empty Discord snowflake (numeric id).",
         }
     }
-    return getGuildDashboardPermissionSnapshot(await headers(), trimmed)
+    try {
+        return await getGuildDashboardPermissionSnapshot(await headers(), trimmed)
+    } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        console.error(
+            "[dashboard-permissions.actions] getGuildDashboardPermissionSnapshot failed:",
+            msg
+        )
+        return {
+            ok: false,
+            status: 503,
+            error: "Service unavailable",
+            details: "Could not load permission snapshot. Try again later.",
+        }
+    }
 }

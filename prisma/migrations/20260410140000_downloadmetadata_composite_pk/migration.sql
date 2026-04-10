@@ -1,4 +1,6 @@
-UPDATE "DownloadMetadata" SET "guildId" = '' WHERE "guildId" IS NULL;
+UPDATE "DownloadMetadata"
+SET "guildId" = ''
+WHERE "guildId" IS NULL;
 
 ALTER TABLE "DownloadMetadata" ALTER COLUMN "guildId" SET NOT NULL;
 

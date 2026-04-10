@@ -3,7 +3,7 @@ import { fetchDiscordUserGuilds } from "../../util/discordUserGuilds.js"
 import { getAuthenticatedSession } from "../../web/lib/api-auth.js"
 import { getBotClient } from "../../web/lib/botClient.js"
 import type { ApiResponse } from "../../types/apiPayloads.js"
-import type { GuildListResponse } from "../../web/types/web.js"
+import type { GuildListResponse } from "../../types/web.js"
 
 /**
  * Discord invite permissions bitset:

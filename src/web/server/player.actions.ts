@@ -8,49 +8,41 @@ export type PlayerCommand = "pause" | "skip" | "stop" | "seek" | "loop" | "shuff
 type Ok<T> = { ok: true; data: T }
 type Err = { ok: false; error: string }
 
-async function readPlayerStateResult(res: Response): Promise<Ok<PlayerStateResponse> | Err> {
+async function parseApiResponse<T>(res: Response): Promise<Ok<T> | Err> {
     const text = await res.text()
     if (!text.trim()) {
         return { ok: false, error: "Empty response from bot API." }
     }
-    let payload: ApiResponse<PlayerStateResponse>
+    let payload: ApiResponse<T>
     try {
-        payload = JSON.parse(text) as ApiResponse<PlayerStateResponse>
+        payload = JSON.parse(text) as ApiResponse<T>
     } catch {
         return { ok: false, error: "Invalid JSON from bot API." }
     }
-    if (!res.ok || payload.ok === false) {
-        const msg =
-            payload.ok === false
-                ? payload.error.details || payload.error.error
-                : "Player request failed."
+    if (payload.ok === false) {
+        const msg = payload.error.details || payload.error.error
         return { ok: false, error: msg }
     }
+    if (!res.ok) {
+        return { ok: false, error: "Request failed." }
+    }
+    if (payload.data === undefined || payload.data === null) {
+        return { ok: false, error: "Bot API returned success without data." }
+    }
     return { ok: true, data: payload.data }
+}
+
+async function readPlayerStateResult(res: Response): Promise<Ok<PlayerStateResponse> | Err> {
+    return parseApiResponse<PlayerStateResponse>(res)
 }
 
 async function readQueueResult(res: Response): Promise<Ok<QueueResponse> | Err> {
-    const text = await res.text()
-    if (!text.trim()) {
-        return { ok: false, error: "Empty response from bot API." }
-    }
-    let payload: ApiResponse<QueueResponse>
-    try {
-        payload = JSON.parse(text) as ApiResponse<QueueResponse>
-    } catch {
-        return { ok: false, error: "Invalid JSON from bot API." }
-    }
-    if (!res.ok || payload.ok === false) {
-        const errorPayload = payload.ok === false ? payload.error : null
-        const detail = errorPayload?.details || errorPayload?.error
-        const msg =
-            payload.ok === false ? detail ?? "Queue request failed." : "Queue request failed."
-        return { ok: false, error: msg }
-    }
-    return { ok: true, data: payload.data }
+    return parseApiResponse<QueueResponse>(res)
 }
 
-export async function getPlayerStateAction(guildId: string): Promise<Ok<PlayerStateResponse> | Err> {
+export async function getPlayerStateAction(
+    guildId: string
+): Promise<Ok<PlayerStateResponse> | Err> {
     const res = await serverFetchBot(`/api/guilds/${guildId}/player`)
     return readPlayerStateResult(res)
 }

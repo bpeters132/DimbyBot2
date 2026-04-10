@@ -40,6 +40,9 @@ function normalizedRowsFromStore(store: DownloadsMetadataStore) {
         const parsed = parseDownloadMetadataStoreKey(key)
         const fileName = parsed.fileName
         const guildId = effectiveDownloadMetadataGuildId(key, metadata)
+        if (guildId === null) {
+            continue
+        }
         const parsedDownloadDate =
             metadata.downloadDate === undefined ? null : new Date(metadata.downloadDate)
         const downloadDate =
@@ -78,7 +81,8 @@ export async function isDownloadMetadataTableEmpty(): Promise<boolean> {
 }
 
 /**
- * Replaces all download metadata rows with the provided map (full replace via delete + createMany).
+ * Syncs download metadata to match the provided map without emptying the table first (avoids a
+ * brief full-table gap visible to concurrent readers).
  */
 export async function replaceDownloadMetadataStoreInDatabase(
     store: DownloadsMetadataStore
@@ -87,9 +91,34 @@ export async function replaceDownloadMetadataStoreInDatabase(
     const rows = normalizedRowsFromStore(store)
 
     await prisma.$transaction(async (tx) => {
-        await tx.downloadMetadata.deleteMany({})
-        if (rows.length > 0) {
-            await tx.downloadMetadata.createMany({ data: rows })
+        if (rows.length === 0) {
+            await tx.downloadMetadata.deleteMany({})
+            return
+        }
+
+        await tx.downloadMetadata.deleteMany({
+            where: {
+                NOT: {
+                    OR: rows.map((r) => ({
+                        fileName: r.fileName,
+                        guildId: r.guildId,
+                    })),
+                },
+            },
+        })
+
+        for (const row of rows) {
+            const updated = await tx.downloadMetadata.updateMany({
+                where: { fileName: row.fileName, guildId: row.guildId },
+                data: {
+                    downloadDate: row.downloadDate,
+                    originalUrl: row.originalUrl,
+                    filePath: row.filePath,
+                },
+            })
+            if (updated.count === 0) {
+                await tx.downloadMetadata.create({ data: row })
+            }
         }
     })
 

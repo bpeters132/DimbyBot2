@@ -65,5 +65,5 @@ export async function getServiceStatusPayload(): Promise<StatusPayload> {
         }
     }
 
-    return { checkedAt, database, botApi }
+    return { ok: true, checkedAt, database, botApi }
 }

@@ -23,8 +23,10 @@ export async function readSessionSafe(): Promise<SessionReadResult> {
             headers: await headers(),
         })) as BetterAuthSession | null
         return { ok: true, session }
-    } catch (e) {
-        console.error("[auth-session] failed to load session", e)
+    } catch (e: unknown) {
+        const name = e instanceof Error ? e.name : "Error"
+        const message = e instanceof Error ? e.message : String(e)
+        console.error("[auth-session] failed to load session", { name, message })
         return { ok: false, message: "Failed to load session" }
     }
 }

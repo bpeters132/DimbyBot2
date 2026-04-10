@@ -23,7 +23,7 @@ try {
         fs.rmSync(p, { force: true })
         console.log("Removed invalid Next dev lock")
     }
-} catch {
-    fs.rmSync(p, { force: true })
-    console.log("Removed unreadable Next dev lock")
+} catch (err) {
+    console.error("[predev] Unexpected error while handling Next dev lock:", err)
+    throw err
 }

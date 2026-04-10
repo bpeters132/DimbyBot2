@@ -256,11 +256,7 @@ export function resolveOauthGuildPermissionFallback(
 ): PermissionResolution {
     if (!client) {
         return {
-            permissions: [
-                WebPermission.VIEW_PLAYER,
-                WebPermission.CONTROL_PLAYBACK,
-                WebPermission.MANAGE_QUEUE,
-            ],
+            permissions: [WebPermission.VIEW_PLAYER],
             inVoiceWithBot: false,
         }
     }

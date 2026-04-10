@@ -19,7 +19,8 @@ export async function getDiscordAccountSnowflake(betterAuthUserId: string): Prom
             select: { providerId: true, accountId: true },
         })
     } catch (e) {
-        const code = e && typeof e === "object" && "code" in e ? String((e as { code: unknown }).code) : ""
+        const code =
+            e && typeof e === "object" && "code" in e ? String((e as { code: unknown }).code) : ""
         console.warn(
             "[discord-user-id] account lookup skipped (database unavailable?)",
             code || (e instanceof Error ? e.message : e)
@@ -58,6 +59,9 @@ export async function resolveDiscordUserSnowflake(
     })) as { accessToken?: string } | null
     const accessToken = accessResult?.accessToken
     if (!accessToken) {
+        console.error(
+            "[discord-user-id] No OAuth access token from Better Auth (getAccessToken returned empty token)"
+        )
         return null
     }
     try {

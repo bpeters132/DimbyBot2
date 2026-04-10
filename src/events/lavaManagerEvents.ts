@@ -31,6 +31,16 @@ import {
 } from "../util/rrqDisconnect.js"
 import { playerBroadcaster } from "../web/websocket/PlayerBroadcaster.js"
 
+/** Fire-and-forget control message refresh; logs rejections so Lavalink callbacks never surface unhandled rejections. */
+function scheduleControlMessageUpdate(client: BotClient, guildId: string, context: string) {
+    void updateControlMessage(client, guildId).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err)
+        client.error(
+            `[LavaMgrEvents] updateControlMessage failed (${context}, guildId=${guildId}): ${msg}`
+        )
+    })
+}
+
 type GuildTextSendable = {
     send: (content: string | MessagePayload | MessageCreateOptions) => Promise<Message<boolean>>
 }
@@ -93,14 +103,14 @@ export default async (client: BotClient) => {
             client.debug(
                 `[LavaMgrEvents] Player destroyed for Guild: ${player.guildId}, Reason: ${reason}`
             )
-            updateControlMessage(client, player.guildId)
+            scheduleControlMessageUpdate(client, player.guildId, "playerDestroy")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, null, "playerDestroy")
         })
         .on("playerDisconnect", (player: Player, oldChannelId: string | null) => {
             client.debug(
                 `[LavaMgrEvents] Player disconnected from Guild: ${player.guildId}, Old Channel: ${oldChannelId}`
             )
-            updateControlMessage(client, player.guildId)
+            scheduleControlMessageUpdate(client, player.guildId, "playerDisconnect")
         })
         .on(
             "playerMove",
@@ -120,7 +130,7 @@ export default async (client: BotClient) => {
             client.debug(
                 `[LavaMgrEvents] Track started in Guild: ${player.guildId}, Title: ${track.info.title}`
             )
-            updateControlMessage(client, player.guildId)
+            scheduleControlMessageUpdate(client, player.guildId, "trackStart")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "trackStart")
 
             const prev = player.queue.previous?.[0]
@@ -184,14 +194,14 @@ export default async (client: BotClient) => {
             client.debug(
                 `[LavaMgrEvents] Track ended in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "N/A"}, Reason: ${payload.reason}`
             )
-            updateControlMessage(client, player.guildId)
+            scheduleControlMessageUpdate(client, player.guildId, "trackEnd")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "trackEnd")
         })
         .on("trackStuck", async (player: Player, track: Track | null, payload: TrackStuckEvent) => {
             client.warn(
                 `[LavaMgrEvents] Track stuck in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "N/A"}, Threshold: ${payload.thresholdMs}`
             )
-            updateControlMessage(client, player.guildId)
+            scheduleControlMessageUpdate(client, player.guildId, "trackStuck")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "queueUpdate")
 
             const textIdStuck = player.textChannelId
@@ -228,7 +238,7 @@ export default async (client: BotClient) => {
                     `[LavaMgrEvents] Track error in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "Unknown Track"}`,
                     payload
                 )
-                updateControlMessage(client, player.guildId)
+                scheduleControlMessageUpdate(client, player.guildId, "trackError")
                 playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "queueUpdate")
 
                 const textIdErr = player.textChannelId
@@ -316,7 +326,7 @@ export default async (client: BotClient) => {
          */
         .on("queueEnd", (player: Player) => {
             client.debug(`[LavaMgrEvents] Queue ended for Guild: ${player.guildId}`)
-            updateControlMessage(client, player.guildId) // Update control message immediately
+            scheduleControlMessageUpdate(client, player.guildId, "queueEnd")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "queueUpdate")
 
             // Send message to non-control channel
@@ -403,7 +413,17 @@ export default async (client: BotClient) => {
                                 client.info(
                                     `[LavaMgrEvents] Destroying player in Guild ${player.guildId} as bot is alone.`
                                 )
-                                await updateControlMessage(client, player.guildId) // Update before destroy
+                                await updateControlMessage(client, player.guildId).catch(
+                                    (ctrlErr: unknown) => {
+                                        const msg =
+                                            ctrlErr instanceof Error
+                                                ? ctrlErr.message
+                                                : String(ctrlErr)
+                                        client.error(
+                                            `[LavaMgrEvents] updateControlMessage failed (beforeDestroyAlone, guildId=${player.guildId}): ${msg}`
+                                        )
+                                    }
+                                )
                                 await player.destroy()
                             }
                         } else {
@@ -501,7 +521,7 @@ export default async (client: BotClient) => {
                 `[LavaMgrEvents] Player WebSocket closed for Guild: ${player.guildId}`,
                 payload
             )
-            updateControlMessage(client, player.guildId)
+            scheduleControlMessageUpdate(client, player.guildId, "playerSocketClosed")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "queueUpdate")
         })
         .on("playerSuppressChange", (player: Player, suppress: boolean) => {

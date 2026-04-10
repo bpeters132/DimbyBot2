@@ -2,6 +2,8 @@ import { headers } from "next/headers"
 import { getBotApiOrigin } from "@/server/bot-api-origin"
 import { isBotApiVerbose, logBotApiVerbose } from "@/server/bot-api-verbose"
 
+const UPSTREAM_FETCH_TIMEOUT_MS = 10_000
+
 /**
  * Calls the bot REST API from the Next server using the current request cookies (session).
  */
@@ -61,11 +63,15 @@ export async function serverFetchBot(
         })
     }
 
+    const controller = new AbortController()
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
     try {
+        timeoutId = setTimeout(() => controller.abort(), UPSTREAM_FETCH_TIMEOUT_MS)
         const res = await fetch(url, {
             method,
             headers: outHeaders,
             body: method !== "GET" && method !== "HEAD" ? options?.body : undefined,
+            signal: controller.signal,
         })
         if (isBotApiVerbose()) {
             logBotApiVerbose("serverFetchBot ← response", {
@@ -89,9 +95,16 @@ export async function serverFetchBot(
         return new Response(
             JSON.stringify({
                 ok: false,
-                error: { error: "Bot API unreachable", details: message },
+                error: {
+                    error: "Bot API unreachable",
+                    details: "Unable to reach Bot API",
+                },
             }),
             { status: 502, headers: { "content-type": "application/json" } }
         )
+    } finally {
+        if (timeoutId !== undefined) {
+            clearTimeout(timeoutId)
+        }
     }
 }

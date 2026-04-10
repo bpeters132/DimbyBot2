@@ -24,6 +24,8 @@ function redactSecrets(value: unknown): unknown {
         "auth",
         "credentials",
         "config",
+        "cookie",
+        "set-cookie",
     ])
 
     const clone: Record<string, unknown> = { ...(value as Record<string, unknown>) }

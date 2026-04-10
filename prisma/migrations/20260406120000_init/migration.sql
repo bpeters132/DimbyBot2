@@ -10,12 +10,12 @@ CREATE TABLE "GuildSettings" (
 
 CREATE TABLE "DownloadMetadata" (
     "fileName" TEXT NOT NULL,
-    "guildId" TEXT NOT NULL,
+    "guildId" TEXT,
     "downloadDate" TIMESTAMPTZ,
     "originalUrl" TEXT,
     "filePath" TEXT,
 
-    CONSTRAINT "DownloadMetadata_pkey" PRIMARY KEY ("fileName", "guildId")
+    CONSTRAINT "DownloadMetadata_pkey" PRIMARY KEY ("fileName")
 );
 
 CREATE INDEX "DownloadMetadata_guildId_idx" ON "DownloadMetadata"("guildId");

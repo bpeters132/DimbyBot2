@@ -14,7 +14,9 @@ export function ServiceDegraded({ title, description, detail }: ServiceDegradedP
         .replace(/\b[A-Z_]*ERROR_[A-Z_0-9]+\b/g, "[error-code]")
         .slice(0, 300)
     const detailForRender =
-        process.env.NODE_ENV === "production" ? "Technical details hidden." : sanitizedDetail
+        detail && process.env.NODE_ENV === "production"
+            ? "Technical details hidden."
+            : sanitizedDetail
 
     return (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-6 text-left">

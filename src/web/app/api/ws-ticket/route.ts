@@ -13,24 +13,20 @@ export async function GET(): Promise<NextResponse> {
         return NextResponse.json({ error: "BETTER_AUTH_SECRET is not set" }, { status: 503 })
     }
 
-    let session: { user?: { id?: string } } | null = null
     try {
-        session = (await auth.api.getSession({
+        const session = (await auth.api.getSession({
             headers: await headers(),
         })) as { user?: { id?: string } } | null
+
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
+
+        const token = createWsConnectToken(session.user.id, secret)
+        return NextResponse.json({ token }, { headers: { "Cache-Control": "no-store" } })
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "unknown"
         console.error("[api/ws-ticket] failed to resolve session:", message)
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        return NextResponse.json({ error: "Auth service temporarily unavailable" }, { status: 503 })
     }
-
-    if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const token = createWsConnectToken(session.user.id, secret)
-    return NextResponse.json(
-        { token },
-        { headers: { "Cache-Control": "no-store" } }
-    )
 }

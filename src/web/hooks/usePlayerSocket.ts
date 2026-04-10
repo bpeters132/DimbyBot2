@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 import type { PlayerStateResponse, QueueTrackSummary, WSMessage } from "@/types/web"
 
+const MAX_RECONNECT_ATTEMPTS = 12
+
 interface UsePlayerSocketResult {
     isConnected: boolean
     playerState: PlayerStateResponse | null
@@ -84,6 +86,7 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
                 }
 
                 if (parsed.type === "subscribed") {
+                    reconnectAttemptsRef.current = 0
                     setLiveUpdatesError(null)
                     return
                 }
@@ -122,7 +125,14 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
             socket.onclose = () => {
                 setIsConnected(false)
                 if (cancelled) return
-                reconnectAttemptsRef.current += 1
+                const nextAttempt = reconnectAttemptsRef.current + 1
+                if (nextAttempt > MAX_RECONNECT_ATTEMPTS) {
+                    setLiveUpdatesError(
+                        "Live updates disconnected after repeated failures. Refresh the page to try again."
+                    )
+                    return
+                }
+                reconnectAttemptsRef.current = nextAttempt
                 const delay = Math.min(30000, 1000 * 2 ** reconnectAttemptsRef.current)
                 setTimeout(() => {
                     if (!cancelled) {

@@ -144,9 +144,9 @@ export function createBotApiApp(): express.Express {
             err: unknown,
             _req: express.Request,
             res: express.Response,
-            next: express.NextFunction
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Express error middleware requires a 4-arg signature
+            _next: express.NextFunction
         ) => {
-            void next
             console.error("[botApi]", err)
             const parseError =
                 err instanceof SyntaxError &&

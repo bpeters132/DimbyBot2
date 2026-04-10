@@ -12,6 +12,7 @@ services:
                 - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-build-time-discord-client-secret}
         image: dimbybot-dev # Optional: Give the dev image a distinct name
         command: yarn dev # Override the default command/entrypoint to run nodemon
+        # `ports: !override` is a Docker Compose tag so this list replaces the base file's ports (merge would append and cause host port conflicts in dev).
         ports: !override
             - "3001:3001"
         volumes:

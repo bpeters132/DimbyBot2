@@ -1,8 +1,8 @@
 import { betterAuth } from "better-auth"
 import { prismaAdapter } from "better-auth/adapters/prisma"
 import { nextCookies } from "better-auth/next-js"
-import { betterAuthBaseConfig } from "@/lib/auth-base-config"
-import { getWebPrismaClient } from "@/lib/prisma"
+import { betterAuthBaseConfig } from "@/lib/auth-base-config.js"
+import { getWebPrismaClient } from "@/lib/prisma.js"
 
 /**
  * Better Auth for **Next.js only** — `nextCookies()` pulls in the `next` package (not installed in the bot image).

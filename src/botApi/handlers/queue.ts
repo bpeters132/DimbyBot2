@@ -3,7 +3,7 @@ import { resolveWebRequesterDiscordId } from "../resolveWebRequesterId.js"
 import { resolveWebDashboardTextChannelId } from "../webDashboardTextChannel.js"
 import { WebPermission } from "../../web/shared/permissions.js"
 import type { ApiResponse } from "../../types/apiPayloads.js"
-import type { QueueResponse } from "../../web/types/web.js"
+import type { QueueResponse } from "../../types/web.js"
 import { requirePermissions } from "../../web/lib/api-auth.js"
 import { getBotClient } from "../../web/lib/botClient.js"
 import { toQueueResponse } from "../../web/lib/player-state.js"
@@ -97,9 +97,20 @@ export async function queuePOST(
     const botUser = client.user
     if (botUser) {
         const joinPerms = voiceChannel.permissionsFor(botUser)
+        if (!joinPerms) {
+            return {
+                status: 403,
+                body: {
+                    ok: false,
+                    error: {
+                        error: "Could not determine bot permissions for this voice channel.",
+                    },
+                },
+            }
+        }
         if (
-            !joinPerms?.has(PermissionFlagsBits.Connect) ||
-            !joinPerms?.has(PermissionFlagsBits.Speak)
+            !joinPerms.has(PermissionFlagsBits.Connect) ||
+            !joinPerms.has(PermissionFlagsBits.Speak)
         ) {
             return {
                 status: 403,
@@ -162,9 +173,7 @@ export async function queuePOST(
         player.queue.add(searchResult.tracks[0])
     }
 
-    if (player.queue.tracks.length > 0) {
-        await startPlaybackIfNeeded(player)
-    }
+    await startPlaybackIfNeeded(player)
 
     return {
         status: 200,

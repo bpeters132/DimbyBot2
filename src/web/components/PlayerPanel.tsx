@@ -458,7 +458,7 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
 
                                 return (
                                     <li
-                                        key={`${track.uri ?? track.title}-${queueIndex}`}
+                                        key={track.encoded ?? track.uri ?? track.title}
                                         className="group relative rounded border bg-background p-2"
                                         tabIndex={0}
                                     >
