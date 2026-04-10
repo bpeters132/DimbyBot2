@@ -27,18 +27,10 @@ export async function getDiscordAccountSnowflake(betterAuthUserId: string): Prom
         return null
     }
     const discordRow = accounts.find(
-        (a) =>
-            a.providerId === "discord" ||
-            a.providerId.toLowerCase() === "discord" ||
-            a.providerId.toLowerCase().includes("discord")
+        (a) => a.providerId && a.providerId.toLowerCase() === "discord"
     )
     if (discordRow?.accountId && isDiscordSnowflake(discordRow.accountId)) {
         return discordRow.accountId.trim()
-    }
-    for (const a of accounts) {
-        if (isDiscordSnowflake(a.accountId)) {
-            return a.accountId.trim()
-        }
     }
     return null
 }
@@ -68,5 +60,11 @@ export async function resolveDiscordUserSnowflake(
     if (!accessToken) {
         return null
     }
-    return fetchDiscordCurrentUserId(accessToken)
+    try {
+        return await fetchDiscordCurrentUserId(accessToken)
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error)
+        console.warn("[discord-user-id] /users/@me fallback failed:", message)
+        return null
+    }
 }

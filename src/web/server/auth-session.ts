@@ -1,15 +1,14 @@
 import { headers } from "next/headers"
-import { auth } from "@/auth"
+import { auth, type BetterAuthSession } from "@/auth"
 
 export type SessionReadSuccess = {
     ok: true
-    session: { user?: { id?: string; name?: string; image?: string } } | null
+    session: BetterAuthSession | null
 }
 
 export type SessionReadFailure = {
     ok: false
     message: string
-    code?: string
 }
 
 export type SessionReadResult = SessionReadSuccess | SessionReadFailure
@@ -22,15 +21,10 @@ export async function readSessionSafe(): Promise<SessionReadResult> {
     try {
         const session = (await auth.api.getSession({
             headers: await headers(),
-        })) as { user?: { id?: string; name?: string; image?: string } } | null
+        })) as BetterAuthSession | null
         return { ok: true, session }
     } catch (e) {
-        const message =
-            e instanceof Error ? e.message : typeof e === "string" ? e : "Failed to load session"
-        const code =
-            typeof e === "object" && e !== null && "code" in e
-                ? String((e as { code?: unknown }).code)
-                : undefined
-        return { ok: false, message, code }
+        console.error("[auth-session] failed to load session", e)
+        return { ok: false, message: "Failed to load session" }
     }
 }

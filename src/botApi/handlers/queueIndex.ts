@@ -1,12 +1,13 @@
 import { WebPermission } from "../../web/shared/permissions.js"
-import type { ApiResponse, QueueResponse } from "../../web/types/web.js"
+import type { ApiResponse } from "../../types/apiPayloads.js"
+import type { QueueResponse } from "../../web/types/web.js"
 import { requirePermissions } from "../../web/lib/api-auth.js"
 import { getBotClient } from "../../web/lib/botClient.js"
 import { toQueueResponse } from "../../web/lib/player-state.js"
 
 function parseIndex(value: string): number | null {
     const index = Number(value)
-    if (!Number.isInteger(index)) {
+    if (!Number.isInteger(index) || index < 0) {
         return null
     }
     return index
@@ -26,7 +27,7 @@ export async function queueIndexDELETE(
     }
 
     const queueIndex = parseIndex(indexParam)
-    if (queueIndex === null || queueIndex < 0) {
+    if (queueIndex === null) {
         return {
             status: 400,
             body: { ok: false, error: { error: "Queue index must be a non-negative integer." } },
@@ -72,12 +73,7 @@ export async function queueIndexPATCH(
     const destinationIndex =
         typeof body.newIndex === "number" && Number.isInteger(body.newIndex) ? body.newIndex : null
 
-    if (
-        sourceIndex === null ||
-        sourceIndex < 0 ||
-        destinationIndex === null ||
-        destinationIndex < 0
-    ) {
+    if (sourceIndex === null || destinationIndex === null || destinationIndex < 0) {
         return {
             status: 400,
             body: {
@@ -95,16 +91,16 @@ export async function queueIndexPATCH(
         }
     }
 
-    const tracks = player.queue.tracks
-    if (sourceIndex >= tracks.length || destinationIndex >= tracks.length) {
+    const trackCount = player.queue.tracks.length
+    if (sourceIndex >= trackCount || destinationIndex >= trackCount) {
         return {
             status: 404,
             body: { ok: false, error: { error: "Queue index out of range." } },
         }
     }
 
-    const [track] = tracks.splice(sourceIndex, 1)
-    tracks.splice(destinationIndex, 0, track)
+    const [track] = player.queue.splice(sourceIndex, 1)
+    player.queue.splice(destinationIndex, 0, track)
 
     return {
         status: 200,

@@ -1,4 +1,4 @@
-import type { Guild } from "discord.js"
+import type { Guild, GuildBasedChannel } from "discord.js"
 import { getGuildSettings } from "../util/saveControlChannel.js"
 
 /**
@@ -8,12 +8,13 @@ import { getGuildSettings } from "../util/saveControlChannel.js"
 export async function resolveWebDashboardTextChannelId(guild: Guild): Promise<string | undefined> {
     const controlId = getGuildSettings()[guild.id]?.controlChannelId
     if (controlId) {
-        let ch = guild.channels.cache.get(controlId)
+        let ch: GuildBasedChannel | undefined = guild.channels.cache.get(controlId)
         if (!ch) {
             try {
-                ch = await guild.channels.fetch(controlId)
+                const fetched = await guild.channels.fetch(controlId)
+                ch = fetched ?? undefined
             } catch {
-                ch = null
+                ch = undefined
             }
         }
         if (ch?.isTextBased() && !ch.isDMBased()) {
@@ -27,12 +28,13 @@ export async function resolveWebDashboardTextChannelId(guild: Guild): Promise<st
     }
     const systemId = guild.systemChannelId
     if (systemId) {
-        let sysCh = guild.channels.cache.get(systemId)
+        let sysCh: GuildBasedChannel | undefined = guild.channels.cache.get(systemId)
         if (!sysCh) {
             try {
-                sysCh = await guild.channels.fetch(systemId)
+                const fetched = await guild.channels.fetch(systemId)
+                sysCh = fetched ?? undefined
             } catch {
-                sysCh = null
+                sysCh = undefined
             }
         }
         if (sysCh?.isTextBased() && !sysCh.isDMBased()) {

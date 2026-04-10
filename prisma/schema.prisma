@@ -15,12 +15,13 @@ model GuildSettings {
 }
 
 model DownloadMetadata {
-  fileName     String    @id
-  guildId      String?
+  fileName     String
+  guildId      String
   downloadDate DateTime?
   originalUrl  String?
   filePath     String?
 
+  @@id([fileName, guildId])
   @@index([guildId], name: "DownloadMetadata_guildId_idx")
 }
 
@@ -52,6 +53,7 @@ model Session {
 
   @@unique([token])
   @@index([userId])
+  @@index([expiresAt])
   @@map("session")
 }
 
@@ -72,6 +74,7 @@ model Account {
   updatedAt             DateTime  @updatedAt
 
   @@index([userId])
+  @@unique([providerId, accountId])
   @@map("account")
 }
 

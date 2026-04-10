@@ -9,6 +9,12 @@ import { getGuildSettings } from "../../util/saveControlChannel.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import type { DownloadsMetadataStore } from "../../types/index.js"
 import {
+    downloadMetadataEntryMatchesGuild,
+    downloadMetadataKeysForFile,
+    downloadMetadataStoreKey,
+    parseDownloadMetadataStoreKey,
+} from "../../util/downloadMetadataKeys.js"
+import {
     getDownloadMetadataStore,
     saveDownloadMetadataStore,
 } from "../../util/downloadMetadataStore.js"
@@ -62,12 +68,13 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
 
     const metadata: DownloadsMetadataStore = getDownloadMetadataStore()
 
-    const entries = Object.entries(metadata).filter(
-        ([, info]) => info && (info.guildId === guildId || info.guildId === undefined)
+    const entries = Object.entries(metadata).filter(([key, info]) =>
+        downloadMetadataEntryMatchesGuild(key, info, guildId)
     )
 
-    for (const [fileName, fileInfo] of entries) {
-        const filePath = path.join(downloadsDir, fileName)
+    for (const [storeKey, fileInfo] of entries) {
+        const baseFileName = parseDownloadMetadataStoreKey(storeKey).fileName
+        const filePath = path.join(downloadsDir, baseFileName)
         let downloadDate = fileInfo?.downloadDate ? new Date(fileInfo.downloadDate) : null
         let stats = null
         if (!downloadDate || Number.isNaN(downloadDate.getTime())) {
@@ -77,15 +84,15 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
             } catch (error: unknown) {
                 const err = error as NodeJS.ErrnoException
                 if (err.code === "ENOENT") {
-                    delete metadata[fileName]
+                    delete metadata[storeKey]
                     metadataDirty = true
                     client.debug(
-                        `[Download Cleanup] Removed "${fileName}" entry with missing file and no valid date.`
+                        `[Download Cleanup] Removed "${storeKey}" entry with missing file and no valid date.`
                     )
                     continue
                 }
                 client.error(
-                    `[Download Cleanup] Failed to stat file "${fileName}" for date fallback:`,
+                    `[Download Cleanup] Failed to stat file "${baseFileName}" for date fallback:`,
                     error
                 )
                 continue
@@ -99,10 +106,10 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
                     } catch (error: unknown) {
                         const err = error as NodeJS.ErrnoException
                         if (err.code === "ENOENT") {
-                            delete metadata[fileName]
+                            delete metadata[storeKey]
                             metadataDirty = true
                             client.debug(
-                                `[Download Cleanup] Removed "${fileName}" entry due to missing file.`
+                                `[Download Cleanup] Removed "${storeKey}" entry due to missing file.`
                             )
                             continue
                         }
@@ -114,13 +121,13 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
                     fs.unlinkSync(filePath)
                     deletedCount++
                 }
-                delete metadata[fileName]
+                delete metadata[storeKey]
                 metadataDirty = true
                 client.debug(
-                    `[Download Cleanup] Removed "${fileName}" entry (downloaded ${downloadDate.toISOString()}) due to age${stats ? "" : " (metadata only)"}.`
+                    `[Download Cleanup] Removed "${storeKey}" entry (downloaded ${downloadDate.toISOString()}) due to age${stats ? "" : " (metadata only)"}.`
                 )
             } catch (error: unknown) {
-                client.error(`[Download Cleanup] Failed to delete old file "${fileName}":`, error)
+                client.error(`[Download Cleanup] Failed to delete old file "${baseFileName}":`, error)
             }
         }
     }
@@ -158,8 +165,9 @@ async function enforceDirectoryLimit(
     const metadata: DownloadsMetadataStore = getDownloadMetadataStore()
 
     const files: SizedFile[] = Object.entries(metadata)
-        .filter(([, info]) => info && (info.guildId === guildId || info.guildId === undefined))
-        .map(([name, info]) => {
+        .filter(([key, info]) => downloadMetadataEntryMatchesGuild(key, info, guildId))
+        .map(([key, info]) => {
+            const name = parseDownloadMetadataStoreKey(key).fileName
             const filePath = path.join(downloadsDir, name)
             let stats: fs.Stats
             try {
@@ -201,8 +209,8 @@ async function enforceDirectoryLimit(
                 fs.unlinkSync(file.path)
                 deletedCount++
                 deletedSize += file.size
-                if (metadata[file.name]) {
-                    delete metadata[file.name]
+                for (const metaKey of downloadMetadataKeysForFile(metadata, file.name, guildId)) {
+                    delete metadata[metaKey]
                     metadataDirty = true
                 }
             } catch (error: unknown) {
@@ -487,7 +495,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
                 const metadata: DownloadsMetadataStore = getDownloadMetadataStore()
 
-                metadata[downloadedFile] = {
+                metadata[downloadMetadataStoreKey(guildId, downloadedFile)] = {
                     downloadDate: new Date().toISOString(),
                     originalUrl: url,
                     filePath: filePath,

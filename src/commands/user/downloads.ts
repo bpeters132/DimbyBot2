@@ -7,6 +7,11 @@ import type BotClient from "../../lib/BotClient.js"
 import { getGuildSettings } from "../../util/saveControlChannel.js"
 import type { DownloadsMetadataStore } from "../../types/index.js"
 import {
+    downloadMetadataEntryMatchesGuild,
+    downloadMetadataKeysForFile,
+    parseDownloadMetadataStoreKey,
+} from "../../util/downloadMetadataKeys.js"
+import {
     getDownloadMetadataStore,
     saveDownloadMetadataStore,
 } from "../../util/downloadMetadataStore.js"
@@ -64,7 +69,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         const downloadsDir = path.join(process.cwd(), "downloads")
         const guildId = interaction.guildId
         if (!guildId) {
-            return interaction.reply({ content: "Use this command in a server." })
+            return interaction.reply({ content: "Use this command in a server.", ephemeral: true })
         }
 
         // Ensure downloads directory exists
@@ -72,6 +77,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             client.debug(`[Downloads] Downloads directory not found at ${downloadsDir}`)
             return interaction.reply({
                 content: "No downloads directory found.",
+                ephemeral: true,
             })
         }
 
@@ -84,8 +90,9 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
         if (subcommand === "list") {
             const files = Object.entries(metadata)
-                .filter(([, info]) => info && info.guildId === guildId)
-                .map(([file, info]) => {
+                .filter(([key, info]) => downloadMetadataEntryMatchesGuild(key, info, guildId))
+                .map(([key, info]) => {
+                    const file = parseDownloadMetadataStoreKey(key).fileName
                     const filePath = path.join(downloadsDir, file)
                     if (!fs.existsSync(filePath)) return null
                     const stats = fs.statSync(filePath)
@@ -108,7 +115,10 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 .sort((a, b) => b.date.getTime() - a.date.getTime())
 
             if (files.length === 0) {
-                return interaction.reply("No downloaded files found for this server.")
+                return interaction.reply({
+                    content: "No downloaded files found for this server.",
+                    ephemeral: true,
+                })
             }
 
             // Calculate total size and limit
@@ -175,8 +185,9 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             cutoffDate.setDate(cutoffDate.getDate() - days)
 
             const files = Object.entries(metadata)
-                .filter(([, info]) => info && info.guildId === guildId)
-                .map(([file, info]) => {
+                .filter(([key, info]) => downloadMetadataEntryMatchesGuild(key, info, guildId))
+                .map(([key, info]) => {
+                    const file = parseDownloadMetadataStoreKey(key).fileName
                     const filePath = path.join(downloadsDir, file)
                     const date = info.downloadDate
                         ? new Date(info.downloadDate)
@@ -205,15 +216,19 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
             for (const file of files) {
                 try {
-                    if (fs.existsSync(file.path)) {
-                        const stats = fs.statSync(file.path)
-                        totalSize += stats.size
-                        fs.unlinkSync(file.path)
-                        deletedCount++
+                    if (!fs.existsSync(file.path)) {
+                        continue
                     }
-                    // Remove from metadata
-                    if (metadata[file.name]) {
-                        delete metadata[file.name]
+                    const stats = fs.statSync(file.path)
+                    fs.unlinkSync(file.path)
+                    totalSize += stats.size
+                    deletedCount++
+                    for (const metaKey of downloadMetadataKeysForFile(
+                        metadata,
+                        file.name,
+                        guildId
+                    )) {
+                        delete metadata[metaKey]
                     }
                 } catch (error: unknown) {
                     const msg = error instanceof Error ? error.message : String(error)

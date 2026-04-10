@@ -8,11 +8,43 @@ export function isBotApiVerbose(): boolean {
     return /^(1|true|yes|on)$/i.test(v)
 }
 
+function redactSecrets(value: unknown): unknown {
+    if (!value || typeof value !== "object") {
+        return value
+    }
+
+    const redactedKeys = new Set([
+        "token",
+        "secret",
+        "password",
+        "apikey",
+        "api_key",
+        "authorization",
+        "access_token",
+        "auth",
+        "credentials",
+        "config",
+    ])
+
+    const clone: Record<string, unknown> = { ...(value as Record<string, unknown>) }
+    for (const [key, entry] of Object.entries(clone)) {
+        if (redactedKeys.has(key.toLowerCase())) {
+            clone[key] = "[REDACTED]"
+            continue
+        }
+        if (entry && typeof entry === "object") {
+            clone[key] = redactSecrets(entry)
+        }
+    }
+
+    return clone
+}
+
 /** Structured one-line log for the Next server terminal. */
 export function logBotApiVerbose(message: string, data?: Record<string, unknown>): void {
     if (!isBotApiVerbose()) return
     if (data && Object.keys(data).length > 0) {
-        console.log(`[bot-api:next] ${message}`, data)
+        console.log(`[bot-api:next] ${message}`, redactSecrets(data))
     } else {
         console.log(`[bot-api:next] ${message}`)
     }

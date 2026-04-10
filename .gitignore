@@ -24,13 +24,13 @@ lavaNodesConfig.js
 
 # Data storage (e.g., guild settings)
 storage/
-storage/guild_settings.json
 
 # Cursor
 .cursor/
-.cursor/rules/code-style.mdc
 
 # VSCode
 .vscode/
-.vscode/settings.json
 .kilocode/mcp.json
+
+# TypeScript incremental build info (web subproject)
+*.tsbuildinfo

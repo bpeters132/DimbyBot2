@@ -100,7 +100,14 @@ export async function runPrismaMigrateDeploy(
                 return
             }
             const combined = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n")
-            reject(new Error(`prisma migrate deploy failed with exit code ${code}\n${combined}`))
+            logger.debug(
+                `[Database][migrate] Full migrate output on failure (${combined.length} chars):\n${combined}`
+            )
+            reject(
+                new Error(
+                    `prisma migrate deploy failed with exit code ${code} (see debug logs for full output).`
+                )
+            )
         })
     })
 

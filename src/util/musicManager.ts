@@ -19,6 +19,7 @@ import {
     rebalancePlayerQueueRoundRobin,
     stampRequesterUserIdOnTracks,
 } from "./rrqDisconnect.js"
+import { downloadMetadataFileBelongsToGuild } from "./downloadMetadataKeys.js"
 import { getDownloadMetadataStore } from "./downloadMetadataStore.js"
 
 type SearchAttempt =
@@ -26,6 +27,33 @@ type SearchAttempt =
     | { source: string; success: false; error?: string }
 
 type PlayerSearchResult = Awaited<ReturnType<Player["search"]>>
+const playerStartLocks = new WeakMap<Player, Promise<void>>()
+
+/**
+ * Prevents concurrent check-then-play races by serializing start attempts per player.
+ */
+export async function startPlaybackIfNeeded(player: Player): Promise<void> {
+    const existingLock = playerStartLocks.get(player)
+    if (existingLock) {
+        await existingLock
+        return
+    }
+
+    const startPromise = (async () => {
+        if (!player.playing && player.queue.tracks.length > 0) {
+            await player.play()
+        }
+    })()
+
+    playerStartLocks.set(player, startPromise)
+    try {
+        await startPromise
+    } finally {
+        if (playerStartLocks.get(player) === startPromise) {
+            playerStartLocks.delete(player)
+        }
+    }
+}
 
 function syntheticTrackResult(track: Track | UnresolvedTrack): PlayerSearchResult {
     return {
@@ -45,6 +73,7 @@ export async function ensurePlayerConnected(
         client.debug(
             `[MusicManager] Lavalink player not connected or in wrong channel. Player state: Connected=${player.connected}, Player VC=${player.voiceChannelId}, Target VC=${voiceChannel.id}. Reconnecting/Moving.`
         )
+        player.voiceChannelId = voiceChannel.id
         const timeoutMs = 10000
         let disposeMoveWait: (() => void) | undefined
         const movePromise = new Promise<void>((resolve, reject) => {
@@ -237,7 +266,7 @@ export async function handleQueryAndPlay(
                     const entries = await fs.promises.readdir(downloadsDir)
                     files = entries
                         .filter((file) => file.endsWith(".wav"))
-                        .filter((file) => metadata[file]?.guildId === guildId)
+                        .filter((file) => downloadMetadataFileBelongsToGuild(metadata, file, guildId))
                         .map((f) => ({
                             name: f,
                             path: path.join(downloadsDir, f),
@@ -605,8 +634,8 @@ export async function handleQueryAndPlay(
                 client.debug(
                     `[MusicManager] Before play check: player.playing=${player.playing}, player.queue.tracks.length=${player.queue.tracks.length}`
                 )
-                if (!player.playing && player.queue.tracks.length > 0) {
-                    await player.play()
+                if (player.queue.tracks.length > 0) {
+                    await startPlaybackIfNeeded(player)
                     client.debug(
                         `[MusicManager] Lavalink player started playing [${player.queue.current?.info?.title || "track from queue"}].`
                     )

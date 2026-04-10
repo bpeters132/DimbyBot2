@@ -1,12 +1,13 @@
-import type { Track } from "lavalink-client"
+import { PermissionFlagsBits } from "discord.js"
 import { resolveWebRequesterDiscordId } from "../resolveWebRequesterId.js"
 import { resolveWebDashboardTextChannelId } from "../webDashboardTextChannel.js"
 import { WebPermission } from "../../web/shared/permissions.js"
-import type { ApiResponse, QueueResponse } from "../../web/types/web.js"
+import type { ApiResponse } from "../../types/apiPayloads.js"
+import type { QueueResponse } from "../../web/types/web.js"
 import { requirePermissions } from "../../web/lib/api-auth.js"
 import { getBotClient } from "../../web/lib/botClient.js"
 import { toQueueResponse } from "../../web/lib/player-state.js"
-import { ensurePlayerConnected } from "../../util/musicManager.js"
+import { ensurePlayerConnected, startPlaybackIfNeeded } from "../../util/musicManager.js"
 
 function parseNumber(value: string | null, fallback: number): number {
     const parsed = Number(value)
@@ -93,6 +94,23 @@ export async function queuePOST(
 
     const textChannelId = await resolveWebDashboardTextChannelId(guild)
 
+    const botUser = client.user
+    if (botUser) {
+        const joinPerms = voiceChannel.permissionsFor(botUser)
+        if (
+            !joinPerms?.has(PermissionFlagsBits.Connect) ||
+            !joinPerms?.has(PermissionFlagsBits.Speak)
+        ) {
+            return {
+                status: 403,
+                body: {
+                    ok: false,
+                    error: { error: "Bot lacks permission to join this voice channel." },
+                },
+            }
+        }
+    }
+
     let player = client.lavalink.getPlayer(guildId)
     if (!player) {
         player = await client.lavalink.createPlayer({
@@ -106,6 +124,14 @@ export async function queuePOST(
 
     try {
         await ensurePlayerConnected(client, player, voiceChannel)
+        const refreshedMember = await guild.members.fetch(requester.requesterId).catch(() => null)
+        const refreshedVoiceChannel = refreshedMember?.voice?.channel
+        if (!refreshedVoiceChannel || refreshedVoiceChannel.id !== voiceChannel.id) {
+            return {
+                status: 400,
+                body: { ok: false, error: { error: "Join a voice channel first." } },
+            }
+        }
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Voice connection failed."
         return {
@@ -131,13 +157,13 @@ export async function queuePOST(
     }
 
     if (searchResult.loadType === "playlist") {
-        player.queue.add(searchResult.tracks as Track[])
+        player.queue.add(searchResult.tracks)
     } else {
-        player.queue.add(searchResult.tracks[0] as Track)
+        player.queue.add(searchResult.tracks[0])
     }
 
-    if (!player.playing && player.queue.tracks.length > 0) {
-        await player.play()
+    if (player.queue.tracks.length > 0) {
+        await startPlaybackIfNeeded(player)
     }
 
     return {

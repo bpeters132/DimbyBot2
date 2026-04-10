@@ -14,7 +14,7 @@ import { playerBroadcaster } from "./web/websocket/PlayerBroadcaster.js"
 
 const logFilePath = path.join(import.meta.dirname, "..", "logs", "app.log")
 const webEnabled = process.env.WEB_ENABLED === "true"
-const webPort = Number(process.env.WEB_PORT || 3000)
+const webPort = Number(process.env.WEB_PORT || 3001)
 
 function ensureLogDir(): void {
     try {
@@ -61,6 +61,28 @@ async function run(): Promise<void> {
 
     let client: BotClient | null = null
     let server: http.Server | null = null
+    const shutdown = async (signal: string): Promise<void> => {
+        logger.info(`Received ${signal}, shutting down...`)
+        try {
+            if (server) {
+                await new Promise<void>((resolve) => {
+                    server?.close(() => resolve())
+                })
+                logger.info("Web server stopped.")
+            }
+            connectionManager.stopHeartbeat()
+            if (client) {
+                client.destroy()
+                logger.info("Bot client stopped.")
+            }
+            await disconnectDatabase(logger)
+        } finally {
+            process.exit(0)
+        }
+    }
+
+    process.once("SIGINT", () => void shutdown("SIGINT"))
+    process.once("SIGTERM", () => void shutdown("SIGTERM"))
 
     try {
         client = await startBot(logger)
@@ -95,7 +117,7 @@ async function run(): Promise<void> {
             }
             res.statusCode = 404
             res.setHeader("Content-Type", "application/json")
-            res.end(JSON.stringify({ ok: false, error: { error: "Not found" } }))
+            res.end(JSON.stringify({ ok: false, error: { message: "Not found" } }))
         })
 
         server.on("upgrade", (req, socket, head) => {
@@ -105,24 +127,39 @@ async function run(): Promise<void> {
                 return
             }
             void (async () => {
-                const session = await connectionManager.authenticateUpgrade(req)
-                if (!session) {
-                    socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n")
+                try {
+                    const session = await connectionManager.authenticateUpgrade(req)
+                    if (!session) {
+                        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n")
+                        socket.destroy()
+                        return
+                    }
+                    wss.handleUpgrade(req, socket, head, (ws) => {
+                        connectionManager.registerConnection(ws, session.userId)
+                        wss.emit("connection", ws, req)
+                    })
+                } catch (error) {
+                    logger.error("WebSocket upgrade authentication failed:", error)
+                    socket.write("HTTP/1.1 500 Internal Server Error\r\n\r\n")
                     socket.destroy()
-                    return
                 }
-                wss.handleUpgrade(req, socket, head, (ws) => {
-                    connectionManager.registerConnection(ws, session.userId)
-                    wss.emit("connection", ws, req)
-                })
             })()
         })
 
         client.on("voiceStateUpdate", (oldState, newState) => {
-            const guildId = newState.guild.id
             const userId = newState.id
-            invalidatePermissionCache(guildId, userId)
-            playerBroadcaster.broadcastGuildVoiceState(guildId)
+            const guildIds = new Set<string>()
+            if (newState.guild?.id) {
+                guildIds.add(newState.guild.id)
+            }
+            const oldGuildId = oldState.guild?.id
+            if (oldGuildId && oldGuildId !== newState.guild?.id) {
+                guildIds.add(oldGuildId)
+            }
+            for (const guildId of guildIds) {
+                invalidatePermissionCache(guildId, userId)
+                playerBroadcaster.broadcastGuildVoiceState(guildId)
+            }
         })
 
         await new Promise<void>((resolve, reject) => {
@@ -135,28 +172,6 @@ async function run(): Promise<void> {
         process.exit(1)
     }
 
-    const shutdown = async (signal: string): Promise<void> => {
-        logger.info(`Received ${signal}, shutting down...`)
-        try {
-            if (server) {
-                await new Promise<void>((resolve) => {
-                    server?.close(() => resolve())
-                })
-                logger.info("Web server stopped.")
-            }
-            connectionManager.stopHeartbeat()
-            if (client) {
-                client.destroy()
-                logger.info("Bot client stopped.")
-            }
-            await disconnectDatabase(logger)
-        } finally {
-            process.exit(0)
-        }
-    }
-
-    process.once("SIGINT", () => void shutdown("SIGINT"))
-    process.once("SIGTERM", () => void shutdown("SIGTERM"))
 }
 
 void run()

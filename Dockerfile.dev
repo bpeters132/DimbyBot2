@@ -5,23 +5,18 @@ WORKDIR /app
 
 # Optional build-time placeholders for Better Auth / Discord (runtime env from compose).
 ARG BETTER_AUTH_URL=http://localhost:3000
-ARG BETTER_AUTH_SECRET=f4b8e3c1d92a7b60f15e8c4379ab2d56e0c4f1a7b3d9e8c6a1f2b4d6e8c0a3f5
 ARG CLIENT_ID=000000000000000000
-ARG DISCORD_CLIENT_SECRET=build-time-discord-client-secret
 ENV BETTER_AUTH_URL=${BETTER_AUTH_URL}
-ENV BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
 ENV CLIENT_ID=${CLIENT_ID}
-ENV DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
 
 # Install yt-dlp and its dependencies (always latest from pip)
 # Also install build tools needed for native Node.js modules
 # Use pipx to install yt-dlp to avoid PEP 668 issues
-RUN apk add --no-cache python3 py3-pip ffmpeg build-base autoconf automake libtool g++ pipx su-exec \
+RUN apk add --no-cache python3 py3-pip ffmpeg build-base autoconf automake libtool g++ pipx su-exec wget \
     && pipx install yt-dlp \
-    # Ensure yt-dlp is reachable for subsequent RUN commands and entrypoint.
-    # On Alpine we avoid `pipx ensurepath` (it may invoke bash); instead we create a symlink.
-    && (if [ -f /root/.local/bin/yt-dlp ]; then ln -s /root/.local/bin/yt-dlp /usr/local/bin/yt-dlp; fi || \
-        if [ -f /usr/local/bin/yt-dlp ]; then echo "yt-dlp already in /usr/local/bin"; else echo "yt-dlp not found in common pipx paths"; exit 1; fi)
+    && if [ -f /root/.local/bin/yt-dlp ]; then ln -sf /root/.local/bin/yt-dlp /usr/local/bin/yt-dlp; fi \
+    && if ! command -v yt-dlp >/dev/null 2>&1; then echo "yt-dlp not found after pipx install"; exit 1; fi \
+    && yt-dlp --version
 
 # Copy package files and install ALL dependencies (including dev)
 COPY package.json yarn.lock ./
@@ -36,6 +31,9 @@ COPY . .
 # does not overwrite it with the host copy.
 COPY --chmod=755 entrypoint.sh /usr/local/bin/dimbybot-entrypoint.sh
 
+RUN addgroup -S devuser && adduser -S devuser -G devuser \
+    && chown -R devuser:devuser /app
+
 # Runtime environment (see Dockerfile in repo root for the full list):
 # Autoplay: Spotify API on the bot (compose / .env):
 #   LAVALINK_SPOTIFY_CLIENT_ID, LAVALINK_SPOTIFY_CLIENT_SECRET or SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
@@ -43,6 +41,11 @@ COPY --chmod=755 entrypoint.sh /usr/local/bin/dimbybot-entrypoint.sh
 
 # Use the same entrypoint as production so dev containers generate
 # lavaNodesConfig.js from compose environment before starting nodemon.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD wget -qO- http://127.0.0.1:3001/health || exit 1
+
+USER devuser
+
 ENTRYPOINT ["/usr/local/bin/dimbybot-entrypoint.sh"]
 
-CMD ["yarn", "dev"] 
+CMD ["yarn", "dev"]

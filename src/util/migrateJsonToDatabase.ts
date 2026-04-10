@@ -14,6 +14,8 @@ import {
     isDownloadMetadataTableEmpty,
     replaceDownloadMetadataStoreInDatabase,
 } from "../repositories/downloadMetadataRepository.js"
+import { downloadMetadataStoreKey } from "./downloadMetadataKeys.js"
+import { loggerFromPartial } from "./loggerFromPartial.js"
 
 const __dirname = import.meta.dirname
 
@@ -34,56 +36,24 @@ const guildSettingsJsonPath =
 const downloadMetadataJsonPath =
     resolveJsonPath("downloads/.metadata.json", "downloads/.metadata.json") ?? ""
 
-function getLogger(loggerInstance: Partial<LoggerInterface> | undefined): LoggerInterface {
-    if (
-        loggerInstance &&
-        typeof loggerInstance.debug === "function" &&
-        typeof loggerInstance.info === "function" &&
-        typeof loggerInstance.warn === "function" &&
-        typeof loggerInstance.error === "function"
-    ) {
-        const logger = loggerInstance as Partial<LoggerInterface>
-        return {
-            debug: (text: string, ...args: unknown[]) => logger.debug!(text, ...args),
-            info: (text: string, ...args: unknown[]) => logger.info!(text, ...args),
-            warn: (text: string, ...args: unknown[]) => logger.warn!(text, ...args),
-            error: (text: string, ...args: unknown[]) => logger.error!(text, ...args),
-            setDebugEnabled:
-                typeof logger.setDebugEnabled === "function"
-                    ? logger.setDebugEnabled.bind(logger)
-                    : () => {},
-            getDebugEnabled:
-                typeof logger.getDebugEnabled === "function"
-                    ? logger.getDebugEnabled.bind(logger)
-                    : () => false,
-            getLogFilePath:
-                typeof logger.getLogFilePath === "function"
-                    ? logger.getLogFilePath.bind(logger)
-                    : () => null,
-        }
-    }
-    return {
-        debug: () => {},
-        info: () => {},
-        warn: () => {},
-        error: () => {},
-        setDebugEnabled: () => {},
-        getDebugEnabled: () => false,
-        getLogFilePath: () => null,
-    }
-}
-
 function renameJsonAsMigrated(filePath: string, logger: LoggerInterface): void {
     const migratedPath = `${filePath}.migrated`
-    fs.renameSync(filePath, migratedPath)
-    logger.info(`[JsonMigration] Renamed ${filePath} -> ${migratedPath}`)
+    try {
+        fs.renameSync(filePath, migratedPath)
+        logger.info(`[JsonMigration] Renamed ${filePath} -> ${migratedPath}`)
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error)
+        logger.warn(
+            `[JsonMigration] Migration data was written but renaming failed (${filePath} -> ${migratedPath}): ${message}`
+        )
+    }
 }
 
 /** Migrates guild settings JSON into DB when table is empty and source file exists. */
 export async function migrateGuildSettings(
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<JsonMigrationResult> {
-    const logger = getLogger(loggerInstance)
+    const logger = loggerFromPartial(loggerInstance)
     const result: JsonMigrationResult = {
         source: "guildSettings",
         attempted: false,
@@ -156,7 +126,7 @@ export async function migrateGuildSettings(
 export async function migrateDownloadMetadata(
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<JsonMigrationResult> {
-    const logger = getLogger(loggerInstance)
+    const logger = loggerFromPartial(loggerInstance)
     const result: JsonMigrationResult = {
         source: "downloadMetadata",
         attempted: false,
@@ -201,9 +171,17 @@ export async function migrateDownloadMetadata(
                 )
                 continue
             }
-            validEntries[fileName] = metadata
+            const gid =
+                typeof metadata.guildId === "string" && metadata.guildId.trim().length > 0
+                    ? metadata.guildId.trim()
+                    : ""
+            const storeKey = downloadMetadataStoreKey(gid, fileName)
+            validEntries[storeKey] = {
+                ...metadata,
+                guildId: gid || metadata.guildId,
+            }
             logger.debug(
-                `[JsonMigration] Prepared download metadata entry "${fileName}" for migration.`
+                `[JsonMigration] Prepared download metadata entry "${storeKey}" for migration.`
             )
         }
 

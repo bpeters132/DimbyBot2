@@ -6,6 +6,7 @@ import {
     getGuildSettingsStoreFromDatabase,
     replaceGuildSettingsStoreInDatabase,
 } from "../repositories/guildSettingsRepository.js"
+import { loggerFromPartial } from "./loggerFromPartial.js"
 
 const __dirname = import.meta.dirname
 
@@ -18,44 +19,11 @@ function cloneGuildSettingsStore(store: GuildSettingsStore): GuildSettingsStore 
     return structuredClone(store)
 }
 
-function getLogger(logger: Partial<LoggerInterface> | undefined): LoggerInterface {
-    if (
-        logger &&
-        typeof logger.debug === "function" &&
-        typeof logger.info === "function" &&
-        typeof logger.warn === "function" &&
-        typeof logger.error === "function"
-    ) {
-        const l = logger as Partial<LoggerInterface>
-        return {
-            debug: (text: string, ...args: unknown[]) => l.debug!(text, ...args),
-            info: (text: string, ...args: unknown[]) => l.info!(text, ...args),
-            warn: (text: string, ...args: unknown[]) => l.warn!(text, ...args),
-            error: (text: string, ...args: unknown[]) => l.error!(text, ...args),
-            setDebugEnabled:
-                typeof l.setDebugEnabled === "function" ? l.setDebugEnabled.bind(l) : () => {},
-            getDebugEnabled:
-                typeof l.getDebugEnabled === "function" ? l.getDebugEnabled.bind(l) : () => false,
-            getLogFilePath:
-                typeof l.getLogFilePath === "function" ? l.getLogFilePath.bind(l) : () => null,
-        }
-    }
-    return {
-        debug: () => {},
-        info: () => {},
-        warn: () => {},
-        error: () => {},
-        setDebugEnabled: () => {},
-        getDebugEnabled: () => false,
-        getLogFilePath: () => null,
-    }
-}
-
 /**
  * Ensures that the storage directory exists, creating it if necessary.
  */
 export function ensureStorageDir(loggerInstance?: Partial<LoggerInterface>) {
-    const logger = getLogger(loggerInstance)
+    const logger = loggerFromPartial(loggerInstance)
     if (!fs.existsSync(storageDir)) {
         logger.debug(
             `[guildSettings] Storage directory ${storageDir} not found, attempting creation.`
@@ -72,7 +40,7 @@ export function ensureStorageDir(loggerInstance?: Partial<LoggerInterface>) {
 async function readGuildSettingsFromDatabase(
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<GuildSettingsStore> {
-    const logger = getLogger(loggerInstance)
+    const logger = loggerFromPartial(loggerInstance)
     logger.debug("[guildSettings] Attempting to load settings from database.")
     try {
         const store = await getGuildSettingsStoreFromDatabase()
@@ -117,7 +85,7 @@ export async function saveGuildSettings(
     settings: GuildSettingsStore,
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<boolean> {
-    const logger = getLogger(loggerInstance)
+    const logger = loggerFromPartial(loggerInstance)
     logger.debug("[guildSettings] Attempting to save settings to database.")
     try {
         const result = await replaceGuildSettingsStoreInDatabase(settings)

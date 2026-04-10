@@ -1,4 +1,4 @@
-import type { Guild, GuildMember } from "discord.js"
+import { PermissionFlagsBits, type Guild, type GuildMember } from "discord.js"
 import { summarizeVoiceForWeb } from "../lib/player-state.js"
 
 /** Dashboard/bot-API capability flags — not Discord permission names; see role mapping in this file. */
@@ -11,10 +11,6 @@ export enum WebPermission {
     MANAGE_MESSAGES = "MANAGE_MESSAGES",
     DEVELOPER_ACCESS = "DEVELOPER_ACCESS",
 }
-
-const DISCORD_PERMISSION_ADMINISTRATOR = 8n
-const DISCORD_PERMISSION_MANAGE_GUILD = 32n
-const DISCORD_PERMISSION_MANAGE_MESSAGES = 8192n
 
 type PermissionClient = {
     guilds: {
@@ -43,7 +39,20 @@ interface CachedPermissionResult {
     expiresAt: number
 }
 
-const permissionCache = new Map<string, CachedPermissionResult>()
+const permissionCache = new Map<string, Map<string, CachedPermissionResult>>()
+
+function readCached(guildId: string, userId: string): CachedPermissionResult | undefined {
+    return permissionCache.get(guildId)?.get(userId)
+}
+
+function writeCached(guildId: string, userId: string, entry: CachedPermissionResult): void {
+    let inner = permissionCache.get(guildId)
+    if (!inner) {
+        inner = new Map()
+        permissionCache.set(guildId, inner)
+    }
+    inner.set(userId, entry)
+}
 
 export interface PermissionResolution {
     permissions: WebPermission[]
@@ -126,10 +135,9 @@ export async function resolveUserPermissions(
     options?: ResolveUserPermissionsOptions
 ): Promise<PermissionResolution> {
     const applyVoiceGating = options?.applyVoiceGating !== false
-    const cacheKey = `${guildId}:${userId}`
     const now = Date.now()
     if (applyVoiceGating) {
-        const cached = permissionCache.get(cacheKey)
+        const cached = readCached(guildId, userId)
         if (cached && cached.expiresAt > now) {
             return cached.value
         }
@@ -139,7 +147,7 @@ export async function resolveUserPermissions(
     if (!guild) {
         const result: PermissionResolution = { permissions: [], inVoiceWithBot: false }
         if (applyVoiceGating) {
-            permissionCache.set(cacheKey, { value: result, expiresAt: now + cacheTtlMs })
+            writeCached(guildId, userId, { value: result, expiresAt: now + cacheTtlMs })
         }
         return result
     }
@@ -170,7 +178,7 @@ export async function resolveUserPermissions(
             inVoiceWithBot,
         }
         if (applyVoiceGating) {
-            permissionCache.set(cacheKey, { value: result, expiresAt: now + cacheTtlMs })
+            writeCached(guildId, userId, { value: result, expiresAt: now + cacheTtlMs })
         }
         return result
     }
@@ -179,27 +187,29 @@ export async function resolveUserPermissions(
     if (!member) {
         const result: PermissionResolution = { permissions: [], inVoiceWithBot: false }
         if (applyVoiceGating) {
-            permissionCache.set(cacheKey, { value: result, expiresAt: now + cacheTtlMs })
+            writeCached(guildId, userId, { value: result, expiresAt: now + cacheTtlMs })
         }
         return result
     }
 
     const ownerId = process.env.OWNER_ID?.trim()
 
+    // Separate from guild owner handling above: grants bot-owner rights to configured OWNER_ID
+    // when they are a guild member but not the current guild owner.
     if (ownerId && ownerId === userId) {
         const result: PermissionResolution = {
             permissions: applyGate(getOwnerPermissions()),
             inVoiceWithBot,
         }
         if (applyVoiceGating) {
-            permissionCache.set(cacheKey, { value: result, expiresAt: now + cacheTtlMs })
+            writeCached(guildId, userId, { value: result, expiresAt: now + cacheTtlMs })
         }
         return result
     }
 
-    const isAdmin = member.permissions.has(DISCORD_PERMISSION_ADMINISTRATOR)
-    const canManageGuild = member.permissions.has(DISCORD_PERMISSION_MANAGE_GUILD)
-    const canManageMessages = member.permissions.has(DISCORD_PERMISSION_MANAGE_MESSAGES)
+    const isAdmin = member.permissions.has(PermissionFlagsBits.Administrator)
+    const canManageGuild = member.permissions.has(PermissionFlagsBits.ManageGuild)
+    const canManageMessages = member.permissions.has(PermissionFlagsBits.ManageMessages)
 
     let permissions: WebPermission[]
     if (isAdmin || canManageGuild) {
@@ -230,7 +240,7 @@ export async function resolveUserPermissions(
         inVoiceWithBot,
     }
     if (applyVoiceGating) {
-        permissionCache.set(cacheKey, { value: result, expiresAt: now + cacheTtlMs })
+        writeCached(guildId, userId, { value: result, expiresAt: now + cacheTtlMs })
     }
     return result
 }
@@ -240,10 +250,21 @@ export async function resolveUserPermissions(
  * still allow the dashboard using voice-state + player data only. Does not grant mod permissions.
  */
 export function resolveOauthGuildPermissionFallback(
-    client: PermissionClient,
+    client: PermissionClient | null,
     guildId: string,
     userId: string
 ): PermissionResolution {
+    if (!client) {
+        return {
+            permissions: [
+                WebPermission.VIEW_PLAYER,
+                WebPermission.CONTROL_PLAYBACK,
+                WebPermission.MANAGE_QUEUE,
+            ],
+            inVoiceWithBot: false,
+        }
+    }
+
     const guild = client.guilds.cache.get(guildId) as Guild | undefined
     if (!guild) {
         return { permissions: [], inVoiceWithBot: false }
@@ -252,12 +273,12 @@ export function resolveOauthGuildPermissionFallback(
     const player = client.lavalink.getPlayer(guildId)
     const { inVoiceWithBot, canQueueTracks } = summarizeVoiceForWeb(guildId, userId, player)
 
-    const permissions: WebPermission[] = [WebPermission.VIEW_PLAYER]
-    if (inVoiceWithBot) {
-        permissions.push(WebPermission.CONTROL_PLAYBACK, WebPermission.MANAGE_QUEUE)
-    } else if (canQueueTracks) {
-        permissions.push(WebPermission.MANAGE_QUEUE)
-    }
+    const base: WebPermission[] = [
+        WebPermission.VIEW_PLAYER,
+        WebPermission.CONTROL_PLAYBACK,
+        WebPermission.MANAGE_QUEUE,
+    ]
+    const permissions = addVoiceGatedPermissions(base, inVoiceWithBot, canQueueTracks)
 
     return { permissions, inVoiceWithBot }
 }
@@ -268,12 +289,21 @@ export function invalidatePermissionCache(guildId?: string, userId?: string): vo
         return
     }
 
-    for (const key of permissionCache.keys()) {
-        const [cacheGuildId, cacheUserId] = key.split(":")
-        const guildMatches = guildId ? guildId === cacheGuildId : true
-        const userMatches = userId ? userId === cacheUserId : true
-        if (guildMatches && userMatches) {
-            permissionCache.delete(key)
+    if (guildId && userId) {
+        const inner = permissionCache.get(guildId)
+        inner?.delete(userId)
+        if (inner && inner.size === 0) {
+            permissionCache.delete(guildId)
         }
+        return
+    }
+
+    if (guildId) {
+        permissionCache.delete(guildId)
+        return
+    }
+
+    for (const inner of permissionCache.values()) {
+        inner.delete(userId!)
     }
 }

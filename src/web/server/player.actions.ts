@@ -41,8 +41,10 @@ async function readQueueResult(res: Response): Promise<Ok<QueueResponse> | Err> 
         return { ok: false, error: "Invalid JSON from bot API." }
     }
     if (!res.ok || payload.ok === false) {
+        const errorPayload = payload.ok === false ? payload.error : null
+        const detail = errorPayload?.details || errorPayload?.error
         const msg =
-            payload.ok === false ? payload.error.details || payload.error.error : "Queue request failed."
+            payload.ok === false ? detail ?? "Queue request failed." : "Queue request failed."
         return { ok: false, error: msg }
     }
     return { ok: true, data: payload.data }

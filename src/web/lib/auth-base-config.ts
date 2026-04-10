@@ -8,23 +8,28 @@
  *   `/api/guilds/*` and `/ws`. No Next.js runtime; do not import `better-auth/next-js` there.
  *
  * Both use the same `BETTER_AUTH_SECRET`, `DATABASE_URL`, and Discord OAuth app — one identity store, two HTTP stacks.
+ *
+ * OAuth tokens on `Account` rows are sensitive: use a TLS `DATABASE_URL` in production and least-privilege DB roles.
  */
+const betterAuthSecret = getRequiredEnv("BETTER_AUTH_SECRET")
+const betterAuthUrl = getRequiredEnv("BETTER_AUTH_URL")
+
 export const betterAuthBaseConfig = {
-    secret: process.env.BETTER_AUTH_SECRET,
-    baseURL: process.env.BETTER_AUTH_URL,
-    trustedOrigins: [process.env.BETTER_AUTH_URL || "http://localhost:3000"],
+    secret: betterAuthSecret,
+    baseURL: betterAuthUrl,
+    trustedOrigins: [betterAuthUrl],
     socialProviders: {
         discord: {
-            clientId: process.env.CLIENT_ID as string,
-            clientSecret: process.env.DISCORD_CLIENT_SECRET as string,
+            clientId: getRequiredEnv("CLIENT_ID"),
+            clientSecret: getRequiredEnv("DISCORD_CLIENT_SECRET"),
             scope: ["identify", "guilds"],
             /**
              * Discord often omits `refresh_token` in refresh responses. Better Auth otherwise may clear the stored
              * refresh token and break `getAccessToken` → `/users/@me/guilds` after the first expiry.
              */
             refreshAccessToken: async (refreshToken: string) => {
-                const clientId = process.env.CLIENT_ID as string
-                const clientSecret = process.env.DISCORD_CLIENT_SECRET as string
+                const clientId = getRequiredEnv("CLIENT_ID")
+                const clientSecret = getRequiredEnv("DISCORD_CLIENT_SECRET")
                 const tokenResponse = await fetch("https://discord.com/api/oauth2/token", {
                     method: "POST",
                     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -58,4 +63,14 @@ export const betterAuthBaseConfig = {
             maxAge: 5 * 60,
         },
     },
+}
+
+function getRequiredEnv(
+    name: "CLIENT_ID" | "DISCORD_CLIENT_SECRET" | "BETTER_AUTH_SECRET" | "BETTER_AUTH_URL"
+): string {
+    const value = process.env[name]?.trim()
+    if (!value) {
+        throw new Error(`${name} is required for auth configuration.`)
+    }
+    return value
 }

@@ -10,7 +10,7 @@ import type { GuildDashboardSnapshotResult } from "../types/web.js"
 import { fetchDiscordUserGuilds } from "./discord-rest.js"
 import { resolveDiscordUserSnowflake } from "./discord-user-id.js"
 import { auth } from "../auth-node.js"
-import { getBotClient, tryGetBotClient } from "./botClient.js"
+import { tryGetBotClient } from "./botClient.js"
 
 export interface AuthenticatedSession {
     user: {
@@ -283,8 +283,10 @@ export async function requirePermissions(
         return ctx
     }
 
-    const botClient = getBotClient()
-    let permissionResolution = await resolveUserPermissions(botClient, guildId, ctx.discordUserId)
+    const botClient = tryGetBotClient()
+    let permissionResolution = botClient
+        ? await resolveUserPermissions(botClient, guildId, ctx.discordUserId)
+        : resolveOauthGuildPermissionFallback(null, guildId, ctx.discordUserId)
 
     if (
         !hasRequiredPermissions(permissionResolution.permissions, requiredPerms) &&

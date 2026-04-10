@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client"
+import { Prisma } from "@prisma/client"
 import { getPrismaClient } from "../lib/database.js"
 import type { GuildDiscordLogSettings, GuildSettings, GuildSettingsStore } from "../types/index.js"
 
@@ -51,29 +51,23 @@ export async function replaceGuildSettingsStoreInDatabase(
     await prisma.$transaction(async (tx) => {
         for (const guildId of guildIds) {
             const settings = store[guildId]
+            const payload = {
+                controlChannelId: settings?.controlChannelId ?? null,
+                controlMessageId: settings?.controlMessageId ?? null,
+                downloadsMaxMb:
+                    typeof settings?.downloadsMaxMb === "number" ? settings.downloadsMaxMb : null,
+                discordLog:
+                    settings?.discordLog != null
+                        ? (settings.discordLog as Prisma.InputJsonValue)
+                        : Prisma.DbNull,
+            }
             await tx.guildSettings.upsert({
                 where: { guildId },
                 create: {
                     guildId,
-                    controlChannelId: settings?.controlChannelId ?? null,
-                    controlMessageId: settings?.controlMessageId ?? null,
-                    downloadsMaxMb:
-                        typeof settings?.downloadsMaxMb === "number" ? settings.downloadsMaxMb : null,
-                    discordLog:
-                        settings?.discordLog != null
-                            ? (settings.discordLog as Prisma.InputJsonValue)
-                            : undefined,
+                    ...payload,
                 },
-                update: {
-                    controlChannelId: settings?.controlChannelId ?? null,
-                    controlMessageId: settings?.controlMessageId ?? null,
-                    downloadsMaxMb:
-                        typeof settings?.downloadsMaxMb === "number" ? settings.downloadsMaxMb : null,
-                    discordLog:
-                        settings?.discordLog != null
-                            ? (settings.discordLog as Prisma.InputJsonValue)
-                            : undefined,
-                },
+                update: payload,
             })
         }
 

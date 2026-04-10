@@ -68,26 +68,26 @@ jobs:
             - name: Build bot image
               run: |
                   # Dockerfile is multi-stage: yarn install + yarn build (TypeScript → dist/), then runtime yarn install --production + copied dist/
-                  docker build -t $IMAGE_BOT -f Dockerfile .
+                  docker build -t "$IMAGE_BOT" -f Dockerfile .
 
             - name: Verify bot image contains Prisma runtime assets
               run: |
-                  docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -f /app/dist/server.js"
-                  docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -f /app/prisma/schema.prisma"
-                  docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -d /app/prisma/migrations"
-                  docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -f /app/prisma.config.ts"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT" -c "test -f /app/dist/server.js"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT" -c "test -f /app/prisma/schema.prisma"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT" -c "test -d /app/prisma/migrations"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT" -c "test -f /app/prisma.config.ts"
 
             - name: Build lavalink image
               run: |
-                  docker build -t $IMAGE_LAVALINK -f Lavalink/Dockerfile ./Lavalink
+                  docker build -t "$IMAGE_LAVALINK" -f Lavalink/Dockerfile ./Lavalink
 
             - name: Push bot image
               run: |
-                  docker push $IMAGE_BOT
+                  docker push "$IMAGE_BOT"
 
             - name: Push lavalink image
               run: |
-                  docker push $IMAGE_LAVALINK
+                  docker push "$IMAGE_LAVALINK"
 
     deploy:
         needs:
@@ -108,6 +108,7 @@ jobs:
                   cat << EOF > .env
                   BOT_TOKEN=${{ secrets.BOT_TOKEN }}
                   CLIENT_ID=${{ secrets.CLIENT_ID }}
+                  DISCORD_CLIENT_SECRET=${{ secrets.DISCORD_CLIENT_SECRET }}
                   GUILD_ID=${{ secrets.GUILD_ID }}
                   OWNER_ID=${{ secrets.OWNER_ID }}
                   DEV_MODE=${{ secrets.DEV_MODE }}
@@ -160,8 +161,8 @@ jobs:
                   set -e
                   cd /home/bot
                   export $(grep -v '^#' .env | xargs)
-                  sed -i "s|image: .*bot.*|image: $BOT_IMAGE|" docker-compose.yml
-                  sed -i "s|image: .*lavalink.*|image: $LAVALINK_IMAGE|" docker-compose.yml
+                  sed -i "s|image: .*bot.*|image: ${BOT_IMAGE}|" docker-compose.yml
+                  sed -i "s|image: .*lavalink.*|image: ${LAVALINK_IMAGE}|" docker-compose.yml
                   echo "$GH_TOKEN" | /usr/bin/docker login ghcr.io -u "$GH_ACTOR" --password-stdin
                   /usr/bin/docker compose down
                   /usr/bin/docker compose pull

@@ -7,7 +7,7 @@ import {
 } from "../shared/permissions.js"
 import type { WSMessage } from "../types/web.js"
 import { auth } from "../auth-node.js"
-import { getBotClient } from "../lib/botClient.js"
+import { tryGetBotClient } from "../lib/botClient.js"
 import { resolveDiscordUserSnowflake } from "../lib/discord-user-id.js"
 import { parseWsConnectToken } from "../lib/ws-connect-token.js"
 
@@ -40,6 +40,7 @@ export class ConnectionManager {
                 socket.ping()
             }
         }, this.heartbeatIntervalMs)
+        this.heartbeatTimer.unref()
     }
 
     stopHeartbeat(): void {
@@ -128,11 +129,13 @@ export class ConnectionManager {
         }
     }
 
-    broadcastWithResolver(guildId: string, factory: (userId: string) => WSMessage): void {
+    broadcastWithResolver(guildId: string, factory: (userId: string) => WSMessage | null): void {
         for (const socket of this.getGuildConnections(guildId)) {
             const meta = this.socketMeta.get(socket)
             if (!meta || socket.readyState !== socket.OPEN) continue
-            socket.send(JSON.stringify(factory(meta.userId)))
+            const payload = factory(meta.userId)
+            if (!payload) continue
+            socket.send(JSON.stringify(payload))
         }
     }
 
@@ -140,9 +143,9 @@ export class ConnectionManager {
         const meta = this.socketMeta.get(socket)
         if (!meta) return
 
-        let parsed: Partial<WSMessage>
+        let parsed: Record<string, unknown>
         try {
-            parsed = JSON.parse(raw) as Partial<WSMessage>
+            parsed = JSON.parse(raw) as Record<string, unknown>
         } catch {
             socket.send(JSON.stringify({ type: "error", message: "Invalid message JSON." }))
             return
@@ -161,7 +164,19 @@ export class ConnectionManager {
                 return
             }
 
-            const resolution = await resolveUserPermissions(getBotClient(), guildId, meta.userId)
+            const botClient = tryGetBotClient()
+            if (!botClient) {
+                socket.send(
+                    JSON.stringify({
+                        type: "error",
+                        code: "BOT_UNAVAILABLE",
+                        message: "Live updates require the bot process to be running with this dashboard.",
+                    })
+                )
+                return
+            }
+
+            const resolution = await resolveUserPermissions(botClient, guildId, meta.userId)
             if (!hasRequiredPermissions(resolution.permissions, [WebPermission.VIEW_PLAYER])) {
                 socket.send(
                     JSON.stringify({
@@ -174,6 +189,7 @@ export class ConnectionManager {
                 return
             }
 
+            this.clearSubscriptions(socket)
             this.subscribe(socket, guildId)
             socket.send(
                 JSON.stringify({
@@ -181,7 +197,42 @@ export class ConnectionManager {
                     guildId,
                 })
             )
+            return
         }
+
+        if (parsed.type === "unsubscribe") {
+            const guildId = parsed.guildId
+            if (!guildId || typeof guildId !== "string") {
+                socket.send(
+                    JSON.stringify({ type: "error", message: "Invalid guildId for unsubscribe." })
+                )
+                return
+            }
+            this.unsubscribe(socket, guildId)
+            socket.send(JSON.stringify({ type: "unsubscribed", guildId }))
+        }
+    }
+
+    /** Drops all guild subscriptions for a socket (one active guild per subscribe). */
+    private clearSubscriptions(socket: WebSocket): void {
+        const meta = this.socketMeta.get(socket)
+        if (!meta) return
+        for (const guildId of [...meta.guildSubscriptions]) {
+            this.unsubscribe(socket, guildId)
+        }
+    }
+
+    private unsubscribe(socket: WebSocket, guildId: string): void {
+        const meta = this.socketMeta.get(socket)
+        if (!meta) return
+        const sockets = this.guildConnections.get(guildId)
+        if (sockets) {
+            sockets.delete(socket)
+            if (sockets.size === 0) {
+                this.guildConnections.delete(guildId)
+            }
+        }
+        meta.guildSubscriptions.delete(guildId)
     }
 
     private subscribe(socket: WebSocket, guildId: string): void {

@@ -30,19 +30,26 @@ function requesterId(track: Track | UnresolvedTrack): string | null {
     return requester?.id ?? null
 }
 
+function isPlayer(value: unknown): value is Player {
+    return typeof value === "object" && value !== null && "queue" in value && "playing" in value
+}
+
 export function toQueueTrackSummary(track: Track | UnresolvedTrack): QueueTrackSummary {
     return {
         title: track.info.title,
         uri: track.info.uri ?? null,
         durationMs: track.info.duration ?? 0,
         isStream: Boolean(track.info.isStream),
+        thumbnailUrl: trackThumbnail(track),
+        author: track.info.author?.trim() || null,
+        sourceName: track.info.sourceName ?? null,
         requesterId: requesterId(track),
     }
 }
 
 /** Bot VC from Lavalink player when set; otherwise Discord.js (covers brief desync after connect). */
-export function resolveBotVoiceChannelId(guildId: string, player?: unknown): string | null {
-    const p = player as Player | null | undefined
+export function resolveBotVoiceChannelId(guildId: string, player?: Player | null): string | null {
+    const p = player ?? null
     if (p?.voiceChannelId) {
         return p.voiceChannelId
     }
@@ -58,13 +65,11 @@ export function summarizeVoiceForWeb(
 ): { inVoiceWithBot: boolean; botInVoiceChannel: boolean; canQueueTracks: boolean } {
     const guild = getBotClient().guilds.cache.get(guildId)
     const userVoiceChannelId = guild?.voiceStates.cache.get(userId)?.channelId ?? null
-    const botVoiceChannelId = resolveBotVoiceChannelId(guildId, player)
+    const botVoiceChannelId = resolveBotVoiceChannelId(guildId, isPlayer(player) ? player : null)
     const botInVoiceChannel = botVoiceChannelId !== null
     const userInVoice = userVoiceChannelId !== null
     const inVoiceWithBot =
-        userInVoice &&
-        botInVoiceChannel &&
-        userVoiceChannelId === botVoiceChannelId
+        userInVoice && botInVoiceChannel && userVoiceChannelId === botVoiceChannelId
     const canQueueTracks = userInVoice && (!botInVoiceChannel || inVoiceWithBot)
     return { inVoiceWithBot, botInVoiceChannel, canQueueTracks }
 }
@@ -78,7 +83,7 @@ export function toPlayerStateResponse(
     userId: string,
     player: unknown
 ): PlayerStateResponse {
-    const p = player as Player | null
+    const p = isPlayer(player) ? player : null
     const current = p?.queue?.current ?? null
     const { inVoiceWithBot, botInVoiceChannel, canQueueTracks } = summarizeVoiceForWeb(
         guildId,
@@ -117,7 +122,7 @@ export function toQueueResponse(
     page = 1,
     limit = 20
 ): QueueResponse {
-    const p = player as Player | null
+    const p = isPlayer(player) ? player : null
     const queue = p?.queue?.tracks ?? []
     const total = queue.length
     const normalizedPage = Math.max(1, page)
@@ -141,7 +146,7 @@ export function toQueueSnapshotMessage(
     userId: string,
     player: unknown
 ): QueueUpdateMessage {
-    const p = player as Player | null
+    const p = isPlayer(player) ? player : null
     return {
         type: "queueUpdate",
         guildId,

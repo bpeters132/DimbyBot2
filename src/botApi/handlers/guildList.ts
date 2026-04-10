@@ -2,7 +2,14 @@ import { auth } from "../../web/auth-node.js"
 import { fetchDiscordUserGuilds } from "../../util/discordUserGuilds.js"
 import { getAuthenticatedSession } from "../../web/lib/api-auth.js"
 import { getBotClient } from "../../web/lib/botClient.js"
-import type { ApiResponse, GuildListResponse } from "../../web/types/web.js"
+import type { ApiResponse } from "../../types/apiPayloads.js"
+import type { GuildListResponse } from "../../web/types/web.js"
+
+/**
+ * Discord invite permissions bitset:
+ * Administrator, ManageGuild, ManageMessages, Connect, Speak, and related playback controls.
+ */
+export const BOT_INVITE_PERMISSIONS = "277025509376"
 
 function discordGuildIconUrl(guildId: string, icon: string | null): string | null {
     if (!icon) return null
@@ -63,7 +70,7 @@ export async function guildListGET(
     const clientId = process.env.CLIENT_ID || ""
     const botInviteUrl =
         mutualGuilds.length === 0 && clientId
-            ? `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=277025509376&scope=bot%20applications.commands`
+            ? `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=${BOT_INVITE_PERMISSIONS}&scope=bot%20applications.commands`
             : undefined
 
     return {

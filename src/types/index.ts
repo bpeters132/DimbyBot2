@@ -152,3 +152,10 @@ export interface DisconnectedRRQUser {
  * Stored on the player via `player.set("rrqDisconnectedUsers", map)`.
  */
 export type RRQDisconnectedUsersMap = Map<string, DisconnectedRRQUser>
+
+export type {
+    ApiErrorPayload,
+    ApiFailurePayload,
+    ApiResponse,
+    ApiSuccessPayload,
+} from "./apiPayloads.js"

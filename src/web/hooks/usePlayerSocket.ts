@@ -6,7 +6,7 @@ import type { PlayerStateResponse, QueueTrackSummary, WSMessage } from "@/types/
 interface UsePlayerSocketResult {
     isConnected: boolean
     playerState: PlayerStateResponse | null
-    queue: QueueTrackSummary[]
+    queue: QueueTrackSummary[] | undefined
     /** Set when the server rejects subscribe or sends an error frame (permission/membership), not voice/player state. */
     liveUpdatesError: string | null
 }
@@ -14,7 +14,7 @@ interface UsePlayerSocketResult {
 export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSocketResult {
     const [isConnected, setIsConnected] = useState(false)
     const [playerState, setPlayerState] = useState<PlayerStateResponse | null>(null)
-    const [queue, setQueue] = useState<QueueTrackSummary[]>([])
+    const [queue, setQueue] = useState<QueueTrackSummary[] | undefined>(undefined)
     const [liveUpdatesError, setLiveUpdatesError] = useState<string | null>(null)
     const reconnectAttemptsRef = useRef(0)
     const socketRef = useRef<WebSocket | null>(null)
@@ -35,7 +35,9 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
             } catch {
                 // Fall back to cookie-only upgrade (same-origin WS only).
             }
+            if (cancelled) return
 
+            // Dev: Next on :3000 and bot WS on :3001; override with NEXT_PUBLIC_WS_URL in other setups.
             const explicitWsUrl = process.env.NEXT_PUBLIC_WS_URL
             const protocol = window.location.protocol === "https:" ? "wss" : "ws"
             const base =
@@ -48,6 +50,7 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
             if (ticket) {
                 url.searchParams.set("ticket", ticket)
             }
+            if (cancelled) return
             const socket = new WebSocket(url.toString())
             socketRef.current = socket
 
@@ -59,7 +62,7 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
             }
 
             socket.onmessage = (event) => {
-                const parsed = JSON.parse(event.data as string) as Partial<WSMessage> & {
+                let parsed: Partial<WSMessage> & {
                     state?: PlayerStateResponse
                     queue?: QueueTrackSummary[]
                     inVoiceWithBot?: boolean
@@ -67,6 +70,12 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
                     canQueueTracks?: boolean
                     message?: string
                     code?: string
+                }
+                try {
+                    parsed = JSON.parse(event.data as string) as typeof parsed
+                } catch {
+                    console.warn("[usePlayerSocket] Ignoring non-JSON WS payload:", event.data)
+                    return
                 }
 
                 if (parsed.type === "error" && typeof parsed.message === "string") {
@@ -88,7 +97,7 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
                     parsed.type === "playerDestroy"
                 ) {
                     if (parsed.state) setPlayerState(parsed.state)
-                    if (parsed.queue) setQueue(parsed.queue)
+                    if (parsed.queue !== undefined) setQueue(parsed.queue)
                     return
                 }
 
@@ -115,7 +124,11 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
                 if (cancelled) return
                 reconnectAttemptsRef.current += 1
                 const delay = Math.min(30000, 1000 * 2 ** reconnectAttemptsRef.current)
-                setTimeout(() => void connect(), delay)
+                setTimeout(() => {
+                    if (!cancelled) {
+                        void connect()
+                    }
+                }, delay)
             }
 
             socket.onerror = () => {

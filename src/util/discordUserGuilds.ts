@@ -21,6 +21,30 @@ type SuccessCacheEntry = { expiresAt: number; guilds: DiscordUserGuild[] }
 const successCache = new Map<string, SuccessCacheEntry>()
 const inflight = new Map<string, Promise<FetchUserGuildsResult>>()
 
+const SUCCESS_CACHE_SWEEP_MS = 60_000
+const sweepInterval = setInterval(() => {
+    const now = Date.now()
+    for (const [key, entry] of successCache.entries()) {
+        if (now > entry.expiresAt) {
+            successCache.delete(key)
+        }
+    }
+}, SUCCESS_CACHE_SWEEP_MS)
+if (typeof sweepInterval.unref === "function") {
+    sweepInterval.unref()
+}
+
+function isDiscordUserGuildRow(value: unknown): value is DiscordUserGuild {
+    if (!value || typeof value !== "object") {
+        return false
+    }
+    const row = value as { id?: unknown; name?: unknown; icon?: unknown }
+    if (typeof row.id !== "string" || typeof row.name !== "string") {
+        return false
+    }
+    return row.icon === null || typeof row.icon === "string"
+}
+
 function delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -79,7 +103,26 @@ async function fetchDiscordUserGuildsOnce(accessToken: string): Promise<FetchUse
         }
 
         if (response.ok) {
-            const guilds = (await response.json()) as DiscordUserGuild[]
+            let parsed: unknown
+            try {
+                parsed = await response.json()
+            } catch {
+                return { ok: false, status: 0, message: "invalid-discord-guilds-response" }
+            }
+            if (!Array.isArray(parsed)) {
+                return { ok: false, status: 0, message: "invalid-discord-guilds-response" }
+            }
+            const guilds: DiscordUserGuild[] = []
+            for (const item of parsed) {
+                if (!isDiscordUserGuildRow(item)) {
+                    return { ok: false, status: 0, message: "invalid-discord-guilds-response" }
+                }
+                guilds.push({
+                    id: item.id,
+                    name: item.name,
+                    icon: item.icon ?? null,
+                })
+            }
             return { ok: true, guilds }
         }
 

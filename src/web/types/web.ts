@@ -5,22 +5,12 @@ export interface StatusPayload {
     botApi: { ok: boolean; message?: string }
 }
 
-export interface ApiErrorPayload {
-    error: string
-    details?: string
-}
-
-export interface ApiSuccessPayload<T> {
-    ok: true
-    data: T
-}
-
-export interface ApiFailurePayload {
-    ok: false
-    error: ApiErrorPayload
-}
-
-export type ApiResponse<T> = ApiSuccessPayload<T> | ApiFailurePayload
+export type {
+    ApiErrorPayload,
+    ApiFailurePayload,
+    ApiResponse,
+    ApiSuccessPayload,
+} from "../../types/apiPayloads.js"
 
 export interface GuildListItem {
     id: string
@@ -58,12 +48,9 @@ export interface PlayerTrackSummary {
     requesterId: string | null
 }
 
-export interface QueueTrackSummary {
-    title: string
-    uri: string | null
-    durationMs: number
-    isStream: boolean
-    requesterId: string | null
+export interface QueueTrackSummary extends PlayerTrackSummary {
+    author: string | null
+    sourceName: string | null
 }
 
 export interface PlayerStateResponse {
@@ -102,13 +89,7 @@ export interface VoiceStateMessage {
 }
 
 export interface PlayerUpdateMessage {
-    type:
-        | "trackStart"
-        | "trackEnd"
-        | "playerPause"
-        | "playerResume"
-        | "queueUpdate"
-        | "playerDestroy"
+    type: "trackStart" | "trackEnd" | "playerPause" | "playerResume" | "playerDestroy"
     guildId: string
     state: PlayerStateResponse
     queue: QueueTrackSummary[]
@@ -131,6 +112,11 @@ export interface WsSubscribedMessage {
     guildId: string
 }
 
+export interface WsUnsubscribedMessage {
+    type: "unsubscribed"
+    guildId: string
+}
+
 export interface WsPingMessage {
     type: "ping"
 }
@@ -148,5 +134,6 @@ export type WSMessage =
     | QueueUpdateMessage
     | WsSubscribeMessage
     | WsSubscribedMessage
+    | WsUnsubscribedMessage
     | WsPingMessage
     | WsErrorMessage

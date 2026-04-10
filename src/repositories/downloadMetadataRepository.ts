@@ -1,8 +1,13 @@
 import { getPrismaClient } from "../lib/database.js"
 import type { DownloadFileMetadata, DownloadsMetadataStore } from "../types/index.js"
+import {
+    downloadMetadataStoreKey,
+    effectiveDownloadMetadataGuildId,
+    parseDownloadMetadataStoreKey,
+} from "../util/downloadMetadataKeys.js"
 
 function toDownloadMetadataEntry(row: {
-    guildId: string | null
+    guildId: string
     downloadDate: Date | string | null
     originalUrl: string | null
     filePath: string | null
@@ -21,12 +26,46 @@ function toDownloadMetadataEntry(row: {
     return entry
 }
 
-/** Reads all download metadata rows and returns the legacy map shape keyed by file name. */
+function normalizedRowsFromStore(store: DownloadsMetadataStore) {
+    const rows: Array<{
+        fileName: string
+        guildId: string
+        downloadDate: Date | null
+        originalUrl: string | null
+        filePath: string | null
+    }> = []
+
+    for (const [key, metadata] of Object.entries(store)) {
+        if (!metadata || typeof metadata !== "object") continue
+        const parsed = parseDownloadMetadataStoreKey(key)
+        const fileName = parsed.fileName
+        const guildId = effectiveDownloadMetadataGuildId(key, metadata)
+        const parsedDownloadDate =
+            metadata.downloadDate === undefined ? null : new Date(metadata.downloadDate)
+        const downloadDate =
+            parsedDownloadDate && Number.isFinite(parsedDownloadDate.getTime())
+                ? parsedDownloadDate
+                : null
+        rows.push({
+            fileName,
+            guildId,
+            downloadDate,
+            originalUrl: metadata.originalUrl ?? null,
+            filePath: metadata.filePath ?? null,
+        })
+    }
+
+    return rows
+}
+
+/** Reads all download metadata rows and returns the legacy map shape keyed by composite store key. */
 export async function getDownloadMetadataStoreFromDatabase(): Promise<DownloadsMetadataStore> {
     const prisma = getPrismaClient()
     const rows = await prisma.downloadMetadata.findMany()
     return rows.reduce<DownloadsMetadataStore>((acc, row) => {
-        acc[row.fileName] = toDownloadMetadataEntry(row)
+        const guildId = row.guildId ?? ""
+        const key = downloadMetadataStoreKey(guildId, row.fileName)
+        acc[key] = toDownloadMetadataEntry({ ...row, guildId })
         return acc
     }, {})
 }
@@ -38,59 +77,21 @@ export async function isDownloadMetadataTableEmpty(): Promise<boolean> {
     return count === 0
 }
 
-/** Replaces all download metadata rows with the provided legacy map shape. */
+/**
+ * Replaces all download metadata rows with the provided map (full replace via delete + createMany).
+ */
 export async function replaceDownloadMetadataStoreInDatabase(
     store: DownloadsMetadataStore
 ): Promise<{ rowsWritten: number }> {
     const prisma = getPrismaClient()
-    const fileNames = Object.keys(store)
+    const rows = normalizedRowsFromStore(store)
 
     await prisma.$transaction(async (tx) => {
-        const existingRows = await tx.downloadMetadata.findMany({
-            select: { fileName: true, downloadDate: true },
-        })
-        const fileNameSet = new Set(fileNames)
-        const toDelete = existingRows.filter((row) => !fileNameSet.has(row.fileName))
-
-        for (const fileName of fileNames) {
-            const metadata = store[fileName]
-            const parsedDownloadDate =
-                metadata?.downloadDate === undefined ? null : new Date(metadata.downloadDate)
-            const downloadDate =
-                parsedDownloadDate && Number.isFinite(parsedDownloadDate.getTime())
-                    ? parsedDownloadDate.toISOString()
-                    : null
-
-            await tx.downloadMetadata.upsert({
-                where: { fileName },
-                create: {
-                    fileName,
-                    guildId: metadata?.guildId ?? null,
-                    downloadDate,
-                    originalUrl: metadata?.originalUrl ?? null,
-                    filePath: metadata?.filePath ?? null,
-                },
-                update: {
-                    guildId: metadata?.guildId ?? null,
-                    downloadDate,
-                    originalUrl: metadata?.originalUrl ?? null,
-                    filePath: metadata?.filePath ?? null,
-                },
-            })
-        }
-
-        if (toDelete.length > 0) {
-            const deleteGuards = toDelete.map((row) => ({
-                fileName: row.fileName,
-                downloadDate: row.downloadDate,
-            }))
-            await tx.downloadMetadata.deleteMany({
-                where: {
-                    OR: deleteGuards,
-                },
-            })
+        await tx.downloadMetadata.deleteMany({})
+        if (rows.length > 0) {
+            await tx.downloadMetadata.createMany({ data: rows })
         }
     })
 
-    return { rowsWritten: fileNames.length }
+    return { rowsWritten: rows.length }
 }

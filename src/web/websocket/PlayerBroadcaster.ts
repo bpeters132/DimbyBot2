@@ -1,9 +1,10 @@
 import type { Player } from "lavalink-client"
-import type { PlayerUpdateMessage } from "../types/web.js"
-import { getBotClient } from "../lib/botClient.js"
+import type { PlayerUpdateMessage, QueueUpdateMessage } from "../types/web.js"
+import { tryGetBotClient } from "../lib/botClient.js"
 import {
     summarizeVoiceForWeb,
     toPlayerStateResponse,
+    toQueueSnapshotMessage,
     toQueueTrackSummary,
 } from "../lib/player-state.js"
 import { connectionManager } from "./ConnectionManager.js"
@@ -20,20 +21,39 @@ class PlayerBroadcaster {
     /** `player` is typed loosely so bot code and web code can share broadcasts across one lavalink-client install or two. */
     broadcastPlayerEvent(guildId: string, player: unknown, type: BroadcastEventType): void {
         connectionManager.broadcastWithResolver(guildId, (userId) => {
-            const p = player as Player | null
-            const message: PlayerUpdateMessage = {
-                type,
-                guildId,
-                state: toPlayerStateResponse(guildId, userId, p),
-                queue: (p?.queue?.tracks ?? []).map(toQueueTrackSummary),
+            try {
+                const p = player as Player | null
+                if (type === "queueUpdate") {
+                    const queueMessage: QueueUpdateMessage = toQueueSnapshotMessage(guildId, userId, p)
+                    return queueMessage
+                }
+                const message: PlayerUpdateMessage = {
+                    type,
+                    guildId,
+                    state: toPlayerStateResponse(guildId, userId, p),
+                    queue: (p?.queue?.tracks ?? []).map(toQueueTrackSummary),
+                }
+                return message
+            } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : String(error)
+                console.error("[PlayerBroadcaster] Failed to build player event payload", {
+                    guildId,
+                    type,
+                    userId,
+                    message,
+                })
+                return null
             }
-            return message
         })
     }
 
     /** Push voice-related dashboard fields to every subscribed user (bot moves use the bot’s id, not the viewer’s). */
     broadcastGuildVoiceState(guildId: string): void {
-        const player = getBotClient().lavalink.getPlayer(guildId) ?? null
+        const client = tryGetBotClient()
+        if (!client?.lavalink) {
+            return
+        }
+        const player = client.lavalink.getPlayer(guildId) ?? null
         connectionManager.broadcastWithResolver(guildId, (socketUserId) => {
             const { inVoiceWithBot, botInVoiceChannel, canQueueTracks } = summarizeVoiceForWeb(
                 guildId,

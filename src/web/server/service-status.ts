@@ -27,13 +27,13 @@ export async function getServiceStatusPayload(): Promise<StatusPayload> {
         if (isBotApiVerbose()) {
             logBotApiVerbose("getServiceStatusPayload: probing bot /health", { healthUrl })
         }
+        let abortTimer: ReturnType<typeof setTimeout> | undefined
         try {
             const controller = new AbortController()
-            const t = setTimeout(() => controller.abort(), 4000)
+            abortTimer = setTimeout(() => controller.abort(), 4000)
             const res = await fetch(healthUrl, {
                 signal: controller.signal,
             })
-            clearTimeout(t)
             if (res.ok) {
                 botApi.ok = true
                 logBotApiVerbose("getServiceStatusPayload: bot /health ok", {
@@ -58,6 +58,10 @@ export async function getServiceStatusPayload(): Promise<StatusPayload> {
                 ms: Date.now() - started,
                 message: botApi.message,
             })
+        } finally {
+            if (abortTimer !== undefined) {
+                clearTimeout(abortTimer)
+            }
         }
     }
 
