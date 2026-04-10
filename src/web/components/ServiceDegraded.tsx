@@ -1,0 +1,36 @@
+import Link from "next/link"
+
+type ServiceDegradedProps = {
+    title: string
+    description: string
+    detail?: string
+}
+
+/** Shown when auth/session or another dependency fails instead of erroring the whole segment. */
+export function ServiceDegraded({ title, description, detail }: ServiceDegradedProps) {
+    return (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-6 text-left">
+            <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+            <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+            {detail ? (
+                <pre className="mt-4 max-h-40 overflow-auto rounded bg-muted/50 p-3 text-xs text-muted-foreground">
+                    {detail}
+                </pre>
+            ) : null}
+            <div className="mt-6 flex flex-wrap gap-3">
+                <Link
+                    href="/status"
+                    className="inline-flex rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground no-underline hover:opacity-90"
+                >
+                    Check service status
+                </Link>
+                <Link
+                    href="/"
+                    className="inline-flex items-center rounded-md border px-4 py-2 text-sm no-underline hover:bg-accent hover:text-accent-foreground"
+                >
+                    Home
+                </Link>
+            </div>
+        </div>
+    )
+}

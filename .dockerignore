@@ -5,6 +5,8 @@
 # Node specific
 node_modules
 dist
+src/web/.next
+.next
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

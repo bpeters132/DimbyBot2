@@ -7,9 +7,10 @@ cd "$(dirname "$0")" || exit 1
 
 # Function to display usage
 usage() {
-  echo "Usage: $0 {up|down|build|rebuild|logs|restart [service]|exec <service> [command]}"
+  echo "Usage: $0 {up|down|down-volumes|build|rebuild|logs|restart [service]|exec <service> [command]}"
   echo "  up: Build (if needed) and start all services in detached mode."
-  echo "  down: Stop and remove containers, networks, and volumes."
+  echo "  down: Stop and remove containers (keeps named volumes — Postgres data persists)."
+  echo "  down-volumes: Like down, but also removes volumes (full wipe incl. database)."
   echo "  build: Force build/rebuild images for services."
   echo "  rebuild: Stop, force build/rebuild, and start all services."
   echo "  logs: Follow logs for all services (or specific service)."
@@ -36,8 +37,12 @@ case $COMMAND in
     $DC up --build -d "$@" # Build if needed, run detached
     ;;
   down)
-    echo "Stopping development environment..."
-    $DC down -v "$@" # Stop and remove volumes
+    echo "Stopping development environment (volumes kept)..."
+    $DC down "$@"
+    ;;
+  down-volumes)
+    echo "Stopping development environment and removing volumes..."
+    $DC down -v "$@"
     ;;
   build)
     echo "Building development images..."
@@ -46,7 +51,7 @@ case $COMMAND in
   rebuild)
     echo "Rebuilding development environment (down, build, up)..."
     echo "Stopping..."
-    $DC down -v # Stop and remove volumes
+    $DC down # Keep volumes so Postgres guild settings and auth data persist
     echo "Building..."
     $DC build "$@" # Build images, pass any extra args
     echo "Starting..."

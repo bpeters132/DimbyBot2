@@ -3,6 +3,7 @@
         "target": "ES2022",
         "module": "NodeNext",
         "moduleResolution": "NodeNext",
+        "baseUrl": ".",
         "lib": ["ES2022"],
         "outDir": "dist",
         "rootDir": "src",
@@ -18,5 +19,6 @@
         "esModuleInterop": true,
         "noEmitOnError": true
     },
-    "include": ["src/**/*", "lavaNodesConfig.d.ts"]
+    "include": ["src/**/*", "lavaNodesConfig.d.ts"],
+    "exclude": ["src/web", "src/web/.next/**/*"]
 }

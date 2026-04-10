@@ -28,6 +28,7 @@ import {
     trackDisconnectedUser,
     userHasQueuedTracks,
 } from "../util/rrqDisconnect.js"
+import { playerBroadcaster } from "../web/websocket/PlayerBroadcaster.js"
 
 type GuildTextSendable = {
     send: (content: string | MessagePayload | MessageCreateOptions) => Promise<Message<boolean>>
@@ -92,6 +93,7 @@ export default async (client: BotClient) => {
                 `[LavaMgrEvents] Player destroyed for Guild: ${player.guildId}, Reason: ${reason}`
             )
             updateControlMessage(client, player.guildId)
+            playerBroadcaster.broadcastPlayerEvent(player.guildId, null, "playerDestroy")
         })
         .on("playerDisconnect", (player: Player, oldChannelId: string | null) => {
             client.debug(
@@ -118,6 +120,7 @@ export default async (client: BotClient) => {
                 `[LavaMgrEvents] Track started in Guild: ${player.guildId}, Title: ${track.info.title}`
             )
             updateControlMessage(client, player.guildId)
+            playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "trackStart")
 
             const prev = player.queue.previous?.[0]
             const prevAuthor = prev?.info?.author?.trim()
@@ -181,12 +184,14 @@ export default async (client: BotClient) => {
                 `[LavaMgrEvents] Track ended in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "N/A"}, Reason: ${payload.reason}`
             )
             updateControlMessage(client, player.guildId)
+            playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "trackEnd")
         })
         .on("trackStuck", async (player: Player, track: Track | null, payload: TrackStuckEvent) => {
             client.warn(
                 `[LavaMgrEvents] Track stuck in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "N/A"}, Threshold: ${payload.thresholdMs}`
             )
             updateControlMessage(client, player.guildId)
+            playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "queueUpdate")
 
             const textIdStuck = player.textChannelId
             const channelStuck = textIdStuck ? client.channels.cache.get(textIdStuck) : undefined
@@ -223,6 +228,7 @@ export default async (client: BotClient) => {
                     payload
                 )
                 updateControlMessage(client, player.guildId)
+                playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "queueUpdate")
 
                 const textIdErr = player.textChannelId
                 const channelErr = textIdErr ? client.channels.cache.get(textIdErr) : undefined
@@ -310,6 +316,7 @@ export default async (client: BotClient) => {
         .on("queueEnd", (player: Player) => {
             client.debug(`[LavaMgrEvents] Queue ended for Guild: ${player.guildId}`)
             updateControlMessage(client, player.guildId) // Update control message immediately
+            playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "queueUpdate")
 
             // Send message to non-control channel
             const textIdQ = player.textChannelId
@@ -494,14 +501,29 @@ export default async (client: BotClient) => {
                 payload
             )
             updateControlMessage(client, player.guildId)
+            playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "queueUpdate")
         })
         .on("playerSuppressChange", (player: Player, suppress: boolean) => {
             client.debug(
                 `[LavaMgrEvents] Player suppress state changed for Guild: ${player.guildId}, Suppressed: ${suppress}`
             )
         })
-        .on("playerUpdate", (/* oldPlayerJson, newPlayer */) => {
-            // Still too frequent for logging generally
+        .on("playerUpdate", (oldPlayerJson: unknown, newPlayer: Player) => {
+            const oldPaused =
+                typeof oldPlayerJson === "object" &&
+                oldPlayerJson !== null &&
+                "paused" in oldPlayerJson
+                    ? Boolean((oldPlayerJson as { paused?: unknown }).paused)
+                    : null
+            if (oldPaused !== null && oldPaused !== newPlayer.paused) {
+                playerBroadcaster.broadcastPlayerEvent(
+                    newPlayer.guildId,
+                    newPlayer,
+                    newPlayer.paused ? "playerPause" : "playerResume"
+                )
+                return
+            }
+            playerBroadcaster.broadcastPlayerEvent(newPlayer.guildId, newPlayer, "queueUpdate")
         })
 
         /**

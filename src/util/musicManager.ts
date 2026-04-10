@@ -36,7 +36,7 @@ function syntheticTrackResult(track: Track | UnresolvedTrack): PlayerSearchResul
     } as unknown as PlayerSearchResult
 }
 
-async function ensurePlayerConnected(
+export async function ensurePlayerConnected(
     client: BotClient,
     player: Player,
     voiceChannel: VoiceBasedChannel

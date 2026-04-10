@@ -1,0 +1,162 @@
+import "dotenv/config"
+import fs from "fs"
+import http from "http"
+import path from "path"
+import { WebSocketServer } from "ws"
+import { createBotApiApp, isBotApiRequestVerbose } from "./botApi/createBotApiApp.js"
+import BotClient from "./lib/BotClient.js"
+import { disconnectDatabase } from "./lib/database.js"
+import Logger from "./lib/Logger.js"
+import { setBotClient } from "./web/lib/botClient.js"
+import { connectionManager } from "./web/websocket/ConnectionManager.js"
+import { invalidatePermissionCache } from "./web/shared/permissions.js"
+import { playerBroadcaster } from "./web/websocket/PlayerBroadcaster.js"
+
+const logFilePath = path.join(import.meta.dirname, "..", "logs", "app.log")
+const webEnabled = process.env.WEB_ENABLED === "true"
+const webPort = Number(process.env.WEB_PORT || 3000)
+
+function ensureLogDir(): void {
+    try {
+        const logDirectory = path.dirname(logFilePath)
+        if (!fs.existsSync(logDirectory)) {
+            fs.mkdirSync(logDirectory, { recursive: true })
+            console.log(`Log directory created at ${logDirectory}`)
+        }
+    } catch (error) {
+        console.error("Failed to create log directory:", error)
+    }
+}
+
+function pathnameOnly(url: string | undefined): string {
+    try {
+        return new URL(url || "/", "http://localhost").pathname
+    } catch {
+        return "/"
+    }
+}
+
+async function startBot(logger: Logger): Promise<BotClient> {
+    logger.debug("Initializing BotClient...")
+    const client = new BotClient(logger)
+    logger.debug("BotClient initialized.")
+
+    logger.debug("Starting BotClient...")
+    await client.start()
+    logger.info("BotClient started successfully.")
+    setBotClient(client)
+    return client
+}
+
+async function run(): Promise<void> {
+    ensureLogDir()
+
+    const logger = new Logger(logFilePath)
+    logger.info("Starting application...")
+    if (logger.getDebugEnabled()) {
+        logger.info("Debug logging is enabled via LOG_LEVEL environment variable.")
+    } else {
+        logger.info("Debug logging is disabled. Set LOG_LEVEL=debug to enable it.")
+    }
+
+    let client: BotClient | null = null
+    let server: http.Server | null = null
+
+    try {
+        client = await startBot(logger)
+
+        if (!webEnabled) {
+            logger.info("WEB_ENABLED is false; running bot-only mode.")
+            return
+        }
+
+        const botApiApp = createBotApiApp()
+        logger.info(
+            "Serving bot HTTP: /health, /api/guilds/* (Express), /ws (WebSocket). Next.js is not used here."
+        )
+
+        const wss = new WebSocketServer({ noServer: true })
+        connectionManager.startHeartbeat()
+
+        server = http.createServer((req, res) => {
+            const pathOnly = pathnameOnly(req.url)
+            if (pathOnly === "/health" || pathOnly === "/health/") {
+                if (isBotApiRequestVerbose()) {
+                    console.log("[bot-api:express] GET /health -> 200")
+                }
+                res.statusCode = 200
+                res.setHeader("Content-Type", "text/plain; charset=utf-8")
+                res.end("ok")
+                return
+            }
+            if (pathOnly.startsWith("/api/guilds")) {
+                botApiApp(req, res)
+                return
+            }
+            res.statusCode = 404
+            res.setHeader("Content-Type", "application/json")
+            res.end(JSON.stringify({ ok: false, error: { error: "Not found" } }))
+        })
+
+        server.on("upgrade", (req, socket, head) => {
+            const url = req.url || ""
+            if (!url.startsWith("/ws")) {
+                socket.destroy()
+                return
+            }
+            void (async () => {
+                const session = await connectionManager.authenticateUpgrade(req)
+                if (!session) {
+                    socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n")
+                    socket.destroy()
+                    return
+                }
+                wss.handleUpgrade(req, socket, head, (ws) => {
+                    connectionManager.registerConnection(ws, session.userId)
+                    wss.emit("connection", ws, req)
+                })
+            })()
+        })
+
+        client.on("voiceStateUpdate", (oldState, newState) => {
+            const guildId = newState.guild.id
+            const userId = newState.id
+            invalidatePermissionCache(guildId, userId)
+            playerBroadcaster.broadcastGuildVoiceState(guildId)
+        })
+
+        await new Promise<void>((resolve, reject) => {
+            server?.once("error", reject)
+            server?.listen(webPort, () => resolve())
+        })
+        logger.info(`Web server listening on http://localhost:${webPort}`)
+    } catch (error) {
+        logger.error("Fatal error during application startup:", error)
+        process.exit(1)
+    }
+
+    const shutdown = async (signal: string): Promise<void> => {
+        logger.info(`Received ${signal}, shutting down...`)
+        try {
+            if (server) {
+                await new Promise<void>((resolve) => {
+                    server?.close(() => resolve())
+                })
+                logger.info("Web server stopped.")
+            }
+            connectionManager.stopHeartbeat()
+            if (client) {
+                client.destroy()
+                logger.info("Bot client stopped.")
+            }
+            await disconnectDatabase(logger)
+        } finally {
+            process.exit(0)
+        }
+    }
+
+    process.once("SIGINT", () => void shutdown("SIGINT"))
+    process.once("SIGTERM", () => void shutdown("SIGTERM"))
+}
+
+void run()

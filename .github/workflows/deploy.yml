@@ -72,7 +72,7 @@ jobs:
 
             - name: Verify bot image contains Prisma runtime assets
               run: |
-                  docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -f /app/dist/index.js"
+                  docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -f /app/dist/server.js"
                   docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -f /app/prisma/schema.prisma"
                   docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -d /app/prisma/migrations"
                   docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -f /app/prisma.config.ts"

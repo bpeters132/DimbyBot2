@@ -5,22 +5,38 @@ services:
         build:
             context: .
             dockerfile: Dockerfile.dev # Use the development Dockerfile
+            args:
+                - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:3000}
+                - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-f4b8e3c1d92a7b60f15e8c4379ab2d56e0c4f1a7b3d9e8c6a1f2b4d6e8c0a3f5}
+                - CLIENT_ID=${CLIENT_ID:-000000000000000000}
+                - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-build-time-discord-client-secret}
         image: dimbybot-dev # Optional: Give the dev image a distinct name
         command: yarn dev # Override the default command/entrypoint to run nodemon
+        ports: !override
+            - "3001:3001"
         volumes:
             # Mount the entire source code directory into the container
             # Note: Exclude node_modules to use the ones installed in the container
             - ./:/app
             - /app/node_modules # Anonymous volume to prevent local node_modules overwrite
-            # Override dimbybot-storage from docker-compose.yml: otherwise /app/storage is a named
-            # volume and `compose down -v` removes guild_settings.json (incl. discord-log routes).
+            # Hide host-only nested install so `tsc -w` in the image does not see two lavalink-client copies.
+            - /app/src/web/node_modules
+            # Bind ./storage for dev. Guild settings live in Postgres; use `yarn docker:dev:down`
+            # (no -v) or `./dev-env.sh down` so the `postgres-data` volume is kept. Only
+            # `yarn docker:dev:down:volumes` / `./dev-env.sh down-volumes` wipes the DB.
             # Do not bind ./downloads here — Lavalink still uses the shared dimbybot-downloads volume.
             - ./storage:/app/storage
         environment:
             # Ensure NODE_ENV is set for development if needed by any libs
             - NODE_ENV=development
+            - WEB_PORT=3001
+            - WEB_ENABLED=true
             # Force color output for libraries like 'colors' or 'chalk'
             - FORCE_COLOR=true
+            # Docker Desktop bind mounts can miss fs events; force polling for hot reload.
+            - CHOKIDAR_USEPOLLING=true
+            - WATCHPACK_POLLING=true
+            - WATCHPACK_POLLING_INTERVAL=1000
 
     lavalink: # Add the lavalink service definition for development
         build:
@@ -28,6 +44,9 @@ services:
             dockerfile: Dockerfile # Assuming the Dockerfile is named 'Dockerfile'
         image: lavalink-dev # Optional: Give the dev image a distinct name
 
+    postgres-db:
+        ports:
+            - "5432:5432"
 
     # Define other services ONLY if you need to override something specific
     # for them in development (e.g., different ports, debug flags).

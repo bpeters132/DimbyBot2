@@ -59,14 +59,20 @@ export async function replaceGuildSettingsStoreInDatabase(
                     controlMessageId: settings?.controlMessageId ?? null,
                     downloadsMaxMb:
                         typeof settings?.downloadsMaxMb === "number" ? settings.downloadsMaxMb : null,
-                    discordLog: (settings?.discordLog as Prisma.InputJsonValue | undefined) ?? null,
+                    discordLog:
+                        settings?.discordLog != null
+                            ? (settings.discordLog as Prisma.InputJsonValue)
+                            : undefined,
                 },
                 update: {
                     controlChannelId: settings?.controlChannelId ?? null,
                     controlMessageId: settings?.controlMessageId ?? null,
                     downloadsMaxMb:
                         typeof settings?.downloadsMaxMb === "number" ? settings.downloadsMaxMb : null,
-                    discordLog: (settings?.discordLog as Prisma.InputJsonValue | undefined) ?? null,
+                    discordLog:
+                        settings?.discordLog != null
+                            ? (settings.discordLog as Prisma.InputJsonValue)
+                            : undefined,
                 },
             })
         }

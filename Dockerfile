@@ -3,6 +3,16 @@ FROM node:22-alpine3.22 AS builder
 
 WORKDIR /app
 
+# Optional build-time placeholders (Better Auth loads at runtime from real env in compose).
+ARG BETTER_AUTH_URL=http://localhost:3000
+ARG BETTER_AUTH_SECRET=f4b8e3c1d92a7b60f15e8c4379ab2d56e0c4f1a7b3d9e8c6a1f2b4d6e8c0a3f5
+ARG CLIENT_ID=000000000000000000
+ARG DISCORD_CLIENT_SECRET=build-time-discord-client-secret
+ENV BETTER_AUTH_URL=${BETTER_AUTH_URL}
+ENV BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+ENV CLIENT_ID=${CLIENT_ID}
+ENV DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
+
 COPY docker/ytdlp-requirements.txt /tmp/ytdlp-requirements.txt
 # Native build tools (e.g. sodium) + ffmpeg for any runtime checks during build.
 RUN apk add --no-cache \
@@ -23,7 +33,7 @@ COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
 
 COPY . .
-RUN yarn build \
+RUN yarn db:generate && yarn build:bot \
     && yarn install --production --frozen-lockfile \
     && test -f node_modules/.prisma/client/default.js
 
@@ -67,6 +77,6 @@ RUN apk add --no-cache dos2unix \
 # Run as root so entrypoint can chown the mounted storage volume, then drop to `node` via su-exec.
 ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
 
-# No HTTP /health on this Discord bot; probe PID 1 cmdline (Node after exec) with a short interval.
+# When WEB_ENABLED=true, healthcheck.sh probes GET /health on WEB_PORT.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
     CMD /bin/sh /app/healthcheck.sh

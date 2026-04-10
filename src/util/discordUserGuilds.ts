@@ -1,0 +1,163 @@
+/** Identifies this app to Discord REST (recommended for debugging; not the bot gateway user-agent). */
+const DISCORD_USER_API_UA = "DimbyBotDashboard/1.0 (OAuth user token)"
+
+/** Attempts including the first request; keeps dashboard guild loads from failing on transient 429s. */
+const GUILD_LIST_MAX_ATTEMPTS = 8
+/** Upper bound on a single wait so one bad payload cannot stall the server unbounded. */
+const GUILD_LIST_MAX_RETRY_WAIT_MS = 60_000
+const GUILD_LIST_MIN_RETRY_WAIT_MS = 500
+
+/** Re-use recent successful OAuth guild fetches to avoid bursty `/users/@me/guilds` calls (e.g. dashboard ↔ guild). */
+const GUILD_LIST_SUCCESS_CACHE_TTL_MS = 120_000
+
+export type DiscordUserGuild = { id: string; name: string; icon: string | null }
+
+export type FetchUserGuildsResult =
+    | { ok: true; guilds: DiscordUserGuild[] }
+    | { ok: false; status: number; message: string }
+
+type SuccessCacheEntry = { expiresAt: number; guilds: DiscordUserGuild[] }
+
+const successCache = new Map<string, SuccessCacheEntry>()
+const inflight = new Map<string, Promise<FetchUserGuildsResult>>()
+
+function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function readSuccessCache(accessToken: string): DiscordUserGuild[] | null {
+    const entry = successCache.get(accessToken)
+    if (!entry) return null
+    if (Date.now() > entry.expiresAt) {
+        successCache.delete(accessToken)
+        return null
+    }
+    return entry.guilds
+}
+
+function writeSuccessCache(accessToken: string, guilds: DiscordUserGuild[]): void {
+    successCache.set(accessToken, {
+        expiresAt: Date.now() + GUILD_LIST_SUCCESS_CACHE_TTL_MS,
+        guilds,
+    })
+}
+
+/**
+ * Discord 429 responses include `Retry-After` (seconds) and/or a JSON body with `retry_after` (seconds).
+ */
+function discordRetryAfterMs(response: Response, bodyText: string): number {
+    const header = response.headers.get("retry-after")
+    if (header) {
+        const sec = Number.parseFloat(header.trim())
+        if (Number.isFinite(sec) && sec >= 0) {
+            return Math.min(Math.ceil(sec * 1000), GUILD_LIST_MAX_RETRY_WAIT_MS)
+        }
+    }
+    try {
+        const parsed = JSON.parse(bodyText) as { retry_after?: number }
+        if (typeof parsed.retry_after === "number" && Number.isFinite(parsed.retry_after)) {
+            return Math.min(Math.ceil(parsed.retry_after * 1000), GUILD_LIST_MAX_RETRY_WAIT_MS)
+        }
+    } catch {
+        /* ignore */
+    }
+    return Math.min(2000, GUILD_LIST_MAX_RETRY_WAIT_MS)
+}
+
+async function fetchDiscordUserGuildsOnce(accessToken: string): Promise<FetchUserGuildsResult> {
+    for (let attempt = 1; attempt <= GUILD_LIST_MAX_ATTEMPTS; attempt++) {
+        let response: Response
+        try {
+            response = await fetch("https://discord.com/api/v10/users/@me/guilds", {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "User-Agent": DISCORD_USER_API_UA,
+                },
+            })
+        } catch {
+            return { ok: false, status: 0, message: "Network error reaching Discord." }
+        }
+
+        if (response.ok) {
+            const guilds = (await response.json()) as DiscordUserGuild[]
+            return { ok: true, guilds }
+        }
+
+        if (response.status === 429) {
+            const bodyText = await response.text()
+            if (attempt < GUILD_LIST_MAX_ATTEMPTS) {
+                const waitMs = Math.max(
+                    discordRetryAfterMs(response, bodyText),
+                    GUILD_LIST_MIN_RETRY_WAIT_MS
+                )
+                await delay(waitMs)
+                continue
+            }
+            return {
+                ok: false,
+                status: 429,
+                message: "Discord rate limited this request repeatedly; try again in a minute.",
+            }
+        }
+
+        if (response.status === 401) {
+            return {
+                ok: false,
+                status: 401,
+                message:
+                    "Discord rejected the access token (expired or revoked). Sign out and sign in with Discord again.",
+            }
+        }
+        if (response.status === 403) {
+            return {
+                ok: false,
+                status: 403,
+                message:
+                    "Discord denied this request. Re-authorize with the `guilds` scope (sign out and sign in again).",
+            }
+        }
+        return {
+            ok: false,
+            status: response.status,
+            message: `Discord API returned HTTP ${response.status}.`,
+        }
+    }
+
+    return {
+        ok: false,
+        status: 429,
+        message: "Discord rate limited this request repeatedly; try again in a minute.",
+    }
+}
+
+/**
+ * Calls `GET /users/@me/guilds` with the user's OAuth access token (needs `guilds` scope).
+ * Coalesces concurrent calls, caches successes briefly, and retries on 429 using Discord's suggested delay.
+ *
+ * Lives under `src/util/` so `tsc` emits it to `dist/util/` for the bot process (the bot API must not rely on
+ * stale `dist/web/` output excluded from the root TypeScript project).
+ */
+export async function fetchDiscordUserGuilds(accessToken: string): Promise<FetchUserGuildsResult> {
+    const cached = readSuccessCache(accessToken)
+    if (cached) {
+        return { ok: true, guilds: cached }
+    }
+
+    const existing = inflight.get(accessToken)
+    if (existing) {
+        return existing
+    }
+
+    const run = (async () => {
+        const result = await fetchDiscordUserGuildsOnce(accessToken)
+        if (result.ok) {
+            writeSuccessCache(accessToken, result.guilds)
+        }
+        return result
+    })().finally(() => {
+        inflight.delete(accessToken)
+    })
+
+    inflight.set(accessToken, run)
+    return run
+}
