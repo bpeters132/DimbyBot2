@@ -99,11 +99,11 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
 
                 if (requestId !== requestIdRef.current) return
 
-                if (!playerResult.ok) {
+                if (playerResult.ok === false) {
                     setError(playerResult.error)
                     return
                 }
-                if (!queueResult.ok) {
+                if (queueResult.ok === false) {
                     setError(queueResult.error)
                     return
                 }
@@ -139,7 +139,7 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
             const queueResult = await getPlayerQueueAction(guildId, queuePage, QUEUE_PAGE_SIZE)
             if (!active) return
 
-            if (!queueResult.ok) {
+            if (queueResult.ok === false) {
                 setError(queueResult.error)
             } else {
                 applyQueueResponse(queueResult.data)
@@ -206,10 +206,10 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
             if (socket.queue === undefined) {
                 setQueueLoading(true)
                 const queueResult = await getPlayerQueueAction(guildId, 1, QUEUE_PAGE_SIZE)
-                if (queueResult.ok) {
-                    applyQueueResponse(queueResult.data)
-                } else {
+                if (queueResult.ok === false) {
                     setError(queueResult.error)
+                } else {
+                    applyQueueResponse(queueResult.data)
                 }
                 setQueueLoading(false)
             }

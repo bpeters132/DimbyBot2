@@ -3,10 +3,9 @@
  * call to the bot HTTP API (no cookie or body contents).
  */
 
-export function isBotApiVerbose(): boolean {
-    const v = (process.env.BOT_API_VERBOSE ?? process.env.WEB_BOT_API_VERBOSE ?? "").trim()
-    return /^(1|true|yes|on)$/i.test(v)
-}
+import { isBotApiVerbose } from "../../util/botApiVerboseEnv.js"
+
+export { isBotApiVerbose }
 
 function redactSecrets(value: unknown): unknown {
     if (!value || typeof value !== "object") {

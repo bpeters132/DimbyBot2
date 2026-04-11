@@ -41,6 +41,19 @@ function normalizedRowsFromStore(store: DownloadsMetadataStore) {
         const fileName = parsed.fileName
         const guildId = effectiveDownloadMetadataGuildId(key, metadata)
         if (guildId === null) {
+            const urlPreview =
+                typeof metadata.originalUrl === "string"
+                    ? metadata.originalUrl.slice(0, 120)
+                    : undefined
+            const pathPreview =
+                typeof metadata.filePath === "string" ? metadata.filePath.slice(0, 120) : undefined
+            console.debug("[downloadMetadata] skipping store row (no resolvable guildId)", {
+                key,
+                fileName: parsed.fileName,
+                downloadDate: metadata.downloadDate,
+                originalUrlPreview: urlPreview,
+                filePathPreview: pathPreview,
+            })
             continue
         }
         const parsedDownloadDate =

@@ -53,22 +53,22 @@ export async function resolveDiscordUserSnowflake(
         return betterAuthUserId.trim()
     }
 
-    const accessResult = (await auth.api.getAccessToken({
-        body: { providerId: "discord" },
-        headers: sessionHeaders,
-    })) as { accessToken?: string } | null
-    const accessToken = accessResult?.accessToken
-    if (!accessToken) {
-        console.error(
-            "[discord-user-id] No OAuth access token from Better Auth (getAccessToken returned empty token)"
-        )
-        return null
-    }
     try {
+        const accessResult = (await auth.api.getAccessToken({
+            body: { providerId: "discord" },
+            headers: sessionHeaders,
+        })) as { accessToken?: string } | null
+        const accessToken = accessResult?.accessToken
+        if (!accessToken) {
+            console.warn(
+                "[discord-user-id] No OAuth access token from Better Auth (getAccessToken returned empty token)"
+            )
+            return null
+        }
         return await fetchDiscordCurrentUserId(accessToken)
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error)
-        console.warn("[discord-user-id] /users/@me fallback failed:", message)
+        console.warn("[discord-user-id] Discord token / @me fallback failed:", message)
         return null
     }
 }

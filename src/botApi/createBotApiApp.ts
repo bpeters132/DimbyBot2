@@ -1,4 +1,5 @@
 import express from "express"
+import { isBotApiVerbose } from "../util/botApiVerboseEnv.js"
 import { incomingMessageToHeaders } from "./httpUtil.js"
 import { guildListGET } from "./handlers/guildList.js"
 import { playerGET, playerPOST } from "./handlers/player.js"
@@ -7,12 +8,6 @@ import { queueDELETE, queueGET, queuePOST } from "./handlers/queue.js"
 import { queueIndexDELETE, queueIndexPATCH } from "./handlers/queueIndex.js"
 import { BotClientNotInitializedError } from "../web/lib/botClient.js"
 
-/** Same env as Next `bot-api-verbose.ts`: log each `/api/guilds/*` request when enabled. */
-export function isBotApiRequestVerbose(): boolean {
-    const v = (process.env.BOT_API_VERBOSE ?? process.env.WEB_BOT_API_VERBOSE ?? "").trim()
-    return /^(1|true|yes|on)$/i.test(v)
-}
-
 /**
  * Express app for bot-backed REST routes (`/api/guilds/...`) shared with Next route handlers.
  */
@@ -20,7 +15,7 @@ export function createBotApiApp(): express.Express {
     const app = express()
 
     app.use((req, res, next) => {
-        if (!isBotApiRequestVerbose()) {
+        if (!isBotApiVerbose()) {
             next()
             return
         }

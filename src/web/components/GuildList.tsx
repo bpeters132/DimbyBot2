@@ -7,7 +7,7 @@ type GuildListProps = {
 
 /** Renders the dashboard guild list from a server-loaded result (no client-side refetch race). */
 export function GuildList({ result }: GuildListProps) {
-    if (!result.ok) {
+    if (result.ok === false) {
         return (
             <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm">
                 <p className="text-destructive">{result.error}</p>

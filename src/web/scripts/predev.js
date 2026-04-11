@@ -6,10 +6,12 @@ if (!fs.existsSync(p)) {
 }
 try {
     const lock = JSON.parse(fs.readFileSync(p, "utf8"))
-    if (lock && typeof lock.pid === "number") {
+    const pid = lock?.pid
+    const pidOk = typeof pid === "number" && Number.isInteger(pid) && pid > 0
+    if (lock && pidOk) {
         try {
-            process.kill(lock.pid, 0)
-            console.log("Next dev lock active for PID", lock.pid)
+            process.kill(pid, 0)
+            console.log("Next dev lock active for PID", pid)
         } catch (e) {
             const code = e && typeof e === "object" && "code" in e ? e.code : undefined
             if (code === "ESRCH") {

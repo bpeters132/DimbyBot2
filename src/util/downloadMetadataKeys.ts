@@ -68,7 +68,7 @@ export function downloadMetadataEntryMatchesGuild(
     if (parsed.guildId !== null) {
         return parsed.guildId === guildId
     }
-    return info.guildId === guildId || info.guildId === undefined
+    return info.guildId === guildId
 }
 
 /** Store keys to remove for a given file name in a guild (composite and legacy). */

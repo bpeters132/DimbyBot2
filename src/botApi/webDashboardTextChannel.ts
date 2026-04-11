@@ -25,7 +25,13 @@ async function resolveValidTextChannelId(
  * usable, otherwise the guild system channel (same idea as `guild.systemChannelId` fallback).
  */
 export async function resolveWebDashboardTextChannelId(guild: Guild): Promise<string | undefined> {
-    const controlId = getGuildSettings()[guild.id]?.controlChannelId
+    let controlId: string | undefined
+    try {
+        const settings = getGuildSettings()
+        controlId = settings[guild.id]?.controlChannelId
+    } catch {
+        controlId = undefined
+    }
     if (controlId) {
         const id = await resolveValidTextChannelId(guild, controlId)
         if (id) {

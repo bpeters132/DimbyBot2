@@ -3,25 +3,58 @@
 import type { StatusPayload } from "@/types/web"
 import { getServiceStatusPayload } from "@/server/service-status"
 
+const SENSITIVE_KEY = /password|secret|token|uri|connectionString|connection|host|headers/i
+
+function stringLooksLikeHostOrDsn(value: string): boolean {
+    if (/:\/\//.test(value)) {
+        return true
+    }
+    if (/\b\d{1,3}(?:\.\d{1,3}){3}\b/.test(value)) {
+        return true
+    }
+    if (/[.][a-z0-9-]{2,}:\d{2,5}\b/i.test(value)) {
+        return true
+    }
+    return false
+}
+
+function sanitizeParsedForLog(value: unknown): unknown {
+    if (Array.isArray(value)) {
+        return value.map((item) => sanitizeParsedForLog(item))
+    }
+    if (value && typeof value === "object") {
+        const obj = value as Record<string, unknown>
+        const out: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(obj)) {
+            if (SENSITIVE_KEY.test(k)) {
+                out[k] = "[redacted]"
+                continue
+            }
+            if (typeof v === "string" && stringLooksLikeHostOrDsn(v)) {
+                out[k] = "[redacted]"
+                continue
+            }
+            out[k] = sanitizeParsedForLog(v)
+        }
+        return out
+    }
+    if (typeof value === "string" && stringLooksLikeHostOrDsn(value)) {
+        return "[redacted]"
+    }
+    return value
+}
+
 function sanitizeErrorForLog(error: unknown): { name?: string; message: string } {
     if (!(error instanceof Error)) {
-        return { message: String(error) }
+        return { message: "[redacted]" }
     }
-    const sensitive = /password|secret|token|uri|connectionString|connection|host|headers/i
-    let message = error.message.replace(sensitive, "[redacted]")
     try {
-        const parsed = JSON.parse(message) as Record<string, unknown>
-        const copy = { ...parsed }
-        for (const k of Object.keys(copy)) {
-            if (sensitive.test(k)) {
-                copy[k] = "[redacted]"
-            }
-        }
-        message = JSON.stringify(copy)
+        const parsed = JSON.parse(error.message) as Record<string, unknown>
+        const safeCopy = sanitizeParsedForLog(parsed) as Record<string, unknown>
+        return { name: error.name, message: JSON.stringify(safeCopy) }
     } catch {
-        /* keep message string */
+        return { name: error.name, message: "[redacted]" }
     }
-    return { name: error.name, message }
 }
 
 /** Probes database connectivity and bot `/health` for the status UI. */

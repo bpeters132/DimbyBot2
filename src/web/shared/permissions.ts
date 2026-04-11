@@ -299,7 +299,11 @@ export function invalidatePermissionCache(guildId?: string, userId?: string): vo
         return
     }
 
+    if (!userId) {
+        return
+    }
+
     for (const inner of permissionCache.values()) {
-        inner.delete(userId!)
+        inner.delete(userId)
     }
 }

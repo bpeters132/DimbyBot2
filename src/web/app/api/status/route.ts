@@ -11,8 +11,7 @@ export async function GET(): Promise<NextResponse> {
         return NextResponse.json(payload)
     } catch (error: unknown) {
         const name = error instanceof Error ? error.name : "Error"
-        const message = error instanceof Error ? error.message : "status probe failed"
-        console.error("[api/status] status probe failed", { name, message })
+        console.error("[api/status] status probe failed", { name })
         const checkedAt = new Date().toISOString()
         return NextResponse.json(
             {

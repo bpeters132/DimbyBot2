@@ -65,5 +65,6 @@ export async function getServiceStatusPayload(): Promise<StatusPayload> {
         }
     }
 
-    return { ok: true, checkedAt, database, botApi }
+    const derivedOk = Boolean(database?.ok && botApi?.ok)
+    return { ok: derivedOk, checkedAt, database, botApi }
 }

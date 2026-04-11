@@ -10,7 +10,10 @@ import { createWsConnectToken } from "@/lib/ws-connect-token"
 export async function GET(): Promise<NextResponse> {
     const secret = process.env.BETTER_AUTH_SECRET
     if (!secret) {
-        return NextResponse.json({ error: "BETTER_AUTH_SECRET is not set" }, { status: 503 })
+        console.error(
+            "[api/ws-ticket] server misconfigured: BETTER_AUTH_SECRET is missing (set in src/web/.env or environment)"
+        )
+        return NextResponse.json({ error: "Server misconfigured" }, { status: 503 })
     }
 
     try {

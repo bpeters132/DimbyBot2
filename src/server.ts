@@ -3,7 +3,8 @@ import fs from "fs"
 import http from "http"
 import path from "path"
 import { WebSocketServer } from "ws"
-import { createBotApiApp, isBotApiRequestVerbose } from "./botApi/createBotApiApp.js"
+import { createBotApiApp } from "./botApi/createBotApiApp.js"
+import { isBotApiVerbose } from "./util/botApiVerboseEnv.js"
 import BotClient from "./lib/BotClient.js"
 import { disconnectDatabase } from "./lib/database.js"
 import Logger from "./lib/Logger.js"
@@ -103,7 +104,7 @@ async function run(): Promise<void> {
         server = http.createServer((req, res) => {
             const pathOnly = pathnameOnly(req.url)
             if (pathOnly === "/health" || pathOnly === "/health/") {
-                if (isBotApiRequestVerbose()) {
+                if (isBotApiVerbose()) {
                     console.log("[bot-api:express] GET /health -> 200")
                 }
                 res.statusCode = 200
@@ -117,7 +118,7 @@ async function run(): Promise<void> {
             }
             res.statusCode = 404
             res.setHeader("Content-Type", "application/json")
-            res.end(JSON.stringify({ ok: false, error: { message: "Not found" } }))
+            res.end(JSON.stringify({ ok: false, error: { error: "Not found" } }))
         })
 
         server.on("upgrade", (req, socket, head) => {

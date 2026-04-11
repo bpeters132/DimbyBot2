@@ -14,7 +14,7 @@ async function runCommand(
     value?: number
 ): Promise<PlayerStateResponse> {
     const result = await postPlayerCommandAction(guildId, command, value)
-    if (!result.ok) {
+    if (result.ok === false) {
         throw new Error(result.error)
     }
     return result.data
@@ -38,7 +38,7 @@ export function usePlayerActions(guildId: string, requesterDiscordUserId: string
                     )
                 }
                 const result = await postPlayerPlayAction(guildId, query, requesterId)
-                if (!result.ok) {
+                if (result.ok === false) {
                     throw new Error(result.error)
                 }
                 return result.data

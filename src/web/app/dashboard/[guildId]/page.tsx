@@ -31,7 +31,7 @@ export default async function GuildPage({ params }: GuildPageProps) {
 
     const permResult = await getGuildDashboardSnapshotAction(guildId)
 
-    if (!permResult.ok) {
+    if (permResult.ok === false) {
         return (
             <section className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm">
                 <p className="font-medium text-destructive">
