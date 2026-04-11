@@ -31,18 +31,29 @@ function storeKeyIsComposite(storeKey: string): boolean {
     return parsed.guildId !== null && parsed.guildId.length > 0
 }
 
-function normalizedRowsFromStore(store: DownloadsMetadataStore) {
-    type NormalizedRow = {
-        fileName: string
-        guildId: string
-        downloadDate: Date | null
-        originalUrl: string | null
-        filePath: string | null
-    }
+export type SkippedDownloadMetadataEntry = {
+    key: string
+    reason: "unresolvable-guild-id"
+    fileName: string
+}
+
+type NormalizedDownloadMetadataRow = {
+    fileName: string
+    guildId: string
+    downloadDate: Date | null
+    originalUrl: string | null
+    filePath: string | null
+}
+
+function normalizedRowsFromStore(store: DownloadsMetadataStore): {
+    rows: NormalizedDownloadMetadataRow[]
+    skippedEntries: SkippedDownloadMetadataEntry[]
+} {
+    const skippedEntries: SkippedDownloadMetadataEntry[] = []
     const byGuildFile = new Map<
         string,
         {
-            row: NormalizedRow
+            row: NormalizedDownloadMetadataRow
             sourceKey: string
         }
     >()
@@ -66,6 +77,7 @@ function normalizedRowsFromStore(store: DownloadsMetadataStore) {
                 originalUrlPreview: urlPreview,
                 filePathPreview: pathPreview,
             })
+            skippedEntries.push({ key, reason: "unresolvable-guild-id", fileName })
             continue
         }
         const parsedDownloadDate =
@@ -74,7 +86,7 @@ function normalizedRowsFromStore(store: DownloadsMetadataStore) {
             parsedDownloadDate && Number.isFinite(parsedDownloadDate.getTime())
                 ? parsedDownloadDate
                 : null
-        const row: NormalizedRow = {
+        const row: NormalizedDownloadMetadataRow = {
             fileName,
             guildId,
             downloadDate,
@@ -94,7 +106,7 @@ function normalizedRowsFromStore(store: DownloadsMetadataStore) {
         }
     }
 
-    return Array.from(byGuildFile.values()).map((e) => e.row)
+    return { rows: Array.from(byGuildFile.values()).map((e) => e.row), skippedEntries }
 }
 
 /** Reads all download metadata rows and returns the legacy map shape keyed by composite store key. */
@@ -123,18 +135,28 @@ export async function isDownloadMetadataTableEmpty(): Promise<boolean> {
  * Syncs download metadata to match the provided map without emptying the table first (avoids a
  * brief full-table gap visible to concurrent readers).
  */
+export type ReplaceDownloadMetadataStoreResult = {
+    rowsWritten: number
+    skippedEntries: SkippedDownloadMetadataEntry[]
+}
+
 export async function replaceDownloadMetadataStoreInDatabase(
     store: DownloadsMetadataStore
-): Promise<{ rowsWritten: number }> {
+): Promise<ReplaceDownloadMetadataStoreResult> {
     const prisma = getPrismaClient()
-    const rows = normalizedRowsFromStore(store)
+    const { rows, skippedEntries } = normalizedRowsFromStore(store)
+
+    if (rows.length === 0) {
+        if (skippedEntries.length > 0) {
+            return { rowsWritten: 0, skippedEntries }
+        }
+        await prisma.$transaction(async (tx) => {
+            await tx.downloadMetadata.deleteMany({})
+        })
+        return { rowsWritten: 0, skippedEntries }
+    }
 
     await prisma.$transaction(async (tx) => {
-        if (rows.length === 0) {
-            await tx.downloadMetadata.deleteMany({})
-            return
-        }
-
         await tx.downloadMetadata.deleteMany({
             where: {
                 NOT: {
@@ -147,19 +169,19 @@ export async function replaceDownloadMetadataStoreInDatabase(
         })
 
         for (const row of rows) {
-            const updated = await tx.downloadMetadata.updateMany({
-                where: { fileName: row.fileName, guildId: row.guildId },
-                data: {
+            await tx.downloadMetadata.upsert({
+                where: {
+                    fileName_guildId: { fileName: row.fileName, guildId: row.guildId },
+                },
+                create: row,
+                update: {
                     downloadDate: row.downloadDate,
                     originalUrl: row.originalUrl,
                     filePath: row.filePath,
                 },
             })
-            if (updated.count === 0) {
-                await tx.downloadMetadata.create({ data: row })
-            }
         }
     })
 
-    return { rowsWritten: rows.length }
+    return { rowsWritten: rows.length, skippedEntries }
 }

@@ -50,45 +50,57 @@ export async function getServiceStatusPayload(): Promise<StatusPayload> {
             "API_PROXY_TARGET is not set; cannot probe bot /health in this environment."
         logBotApiVerbose("getServiceStatusPayload: bot probe skipped (no origin)")
     } else {
-        const healthUrl = new URL("/health", origin).toString()
-        const started = Date.now()
-        if (isBotApiVerbose()) {
-            logBotApiVerbose("getServiceStatusPayload: probing bot /health", { healthUrl })
-        }
-        let abortTimer: ReturnType<typeof setTimeout> | undefined
+        let healthUrl = ""
+        let healthTarget: { host: string; pathname: string } | undefined
         try {
-            const controller = new AbortController()
-            abortTimer = setTimeout(() => controller.abort(), 4000)
-            const res = await fetch(healthUrl, {
-                signal: controller.signal,
-            })
-            if (res.ok) {
-                botApi.ok = true
-                logBotApiVerbose("getServiceStatusPayload: bot /health ok", {
-                    ms: Date.now() - started,
-                    status: res.status,
-                })
-            } else {
-                botApi.message = `Bot /health returned HTTP ${res.status}`
-                logBotApiVerbose("getServiceStatusPayload: bot /health non-ok", {
-                    ms: Date.now() - started,
-                    status: res.status,
-                })
-            }
+            const parsed = new URL("/health", origin)
+            healthUrl = parsed.toString()
+            healthTarget = { host: parsed.host, pathname: parsed.pathname }
         } catch (e) {
-            if (e instanceof Error && e.name === "AbortError") {
-                botApi.message = "Timed out connecting to bot /health"
-            } else {
-                botApi.message = "Bot /health request failed"
-                console.error("[service-status] Bot /health request failed", sanitizeError(e))
+            botApi.message = "API_PROXY_TARGET is not a valid origin; cannot probe bot /health."
+            console.error("[service-status] Invalid bot API origin for /health URL", sanitizeError(e))
+            logBotApiVerbose("getServiceStatusPayload: bot probe skipped (invalid origin)")
+        }
+        if (healthUrl) {
+            const started = Date.now()
+            if (isBotApiVerbose()) {
+                logBotApiVerbose("getServiceStatusPayload: probing bot /health", { healthTarget })
             }
-            logBotApiVerbose("getServiceStatusPayload: bot /health failed", {
-                ms: Date.now() - started,
-                message: botApi.message,
-            })
-        } finally {
-            if (abortTimer !== undefined) {
-                clearTimeout(abortTimer)
+            let abortTimer: ReturnType<typeof setTimeout> | undefined
+            try {
+                const controller = new AbortController()
+                abortTimer = setTimeout(() => controller.abort(), 4000)
+                const res = await fetch(healthUrl, {
+                    signal: controller.signal,
+                })
+                if (res.ok) {
+                    botApi.ok = true
+                    logBotApiVerbose("getServiceStatusPayload: bot /health ok", {
+                        ms: Date.now() - started,
+                        status: res.status,
+                    })
+                } else {
+                    botApi.message = `Bot /health returned HTTP ${res.status}`
+                    logBotApiVerbose("getServiceStatusPayload: bot /health non-ok", {
+                        ms: Date.now() - started,
+                        status: res.status,
+                    })
+                }
+            } catch (e) {
+                if (e instanceof Error && e.name === "AbortError") {
+                    botApi.message = "Timed out connecting to bot /health"
+                } else {
+                    botApi.message = "Bot /health request failed"
+                    console.error("[service-status] Bot /health request failed", sanitizeError(e))
+                }
+                logBotApiVerbose("getServiceStatusPayload: bot /health failed", {
+                    ms: Date.now() - started,
+                    message: botApi.message,
+                })
+            } finally {
+                if (abortTimer !== undefined) {
+                    clearTimeout(abortTimer)
+                }
             }
         }
     }

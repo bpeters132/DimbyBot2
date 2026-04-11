@@ -1,8 +1,23 @@
 import Link from "next/link"
 import type { GuildListActionResult } from "@/server/guild.actions"
+import type { GuildListItem } from "@/types/web"
 
 type GuildListProps = {
     result: GuildListActionResult
+}
+
+/** Accepts loose API data so a single bad row cannot crash the dashboard. */
+function parseSafeGuildListItem(entry: unknown): GuildListItem | null {
+    if (!entry || typeof entry !== "object") return null
+    const g = entry as Record<string, unknown>
+    if (typeof g.name !== "string") return null
+    const id = g.id
+    if (typeof id !== "string" && typeof id !== "number") return null
+    const iconRaw = g.iconUrl
+    const iconUrl = typeof iconRaw === "string" ? iconRaw : null
+    const mc = g.memberCount
+    const memberCount = typeof mc === "number" ? mc : null
+    return { id: String(id), name: g.name, iconUrl, memberCount }
 }
 
 /** Renders the dashboard guild list from a server-loaded result (no client-side refetch race). */
@@ -20,9 +35,20 @@ export function GuildList({ result }: GuildListProps) {
 
     const { data } = result
     const guilds = data.guilds
-    const guildsList = Array.isArray(guilds) ? guilds : null
+    const rawList = Array.isArray(guilds) ? guilds : null
+    const guildsList = rawList
+        ? rawList.map(parseSafeGuildListItem).filter((g): g is GuildListItem => g !== null)
+        : null
 
     if (!guildsList) {
+        return (
+            <div className="rounded border bg-card p-4 text-card-foreground">
+                <p>Unable to display the guild list (invalid response).</p>
+            </div>
+        )
+    }
+
+    if (rawList.length > 0 && guildsList.length === 0) {
         return (
             <div className="rounded border bg-card p-4 text-card-foreground">
                 <p>Unable to display the guild list (invalid response).</p>

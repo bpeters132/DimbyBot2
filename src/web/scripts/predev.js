@@ -34,6 +34,13 @@ try {
         console.log("Removed invalid Next dev lock")
     }
 } catch (err) {
-    console.error("[predev] Unexpected error while handling Next dev lock:", err)
-    throw err
+    const isSyntax =
+        err instanceof SyntaxError || (err && typeof err === "object" && err.name === "SyntaxError")
+    if (isSyntax) {
+        fs.rmSync(p, { force: true })
+        console.log("Removed malformed Next dev lock")
+    } else {
+        console.error("[predev] Unexpected error while handling Next dev lock:", err)
+        throw err
+    }
 }
