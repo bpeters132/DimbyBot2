@@ -4,9 +4,12 @@ import { getGuildSettings } from "../util/saveControlChannel.js"
 function botCanUseWebDashboardTextChannel(guild: Guild, ch: GuildBasedChannel): boolean {
     const me = guild.client.user
     if (!me) return false
-    return Boolean(
-        ch.permissionsFor(me)?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages])
-    )
+    const perms = ch.permissionsFor(me)
+    if (!perms) return false
+    const sendFlag = ch.isThread()
+        ? PermissionFlagsBits.SendMessagesInThreads
+        : PermissionFlagsBits.SendMessages
+    return perms.has([PermissionFlagsBits.ViewChannel, sendFlag])
 }
 
 async function resolveValidTextChannelId(

@@ -7,10 +7,15 @@ import { isBotApiVerbose } from "../../util/botApiVerboseEnv.js"
 
 export { isBotApiVerbose }
 
-function redactSecrets(value: unknown): unknown {
+function redactSecrets(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
     if (!value || typeof value !== "object") {
         return value
     }
+
+    if (seen.has(value as object)) {
+        return "[Circular]"
+    }
+    seen.add(value as object)
 
     const redactedKeys = new Set([
         "token",
@@ -28,7 +33,7 @@ function redactSecrets(value: unknown): unknown {
     ])
 
     if (Array.isArray(value)) {
-        return value.map((item) => redactSecrets(item))
+        return value.map((item) => redactSecrets(item, seen))
     }
 
     const clone: Record<string, unknown> = { ...(value as Record<string, unknown>) }
@@ -38,7 +43,7 @@ function redactSecrets(value: unknown): unknown {
             continue
         }
         if (entry && typeof entry === "object") {
-            clone[key] = redactSecrets(entry)
+            clone[key] = redactSecrets(entry, seen)
         }
     }
 

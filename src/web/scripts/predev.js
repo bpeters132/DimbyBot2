@@ -1,5 +1,6 @@
 import fs from "fs"
 
+// Invoked via `yarn --cwd src/web`; cwd is `src/web`, so this relative path resolves correctly.
 const p = ".next/dev/lock"
 let lockRaw
 try {

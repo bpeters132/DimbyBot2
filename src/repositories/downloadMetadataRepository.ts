@@ -69,7 +69,7 @@ function normalizedRowsFromStore(store: DownloadsMetadataStore) {
             continue
         }
         const parsedDownloadDate =
-            metadata.downloadDate === undefined ? null : new Date(metadata.downloadDate)
+            metadata.downloadDate == null ? null : new Date(metadata.downloadDate)
         const downloadDate =
             parsedDownloadDate && Number.isFinite(parsedDownloadDate.getTime())
                 ? parsedDownloadDate

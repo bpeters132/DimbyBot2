@@ -19,8 +19,18 @@ export function GuildList({ result }: GuildListProps) {
     }
 
     const { data } = result
+    const guilds = data.guilds
+    const guildsList = Array.isArray(guilds) ? guilds : null
 
-    if (data.guilds.length === 0) {
+    if (!guildsList) {
+        return (
+            <div className="rounded border bg-card p-4 text-card-foreground">
+                <p>Unable to display the guild list (invalid response).</p>
+            </div>
+        )
+    }
+
+    if (guildsList.length === 0) {
         return (
             <div className="rounded border bg-card p-4 text-card-foreground">
                 <p>The bot is not in any of your servers yet.</p>
@@ -40,7 +50,7 @@ export function GuildList({ result }: GuildListProps) {
 
     return (
         <div className="grid gap-3 md:grid-cols-2">
-            {data.guilds.map((guild) => (
+            {guildsList.map((guild) => (
                 <Link
                     href={`/dashboard/${guild.id}`}
                     key={guild.id}
@@ -61,7 +71,9 @@ export function GuildList({ result }: GuildListProps) {
                         <div className="font-medium">{guild.name}</div>
                         <div className="text-sm text-muted-foreground">
                             {typeof guild.memberCount === "number"
-                                ? `${guild.memberCount} members`
+                                ? guild.memberCount === 1
+                                    ? "1 member"
+                                    : `${guild.memberCount} members`
                                 : "Member count unavailable"}
                         </div>
                     </div>
