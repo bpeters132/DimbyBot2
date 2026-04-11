@@ -1,5 +1,13 @@
-import type { Guild, GuildBasedChannel } from "discord.js"
+import { PermissionFlagsBits, type Guild, type GuildBasedChannel } from "discord.js"
 import { getGuildSettings } from "../util/saveControlChannel.js"
+
+function botCanUseWebDashboardTextChannel(guild: Guild, ch: GuildBasedChannel): boolean {
+    const me = guild.client.user
+    if (!me) return false
+    return Boolean(
+        ch.permissionsFor(me)?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages])
+    )
+}
 
 async function resolveValidTextChannelId(
     guild: Guild,
@@ -14,7 +22,7 @@ async function resolveValidTextChannelId(
             ch = undefined
         }
     }
-    if (ch?.isTextBased() && !ch.isDMBased()) {
+    if (ch?.isTextBased() && !ch.isDMBased() && botCanUseWebDashboardTextChannel(guild, ch)) {
         return ch.id
     }
     return undefined
@@ -40,7 +48,11 @@ export async function resolveWebDashboardTextChannelId(guild: Guild): Promise<st
     }
 
     const system = guild.systemChannel
-    if (system?.isTextBased()) {
+    if (
+        system?.isTextBased() &&
+        !system.isDMBased() &&
+        botCanUseWebDashboardTextChannel(guild, system)
+    ) {
         return system.id
     }
     const systemId = guild.systemChannelId

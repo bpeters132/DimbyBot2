@@ -26,14 +26,26 @@ function toDownloadMetadataEntry(row: {
     return entry
 }
 
+function storeKeyIsComposite(storeKey: string): boolean {
+    const parsed = parseDownloadMetadataStoreKey(storeKey)
+    return parsed.guildId !== null && parsed.guildId.length > 0
+}
+
 function normalizedRowsFromStore(store: DownloadsMetadataStore) {
-    const rows: Array<{
+    type NormalizedRow = {
         fileName: string
         guildId: string
         downloadDate: Date | null
         originalUrl: string | null
         filePath: string | null
-    }> = []
+    }
+    const byGuildFile = new Map<
+        string,
+        {
+            row: NormalizedRow
+            sourceKey: string
+        }
+    >()
 
     for (const [key, metadata] of Object.entries(store)) {
         if (!metadata || typeof metadata !== "object") continue
@@ -62,16 +74,27 @@ function normalizedRowsFromStore(store: DownloadsMetadataStore) {
             parsedDownloadDate && Number.isFinite(parsedDownloadDate.getTime())
                 ? parsedDownloadDate
                 : null
-        rows.push({
+        const row: NormalizedRow = {
             fileName,
             guildId,
             downloadDate,
             originalUrl: metadata.originalUrl ?? null,
             filePath: metadata.filePath ?? null,
-        })
+        }
+        const dedupeKey = `${guildId}|${fileName}`
+        const nextComposite = storeKeyIsComposite(key)
+        const prev = byGuildFile.get(dedupeKey)
+        if (!prev) {
+            byGuildFile.set(dedupeKey, { row, sourceKey: key })
+            continue
+        }
+        const prevComposite = storeKeyIsComposite(prev.sourceKey)
+        if (nextComposite && !prevComposite) {
+            byGuildFile.set(dedupeKey, { row, sourceKey: key })
+        }
     }
 
-    return rows
+    return Array.from(byGuildFile.values()).map((e) => e.row)
 }
 
 /** Reads all download metadata rows and returns the legacy map shape keyed by composite store key. */
@@ -79,8 +102,11 @@ export async function getDownloadMetadataStoreFromDatabase(): Promise<DownloadsM
     const prisma = getPrismaClient()
     const rows = await prisma.downloadMetadata.findMany()
     return rows.reduce<DownloadsMetadataStore>((acc, row) => {
-        const guildId = row.guildId ?? ""
-        const key = downloadMetadataStoreKey(guildId, row.fileName)
+        const guildId = row.guildId?.trim() ?? ""
+        const key =
+            guildId.length > 0
+                ? downloadMetadataStoreKey(guildId, row.fileName)
+                : row.fileName
         acc[key] = toDownloadMetadataEntry({ ...row, guildId })
         return acc
     }, {})

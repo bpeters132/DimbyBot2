@@ -13,7 +13,12 @@ export async function getServiceStatusPayload(): Promise<StatusPayload> {
         await getWebPrismaClient().$queryRaw`SELECT 1`
         database.ok = true
     } catch (e) {
-        database.message = e instanceof Error ? e.message : "Database check failed"
+        database.message = "Database unreachable"
+        const stack = e instanceof Error ? e.stack : undefined
+        console.error("[service-status] Database probe failed", {
+            message: e instanceof Error ? e.message : String(e),
+            stack,
+        })
     }
 
     const origin = getBotApiOrigin()

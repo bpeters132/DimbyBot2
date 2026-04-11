@@ -1,11 +1,18 @@
 import fs from "fs"
 
 const p = ".next/dev/lock"
-if (!fs.existsSync(p)) {
-    process.exit(0)
+let lockRaw
+try {
+    lockRaw = fs.readFileSync(p, "utf8")
+} catch (err) {
+    if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+        process.exit(0)
+    }
+    console.error("[predev] Failed to read Next dev lock:", err)
+    process.exit(1)
 }
 try {
-    const lock = JSON.parse(fs.readFileSync(p, "utf8"))
+    const lock = JSON.parse(lockRaw)
     const pid = lock?.pid
     const pidOk = typeof pid === "number" && Number.isInteger(pid) && pid > 0
     if (lock && pidOk) {

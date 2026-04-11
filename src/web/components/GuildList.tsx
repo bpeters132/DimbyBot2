@@ -60,7 +60,7 @@ export function GuildList({ result }: GuildListProps) {
                     <div>
                         <div className="font-medium">{guild.name}</div>
                         <div className="text-sm text-muted-foreground">
-                            {guild.memberCount
+                            {typeof guild.memberCount === "number"
                                 ? `${guild.memberCount} members`
                                 : "Member count unavailable"}
                         </div>

@@ -27,6 +27,10 @@ function redactSecrets(value: unknown): unknown {
         "set-cookie",
     ])
 
+    if (Array.isArray(value)) {
+        return value.map((item) => redactSecrets(item))
+    }
+
     const clone: Record<string, unknown> = { ...(value as Record<string, unknown>) }
     for (const [key, entry] of Object.entries(clone)) {
         if (redactedKeys.has(key.toLowerCase())) {
