@@ -127,7 +127,10 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
                     `[Download Cleanup] Removed "${storeKey}" entry (downloaded ${downloadDate.toISOString()}) due to age${stats ? "" : " (metadata only)"}.`
                 )
             } catch (error: unknown) {
-                client.error(`[Download Cleanup] Failed to delete old file "${baseFileName}":`, error)
+                client.error(
+                    `[Download Cleanup] Failed to delete old file "${baseFileName}":`,
+                    error
+                )
             }
         }
     }
@@ -164,29 +167,32 @@ async function enforceDirectoryLimit(
 ) {
     const metadata: DownloadsMetadataStore = getDownloadMetadataStore()
 
-    const files: SizedFile[] = Object.entries(metadata)
-        .filter(([key, info]) => downloadMetadataEntryMatchesGuild(key, info, guildId))
-        .map(([key, info]) => {
-            const name = parseDownloadMetadataStoreKey(key).fileName
-            const filePath = path.join(downloadsDir, name)
-            let stats: fs.Stats
-            try {
-                stats = fs.statSync(filePath)
-            } catch {
-                return null
+    const seenFiles = new Map<string, SizedFile>()
+    for (const [key, info] of Object.entries(metadata)) {
+        if (!downloadMetadataEntryMatchesGuild(key, info, guildId)) continue
+        const name = parseDownloadMetadataStoreKey(key).fileName
+        if (seenFiles.has(name)) {
+            const existing = seenFiles.get(name)!
+            const candidateDate = info?.downloadDate ? new Date(info.downloadDate) : existing.date
+            if (candidateDate.getTime() > existing.date.getTime()) {
+                existing.date = candidateDate
             }
-            let date = info?.downloadDate ? new Date(info.downloadDate) : stats.mtime
-            if (Number.isNaN(date.getTime())) {
-                date = stats.mtime
-            }
-            return {
-                name,
-                path: filePath,
-                date,
-                size: stats.size,
-            }
-        })
-        .filter((f): f is SizedFile => f != null)
+            continue
+        }
+        const filePath = path.join(downloadsDir, name)
+        let stats: fs.Stats
+        try {
+            stats = fs.statSync(filePath)
+        } catch {
+            continue
+        }
+        let date = info?.downloadDate ? new Date(info.downloadDate) : stats.mtime
+        if (Number.isNaN(date.getTime())) {
+            date = stats.mtime
+        }
+        seenFiles.set(name, { name, path: filePath, date, size: stats.size })
+    }
+    const files: SizedFile[] = [...seenFiles.values()]
 
     const totalSize = files.reduce((size, file) => size + file.size, 0)
     const totalSizeMB = totalSize / (1024 * 1024)

@@ -18,6 +18,31 @@ import {
 
 const DEFAULT_MAX_DIR_SIZE_MB = 1000
 
+/** Selects the latest metadata entry per physical fileName for a guild. */
+function dedupeMetadataByFileName(
+    metadata: DownloadsMetadataStore,
+    guildId: string
+): Map<string, { key: string; info: DownloadsMetadataStore[string] }> {
+    const result = new Map<string, { key: string; info: DownloadsMetadataStore[string] }>()
+    for (const [key, info] of Object.entries(metadata)) {
+        if (!downloadMetadataEntryMatchesGuild(key, info, guildId)) continue
+        const fileName = parseDownloadMetadataStoreKey(key).fileName
+        const existing = result.get(fileName)
+        if (!existing) {
+            result.set(fileName, { key, info })
+            continue
+        }
+        const existingDate = existing.info.downloadDate
+            ? new Date(existing.info.downloadDate).getTime()
+            : 0
+        const candidateDate = info.downloadDate ? new Date(info.downloadDate).getTime() : 0
+        if (candidateDate >= existingDate) {
+            result.set(fileName, { key, info })
+        }
+    }
+    return result
+}
+
 /**
  * Resolves the configured downloads size limit for a guild.
  * @param {import('../../lib/BotClient.js').default} client The bot client instance.
@@ -89,26 +114,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         client.debug(`[Downloads] Executing ${subcommand} subcommand`)
 
         if (subcommand === "list") {
-            const dedupedEntries = new Map<
-                string,
-                { key: string; info: DownloadsMetadataStore[string] }
-            >()
-            for (const [key, info] of Object.entries(metadata)) {
-                if (!downloadMetadataEntryMatchesGuild(key, info, guildId)) continue
-                const fileName = parseDownloadMetadataStoreKey(key).fileName
-                const existing = dedupedEntries.get(fileName)
-                if (!existing) {
-                    dedupedEntries.set(fileName, { key, info })
-                    continue
-                }
-                const existingDate = existing.info.downloadDate
-                    ? new Date(existing.info.downloadDate).getTime()
-                    : 0
-                const candidateDate = info.downloadDate ? new Date(info.downloadDate).getTime() : 0
-                if (candidateDate >= existingDate) {
-                    dedupedEntries.set(fileName, { key, info })
-                }
-            }
+            const dedupedEntries = dedupeMetadataByFileName(metadata, guildId)
 
             const files = [...dedupedEntries.values()]
                 .map(({ key, info }) => {
@@ -204,26 +210,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             const cutoffDate = new Date()
             cutoffDate.setDate(cutoffDate.getDate() - days)
 
-            const dedupedEntries = new Map<
-                string,
-                { key: string; info: DownloadsMetadataStore[string] }
-            >()
-            for (const [key, info] of Object.entries(metadata)) {
-                if (!downloadMetadataEntryMatchesGuild(key, info, guildId)) continue
-                const fileName = parseDownloadMetadataStoreKey(key).fileName
-                const existing = dedupedEntries.get(fileName)
-                if (!existing) {
-                    dedupedEntries.set(fileName, { key, info })
-                    continue
-                }
-                const existingDate = existing.info.downloadDate
-                    ? new Date(existing.info.downloadDate).getTime()
-                    : 0
-                const candidateDate = info.downloadDate ? new Date(info.downloadDate).getTime() : 0
-                if (candidateDate >= existingDate) {
-                    dedupedEntries.set(fileName, { key, info })
-                }
-            }
+            const dedupedEntries = dedupeMetadataByFileName(metadata, guildId)
 
             const files = [...dedupedEntries.values()]
                 .map(({ key, info }) => {

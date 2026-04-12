@@ -3,18 +3,12 @@ FROM node:22-alpine3.22 AS builder
 
 WORKDIR /app
 
-# Optional build-time placeholders (Better Auth loads at runtime from real env in compose).
+# Build-time placeholders so Next.js can compile; runtime secrets come from compose/env.
 ARG BETTER_AUTH_URL=http://localhost:3000
 ARG BETTER_AUTH_SECRET=fake-better-auth-secret
 ARG CLIENT_ID=000000000000000000
 ARG DISCORD_CLIENT_SECRET=build-time-discord-client-secret
 ARG NEXT_PUBLIC_WS_URL=ws://localhost:3001/ws
-ENV BETTER_AUTH_URL=${BETTER_AUTH_URL}
-ENV BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
-ENV CLIENT_ID=${CLIENT_ID}
-ENV DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
-ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
-# Build-time placeholders for Next.js only; runtime secrets still come from compose/env.
 
 COPY docker/ytdlp-requirements.txt /tmp/ytdlp-requirements.txt
 # Native build tools (e.g. sodium) + ffmpeg for any runtime checks during build.

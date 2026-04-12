@@ -177,8 +177,8 @@ jobs:
                   POSTGRES_DB=${{ secrets.POSTGRES_DB }}
                   POSTGRES_USER=${{ secrets.POSTGRES_USER }}
                   POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-                  BOT_IMAGE=${{ env.IMAGE_BOT }}
-                  LAVALINK_IMAGE=${{ env.IMAGE_LAVALINK }}
+                  BOT_IMAGE=${{ env.IMAGE_BOT_SHA }}
+                  LAVALINK_IMAGE=${{ env.IMAGE_LAVALINK_SHA }}
                   GH_ACTOR=${{ github.actor }}
                   GH_TOKEN=${{ secrets.GITHUB_TOKEN }}
                   EOF

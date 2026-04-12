@@ -44,88 +44,103 @@ export async function playerPlayPOST(
         }
     }
 
-    const client = getBotClient()
-    const guild = client.guilds.cache.get(guildId)
-    if (!guild) {
-        return {
-            status: 404,
-            body: { ok: false, error: { error: "Guild not found in bot cache." } },
-        }
-    }
-
-    const member = await guild.members.fetch(requester.requesterId).catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error)
-        console.error("[playerPlayPOST] Failed to fetch requester member", {
-            requesterId: requester.requesterId,
-            message,
-        })
-        return null
-    })
-    const voiceChannel = member?.voice?.channel
-    if (!voiceChannel) {
-        return {
-            status: 400,
-            body: { ok: false, error: { error: "Join a voice channel first." } },
-        }
-    }
-
-    const textChannelId = await resolveWebDashboardTextChannelId(guild)
-
-    let player = client.lavalink.getPlayer(guildId)
-    if (!player) {
-        player = await client.lavalink.createPlayer({
-            guildId,
-            voiceChannelId: voiceChannel.id,
-            textChannelId,
-            selfDeaf: true,
-            volume: 100,
-        })
-    }
-
     try {
-        await ensurePlayerConnected(client, player, voiceChannel)
-    } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Voice connection failed."
-        return {
-            status: 503,
-            body: {
-                ok: false,
-                error: {
-                    error: "Could not connect the player to your voice channel.",
-                    details: message,
+        const client = getBotClient()
+        const guild = client.guilds.cache.get(guildId)
+        if (!guild) {
+            return {
+                status: 404,
+                body: { ok: false, error: { error: "Guild not found in bot cache." } },
+            }
+        }
+
+        const member = await guild.members.fetch(requester.requesterId).catch((error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error)
+            console.error("[playerPlayPOST] Failed to fetch requester member", {
+                requesterId: requester.requesterId,
+                message,
+            })
+            return null
+        })
+        const voiceChannel = member?.voice?.channel
+        if (!voiceChannel) {
+            return {
+                status: 400,
+                body: { ok: false, error: { error: "Join a voice channel first." } },
+            }
+        }
+
+        const textChannelId = await resolveWebDashboardTextChannelId(guild)
+
+        let player = client.lavalink.getPlayer(guildId)
+        if (!player) {
+            player = await client.lavalink.createPlayer({
+                guildId,
+                voiceChannelId: voiceChannel.id,
+                textChannelId,
+                selfDeaf: true,
+                volume: 100,
+            })
+        }
+
+        try {
+            await ensurePlayerConnected(client, player, voiceChannel)
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Voice connection failed."
+            return {
+                status: 503,
+                body: {
+                    ok: false,
+                    error: {
+                        error: "Could not connect the player to your voice channel.",
+                        details: message,
+                    },
                 },
+            }
+        }
+
+        const searchResult = await player.search(query, {
+            requester: {
+                id: requester.requesterId,
+                username: guard.session.user.name || "web-user",
+            },
+        })
+
+        if (!searchResult.tracks.length) {
+            return {
+                status: 404,
+                body: { ok: false, error: { error: "No matches found." } },
+            }
+        }
+
+        if (searchResult.loadType === "playlist") {
+            stampRequesterUserIdOnTracks(searchResult.tracks, requester.requesterId)
+            player.queue.add(searchResult.tracks)
+        } else {
+            stampRequesterUserIdOnTracks([searchResult.tracks[0]], requester.requesterId)
+            player.queue.add(searchResult.tracks[0])
+        }
+
+        if (player.queue.tracks.length > 0) {
+            await startPlaybackIfNeeded(player)
+        }
+
+        return {
+            status: 200,
+            body: {
+                ok: true,
+                data: await toPlayerStateResponse(guildId, requester.requesterId, player),
             },
         }
-    }
-
-    const searchResult = await player.search(query, {
-        requester: { id: requester.requesterId, username: guard.session.user.name || "web-user" },
-    })
-
-    if (!searchResult.tracks.length) {
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        console.error("[playerPlayPOST] unhandled error", { guildId, message })
         return {
-            status: 404,
-            body: { ok: false, error: { error: "No matches found." } },
+            status: 500,
+            body: {
+                ok: false,
+                error: { error: "Internal server error.", details: message },
+            },
         }
-    }
-
-    if (searchResult.loadType === "playlist") {
-        stampRequesterUserIdOnTracks(searchResult.tracks, requester.requesterId)
-        player.queue.add(searchResult.tracks)
-    } else {
-        stampRequesterUserIdOnTracks([searchResult.tracks[0]], requester.requesterId)
-        player.queue.add(searchResult.tracks[0])
-    }
-
-    if (player.queue.tracks.length > 0) {
-        await startPlaybackIfNeeded(player)
-    }
-
-    return {
-        status: 200,
-        body: {
-            ok: true,
-            data: await toPlayerStateResponse(guildId, requester.requesterId, player),
-        },
     }
 }

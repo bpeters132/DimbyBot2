@@ -145,11 +145,7 @@ export async function resolveUserPermissions(
 
     const guild = client.guilds.cache.get(guildId) as Guild | undefined
     if (!guild) {
-        const result: PermissionResolution = { permissions: [], inVoiceWithBot: false }
-        if (applyVoiceGating) {
-            writeCached(guildId, userId, { value: result, expiresAt: now + cacheTtlMs })
-        }
-        return result
+        return { permissions: [], inVoiceWithBot: false }
     }
 
     const player = client.lavalink.getPlayer(guildId)
@@ -185,11 +181,7 @@ export async function resolveUserPermissions(
 
     const member = await resolveGuildMemberForPermissions(guild, userId)
     if (!member) {
-        const result: PermissionResolution = { permissions: [], inVoiceWithBot: false }
-        if (applyVoiceGating) {
-            writeCached(guildId, userId, { value: result, expiresAt: now + cacheTtlMs })
-        }
-        return result
+        return { permissions: [], inVoiceWithBot: false }
     }
 
     const ownerId = process.env.OWNER_ID?.trim()

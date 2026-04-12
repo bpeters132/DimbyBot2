@@ -25,6 +25,9 @@ lavaNodesConfig.js
 # Data storage (e.g., guild settings)
 storage/
 
+# Runtime media artifacts
+downloads/
+
 # Cursor
 .cursor/
 

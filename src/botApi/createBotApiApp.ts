@@ -162,12 +162,6 @@ export function createBotApiApp(): express.Express {
         ) => {
             const safeError = sanitizeBotApiError(err)
             const pathOnly = (req.originalUrl ?? req.url ?? "").split("?")[0]
-            console.error("[botApi] request failed", {
-                method: req.method,
-                path: pathOnly,
-                status: res.statusCode || 500,
-                error: safeError,
-            })
             const parseError =
                 err instanceof SyntaxError &&
                 typeof err === "object" &&
@@ -176,6 +170,18 @@ export function createBotApiApp(): express.Express {
                 "type" in err &&
                 (err as { status?: unknown; type?: unknown }).status === 400 &&
                 (err as { type?: unknown }).type === "entity.parse.failed"
+            const status =
+                (err as { status?: unknown })?.status === 400 && parseError
+                    ? 400
+                    : err instanceof BotClientNotInitializedError
+                      ? 503
+                      : 500
+            console.error("[botApi] request failed", {
+                method: req.method,
+                path: pathOnly,
+                status,
+                error: safeError,
+            })
             if (parseError) {
                 res.status(400).json({
                     ok: false,

@@ -117,7 +117,7 @@ export async function postPlayerCommandAction(
             body: JSON.stringify({ action: command, value }),
             contentType: "application/json",
         })
-        return readPlayerStateResult(res)
+        return await readPlayerStateResult(res)
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to send player command."
         webPlayerWarn("postPlayerCommandAction: transport/parse failure", {
@@ -140,7 +140,7 @@ export async function postPlayerPlayAction(
             body: JSON.stringify({ query, requesterDiscordUserId }),
             contentType: "application/json",
         })
-        return readPlayerStateResult(res)
+        return await readPlayerStateResult(res)
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to queue track."
         webPlayerWarn("postPlayerPlayAction: transport/parse failure", {

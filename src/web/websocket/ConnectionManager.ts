@@ -131,7 +131,18 @@ export class ConnectionManager {
         })
 
         socket.on("message", (buffer) => {
-            void this.handleMessage(socket, buffer.toString())
+            this.handleMessage(socket, buffer.toString()).catch((err: unknown) => {
+                const message = err instanceof Error ? err.message : String(err)
+                webPlayerWarn("WS handleMessage unhandled error", { message })
+                if (socket.readyState === socket.OPEN) {
+                    socket.send(
+                        JSON.stringify({
+                            type: "error",
+                            message: "An internal error occurred processing your message.",
+                        })
+                    )
+                }
+            })
         })
 
         socket.on("close", () => this.cleanupSocket(socket))

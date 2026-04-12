@@ -30,10 +30,23 @@ export async function guildListGET(
         }
     }
 
-    const accessTokenResult = (await auth.api.getAccessToken({
-        body: { providerId: "discord" },
-        headers,
-    })) as { accessToken?: string } | null
+    let accessTokenResult: { accessToken?: string } | null
+    try {
+        accessTokenResult = (await auth.api.getAccessToken({
+            body: { providerId: "discord" },
+            headers,
+        })) as { accessToken?: string } | null
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        console.error("[guildListGET] getAccessToken threw", { message })
+        return {
+            status: 500,
+            body: {
+                ok: false,
+                error: { error: "Failed to retrieve Discord access token.", details: message },
+            },
+        }
+    }
     const accessToken = accessTokenResult?.accessToken
     if (!accessToken) {
         return {
@@ -45,7 +58,20 @@ export async function guildListGET(
         }
     }
 
-    const discordGuilds = await fetchDiscordUserGuilds(accessToken)
+    let discordGuilds: Awaited<ReturnType<typeof fetchDiscordUserGuilds>>
+    try {
+        discordGuilds = await fetchDiscordUserGuilds(accessToken)
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        console.error("[guildListGET] fetchDiscordUserGuilds threw", { message })
+        return {
+            status: 502,
+            body: {
+                ok: false,
+                error: { error: "Discord API request failed.", details: message },
+            },
+        }
+    }
     if (discordGuilds.ok === false) {
         return {
             status: 502,

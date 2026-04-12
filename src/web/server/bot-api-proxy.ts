@@ -97,7 +97,9 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
                 ok: false,
                 error: {
                     error: isAbort ? "Bot API timeout" : "Bot API unreachable",
-                    details: isAbort ? "Upstream bot API request timed out." : message,
+                    details: isAbort
+                        ? "Upstream bot API request timed out."
+                        : "Upstream bot API request failed.",
                 },
             },
             { status: isAbort ? 504 : 502 }

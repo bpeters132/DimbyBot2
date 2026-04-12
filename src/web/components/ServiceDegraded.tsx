@@ -10,7 +10,7 @@ type ServiceDegradedProps = {
 export function ServiceDegraded({ title, description, detail }: ServiceDegradedProps) {
     const sanitizedDetail = detail
         ?.replace(/[A-Z]:\\[^\s]+/g, "[path]")
-        .replace(/\/[^\s]+/g, "[path]")
+        .replace(/\/(?:[^\s/]+\/)+[^\s]+/g, "[path]")
         .replace(/\b[A-Z_]*ERROR_[A-Z_0-9]+\b/g, "[error-code]")
         .slice(0, 300)
     const detailForRender =

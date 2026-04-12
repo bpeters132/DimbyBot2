@@ -113,6 +113,11 @@ export interface WsSubscribeMessage {
     guildId: string
 }
 
+export interface WsUnsubscribeMessage {
+    type: "unsubscribe"
+    guildId: string
+}
+
 export interface WsSubscribedMessage {
     type: "subscribed"
     guildId: string
@@ -143,6 +148,7 @@ export type WSMessage =
     | PlayerUpdateMessage
     | QueueUpdateMessage
     | WsSubscribeMessage
+    | WsUnsubscribeMessage
     | WsSubscribedMessage
     | WsUnsubscribedMessage
     | WsPingMessage

@@ -9,11 +9,11 @@ ARG CLIENT_ID=000000000000000000
 ENV BETTER_AUTH_URL=${BETTER_AUTH_URL}
 ENV CLIENT_ID=${CLIENT_ID}
 
-# Install yt-dlp and its dependencies (always latest from pip)
-# Also install build tools needed for native Node.js modules
+# Install yt-dlp (pinned — bump version after testing; keep in sync with docker/ytdlp-requirements.txt).
+# Also install build tools needed for native Node.js modules.
 # Use pipx to install yt-dlp to avoid PEP 668 issues (pipx puts binaries in ~/.local/bin, not on PATH).
 RUN apk add --no-cache python3 py3-pip ffmpeg build-base autoconf automake libtool g++ pipx su-exec wget \
-    && pipx install yt-dlp \
+    && pipx install "yt-dlp==2026.2.21" \
     && export PATH="/root/.local/bin:${PATH}" \
     && YTDLP_BIN="$(command -v yt-dlp)" \
     && test -n "$YTDLP_BIN" && test -x "$YTDLP_BIN" \

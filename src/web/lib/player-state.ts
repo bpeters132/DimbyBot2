@@ -14,6 +14,7 @@ import { getRequesterUserId } from "../../util/rrqDisconnect.js"
 import { getBotClient, tryGetBotClient } from "./botClient.js"
 import { webPlayerDebug, webPlayerTrace, webPlayerWarn } from "./web-player-debug-log.js"
 
+const MAX_QUEUE_LIMIT = 100
 const REQUESTER_FETCH_CONCURRENCY = 6
 const REQUESTER_MISS_CACHE_TTL_MS = 120_000
 const requesterMissCache = new Map<string, number>()
@@ -58,7 +59,9 @@ function requesterDebugShape(requester: unknown): string {
     if (typeof requester === "string") return `string(len=${requester.length})`
     if (typeof requester !== "object") return typeof requester
     const ctor = (requester as object).constructor?.name ?? "Object"
-    const keys = Object.keys(requester as object).slice(0, 16).join(",")
+    const keys = Object.keys(requester as object)
+        .slice(0, 16)
+        .join(",")
     return `${ctor}{${keys}}`
 }
 
@@ -134,30 +137,35 @@ async function buildRequesterDisplayMap(
     }
 
     const queue = [...needFetch]
-    const workers = Array.from({ length: Math.min(REQUESTER_FETCH_CONCURRENCY, queue.length) }, () =>
-        (async () => {
-            while (queue.length > 0) {
-                const id = queue.shift()
-                if (!id || map.has(id)) continue
-                const missCacheKey = `${guildId}:${id}`
-                const member = await guild.members.fetch(id).catch((err: unknown) => {
-                    requesterMissCache.set(missCacheKey, Date.now() + REQUESTER_MISS_CACHE_TTL_MS)
-                    webPlayerTrace("members.fetch failed for requester label", {
-                        guildId,
-                        userIdPrefix: id.slice(0, 8),
-                        message: err instanceof Error ? err.message : String(err),
+    const workers = Array.from(
+        { length: Math.min(REQUESTER_FETCH_CONCURRENCY, queue.length) },
+        () =>
+            (async () => {
+                while (queue.length > 0) {
+                    const id = queue.shift()
+                    if (!id || map.has(id)) continue
+                    const missCacheKey = `${guildId}:${id}`
+                    const member = await guild.members.fetch(id).catch((err: unknown) => {
+                        requesterMissCache.set(
+                            missCacheKey,
+                            Date.now() + REQUESTER_MISS_CACHE_TTL_MS
+                        )
+                        webPlayerTrace("members.fetch failed for requester label", {
+                            guildId,
+                            userIdPrefix: id.slice(0, 8),
+                            message: err instanceof Error ? err.message : String(err),
+                        })
+                        return null
                     })
-                    return null
-                })
-                if (!member) continue
-                const u = member.user
-                const label = member.displayName || u.globalName || u.username
-                if (label) {
-                    map.set(id, label)
-                    requesterMissCache.delete(missCacheKey)
+                    if (!member) continue
+                    const u = member.user
+                    const label = member.displayName || u.globalName || u.username
+                    if (label) {
+                        map.set(id, label)
+                        requesterMissCache.delete(missCacheKey)
+                    }
                 }
-            }
-        })()
+            })()
     )
     await Promise.all(workers)
 
@@ -222,8 +230,7 @@ function applyDashboardRequesterFallback(
     return {
         ...summary,
         requesterId: summary.requesterId ?? dash.id,
-        requesterUsername:
-            summary.requesterUsername?.trim() || dash.username?.trim() || null,
+        requesterUsername: summary.requesterUsername?.trim() || dash.username?.trim() || null,
     }
 }
 
@@ -367,8 +374,8 @@ export async function toQueueResponse(
     const p = isPlayer(player) ? player : null
     const queue = p?.queue?.tracks ?? []
     const total = queue.length
-    const normalizedPage = Math.max(1, page)
-    const normalizedLimit = Math.max(1, limit)
+    const normalizedPage = Math.max(1, Math.floor(Number(page) || 1))
+    const normalizedLimit = Math.min(MAX_QUEUE_LIMIT, Math.max(1, Math.floor(Number(limit) || 20)))
     const offset = (normalizedPage - 1) * normalizedLimit
     const slice = queue.slice(offset, offset + normalizedLimit)
     const displayMap = await buildRequesterDisplayMap(guildId, slice)
@@ -390,10 +397,11 @@ export async function toQueueSnapshotMessage(
     userId: string,
     player: unknown
 ): Promise<QueueUpdateMessage> {
-    const { player: p, queueSummaries, currentTrack } = await buildPlayerBroadcastData(
-        guildId,
-        player
-    )
+    const {
+        player: p,
+        queueSummaries,
+        currentTrack,
+    } = await buildPlayerBroadcastData(guildId, player)
     const state = composePlayerStateResponse(guildId, userId, p, currentTrack)
     return {
         type: "queueUpdate",

@@ -9,9 +9,6 @@ import BotClient from "./lib/BotClient.js"
 import { disconnectDatabase } from "./lib/database.js"
 import Logger from "./lib/Logger.js"
 import { setBotClient } from "./web/lib/botClient.js"
-import { connectionManager } from "./web/websocket/ConnectionManager.js"
-import { invalidatePermissionCache } from "./web/shared/permissions.js"
-import { playerBroadcaster } from "./web/websocket/PlayerBroadcaster.js"
 
 const logFilePath = path.join(import.meta.dirname, "..", "logs", "app.log")
 const webEnabled = process.env.WEB_ENABLED === "true"
@@ -62,6 +59,7 @@ async function run(): Promise<void> {
 
     let client: BotClient | null = null
     let server: http.Server | null = null
+    let stopHeartbeat: (() => void) | null = null
     const shutdown = async (signal: string): Promise<void> => {
         logger.info(`Received ${signal}, shutting down...`)
         try {
@@ -71,7 +69,7 @@ async function run(): Promise<void> {
                 })
                 logger.info("Web server stopped.")
             }
-            connectionManager.stopHeartbeat()
+            stopHeartbeat?.()
             if (client) {
                 client.destroy()
                 logger.info("Bot client stopped.")
@@ -93,6 +91,10 @@ async function run(): Promise<void> {
             return
         }
 
+        const { connectionManager } = await import("./web/websocket/ConnectionManager.js")
+        const { invalidatePermissionCache } = await import("./web/shared/permissions.js")
+        const { playerBroadcaster } = await import("./web/websocket/PlayerBroadcaster.js")
+
         const botApiApp = createBotApiApp()
         logger.info(
             "Serving bot HTTP: /health, /api/guilds/* (Express), /ws (WebSocket). Next.js is not used here."
@@ -100,6 +102,7 @@ async function run(): Promise<void> {
 
         const wss = new WebSocketServer({ noServer: true })
         connectionManager.startHeartbeat()
+        stopHeartbeat = () => connectionManager.stopHeartbeat()
 
         server = http.createServer((req, res) => {
             const pathOnly = pathnameOnly(req.url)

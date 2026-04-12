@@ -34,21 +34,33 @@ export async function queueIndexDELETE(
         }
     }
 
-    const player = getBotClient().lavalink.getPlayer(guildId)
-    if (!player || queueIndex >= player.queue.tracks.length) {
-        return {
-            status: 404,
-            body: { ok: false, error: { error: "Queue index out of range." } },
+    try {
+        const player = getBotClient().lavalink.getPlayer(guildId)
+        if (!player || queueIndex >= player.queue.tracks.length) {
+            return {
+                status: 404,
+                body: { ok: false, error: { error: "Queue index out of range." } },
+            }
         }
-    }
 
-    player.queue.splice(queueIndex, 1)
-    return {
-        status: 200,
-        body: {
-            ok: true,
-            data: await toQueueResponse(guildId, player),
-        },
+        await player.queue.splice(queueIndex, 1)
+        return {
+            status: 200,
+            body: {
+                ok: true,
+                data: await toQueueResponse(guildId, player),
+            },
+        }
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        console.error("[queueIndexDELETE] unhandled error", { guildId, message })
+        return {
+            status: 500,
+            body: {
+                ok: false,
+                error: { error: "Internal server error", details: message },
+            },
+        }
     }
 }
 
@@ -83,30 +95,42 @@ export async function queueIndexPATCH(
         }
     }
 
-    const player = getBotClient().lavalink.getPlayer(guildId)
-    if (!player) {
-        return {
-            status: 404,
-            body: { ok: false, error: { error: "No active player for this guild." } },
+    try {
+        const player = getBotClient().lavalink.getPlayer(guildId)
+        if (!player) {
+            return {
+                status: 404,
+                body: { ok: false, error: { error: "No active player for this guild." } },
+            }
         }
-    }
 
-    const trackCount = player.queue.tracks.length
-    if (sourceIndex >= trackCount || destinationIndex >= trackCount) {
-        return {
-            status: 404,
-            body: { ok: false, error: { error: "Queue index out of range." } },
+        const trackCount = player.queue.tracks.length
+        if (sourceIndex >= trackCount || destinationIndex >= trackCount) {
+            return {
+                status: 404,
+                body: { ok: false, error: { error: "Queue index out of range." } },
+            }
         }
-    }
 
-    const [track] = player.queue.splice(sourceIndex, 1)
-    player.queue.splice(destinationIndex, 0, track)
+        const [track] = player.queue.splice(sourceIndex, 1)
+        player.queue.splice(destinationIndex, 0, track)
 
-    return {
-        status: 200,
-        body: {
-            ok: true,
-            data: await toQueueResponse(guildId, player),
-        },
+        return {
+            status: 200,
+            body: {
+                ok: true,
+                data: await toQueueResponse(guildId, player),
+            },
+        }
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        console.error("[queueIndexPATCH] unhandled error", { guildId, message })
+        return {
+            status: 500,
+            body: {
+                ok: false,
+                error: { error: "Internal server error", details: message },
+            },
+        }
     }
 }

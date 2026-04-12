@@ -2,7 +2,7 @@ import { PermissionFlagsBits, type Guild, type GuildBasedChannel } from "discord
 import { getGuildSettings } from "../util/saveControlChannel.js"
 
 function botCanUseWebDashboardTextChannel(guild: Guild, ch: GuildBasedChannel): boolean {
-    const me = guild.client.user
+    const me = guild.members.me
     if (!me) return false
     const perms = ch.permissionsFor(me)
     if (!perms) return false

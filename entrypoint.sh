@@ -120,7 +120,7 @@ start_web_server() {
     node "$NEXT_SERVER_ENTRY" &
   fi
   WEB_PID=$!
-  echo "Bot Entrypoint: Next.js started (PID $WEB_PID) on port 3000"
+  echo "Bot Entrypoint: Next.js started (PID $WEB_PID) on port ${PORT:-3000}"
 }
 
 forward_shutdown() {
