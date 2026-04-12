@@ -5,6 +5,33 @@ import type { PlayerStateResponse, QueueTrackSummary, WSMessage } from "@/types/
 
 const MAX_RECONNECT_ATTEMPTS = 12
 
+function sanitizeHttpUrl(value: unknown): string | null {
+    if (typeof value !== "string") return null
+    try {
+        const parsed = new URL(value)
+        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+            return parsed.toString()
+        }
+    } catch {
+        return null
+    }
+    return null
+}
+
+function sanitizePlayerState(state: PlayerStateResponse): PlayerStateResponse {
+    if (!state.currentTrack) return state
+    const safeUri = sanitizeHttpUrl(state.currentTrack.uri) ?? "#"
+    const safeThumbnailUrl = sanitizeHttpUrl(state.currentTrack.thumbnailUrl)
+    return {
+        ...state,
+        currentTrack: {
+            ...state.currentTrack,
+            uri: safeUri,
+            thumbnailUrl: safeThumbnailUrl ?? undefined,
+        },
+    }
+}
+
 interface UsePlayerSocketResult {
     isConnected: boolean
     playerState: PlayerStateResponse | null
@@ -111,7 +138,7 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
                     parsed.type === "queueUpdate" ||
                     parsed.type === "playerDestroy"
                 ) {
-                    if (parsed.state) setPlayerState(parsed.state)
+                    if (parsed.state) setPlayerState(sanitizePlayerState(parsed.state))
                     if (parsed.queue !== undefined) setQueue(parsed.queue)
                     return
                 }
