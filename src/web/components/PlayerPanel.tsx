@@ -89,7 +89,16 @@ function QueueTrackRow({ track, queueIndex }: QueueTrackRowProps) {
     const liRef = useRef<HTMLLIElement>(null)
     const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null)
 
-    const safeQueueTrackUrl = track.uri && isSafeHttpUrl(track.uri) ? track.uri : null
+    const safeQueueTrackUrl = useMemo(() => {
+        if (!track.uri) return null
+        try {
+            const parsed = new URL(track.uri)
+            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null
+            return parsed.toString()
+        } catch {
+            return null
+        }
+    }, [track.uri])
     const safeQueueThumbnailUrl =
         track.thumbnailUrl && isSafeHttpUrl(track.thumbnailUrl) ? track.thumbnailUrl : null
 
