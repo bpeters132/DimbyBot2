@@ -10,6 +10,7 @@ import { auth } from "../auth-node.js"
 import { tryGetBotClient } from "../lib/botClient.js"
 import { resolveDiscordUserSnowflake } from "../lib/discord-user-id.js"
 import { parseWsConnectToken } from "../lib/ws-connect-token.js"
+import { webPlayerTrace, webPlayerWarn } from "../lib/web-player-debug-log.js"
 
 interface SocketMeta {
     userId: string
@@ -178,6 +179,12 @@ export class ConnectionManager {
 
             const resolution = await resolveUserPermissions(botClient, guildId, meta.userId)
             if (!hasRequiredPermissions(resolution.permissions, [WebPermission.VIEW_PLAYER])) {
+                webPlayerWarn("WS subscribe denied (VIEW_PLAYER missing)", {
+                    guildId,
+                    viewerIdPrefix: meta.userId.slice(0, 8),
+                    permissions: resolution.permissions,
+                    inVoiceWithBot: resolution.inVoiceWithBot,
+                })
                 socket.send(
                     JSON.stringify({
                         type: "error",
@@ -191,6 +198,10 @@ export class ConnectionManager {
 
             this.clearSubscriptions(socket)
             this.subscribe(socket, guildId)
+            webPlayerTrace("WS subscribed", {
+                guildId,
+                viewerIdPrefix: meta.userId.slice(0, 8),
+            })
             socket.send(
                 JSON.stringify({
                     type: "subscribed",

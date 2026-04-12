@@ -8,8 +8,7 @@ export default function StatusPage() {
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">Service status</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Checks the Postgres session store and the bot process HTTP port used for guild
-                        APIs.
+                        Basic status checks for the database and the bot API.
                     </p>
                 </div>
                 <Link href="/" className="text-sm text-primary underline-offset-4 hover:underline">

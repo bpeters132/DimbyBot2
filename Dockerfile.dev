@@ -11,11 +11,12 @@ ENV CLIENT_ID=${CLIENT_ID}
 
 # Install yt-dlp and its dependencies (always latest from pip)
 # Also install build tools needed for native Node.js modules
-# Use pipx to install yt-dlp to avoid PEP 668 issues
+# Use pipx to install yt-dlp to avoid PEP 668 issues (pipx puts binaries in ~/.local/bin, not on PATH).
 RUN apk add --no-cache python3 py3-pip ffmpeg build-base autoconf automake libtool g++ pipx su-exec wget \
     && pipx install yt-dlp \
-    && YTDLP_BIN="$(command -v yt-dlp 2>/dev/null || true)" \
-    && if [ -z "$YTDLP_BIN" ]; then echo "yt-dlp not found in PATH after pipx install"; exit 1; fi \
+    && export PATH="/root/.local/bin:${PATH}" \
+    && YTDLP_BIN="$(command -v yt-dlp)" \
+    && test -n "$YTDLP_BIN" && test -x "$YTDLP_BIN" \
     && ln -sf "$YTDLP_BIN" /usr/local/bin/yt-dlp \
     && yt-dlp --version
 

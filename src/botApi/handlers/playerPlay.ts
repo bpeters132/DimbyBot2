@@ -7,6 +7,7 @@ import { requirePermissions } from "../../web/lib/api-auth.js"
 import { getBotClient } from "../../web/lib/botClient.js"
 import { toPlayerStateResponse } from "../../web/lib/player-state.js"
 import { ensurePlayerConnected, startPlaybackIfNeeded } from "../../util/musicManager.js"
+import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
 
 export async function playerPlayPOST(
     headers: Headers,
@@ -109,8 +110,10 @@ export async function playerPlayPOST(
     }
 
     if (searchResult.loadType === "playlist") {
+        stampRequesterUserIdOnTracks(searchResult.tracks, requester.requesterId)
         player.queue.add(searchResult.tracks)
     } else {
+        stampRequesterUserIdOnTracks([searchResult.tracks[0]], requester.requesterId)
         player.queue.add(searchResult.tracks[0])
     }
 
@@ -122,7 +125,7 @@ export async function playerPlayPOST(
         status: 200,
         body: {
             ok: true,
-            data: toPlayerStateResponse(guildId, requester.requesterId, player),
+            data: await toPlayerStateResponse(guildId, requester.requesterId, player),
         },
     }
 }

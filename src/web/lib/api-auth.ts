@@ -11,6 +11,7 @@ import { fetchDiscordUserGuilds } from "./discord-rest.js"
 import { resolveDiscordUserSnowflake } from "./discord-user-id.js"
 import { auth } from "../auth-node.js"
 import { tryGetBotClient } from "./botClient.js"
+import { webPlayerDebug, webPlayerWarn } from "./web-player-debug-log.js"
 
 export interface AuthenticatedSession {
     user: {
@@ -262,10 +263,24 @@ export async function getGuildDashboardPermissionSnapshot(
     const botClient = tryGetBotClient()
     if (!botClient) {
         /**
-         * Without `setBotClient`, the server cannot resolve Discord roles or voice state. Expose
-         * read-only UI hints; the bot HTTP API still enforces mutations.
+         * Next runs without `setBotClient` when using `yarn dev:web` only. Role-based resolution is
+         * impossible here, but the **bot HTTP API** still enforces permissions for playback/queue.
+         * Grant dashboard UI entitlements so controls/queue forms render; voice gating remains on
+         * live `playerState` from the bot.
          */
-        const defaultMemberWebPerms: WebPermission[] = [WebPermission.VIEW_PLAYER]
+        const noClientMsg =
+            "getGuildDashboardPermissionSnapshot: no BotClient in this process — using optimistic dashboard web perms (run bot+web together or set API_PROXY_TARGET to a running bot)."
+        const noClientCtx = { guildId, discordUserIdPrefix: ctx.discordUserId.slice(0, 8) }
+        if (process.env.NODE_ENV === "development") {
+            webPlayerDebug(noClientMsg, noClientCtx)
+        } else {
+            webPlayerWarn(noClientMsg, noClientCtx)
+        }
+        const defaultMemberWebPerms: WebPermission[] = [
+            WebPermission.VIEW_PLAYER,
+            WebPermission.CONTROL_PLAYBACK,
+            WebPermission.MANAGE_QUEUE,
+        ]
         return {
             ok: true,
             snapshot: {
@@ -273,6 +288,7 @@ export async function getGuildDashboardPermissionSnapshot(
                 primaryPermissions: defaultMemberWebPerms,
                 oauthPermissions: [],
             },
+            discordUserId: ctx.discordUserId,
         }
     }
 
@@ -282,6 +298,14 @@ export async function getGuildDashboardPermissionSnapshot(
     /** Same voice-aware fallback as API; only primary snapshot skips voice stripping (role entitlements). */
     const oauth = resolveOauthGuildPermissionFallback(botClient, guildId, ctx.discordUserId)
 
+    webPlayerDebug("getGuildDashboardPermissionSnapshot", {
+        guildId,
+        discordUserIdPrefix: ctx.discordUserId.slice(0, 8),
+        memberResolved: ctx.memberResolved,
+        primary: primary.permissions,
+        oauth: oauth.permissions,
+    })
+
     return {
         ok: true,
         snapshot: {
@@ -289,6 +313,7 @@ export async function getGuildDashboardPermissionSnapshot(
             primaryPermissions: primary.permissions,
             oauthPermissions: oauth.permissions,
         },
+        discordUserId: ctx.discordUserId,
     }
 }
 

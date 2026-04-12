@@ -8,6 +8,7 @@ import { requirePermissions } from "../../web/lib/api-auth.js"
 import { getBotClient } from "../../web/lib/botClient.js"
 import { toQueueResponse } from "../../web/lib/player-state.js"
 import { ensurePlayerConnected, startPlaybackIfNeeded } from "../../util/musicManager.js"
+import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
 
 function parseNumber(value: string | null, fallback: number): number {
     const parsed = Number(value)
@@ -34,7 +35,7 @@ export async function queueGET(
         status: 200,
         body: {
             ok: true,
-            data: toQueueResponse(guildId, player ?? null, page, limit),
+            data: await toQueueResponse(guildId, player ?? null, page, limit),
         },
     }
 }
@@ -168,8 +169,10 @@ export async function queuePOST(
     }
 
     if (searchResult.loadType === "playlist") {
+        stampRequesterUserIdOnTracks(searchResult.tracks, requester.requesterId)
         player.queue.add(searchResult.tracks)
     } else {
+        stampRequesterUserIdOnTracks([searchResult.tracks[0]], requester.requesterId)
         player.queue.add(searchResult.tracks[0])
     }
 
@@ -179,7 +182,7 @@ export async function queuePOST(
         status: 200,
         body: {
             ok: true,
-            data: toQueueResponse(guildId, player),
+            data: await toQueueResponse(guildId, player),
         },
     }
 }
@@ -205,7 +208,7 @@ export async function queueDELETE(
         status: 200,
         body: {
             ok: true,
-            data: toQueueResponse(guildId, player ?? null),
+            data: await toQueueResponse(guildId, player ?? null),
         },
     }
 }

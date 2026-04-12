@@ -59,41 +59,33 @@ export function StatusChecker() {
                 </p>
             ) : null}
 
-            {data && data.ok === false ? (
-                <p className="text-sm text-amber-500" role="alert">
-                    One or more dependency checks failed. See details below.
-                </p>
-            ) : null}
-
             {data ? (
                 <ul className="space-y-4 rounded-lg border bg-card p-4 text-card-foreground">
                     <li className="space-y-1">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-medium">Database (auth / sessions)</span>
+                            <span className="font-medium">Database</span>
                             <span
                                 className={`text-sm font-semibold ${statusClass(data.database.ok)}`}
                             >
                                 {statusLabel(data.database.ok)}
                             </span>
                         </div>
-                        {data.database.message ? (
+                        {/* {data.database.message ? (
                             <p className="text-xs text-muted-foreground">{data.database.message}</p>
-                        ) : null}
+                        ) : null} */}
                     </li>
                     <li className="space-y-1 border-t border-border pt-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-medium">
-                                Bot HTTP (/health via API_PROXY_TARGET)
-                            </span>
+                            <span className="font-medium">Bot</span>
                             <span
                                 className={`text-sm font-semibold ${statusClass(data.botApi.ok)}`}
                             >
                                 {statusLabel(data.botApi.ok)}
                             </span>
                         </div>
-                        {data.botApi.message ? (
+                        {/* {data.botApi.message ? (
                             <p className="text-xs text-muted-foreground">{data.botApi.message}</p>
-                        ) : null}
+                        ) : null} */}
                     </li>
                 </ul>
             ) : null}

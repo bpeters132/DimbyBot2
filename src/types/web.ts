@@ -38,7 +38,8 @@ export interface GuildDashboardPermissionSnapshot {
 /** Result of loading {@link GuildDashboardPermissionSnapshot} in a server action or RSC. */
 export type GuildDashboardSnapshotResult =
     | { ok: false; status: number; error: string; details?: string }
-    | { ok: true; snapshot: GuildDashboardPermissionSnapshot }
+    /** `discordUserId` is the resolved Discord snowflake (same value used for permissions and bot API). */
+    | { ok: true; snapshot: GuildDashboardPermissionSnapshot; discordUserId: string }
 
 export interface PlayerTrackSummary {
     title: string
@@ -47,6 +48,8 @@ export interface PlayerTrackSummary {
     isStream: boolean
     thumbnailUrl: string | null
     requesterId: string | null
+    /** Guild nickname / global name / username when resolved; null if unknown. */
+    requesterUsername: string | null
 }
 
 export interface QueueTrackSummary extends PlayerTrackSummary {

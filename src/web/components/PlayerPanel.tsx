@@ -1,13 +1,18 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import type { FocusEvent } from "react"
 import type {
     GuildDashboardPermissionSnapshot,
     PlayerStateResponse,
+    PlayerTrackSummary,
     QueueResponse,
     QueueTrackSummary,
 } from "@/types/web"
-import { dashboardHasWebPermission } from "@/lib/dashboard-permissions"
+import {
+    dashboardHasWebPermission,
+    explainDashboardWebPermission,
+} from "@/lib/dashboard-permissions"
 import { WEB_PERMISSION } from "@/lib/web-permission-keys"
 import { getPlayerQueueAction, getPlayerStateAction } from "@/server/player.actions"
 import { ConnectionStatus } from "@/components/ConnectionStatus"
@@ -47,6 +52,230 @@ function formatSourceName(sourceName: string | null): string {
     return sourceName.charAt(0).toUpperCase() + sourceName.slice(1)
 }
 
+function requesterLabel(track: {
+    requesterUsername?: string | null
+    requesterId: string | null
+}): string {
+    const name = track.requesterUsername?.trim()
+    if (name) return name
+    if (track.requesterId) return `User ${track.requesterId}`
+    return "Unknown"
+}
+
+/** Matches `w-80` (20rem) for clamp math. */
+const QUEUE_TRACK_POPOVER_WIDTH_PX = 320
+const QUEUE_TRACK_POPOVER_CURSOR_GAP_PX = 10
+
+/** Keeps the queue detail card on-screen; `top` is the cursor Y (panel uses translateY(-50%)). */
+function clampQueueTrackPopoverPoint(left: number, top: number): { left: number; top: number } {
+    const margin = 8
+    const halfHeightEstimate = 80
+    const maxLeft = window.innerWidth - QUEUE_TRACK_POPOVER_WIDTH_PX - margin
+    const clampedLeft = Math.max(margin, Math.min(left, maxLeft))
+    const clampedTop = Math.max(
+        halfHeightEstimate + margin,
+        Math.min(top, window.innerHeight - halfHeightEstimate - margin)
+    )
+    return { left: clampedLeft, top: clampedTop }
+}
+
+interface QueueTrackRowProps {
+    track: QueueTrackSummary
+    queueIndex: number
+}
+
+/** Queue row with a fixed-position detail card anchored to the right of the pointer (keyboard: row edge). */
+function QueueTrackRow({ track, queueIndex }: QueueTrackRowProps) {
+    const liRef = useRef<HTMLLIElement>(null)
+    const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null)
+
+    const safeQueueTrackUrl = track.uri && isSafeHttpUrl(track.uri) ? track.uri : null
+    const safeQueueThumbnailUrl =
+        track.thumbnailUrl && isSafeHttpUrl(track.thumbnailUrl) ? track.thumbnailUrl : null
+
+    const popoverLayout = anchor
+        ? clampQueueTrackPopoverPoint(anchor.x + QUEUE_TRACK_POPOVER_CURSOR_GAP_PX, anchor.y)
+        : null
+
+    const handleRowFocus = (event: FocusEvent<HTMLElement>) => {
+        const rect = event.currentTarget.getBoundingClientRect()
+        setAnchor({
+            x: rect.right,
+            y: rect.top + rect.height / 2,
+        })
+    }
+
+    const handleRowBlur = (event: FocusEvent<HTMLElement>) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            setAnchor(null)
+        }
+    }
+
+    const rowLine = (
+        <>
+            <div className="font-medium">
+                {queueIndex}. {track.title}
+            </div>
+            <div className="text-sm text-muted-foreground">
+                {formatDuration(track.durationMs, track.isStream)}
+            </div>
+        </>
+    )
+
+    return (
+        <li
+            ref={liRef}
+            className="rounded border bg-background p-2"
+            tabIndex={safeQueueTrackUrl ? undefined : 0}
+            onMouseMove={(event) => setAnchor({ x: event.clientX, y: event.clientY })}
+            onMouseLeave={() => {
+                window.requestAnimationFrame(() => {
+                    if (!liRef.current?.contains(document.activeElement)) {
+                        setAnchor(null)
+                    }
+                })
+            }}
+            onFocus={safeQueueTrackUrl ? undefined : handleRowFocus}
+            onBlur={safeQueueTrackUrl ? undefined : handleRowBlur}
+        >
+            {safeQueueTrackUrl ? (
+                <a
+                    href={safeQueueTrackUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="-m-2 block cursor-pointer rounded-sm p-2 text-inherit no-underline decoration-transparent outline-none ring-offset-background transition-colors hover:bg-accent/50 hover:no-underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    aria-label={`Open track source: ${track.title}`}
+                    onFocus={handleRowFocus}
+                    onBlur={handleRowBlur}
+                >
+                    {rowLine}
+                </a>
+            ) : (
+                rowLine
+            )}
+            {popoverLayout ? (
+                <div
+                    className="fixed z-50 w-80 -translate-y-1/2 rounded border bg-popover p-3 text-popover-foreground shadow-lg"
+                    style={{ left: popoverLayout.left, top: popoverLayout.top }}
+                >
+                    <div className="flex gap-3">
+                        {safeQueueThumbnailUrl ? (
+                            <img
+                                src={safeQueueThumbnailUrl}
+                                alt="queued track artwork"
+                                className="h-16 w-16 rounded object-cover"
+                            />
+                        ) : (
+                            <div className="flex h-16 w-16 items-center justify-center rounded bg-muted text-xs text-muted-foreground">
+                                No Art
+                            </div>
+                        )}
+                        <div className="min-w-0 space-y-1 text-sm">
+                            <div className="truncate font-medium">{track.title}</div>
+                            <div className="text-muted-foreground">
+                                Duration: {formatDuration(track.durationMs, track.isStream)}
+                            </div>
+                            <div className="text-muted-foreground">
+                                Requested by: {requesterLabel(track)}
+                            </div>
+                            <div className="text-muted-foreground">
+                                Artist: {track.author ?? "Unknown"}
+                            </div>
+                            <div className="text-muted-foreground">
+                                Source: {formatSourceName(track.sourceName)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+        </li>
+    )
+}
+
+interface NowPlayingProgressProps {
+    playerState: PlayerStateResponse
+    track: PlayerTrackSummary
+}
+
+/**
+ * Elapsed / remaining bar; interpolates while `playing` because WebSocket updates are sparse.
+ */
+function NowPlayingProgress({ playerState, track }: NowPlayingProgressProps) {
+    const [tick, setTick] = useState(0)
+    const [anchor, setAnchor] = useState(() => ({
+        positionMs: playerState.positionMs,
+        wallMs: Date.now(),
+    }))
+
+    useEffect(() => {
+        setAnchor({ positionMs: playerState.positionMs, wallMs: Date.now() })
+    }, [playerState.positionMs, playerState.status, track.uri, track.durationMs])
+
+    useEffect(() => {
+        if (playerState.status !== "playing" || track.isStream || !track.durationMs) return
+        const id = window.setInterval(() => setTick((n) => n + 1), 250)
+        return () => window.clearInterval(id)
+    }, [playerState.status, track.isStream, track.durationMs])
+
+    const livePositionMs = useMemo(() => {
+        if (track.isStream) return playerState.positionMs
+        if (!track.durationMs || track.durationMs <= 0) return playerState.positionMs
+        if (playerState.status !== "playing") {
+            return Math.min(anchor.positionMs, track.durationMs)
+        }
+        return Math.min(anchor.positionMs + (Date.now() - anchor.wallMs), track.durationMs)
+    }, [anchor, playerState.positionMs, playerState.status, track.durationMs, track.isStream, tick])
+
+    if (track.isStream) {
+        if (playerState.status !== "playing") return null
+        return (
+            <div className="mt-3 space-y-1">
+                <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
+                    <span>{formatDuration(playerState.positionMs, false)}</span>
+                    <span>Live stream</span>
+                </div>
+                <div
+                    className="h-2 w-full overflow-hidden rounded-full bg-muted"
+                    aria-label="Live stream (no fixed duration)"
+                    role="presentation"
+                >
+                    <div className="h-full w-1/3 animate-pulse rounded-full bg-primary/50" />
+                </div>
+            </div>
+        )
+    }
+
+    if (!track.durationMs || track.durationMs <= 0) return null
+
+    const remaining = Math.max(0, track.durationMs - livePositionMs)
+    const pct = Math.min(100, Math.max(0, (livePositionMs / track.durationMs) * 100))
+    const valueMax = Math.max(1, Math.ceil(track.durationMs / 1000))
+    const valueNow = Math.min(valueMax, Math.floor(livePositionMs / 1000))
+
+    return (
+        <div className="mt-3 space-y-1">
+            <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
+                <span>{formatDuration(livePositionMs, false)}</span>
+                <span>{formatDuration(remaining, false)} left</span>
+            </div>
+            <div
+                className="h-2 w-full overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={valueMax}
+                aria-valuenow={valueNow}
+                aria-valuetext={`${formatDuration(livePositionMs, false)} of ${formatDuration(track.durationMs, false)}`}
+                aria-label="Track playback position"
+            >
+                <div
+                    className="h-full rounded-full bg-primary transition-[width] duration-200 ease-linear"
+                    style={{ width: `${pct}%` }}
+                />
+            </div>
+        </div>
+    )
+}
+
 export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: PlayerPanelProps) {
     /** Internal flags: pause/skip/stop from the site (not a Discord permission name). */
     const canControlPlayback = dashboardHasWebPermission(
@@ -73,6 +302,31 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
     const socket = usePlayerSocket(guildId, socketUserId)
     const actions = usePlayerActions(guildId, discordUserId)
     const requestIdRef = useRef(0)
+
+    useEffect(() => {
+        if (process.env.NODE_ENV !== "development") return
+        console.log("[web-player] PlayerPanel snapshot + permissions", {
+            guildId,
+            discordUserIdPrefix: discordUserId?.slice(0, 8) ?? "(missing)",
+            canControlPlayback,
+            canManageQueue,
+            controlExplain: explainDashboardWebPermission(
+                permissionSnapshot,
+                WEB_PERMISSION.CONTROL_PLAYBACK
+            ),
+            queueExplain: explainDashboardWebPermission(
+                permissionSnapshot,
+                WEB_PERMISSION.MANAGE_QUEUE
+            ),
+            permissionSnapshot,
+        })
+    }, [
+        guildId,
+        discordUserId,
+        canControlPlayback,
+        canManageQueue,
+        permissionSnapshot,
+    ])
 
     const applyQueueResponse = (queueData: QueueResponse): void => {
         setBaseQueue(queueData.items)
@@ -186,6 +440,18 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
     const addTrackDisabled =
         !canManageQueue || submitting || (playerState ? !playerState.canQueueTracks : true)
     const nowPlaying = playerState?.currentTrack ?? null
+
+    useEffect(() => {
+        if (process.env.NODE_ENV !== "development") return
+        const t = playerState?.currentTrack
+        console.log("[web-player] PlayerPanel live state", {
+            inVoiceWithBot: playerState?.inVoiceWithBot,
+            canQueueTracks: playerState?.canQueueTracks,
+            playbackControlsDisabled,
+            currentRequesterId: t?.requesterId,
+            currentRequesterUsername: t?.requesterUsername,
+        })
+    }, [playerState, playbackControlsDisabled])
 
     const loopLabel = useMemo(() => {
         if (!playerState) return "Off"
@@ -308,35 +574,45 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
             <section className="rounded border bg-card p-4 text-card-foreground">
                 <h2 className="mb-2 text-lg font-medium">Now Playing</h2>
                 {nowPlaying ? (
-                    <div className="flex gap-4">
-                        {safeThumbnailUrl ? (
-                            <img
-                                src={safeThumbnailUrl}
-                                alt="artwork"
-                                className="h-24 w-24 rounded object-cover"
-                            />
-                        ) : null}
-                        <div className="space-y-1">
-                            <div>
-                                <a href={safeTrackUrl} target="_blank" rel="noreferrer">
-                                    {nowPlaying.title}
-                                </a>
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                                Duration:{" "}
-                                {formatDuration(nowPlaying.durationMs, nowPlaying.isStream)}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                                Queue: {playerState?.queueCount ?? 0} songs
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                                Status: {playerState?.status ?? "idle"} | Loop: {loopLabel} |
-                                Autoplay: {playerState?.autoplay ? "On" : "Off"}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                                Requested by: {nowPlaying.requesterId ?? "Unknown"}
+                    <div className="space-y-1">
+                        <div className="flex gap-4">
+                            {safeThumbnailUrl ? (
+                                <img
+                                    src={safeThumbnailUrl}
+                                    alt="artwork"
+                                    className="h-24 w-24 rounded object-cover"
+                                />
+                            ) : null}
+                            <div className="min-w-0 flex-1 space-y-1">
+                                <div>
+                                    <a
+                                        href={safeTrackUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="font-medium text-foreground no-underline decoration-transparent transition-colors hover:text-primary hover:no-underline"
+                                    >
+                                        {nowPlaying.title}
+                                    </a>
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                    Duration:{" "}
+                                    {formatDuration(nowPlaying.durationMs, nowPlaying.isStream)}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                    Queue: {playerState?.queueCount ?? 0} songs
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                    Status: {playerState?.status ?? "idle"} | Loop: {loopLabel} |
+                                    Autoplay: {playerState?.autoplay ? "On" : "Off"}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                    Requested by: {requesterLabel(nowPlaying)}
+                                </div>
                             </div>
                         </div>
+                        {playerState ? (
+                            <NowPlayingProgress playerState={playerState} track={nowPlaying} />
+                        ) : null}
                     </div>
                 ) : (
                     <p className="text-muted-foreground">Nothing playing. Add a song!</p>
@@ -447,79 +723,13 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                 ) : (
                     <>
                         <ol className="space-y-2" start={queueRangeStart}>
-                            {visibleQueue.map((track, index) => {
-                                const queueIndex = queueRangeStart + index
-                                const safeQueueTrackUrl =
-                                    track.uri && isSafeHttpUrl(track.uri) ? track.uri : null
-                                const safeQueueThumbnailUrl =
-                                    track.thumbnailUrl && isSafeHttpUrl(track.thumbnailUrl)
-                                        ? track.thumbnailUrl
-                                        : null
-
-                                return (
-                                    <li
-                                        key={track.encoded ?? track.uri ?? track.title}
-                                        className="group relative rounded border bg-background p-2"
-                                        tabIndex={0}
-                                    >
-                                        <div className="font-medium">
-                                            {queueIndex}. {track.title}
-                                        </div>
-                                        <div className="text-sm text-muted-foreground">
-                                            {formatDuration(track.durationMs, track.isStream)}
-                                        </div>
-                                        <div className="pointer-events-none invisible absolute left-full top-1/2 z-50 ml-2 w-80 -translate-y-1/2 rounded border bg-popover p-3 text-popover-foreground opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-                                            <div className="flex gap-3">
-                                                {safeQueueThumbnailUrl ? (
-                                                    <img
-                                                        src={safeQueueThumbnailUrl}
-                                                        alt="queued track artwork"
-                                                        className="h-16 w-16 rounded object-cover"
-                                                    />
-                                                ) : (
-                                                    <div className="flex h-16 w-16 items-center justify-center rounded bg-muted text-xs text-muted-foreground">
-                                                        No Art
-                                                    </div>
-                                                )}
-                                                <div className="min-w-0 space-y-1 text-sm">
-                                                    <div className="truncate font-medium">
-                                                        {track.title}
-                                                    </div>
-                                                    <div className="text-muted-foreground">
-                                                        Duration:{" "}
-                                                        {formatDuration(
-                                                            track.durationMs,
-                                                            track.isStream
-                                                        )}
-                                                    </div>
-                                                    <div className="text-muted-foreground">
-                                                        Requested by:{" "}
-                                                        {track.requesterId ?? "Unknown"}
-                                                    </div>
-                                                    <div className="text-muted-foreground">
-                                                        Artist: {track.author ?? "Unknown"}
-                                                    </div>
-                                                    <div className="text-muted-foreground">
-                                                        Source: {formatSourceName(track.sourceName)}
-                                                    </div>
-                                                    {safeQueueTrackUrl ? (
-                                                        <div>
-                                                            <a
-                                                                href={safeQueueTrackUrl}
-                                                                target="_blank"
-                                                                rel="noreferrer"
-                                                                className="pointer-events-auto text-primary underline-offset-4 hover:underline"
-                                                            >
-                                                                Open track
-                                                            </a>
-                                                        </div>
-                                                    ) : null}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </li>
-                                )
-                            })}
+                            {visibleQueue.map((track, index) => (
+                                <QueueTrackRow
+                                    key={track.encoded ?? track.uri ?? track.title}
+                                    track={track}
+                                    queueIndex={queueRangeStart + index}
+                                />
+                            ))}
                         </ol>
                         <div className="mt-3 flex items-center justify-between">
                             <div className="text-sm text-muted-foreground">

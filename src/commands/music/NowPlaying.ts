@@ -62,7 +62,7 @@ export default {
         }
 
         // 2. If no local track, check Lavalink player
-        const lavalinkPlayer = client.lavalink.players.get(guild.id)
+        const lavalinkPlayer = client.lavalink.getPlayer(guild.id)
 
         if (!lavalinkPlayer || !lavalinkPlayer.queue.current) {
             // Simplified check

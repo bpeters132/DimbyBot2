@@ -47,7 +47,7 @@ export async function queueIndexDELETE(
         status: 200,
         body: {
             ok: true,
-            data: toQueueResponse(guildId, player),
+            data: await toQueueResponse(guildId, player),
         },
     }
 }
@@ -106,7 +106,7 @@ export async function queueIndexPATCH(
         status: 200,
         body: {
             ok: true,
-            data: toQueueResponse(guildId, player),
+            data: await toQueueResponse(guildId, player),
         },
     }
 }

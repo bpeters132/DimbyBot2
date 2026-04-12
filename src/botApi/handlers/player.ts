@@ -4,6 +4,7 @@ import type { PlayerStateResponse } from "../../types/web.js"
 import { requirePermissions } from "../../web/lib/api-auth.js"
 import { getBotClient } from "../../web/lib/botClient.js"
 import { toPlayerStateResponse } from "../../web/lib/player-state.js"
+import { webPlayerDebug } from "../../web/lib/web-player-debug-log.js"
 
 type PlayerAction = "pause" | "skip" | "stop" | "seek" | "loop" | "shuffle" | "autoplay"
 
@@ -26,11 +27,19 @@ export async function playerGET(
     }
 
     const player = getBotClient().lavalink.getPlayer(guildId)
+    const data = await toPlayerStateResponse(guildId, guard.discordUserId, player ?? null)
+    webPlayerDebug("playerGET", {
+        guildId,
+        viewerIdPrefix: guard.discordUserId.slice(0, 8),
+        inVoiceWithBot: data.inVoiceWithBot,
+        currentRequesterId: data.currentTrack?.requesterId,
+        currentRequesterUsername: data.currentTrack?.requesterUsername,
+    })
     return {
         status: 200,
         body: {
             ok: true,
-            data: toPlayerStateResponse(guildId, guard.discordUserId, player ?? null),
+            data,
         },
     }
 }
@@ -127,7 +136,7 @@ export async function playerPOST(
         status: 200,
         body: {
             ok: true,
-            data: toPlayerStateResponse(guildId, guard.discordUserId, refreshedPlayer),
+            data: await toPlayerStateResponse(guildId, guard.discordUserId, refreshedPlayer),
         },
     }
 }

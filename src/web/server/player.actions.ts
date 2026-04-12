@@ -1,6 +1,7 @@
 "use server"
 
 import type { ApiResponse, PlayerStateResponse, QueueResponse } from "@/types/web"
+import { webPlayerDebug, webPlayerWarn } from "@/lib/web-player-debug-log"
 import { serverFetchBot } from "@/server/fetch-bot-api"
 
 export type PlayerCommand = "pause" | "skip" | "stop" | "seek" | "loop" | "shuffle" | "autoplay"
@@ -44,7 +45,18 @@ export async function getPlayerStateAction(
     guildId: string
 ): Promise<Ok<PlayerStateResponse> | Err> {
     const res = await serverFetchBot(`/api/guilds/${guildId}/player`)
-    return readPlayerStateResult(res)
+    const out = await readPlayerStateResult(res)
+    if (out.ok === false) {
+        webPlayerWarn("getPlayerStateAction: error", { guildId, error: out.error })
+        return out
+    }
+    webPlayerDebug("getPlayerStateAction: ok", {
+        guildId,
+        inVoiceWithBot: out.data.inVoiceWithBot,
+        requesterId: out.data.currentTrack?.requesterId,
+        requesterUsername: out.data.currentTrack?.requesterUsername,
+    })
+    return out
 }
 
 export async function getPlayerQueueAction(
@@ -57,7 +69,24 @@ export async function getPlayerQueueAction(
         limit: String(limit),
     })
     const res = await serverFetchBot(`/api/guilds/${guildId}/queue?${search.toString()}`)
-    return readQueueResult(res)
+    const out = await readQueueResult(res)
+    if (out.ok === false) {
+        webPlayerWarn("getPlayerQueueAction: error", { guildId, page, error: out.error })
+        return out
+    }
+    webPlayerDebug("getPlayerQueueAction: ok", {
+        guildId,
+        page,
+        limit,
+        itemCount: out.data.items.length,
+        firstRequester: out.data.items[0]
+            ? {
+                  id: out.data.items[0].requesterId,
+                  username: out.data.items[0].requesterUsername,
+              }
+            : null,
+    })
+    return out
 }
 
 export async function postPlayerCommandAction(

@@ -1,10 +1,7 @@
 import { dashboardHasWebPermission } from "@/lib/dashboard-permissions"
 import { WEB_PERMISSION } from "@/lib/web-permission-keys"
-import { resolveDiscordUserSnowflake } from "@/lib/discord-user-id"
-import { readSessionSafe } from "@/server/auth-session"
 import { getGuildDashboardSnapshotAction } from "@/server/dashboard-permissions.actions"
 import { PlayerPanel } from "@/components/PlayerPanel"
-import { headers } from "next/headers"
 
 interface GuildPageProps {
     params: Promise<{ guildId: string }>
@@ -12,22 +9,6 @@ interface GuildPageProps {
 
 export default async function GuildPage({ params }: GuildPageProps) {
     const { guildId } = await params
-    const sessionResult = await readSessionSafe()
-    const betterAuthUserId =
-        sessionResult.ok && sessionResult.session?.user?.id
-            ? sessionResult.session.user.id
-            : undefined
-    const headerList = await headers()
-    const sessionHeaders = new Headers()
-    for (const headerName of ["cookie", "authorization"] as const) {
-        const value = headerList.get(headerName)
-        if (value) {
-            sessionHeaders.append(headerName, value)
-        }
-    }
-    const discordUserId = betterAuthUserId
-        ? (await resolveDiscordUserSnowflake(betterAuthUserId, sessionHeaders)) || undefined
-        : undefined
 
     const permResult = await getGuildDashboardSnapshotAction(guildId)
 
@@ -61,7 +42,7 @@ export default async function GuildPage({ params }: GuildPageProps) {
         <section>
             <PlayerPanel
                 guildId={guildId}
-                discordUserId={discordUserId}
+                discordUserId={permResult.discordUserId}
                 permissionSnapshot={permResult.snapshot}
             />
         </section>

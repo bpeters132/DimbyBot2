@@ -20,12 +20,24 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
     const [liveUpdatesError, setLiveUpdatesError] = useState<string | null>(null)
     const reconnectAttemptsRef = useRef(0)
     const socketRef = useRef<WebSocket | null>(null)
+    const warnedMissingUserIdRef = useRef(false)
 
     useEffect(() => {
         let cancelled = false
 
         const connect = async () => {
             if (cancelled) return
+
+            if (
+                process.env.NODE_ENV === "development" &&
+                !userId?.trim() &&
+                !warnedMissingUserIdRef.current
+            ) {
+                warnedMissingUserIdRef.current = true
+                console.warn(
+                    "[web-player] usePlayerSocket: missing `discordUserId` — voiceStateChange events will not apply to your client state; join/leave voice may look wrong until this is fixed."
+                )
+            }
 
             let ticket: string | null = null
             try {

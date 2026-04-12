@@ -21,7 +21,12 @@ import { rememberAutoplayPlayed } from "../util/autoplayHistory.js"
 import { updateControlMessage } from "./handlers/handleControlChannel.js"
 import { discordDeleteErrorDetails } from "../util/discordErrorDetails.js"
 import {
+    DASHBOARD_REQUESTER_KEY,
+    snapshotFromRequester,
+} from "../util/dashboardRequesterSnapshot.js"
+import {
     clearDisconnectedUser,
+    getRequesterUserId,
     hasTrackedDisconnect,
     isDisconnectTimeoutCurrent,
     isRRQActive,
@@ -103,6 +108,7 @@ export default async (client: BotClient) => {
             client.debug(
                 `[LavaMgrEvents] Player destroyed for Guild: ${player.guildId}, Reason: ${reason}`
             )
+            player.set(DASHBOARD_REQUESTER_KEY, undefined)
             scheduleControlMessageUpdate(client, player.guildId, "playerDestroy")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, null, "playerDestroy")
         })
@@ -127,6 +133,21 @@ export default async (client: BotClient) => {
          */
         .on("trackStart", (player: Player, track: Track | null) => {
             if (!track?.info) return
+            /**
+             * Lavalink often hydrates `queue.current` from the node without `requester`, while the
+             * `trackStart` payload still has the requester from search/enqueue. Copy so dashboard and
+             * embeds see who requested the track.
+             */
+            if (player.queue.current && track) {
+                const current = player.queue.current as Track & { requester?: unknown }
+                if (!getRequesterUserId(current.requester) && getRequesterUserId(track.requester)) {
+                    current.requester = track.requester
+                }
+            }
+            const dashReq = track ? snapshotFromRequester(track.requester) : null
+            if (dashReq) {
+                player.set(DASHBOARD_REQUESTER_KEY, dashReq)
+            }
             client.debug(
                 `[LavaMgrEvents] Track started in Guild: ${player.guildId}, Title: ${track.info.title}`
             )
