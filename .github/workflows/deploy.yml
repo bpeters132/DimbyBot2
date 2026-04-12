@@ -240,15 +240,15 @@ jobs:
                       sleep_seconds=2
                       attempt=1
                       while [ "$attempt" -le "$max_attempts" ]; do
-                        ok_health=0
-                        ok_web=0
-                        if curl --fail --silent http://127.0.0.1:3001/health >/dev/null 2>&1; then ok_health=1; fi
-                        if curl --fail --silent http://127.0.0.1:3000/ >/dev/null 2>&1; then ok_web=1; fi
-                        if [ "$ok_health" -eq 1 ] && [ "$ok_web" -eq 1 ]; then
+                        ok_bot=0
+                        ok_dashboard=0
+                        if curl --fail --silent http://127.0.0.1:3001/health >/dev/null 2>&1; then ok_bot=1; fi
+                        if curl --fail --silent http://127.0.0.1:3000/ >/dev/null 2>&1; then ok_dashboard=1; fi
+                        if [ "$ok_bot" -eq 1 ] && [ "$ok_dashboard" -eq 1 ]; then
                           echo "Health checks passed on attempt $attempt"
                           exit 0
                         fi
-                        echo "Health probe attempt $attempt/$max_attempts (health=$ok_health web=$ok_web) — sleeping ${sleep_seconds}s"
+                        echo "Health probe attempt $attempt/$max_attempts (bot:3001/health=$ok_bot dashboard:3000=$ok_dashboard) — sleeping ${sleep_seconds}s"
                         sleep "$sleep_seconds"
                         attempt=$((attempt + 1))
                       done

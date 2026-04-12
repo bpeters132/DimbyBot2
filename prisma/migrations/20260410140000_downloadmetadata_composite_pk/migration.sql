@@ -1,5 +1,5 @@
 UPDATE "DownloadMetadata"
-SET "guildId" = ''
+SET "guildId" = 'UNKNOWN'
 WHERE "guildId" IS NULL;
 
 WITH ranked_rows AS (

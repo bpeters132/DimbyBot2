@@ -17,7 +17,27 @@ import { webPlayerDebug, webPlayerTrace, webPlayerWarn } from "./web-player-debu
 const MAX_QUEUE_LIMIT = 100
 const REQUESTER_FETCH_CONCURRENCY = 6
 const REQUESTER_MISS_CACHE_TTL_MS = 120_000
+const REQUESTER_MISS_CACHE_PURGE_INTERVAL_MS = 60_000
 const requesterMissCache = new Map<string, number>()
+
+function purgeExpiredRequesterMissCache(): void {
+    const now = Date.now()
+    for (const [key, expiresAt] of requesterMissCache.entries()) {
+        if (expiresAt < now) {
+            requesterMissCache.delete(key)
+        }
+    }
+}
+
+const missPurgeGlobal = globalThis as typeof globalThis & {
+    __dimbyRequesterMissPurgeTimer?: ReturnType<typeof setInterval>
+}
+if (typeof setInterval !== "undefined" && !missPurgeGlobal.__dimbyRequesterMissPurgeTimer) {
+    missPurgeGlobal.__dimbyRequesterMissPurgeTimer = setInterval(
+        purgeExpiredRequesterMissCache,
+        REQUESTER_MISS_CACHE_PURGE_INTERVAL_MS
+    )
+}
 
 function repeatModeToLabel(mode: unknown): "off" | "track" | "queue" {
     if (mode === "track" || mode === "queue") {

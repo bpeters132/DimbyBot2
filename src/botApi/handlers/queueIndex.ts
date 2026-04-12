@@ -2,7 +2,7 @@ import { WebPermission } from "../../web/shared/permissions.js"
 import type { ApiResponse } from "../../types/apiPayloads.js"
 import type { QueueResponse } from "../../types/web.js"
 import { requirePermissions } from "../../web/lib/api-auth.js"
-import { getBotClient } from "../../web/lib/botClient.js"
+import { getBotClient, tryGetBotClient } from "../../web/lib/botClient.js"
 import { toQueueResponse } from "../../web/lib/player-state.js"
 
 function parseIndex(value: string): number | null {
@@ -53,7 +53,12 @@ export async function queueIndexDELETE(
         }
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
-        console.error("[queueIndexDELETE] unhandled error", { guildId, message })
+        const client = tryGetBotClient()
+        if (client) {
+            client.error("[queueIndexDELETE] unhandled error", { guildId, message, err })
+        } else {
+            console.error("[queueIndexDELETE] unhandled error", { guildId, message, err })
+        }
         return {
             status: 500,
             body: {
@@ -124,7 +129,12 @@ export async function queueIndexPATCH(
         }
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
-        console.error("[queueIndexPATCH] unhandled error", { guildId, message })
+        const client = tryGetBotClient()
+        if (client) {
+            client.error("[queueIndexPATCH] unhandled error", { guildId, message, err })
+        } else {
+            console.error("[queueIndexPATCH] unhandled error", { guildId, message, err })
+        }
         return {
             status: 500,
             body: {

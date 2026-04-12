@@ -1,6 +1,7 @@
 "use server"
 
 import type { StatusPayload } from "@/types/web"
+import { sanitizeErrorText } from "@/lib/sanitize-log-text"
 import { getServiceStatusPayload } from "@/server/service-status"
 
 const SENSITIVE_KEY = /password|secret|token|uri|connectionString|connection|host|headers/i
@@ -53,7 +54,10 @@ function sanitizeErrorForLog(error: unknown): { name?: string; message: string }
         const safeCopy = sanitizeParsedForLog(parsed) as Record<string, unknown>
         return { name: error.name, message: JSON.stringify(safeCopy) }
     } catch {
-        return { name: error.name, message: "[redacted]" }
+        return {
+            name: error.name,
+            message: sanitizeErrorText(error.message, 800),
+        }
     }
 }
 

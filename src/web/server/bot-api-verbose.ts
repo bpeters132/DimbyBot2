@@ -3,6 +3,7 @@
  * call to the bot HTTP API (no cookie or body contents).
  */
 
+import { sanitizeErrorText } from "@/lib/sanitize-log-text"
 import { isBotApiVerbose } from "../../util/botApiVerboseEnv.js"
 
 export { isBotApiVerbose }
@@ -62,7 +63,13 @@ function shouldRedactKey(key: string): boolean {
 }
 
 function redactSecrets(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
-    if (!value || typeof value !== "object") {
+    if (value === null || value === undefined) {
+        return value
+    }
+    if (typeof value === "string") {
+        return sanitizeErrorText(value, 4000)
+    }
+    if (typeof value !== "object") {
         return value
     }
 

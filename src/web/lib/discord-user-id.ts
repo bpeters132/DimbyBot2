@@ -57,7 +57,7 @@ export async function resolveDiscordUserSnowflake(
         const accessResult = (await auth.api.getAccessToken({
             body: { providerId: "discord" },
             headers: sessionHeaders,
-        })) as { accessToken?: string } | null
+        })) as { accessToken: string } | null
         const accessToken = accessResult?.accessToken
         if (!accessToken) {
             console.warn(

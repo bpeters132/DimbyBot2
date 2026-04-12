@@ -9,9 +9,10 @@ export function LoginButton() {
                 provider: "discord",
                 callbackURL: "/dashboard",
             })
-        } catch {
+        } catch (err: unknown) {
             console.error(
-                "[LoginButton] Discord sign-in failed (details are logged server-side only)"
+                "[LoginButton] Discord sign-in failed (details are logged server-side only)",
+                err
             )
             window.alert("Sign-in failed. Please try again.")
         }

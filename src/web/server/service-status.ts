@@ -1,20 +1,8 @@
+import { sanitizeErrorText } from "@/lib/sanitize-log-text"
 import { getWebPrismaClient } from "@/lib/prisma"
 import type { StatusPayload } from "@/types/web"
 import { getBotApiOrigin } from "@/server/bot-api-origin"
 import { isBotApiVerbose, logBotApiVerbose } from "@/server/bot-api-verbose"
-
-/** Redacts common secret patterns from error text for safe console logging. */
-function sanitizeErrorText(s: string, maxLen: number): string {
-    let out = s.length > maxLen ? `${s.slice(0, maxLen)}…` : s
-    out = out.replace(/Bearer\s+[\w-._~+/]+/gi, "Bearer [REDACTED]")
-    out = out.replace(/(?:password|passwd|pwd)\s*[=:]\s*[^\s&;"']+/gi, "password=[REDACTED]")
-    out = out.replace(/(?:token|apikey|api[_-]?key)\s*[=:]\s*[^\s&;"']+/gi, "token=[REDACTED]")
-    out = out.replace(/postgres(?:ql)?:\/\/[^@\s/"']+@/gi, "postgres://[REDACTED]@")
-    out = out.replace(/mysql:\/\/[^@\s/"']+@/gi, "mysql://[REDACTED]@")
-    out = out.replace(/mongodb(?:\+srv)?:\/\/[^@\s/"']+@/gi, "mongodb://[REDACTED]@")
-    out = out.replace(/eyJ[\w-]*\.eyJ[\w-]*\.[\w-]*/g, "[REDACTED_JWT]")
-    return out
-}
 
 /** Safe structured error info for logs (no raw credentials). */
 function sanitizeError(e: unknown): {
@@ -118,6 +106,6 @@ export async function getServiceStatusPayload(): Promise<StatusPayload> {
         }
     }
 
-    const derivedOk = Boolean(database?.ok && botApi?.ok)
+    const derivedOk = Boolean(database.ok && botApi.ok)
     return { ok: derivedOk, checkedAt, database, botApi }
 }

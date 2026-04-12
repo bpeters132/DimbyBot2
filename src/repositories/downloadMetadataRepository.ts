@@ -141,9 +141,7 @@ export async function replaceDownloadMetadataStoreInDatabase(
         if (skippedEntries.length > 0) {
             return { rowsWritten: 0, skippedEntries }
         }
-        await prisma.$transaction(async (tx) => {
-            await tx.downloadMetadata.deleteMany({})
-        })
+        await prisma.downloadMetadata.deleteMany({})
         return { rowsWritten: 0, skippedEntries }
     }
 

@@ -14,7 +14,7 @@ import {
     explainDashboardWebPermission,
 } from "@/lib/dashboard-permissions"
 import { WEB_PERMISSION } from "@/lib/web-permission-keys"
-import { getPlayerQueueAction, getPlayerStateAction } from "@/server/player.actions"
+import { getPlayerQueueAction, getPlayerStateAction } from "@/lib/actions/player.actions"
 import { ConnectionStatus } from "@/components/ConnectionStatus"
 import { usePlayerActions } from "@/hooks/usePlayerActions"
 import { usePlayerSocket } from "@/hooks/usePlayerSocket"
@@ -730,9 +730,12 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                     <>
                         <ol className="space-y-2" start={queueRangeStart}>
                             {visibleQueue.map((track, index) => (
-                                // Queue position is the stable identity for rows in this paged list.
                                 <QueueTrackRow
-                                    key={queueRangeStart + index}
+                                    key={
+                                        track.encoded ??
+                                        track.uri ??
+                                        `${queueRangeStart + index}-${track.title}`
+                                    }
                                     track={track}
                                     queueIndex={queueRangeStart + index}
                                 />

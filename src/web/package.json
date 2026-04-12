@@ -4,13 +4,13 @@
     "type": "module",
     "scripts": {
         "predev": "node scripts/predev.js",
-        "dev": "next dev --webpack --hostname 0.0.0.0 --port 3000",
+        "dev": "next dev --webpack --hostname 0.0.0.0 --port 3001",
         "typecheck": "tsc --noEmit",
-        "build": "next build --webpack ."
+        "build": "next build --webpack"
     },
     "dependencies": {
-        "@prisma/adapter-pg": "^7.6.0",
-        "@prisma/client": "^7.6.0",
+        "@prisma/adapter-pg": "^7.5.0",
+        "@prisma/client": "^7.5.0",
         "better-auth": "^1.6.2",
         "clsx": "^2.1.1",
         "lavalink-client": "^2.9.9",

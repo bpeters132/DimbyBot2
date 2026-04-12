@@ -30,6 +30,10 @@ export const betterAuthBaseConfig = {
     secret: betterAuthSecret,
     baseURL: betterAuthUrl,
     trustedOrigins: [betterAuthUrl],
+    /** Encrypt OAuth tokens at rest; uses the same `secret` as signing (see Better Auth `account` plugin). */
+    account: {
+        encryptOAuthTokens: true,
+    },
     socialProviders: {
         discord: {
             clientId: discordOAuthClientId,

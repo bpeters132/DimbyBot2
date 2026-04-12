@@ -183,7 +183,15 @@ async function enforceDirectoryLimit(
         let stats: fs.Stats
         try {
             stats = fs.statSync(filePath)
-        } catch {
+        } catch (e: unknown) {
+            const code =
+                e && typeof e === "object" && "code" in e
+                    ? (e as NodeJS.ErrnoException).code
+                    : undefined
+            if (code === "ENOENT") {
+                continue
+            }
+            console.error("[download] statSync failed", { filePath, e })
             continue
         }
         let date = info?.downloadDate ? new Date(info.downloadDate) : stats.mtime

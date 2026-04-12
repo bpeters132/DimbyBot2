@@ -54,9 +54,8 @@ export async function resolveWebDashboardTextChannelId(guild: Guild): Promise<st
     if (system && botCanUseWebDashboardTextChannel(guild, system)) {
         return system.id
     }
-    const systemId = guild.systemChannelId
-    if (systemId) {
-        return resolveValidTextChannelId(guild, systemId)
+    if (!system && guild.systemChannelId) {
+        return resolveValidTextChannelId(guild, guild.systemChannelId)
     }
     return undefined
 }

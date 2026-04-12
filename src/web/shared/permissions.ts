@@ -162,6 +162,7 @@ export async function resolveUserPermissions(
     userId: string,
     options?: ResolveUserPermissionsOptions
 ): Promise<PermissionResolution> {
+    const envBotOwnerId = process.env.OWNER_ID?.trim()
     const applyVoiceGating = options?.applyVoiceGating !== false
     const now = Date.now()
     if (applyVoiceGating) {
@@ -186,7 +187,6 @@ export async function resolveUserPermissions(
 
     /** Discord server owner — same effective rights as admin; does not depend on member fetch. */
     if (guild.ownerId === userId) {
-        const envBotOwnerId = process.env.OWNER_ID?.trim()
         const permissions: WebPermission[] =
             envBotOwnerId === userId
                 ? getOwnerPermissions()
@@ -212,11 +212,9 @@ export async function resolveUserPermissions(
         return { permissions: [], inVoiceWithBot: false }
     }
 
-    const ownerId = process.env.OWNER_ID?.trim()
-
     // Separate from guild owner handling above: grants bot-owner rights to configured OWNER_ID
     // when they are a guild member but not the current guild owner.
-    if (ownerId && ownerId === userId) {
+    if (envBotOwnerId && envBotOwnerId === userId) {
         const result: PermissionResolution = {
             permissions: applyGate(getOwnerPermissions()),
             inVoiceWithBot,

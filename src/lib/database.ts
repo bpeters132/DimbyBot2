@@ -158,6 +158,7 @@ export async function disconnectDatabase(loggerInstance?: Partial<LoggerInterfac
         await prisma.$disconnect()
         logger.info("[Database] Database connection closed.")
     } catch (error: unknown) {
-        logger.warn("[Database] Failed to disconnect cleanly:", error)
+        const message = error instanceof Error ? error.message : String(error)
+        logger.warn("[Database] Failed to disconnect cleanly:", message)
     }
 }

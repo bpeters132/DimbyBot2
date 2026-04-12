@@ -22,7 +22,8 @@ async function guardGuildAccess(guildId: string): Promise<NextResponse | null> {
             )
         }
         return null
-    } catch {
+    } catch (err: unknown) {
+        console.error("[api/guilds/.../queue/[index]] guardGuildAccess failed", err)
         return NextResponse.json(
             {
                 ok: false,

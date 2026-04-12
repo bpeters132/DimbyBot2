@@ -19,12 +19,18 @@ export async function initializeDownloadMetadataStore(
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<void> {
     const logger = loggerFromPartial(loggerInstance)
-    const loaded = await getDownloadMetadataStoreFromDatabase()
-    downloadMetadataCache = loaded
-    initialized = true
-    logger.info(
-        `[downloadMetadata] Loaded ${Object.keys(downloadMetadataCache).length} metadata entries from database.`
-    )
+    try {
+        const loaded = await getDownloadMetadataStoreFromDatabase()
+        downloadMetadataCache = loaded
+        initialized = true
+        logger.info(
+            `[downloadMetadata] Loaded ${Object.keys(downloadMetadataCache).length} metadata entries from database.`
+        )
+    } catch (error: unknown) {
+        logger.error("[downloadMetadata] Failed to load metadata from database:", error)
+        initialized = false
+        throw error
+    }
 }
 
 /** Returns a clone of the metadata cache so callers cannot mutate shared state. */

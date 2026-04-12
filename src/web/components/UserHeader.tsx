@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { authClient } from "@/auth-client"
@@ -26,6 +26,8 @@ async function signOutAndGoHome() {
 export function UserHeader() {
     const { data: session } = authClient.useSession()
     const [signOutError, setSignOutError] = useState<string | null>(null)
+    const [signOutLoading, setSignOutLoading] = useState(false)
+    const signOutInFlight = useRef(false)
 
     return (
         <div className="flex items-center justify-between">
@@ -49,18 +51,28 @@ export function UserHeader() {
                 ) : null}
                 <button
                     type="button"
+                    aria-busy={signOutLoading}
+                    disabled={signOutLoading}
                     onClick={() => {
                         void (async () => {
+                            if (signOutInFlight.current) return
+                            signOutInFlight.current = true
                             setSignOutError(null)
-                            const ok = await signOutAndGoHome()
-                            if (!ok) {
-                                setSignOutError("Log out failed. Please try again.")
+                            setSignOutLoading(true)
+                            try {
+                                const ok = await signOutAndGoHome()
+                                if (!ok) {
+                                    setSignOutError("Log out failed. Please try again.")
+                                }
+                            } finally {
+                                signOutInFlight.current = false
+                                setSignOutLoading(false)
                             }
                         })()
                     }}
-                    className="rounded border px-3 py-1 text-sm hover:bg-accent hover:text-accent-foreground"
+                    className="rounded border px-3 py-1 text-sm hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
                 >
-                    Log out
+                    {signOutLoading ? "Signing out…" : "Log out"}
                 </button>
                 {signOutError ? (
                     <span className="text-xs text-destructive" role="alert" aria-live="assertive">

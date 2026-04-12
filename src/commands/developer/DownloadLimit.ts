@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, MessageFlags } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
+import type { GuildSettingsStore } from "../../types/index.js"
 
 import { getGuildSettings, saveGuildSettings } from "../../util/saveControlChannel.js"
 
@@ -81,7 +82,17 @@ export default {
             })
         }
 
-        const settings = getGuildSettings()
+        let settings: GuildSettingsStore
+        try {
+            settings = getGuildSettings()
+        } catch (e: unknown) {
+            client.error("[DownloadLimit] Guild settings not available:", e)
+            return interaction.reply({
+                content:
+                    "Guild settings are not loaded yet (bot may still be starting). Please try again shortly.",
+                flags: [MessageFlags.Ephemeral],
+            })
+        }
         if (!settings[targetGuildId]) {
             settings[targetGuildId] = {}
         }

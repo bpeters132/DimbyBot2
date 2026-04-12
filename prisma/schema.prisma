@@ -15,11 +15,12 @@ model GuildSettings {
 }
 
 model DownloadMetadata {
-  fileName     String
-  guildId      String
-  downloadDate DateTime?
-  originalUrl  String?
-  filePath     String?
+    fileName     String
+    /// Discord guild id, or `UNKNOWN` for legacy rows migrated from NULL (see migration `20260410140000_downloadmetadata_composite_pk`).
+    guildId      String
+    downloadDate DateTime?
+    originalUrl  String?
+    filePath     String?
 
   @@id([fileName, guildId])
   @@index([guildId], name: "DownloadMetadata_guildId_idx")

@@ -1,6 +1,9 @@
 /** Unit separator — not used in Discord snowflakes or typical `.wav` names; stable composite store keys. */
 export const DOWNLOAD_METADATA_KEY_SEP = "\x1f"
 
+/** DB sentinel for rows that had NULL guildId before composite PK migration; never a real Discord guild. */
+export const DOWNLOAD_METADATA_UNKNOWN_GUILD_ID = "UNKNOWN"
+
 /** Builds the in-memory store key for a guild-scoped download row (matches DB composite id). */
 export function downloadMetadataStoreKey(guildId: string, fileName: string): string {
     return `${guildId}${DOWNLOAD_METADATA_KEY_SEP}${fileName}`
@@ -28,10 +31,16 @@ export function effectiveDownloadMetadataGuildId(
 ): string | null {
     const parsed = parseDownloadMetadataStoreKey(storeKey)
     if (parsed.guildId !== null && parsed.guildId.length > 0) {
+        if (parsed.guildId === DOWNLOAD_METADATA_UNKNOWN_GUILD_ID) {
+            return null
+        }
         return parsed.guildId
     }
     const fromMeta = meta?.guildId?.trim()
     if (fromMeta) {
+        if (fromMeta === DOWNLOAD_METADATA_UNKNOWN_GUILD_ID) {
+            return null
+        }
         return fromMeta
     }
     return null

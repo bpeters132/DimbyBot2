@@ -90,10 +90,6 @@ export function StatusChecker() {
                     </li>
                 </ul>
             ) : null}
-
-            {!loading && !data && !error ? (
-                <p className="text-sm text-muted-foreground">No status data yet.</p>
-            ) : null}
         </div>
     )
 }

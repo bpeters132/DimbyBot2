@@ -364,6 +364,7 @@ export async function requirePermissions(
             : resolveOauthGuildPermissionFallback(null, guildId, ctx.discordUserId)
 
         if (
+            botClient &&
             !hasRequiredPermissions(permissionResolution.permissions, requiredPerms) &&
             ctx.memberResolved === false
         ) {

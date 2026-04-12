@@ -8,7 +8,11 @@ import type {
     GuildSettingsStore,
 } from "../../types/index.js"
 import { discordLogLevelAllowed, resolveDiscordLogChannelId } from "../../util/discordLogForward.js"
-import { getGuildSettings, saveGuildSettings } from "../../util/saveControlChannel.js"
+import {
+    getGuildSettings,
+    isGuildSettingsInitialized,
+    saveGuildSettings,
+} from "../../util/saveControlChannel.js"
 
 const LEVEL_CHOICES: DiscordLogLevelName[] = ["debug", "info", "warn", "error"]
 
@@ -197,6 +201,12 @@ export default {
         }
 
         const sub = interaction.options.getSubcommand()
+        if (!isGuildSettingsInitialized()) {
+            return interaction.reply({
+                content: "Bot is still starting up. Please try again in a moment.",
+                flags: [MessageFlags.Ephemeral],
+            })
+        }
         const store = getGuildSettings()
 
         if (sub === "show") {

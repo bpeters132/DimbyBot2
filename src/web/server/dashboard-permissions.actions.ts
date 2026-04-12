@@ -2,6 +2,7 @@
 
 import type { GuildDashboardSnapshotResult } from "@/types/web"
 import { headers } from "next/headers"
+import { sanitizeErrorText } from "@/lib/sanitize-log-text"
 import { getGuildDashboardPermissionSnapshot } from "@/lib/api-auth"
 
 const DISCORD_SNOWFLAKE_RE = /^\d{17,22}$/
@@ -22,7 +23,8 @@ export async function getGuildDashboardSnapshotAction(
     try {
         return await getGuildDashboardPermissionSnapshot(await headers(), trimmed)
     } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e)
+        const raw = e instanceof Error ? e.message : String(e)
+        const msg = sanitizeErrorText(raw, 800)
         console.error(
             "[dashboard-permissions.actions] getGuildDashboardPermissionSnapshot failed:",
             msg

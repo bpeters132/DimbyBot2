@@ -64,7 +64,7 @@ case $COMMAND in
     "${DC[@]}" logs -f "$@"
     ;;
   restart)
-    SERVICE=$1
+    SERVICE="${1:-}"
     if [ -z "$SERVICE" ]; then
       echo "Error: Please specify a service to restart (e.g., 'bot')."
       exit 1
@@ -73,16 +73,16 @@ case $COMMAND in
     "${DC[@]}" restart "$SERVICE"
     ;;
   exec)
+    if [ $# -lt 1 ] || [ -z "${1:-}" ]; then
+      echo "Error: Please specify a service to execute command in (e.g., 'bot')."
+      exit 1
+    fi
     SERVICE=$1
     shift # Remove service name argument
     if [ $# -eq 0 ]; then
       CMD=(sh)
     else
       CMD=("$@")
-    fi
-    if [ -z "$SERVICE" ]; then
-      echo "Error: Please specify a service to execute command in (e.g., 'bot')."
-      exit 1
     fi
     echo "Executing '${CMD[*]}' in service '$SERVICE'..."
     "${DC[@]}" exec "$SERVICE" "${CMD[@]}"

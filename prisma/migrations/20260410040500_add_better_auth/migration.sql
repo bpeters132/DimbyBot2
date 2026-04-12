@@ -69,3 +69,31 @@ ALTER TABLE "account"
 ADD CONSTRAINT "account_userId_fkey"
 FOREIGN KEY ("userId") REFERENCES "user"("id")
 ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- Keep "updatedAt" fresh on row updates (Prisma @updatedAt also updates on ORM writes).
+CREATE OR REPLACE FUNCTION ba_touch_updated_at() RETURNS trigger AS $$
+BEGIN
+  NEW."updatedAt" = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER user_touch_updated_at
+  BEFORE UPDATE ON "user"
+  FOR EACH ROW
+  EXECUTE PROCEDURE ba_touch_updated_at();
+
+CREATE TRIGGER session_touch_updated_at
+  BEFORE UPDATE ON "session"
+  FOR EACH ROW
+  EXECUTE PROCEDURE ba_touch_updated_at();
+
+CREATE TRIGGER account_touch_updated_at
+  BEFORE UPDATE ON "account"
+  FOR EACH ROW
+  EXECUTE PROCEDURE ba_touch_updated_at();
+
+CREATE TRIGGER verification_touch_updated_at
+  BEFORE UPDATE ON "verification"
+  FOR EACH ROW
+  EXECUTE PROCEDURE ba_touch_updated_at();

@@ -6,7 +6,7 @@ import {
     type PlayerCommand,
     postPlayerCommandAction,
     postPlayerPlayAction,
-} from "@/server/player.actions"
+} from "@/lib/actions/player.actions"
 
 async function runCommand(
     guildId: string,

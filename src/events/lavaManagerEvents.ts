@@ -36,6 +36,10 @@ import {
 } from "../util/rrqDisconnect.js"
 import { playerBroadcaster } from "../web/websocket/PlayerBroadcaster.js"
 
+/** Rate-limit `queueUpdate` websocket fan-out on Lavalink position ticks (pause/resume still immediate). */
+const lastQueueUpdateBroadcastAtMs = new Map<string, number>()
+const QUEUE_UPDATE_BROADCAST_MIN_INTERVAL_MS = 2000
+
 /** Fire-and-forget control message refresh; logs rejections so Lavalink callbacks never surface unhandled rejections. */
 function scheduleControlMessageUpdate(client: BotClient, guildId: string, context: string) {
     void updateControlMessage(client, guildId).catch((err: unknown) => {
@@ -562,7 +566,14 @@ export default async (client: BotClient) => {
                 )
                 return
             }
-            playerBroadcaster.broadcastPlayerEvent(newPlayer.guildId, newPlayer, "queueUpdate")
+            const guildId = newPlayer.guildId
+            const now = Date.now()
+            const last = lastQueueUpdateBroadcastAtMs.get(guildId) ?? 0
+            if (now - last < QUEUE_UPDATE_BROADCAST_MIN_INTERVAL_MS) {
+                return
+            }
+            lastQueueUpdateBroadcastAtMs.set(guildId, now)
+            playerBroadcaster.broadcastPlayerEvent(guildId, newPlayer, "queueUpdate")
         })
 
         /**

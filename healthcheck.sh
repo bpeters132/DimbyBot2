@@ -5,13 +5,14 @@
 set -e
 
 if [ "${WEB_ENABLED:-false}" = "true" ]; then
-  PORT="${WEB_PORT:-3001}"
-  if ! wget --timeout=5 --tries=1 -qO- "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
-    echo "healthcheck: bot /health not reachable on port ${PORT}" >&2
+  BOT_PORT="${WEB_PORT:-3001}"
+  DASHBOARD_PORT="${DASHBOARD_PORT:-3000}"
+  if ! wget --timeout=5 --tries=1 -qO- "http://127.0.0.1:${BOT_PORT}/health" >/dev/null 2>&1; then
+    echo "healthcheck: bot /health not reachable on WEB_PORT=${BOT_PORT}" >&2
     exit 1
   fi
-  if ! wget --timeout=5 --tries=1 -qO- "http://127.0.0.1:3000/" >/dev/null 2>&1; then
-    echo "healthcheck: Next.js dashboard not reachable on port 3000" >&2
+  if ! wget --timeout=5 --tries=1 -qO- "http://127.0.0.1:${DASHBOARD_PORT}/" >/dev/null 2>&1; then
+    echo "healthcheck: Next.js dashboard not reachable on DASHBOARD_PORT=${DASHBOARD_PORT}" >&2
     exit 1
   fi
   exit 0

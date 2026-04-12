@@ -7,7 +7,7 @@ const SEP = "."
  * where session cookies are not sent. Minted by Next (`GET /api/ws-ticket`), verified on upgrade.
  */
 function wsConnectHmacKey(secret: string): Buffer {
-    return Buffer.from(secret, "base64")
+    return Buffer.from(secret, "utf8")
 }
 
 export function createWsConnectToken(userId: string, secret: string, ttlSeconds = 120): string {

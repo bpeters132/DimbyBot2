@@ -8,8 +8,8 @@ services:
             args:
                 - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:3001}
                 - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
-                - CLIENT_ID=${CLIENT_ID:-000000000000000000}
-                - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-build-time-discord-client-secret}
+                - CLIENT_ID=${CLIENT_ID:?CLIENT_ID is required for dev image build (Discord OAuth)}
+                - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:?DISCORD_CLIENT_SECRET is required for dev image build}
         image: dimbybot-dev # Optional: Give the dev image a distinct name
         command: yarn dev # Override the default command/entrypoint to run nodemon
         # `ports: !override` is a Docker Compose tag so this list replaces the base file's ports (merge would append and cause host port conflicts in dev).

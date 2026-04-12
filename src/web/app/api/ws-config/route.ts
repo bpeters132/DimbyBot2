@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server"
 
 /**
- * Returns an optional absolute WebSocket URL for the player socket.
+ * **Public by design:** `GET` returns only a non-sensitive WebSocket URL string (or null) so the
+ * browser can connect to the player socket before any guild-scoped auth runs; no secrets or user
+ * data are exposed, so this route intentionally skips session checks.
+ *
  * Prefer `WEBSOCKET_CLIENT_URL` (runtime env, not inlined into the client bundle).
  * Falls back to `NEXT_PUBLIC_WS_URL` when set in the server environment for legacy setups.
  */
