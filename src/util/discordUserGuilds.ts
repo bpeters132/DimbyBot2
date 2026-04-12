@@ -9,6 +9,14 @@ const GUILD_LIST_MAX_ATTEMPTS = 8
 const GUILD_LIST_MAX_RETRY_WAIT_MS = 60_000
 const GUILD_LIST_MIN_RETRY_WAIT_MS = 500
 const GUILD_LIST_REQUEST_TIMEOUT_MS = 10_000
+/** +/- fraction applied to retry waits so concurrent clients do not retry in lockstep after 429s. */
+const GUILD_LIST_RETRY_JITTER_RATIO = 0.15
+
+function jitteredDelayMs(baseMs: number): number {
+    const factor = 1 + (Math.random() * 2 - 1) * GUILD_LIST_RETRY_JITTER_RATIO
+    const ms = Math.round(baseMs * factor)
+    return Math.min(Math.max(ms, 1), GUILD_LIST_MAX_RETRY_WAIT_MS)
+}
 
 /** Re-use recent successful OAuth guild fetches to avoid bursty `/users/@me/guilds` calls (e.g. dashboard ↔ guild). */
 const GUILD_LIST_SUCCESS_CACHE_TTL_MS = 120_000
@@ -125,7 +133,7 @@ async function fetchDiscordUserGuildsOnce(accessToken: string): Promise<FetchUse
             })
         } catch (error: unknown) {
             if (attempt < GUILD_LIST_MAX_ATTEMPTS) {
-                await delay(GUILD_LIST_MIN_RETRY_WAIT_MS)
+                await delay(jitteredDelayMs(GUILD_LIST_MIN_RETRY_WAIT_MS))
                 continue
             }
             if (error instanceof Error && error.name === "AbortError") {
@@ -171,7 +179,7 @@ async function fetchDiscordUserGuildsOnce(accessToken: string): Promise<FetchUse
                     discordRetryAfterMs(response, bodyText),
                     GUILD_LIST_MIN_RETRY_WAIT_MS
                 )
-                await delay(waitMs)
+                await delay(jitteredDelayMs(waitMs))
                 continue
             }
             return {

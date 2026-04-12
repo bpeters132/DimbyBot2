@@ -22,8 +22,7 @@ export default async function GuildPage({ params }: GuildPageProps) {
             <section className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm">
                 <p className="font-medium text-destructive">Dashboard unavailable</p>
                 <p className="mt-2 text-muted-foreground">
-                    We could not load this guild dashboard right now. Please try again in a
-                    moment.
+                    We could not load this guild dashboard right now. Please try again in a moment.
                 </p>
             </section>
         )

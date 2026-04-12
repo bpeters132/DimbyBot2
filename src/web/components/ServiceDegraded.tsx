@@ -15,20 +15,20 @@ export function ServiceDegraded({
     detail,
     supportReference,
 }: ServiceDegradedProps) {
-    const sanitizedDetail = detail
-        ?.replace(/https?:\/\/[^\s"'<>]+/gi, "[url]")
-        .replace(/[A-Z]:\\[^\s]+/g, "[path]")
-        .replace(
-            /(^|[\s"'(>])(\/(?:etc|var|tmp|usr|home|opt|root|app|proc)\b(?:\/[\w.-]+)+)/gi,
-            "$1[path]"
-        )
-        .replace(/(^|[\s"'(>])(\.{1,2}\/(?:[\w.-]+\/)*[\w.-]+)/g, "$1[path]")
-        .replace(/\b[A-Z_]*ERROR_[A-Z_0-9]+\b/g, "[error-code]")
-        .slice(0, 300)
-    const detailForRender =
-        detail && process.env.NODE_ENV === "production"
-            ? "Technical details hidden."
-            : sanitizedDetail
+    const detailForRender = !detail
+        ? undefined
+        : process.env.NODE_ENV === "production"
+          ? "Technical details hidden."
+          : detail
+                .replace(/https?:\/\/[^\s"'<>]+/gi, "[url]")
+                .replace(/[A-Z]:\\[^\s]+/g, "[path]")
+                .replace(
+                    /(^|[\s"'(>])(\/(?:etc|var|tmp|usr|home|opt|root|app|proc)\b(?:\/[\w.-]+)+)/gi,
+                    "$1[path]"
+                )
+                .replace(/(^|[\s"'(>])(\.{1,2}\/(?:[\w.-]+\/)*[\w.-]+)/g, "$1[path]")
+                .replace(/\b[A-Z_]*ERROR_[A-Z_0-9]+\b/g, "[error-code]")
+                .slice(0, 300)
 
     return (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-6 text-left">

@@ -4,7 +4,7 @@ import type { StatusPayload } from "@/types/web"
 import { sanitizeErrorText } from "@/lib/sanitize-log-text"
 import { getServiceStatusPayload } from "@/server/service-status"
 
-const SENSITIVE_KEY = /password|secret|token|uri|connectionString|connection|host|headers/i
+const SENSITIVE_KEY = /\b(?:password|secret|token|uri|connectionString|connection|host|headers)\b/i
 
 function stringLooksLikeHostOrDsn(value: string): boolean {
     if (/:\/\//.test(value)) {

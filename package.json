@@ -37,8 +37,8 @@
     "dependencies": {
         "@discordjs/voice": "0.19.2",
         "@opentelemetry/api": "^1.9.1",
-        "@prisma/adapter-pg": "^7.5.0",
-        "@prisma/client": "^7.5.0",
+        "@prisma/adapter-pg": "^7.6.0",
+        "@prisma/client": "^7.6.0",
         "@snazzah/davey": "^0.1.10",
         "better-auth": "^1.6.2",
         "colors": "^1.4.0",

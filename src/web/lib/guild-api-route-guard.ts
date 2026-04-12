@@ -1,0 +1,36 @@
+import { headers } from "next/headers"
+import { NextResponse } from "next/server"
+import { resolveAuthenticatedGuildAccess } from "@/lib/api-auth"
+
+/** Next route helper: forwards request headers and returns a JSON error response when access fails. */
+export async function guardGuildAccess(guildId: string): Promise<NextResponse | null> {
+    try {
+        const h = await headers()
+        const headerRecord: Record<string, string> = {}
+        for (const [k, v] of h.entries()) {
+            headerRecord[k] = v
+        }
+        const ctx = await resolveAuthenticatedGuildAccess(headerRecord, guildId)
+        if (ctx.ok === false) {
+            return NextResponse.json(
+                { ok: false, error: { error: ctx.error, details: ctx.details } },
+                { status: ctx.status }
+            )
+        }
+        return null
+    } catch (err: unknown) {
+        const name = err instanceof Error ? err.name : "Error"
+        const message = err instanceof Error ? err.message : String(err)
+        console.error("[guild-api-route-guard] guardGuildAccess failed", `${name}: ${message}`)
+        return NextResponse.json(
+            {
+                ok: false,
+                error: {
+                    error: "internal_error",
+                    details: "authentication failed",
+                },
+            },
+            { status: 500 }
+        )
+    }
+}

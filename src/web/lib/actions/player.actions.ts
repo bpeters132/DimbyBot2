@@ -12,20 +12,37 @@ type Err = { ok: false; error: string }
 async function parseApiResponse<T>(res: Response): Promise<Ok<T> | Err> {
     const text = await res.text()
     if (!text.trim()) {
-        return { ok: false, error: "Empty response from bot API." }
+        return {
+            ok: false,
+            error: res.ok
+                ? "Empty response from bot API."
+                : `Request failed (${res.status}): empty body.`,
+        }
     }
     let payload: ApiResponse<T>
     try {
         payload = JSON.parse(text) as ApiResponse<T>
     } catch {
-        return { ok: false, error: "Invalid JSON from bot API." }
-    }
-    if (payload.ok === false) {
-        const msg = payload.error.details || payload.error.error
-        return { ok: false, error: msg }
+        return {
+            ok: false,
+            error: res.ok
+                ? "Invalid JSON from bot API."
+                : `Request failed (${res.status}): invalid JSON.`,
+        }
     }
     if (!res.ok) {
-        return { ok: false, error: "Request failed." }
+        if (payload.ok === false && payload.error && typeof payload.error === "object") {
+            const errObj = payload.error as { error?: string; details?: string }
+            const msg =
+                [errObj.details, errObj.error].filter(Boolean).join(" — ") ||
+                `Request failed (${res.status}).`
+            return { ok: false, error: msg }
+        }
+        return { ok: false, error: `Request failed (${res.status}).` }
+    }
+    if (payload.ok === false) {
+        const msg = payload.error.details || payload.error.error || "Bot API returned an error."
+        return { ok: false, error: msg }
     }
     if (payload.data === undefined || payload.data === null) {
         return { ok: false, error: "Bot API returned success without data." }
@@ -117,7 +134,20 @@ export async function postPlayerCommandAction(
             body: JSON.stringify({ action: command, value }),
             contentType: "application/json",
         })
-        return await readPlayerStateResult(res)
+        const out = await readPlayerStateResult(res)
+        if (out.ok === false) {
+            webPlayerWarn("postPlayerCommandAction: error", { guildId, command, error: out.error })
+            return out
+        }
+        webPlayerDebug("postPlayerCommandAction: ok", {
+            guildId,
+            command,
+            value,
+            status: out.data.status,
+            queueCount: out.data.queueCount,
+            hasPlayer: out.data.hasPlayer,
+        })
+        return out
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to send player command."
         webPlayerWarn("postPlayerCommandAction: transport/parse failure", {
@@ -140,7 +170,25 @@ export async function postPlayerPlayAction(
             body: JSON.stringify({ query, requesterDiscordUserId }),
             contentType: "application/json",
         })
-        return await readPlayerStateResult(res)
+        const out = await readPlayerStateResult(res)
+        if (out.ok === false) {
+            webPlayerWarn("postPlayerPlayAction: error", {
+                guildId,
+                query,
+                requesterDiscordUserId,
+                error: out.error,
+            })
+            return out
+        }
+        webPlayerDebug("postPlayerPlayAction: ok", {
+            guildId,
+            query,
+            requesterDiscordUserId,
+            status: out.data.status,
+            queueCount: out.data.queueCount,
+            currentTitle: out.data.currentTrack?.title ?? null,
+        })
+        return out
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to queue track."
         webPlayerWarn("postPlayerPlayAction: transport/parse failure", {

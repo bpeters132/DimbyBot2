@@ -39,6 +39,15 @@ if (typeof setInterval !== "undefined" && !missPurgeGlobal.__dimbyRequesterMissP
     )
 }
 
+/** Clears the requester-miss purge interval (tests, dev teardown, or graceful shutdown hooks). */
+export function stopRequesterMissCachePurge(): void {
+    const t = missPurgeGlobal.__dimbyRequesterMissPurgeTimer
+    if (t !== undefined) {
+        clearInterval(t)
+        missPurgeGlobal.__dimbyRequesterMissPurgeTimer = undefined
+    }
+}
+
 function repeatModeToLabel(mode: unknown): "off" | "track" | "queue" {
     if (mode === "track" || mode === "queue") {
         return mode
@@ -277,7 +286,16 @@ function trackToQueueTrackSummary(
 }
 
 export function isPlayer(value: unknown): value is Player {
-    return typeof value === "object" && value !== null && "queue" in value && "playing" in value
+    if (typeof value !== "object" || value === null) return false
+    const o = value as Record<string, unknown>
+    const queue = o.queue
+    if (!queue || typeof queue !== "object") return false
+    const tracks = (queue as { tracks?: unknown }).tracks
+    if (!Array.isArray(tracks)) return false
+    if (typeof o.playing !== "boolean") return false
+    if (o.guildId !== undefined && typeof o.guildId !== "string") return false
+    if (o.node !== undefined && (typeof o.node !== "object" || o.node === null)) return false
+    return true
 }
 
 /** Shared player state body; `currentTrack` must already include requester usernames when needed. */

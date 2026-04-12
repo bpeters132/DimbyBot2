@@ -35,6 +35,9 @@ export async function initializeDownloadMetadataStore(
 
 /** Returns a clone of the metadata cache so callers cannot mutate shared state. */
 export function getDownloadMetadataStore(): DownloadsMetadataStore {
+    if (!initialized) {
+        throw new Error("Download metadata store not initialized")
+    }
     return cloneStore(downloadMetadataCache)
 }
 

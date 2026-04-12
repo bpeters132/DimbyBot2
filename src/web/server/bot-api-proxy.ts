@@ -50,6 +50,8 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
     }
 
     const incoming = new URL(request.url)
+    // Path + query come from this Next route's URL; guild scoping and auth are enforced by route
+    // params and {@link resolveAuthenticatedGuildAccess} / {@link requirePermissions} before proxying.
     const targetUrl = `${origin}${incoming.pathname}${incoming.search}`
 
     const headers = new Headers()

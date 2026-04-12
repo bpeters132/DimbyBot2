@@ -71,7 +71,11 @@ async function run(): Promise<void> {
             }
             stopHeartbeat?.()
             if (client) {
-                client.destroy()
+                try {
+                    await client.destroy()
+                } catch (destroyErr: unknown) {
+                    logger.error("Error while destroying Discord client:", destroyErr)
+                }
                 logger.info("Bot client stopped.")
             }
             await disconnectDatabase(logger)

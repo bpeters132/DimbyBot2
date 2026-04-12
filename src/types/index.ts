@@ -116,14 +116,35 @@ export interface JsonMigrationResult {
     migratedCount: number
     failedCount: number
     reason?: string
+    /** When {@link JsonMigrationOptions.allowPartialMigration} is true and some rows failed validation. */
+    partial?: boolean
+    /** Keys or descriptions of entries that failed validation (partial mode only). */
+    failedEntries?: string[]
 }
 
 export type ReplaceGuildSettingsStoreFn = (
     store: GuildSettingsStore
 ) => Promise<{ rowsWritten: number }>
+/** Row-level skips from {@link replaceDownloadMetadataStoreInDatabase} (e.g. unresolvable guild id). */
+export type DownloadMetadataStoreSkippedEntry = {
+    key: string
+    reason: "unresolvable-guild-id"
+    fileName: string
+}
+
+export type ReplaceDownloadMetadataStoreResult = {
+    rowsWritten: number
+    skippedEntries: DownloadMetadataStoreSkippedEntry[]
+}
+
 export type ReplaceDownloadMetadataStoreFn = (
     store: DownloadsMetadataStore
-) => Promise<{ rowsWritten: number }>
+) => Promise<ReplaceDownloadMetadataStoreResult>
+
+/** Options for JSON → DB migration helpers. */
+export interface JsonMigrationOptions {
+    allowPartialMigration?: boolean
+}
 
 export type DiscordLogForwarder = (level: DiscordLogLevelName, message: string) => void
 

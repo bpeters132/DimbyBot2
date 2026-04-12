@@ -76,9 +76,10 @@ export async function loadGuildListForDashboard(): Promise<GuildListActionResult
         const res = await serverFetchBot("/api/guilds")
         return parseGuildListBotResponse(res)
     } catch (error: unknown) {
+        console.error("[guild.actions] loadGuildListForDashboard failed:", error)
         return {
             ok: false,
-            error: error instanceof Error ? error.message : String(error),
+            error: "Unable to fetch bot data.",
         }
     }
 }

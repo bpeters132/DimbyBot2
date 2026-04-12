@@ -16,6 +16,6 @@
         "isolatedModules": true,
         "plugins": [{ "name": "next" }]
     },
-    "include": ["src/web/**/*", "src/web/next-env.d.ts"],
+    "include": ["src/web/**/*"],
     "exclude": ["node_modules", "src/web/.next", ".next"]
 }

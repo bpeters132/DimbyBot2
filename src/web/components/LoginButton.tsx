@@ -10,10 +10,9 @@ export function LoginButton() {
                 callbackURL: "/dashboard",
             })
         } catch (err: unknown) {
-            console.error(
-                "[LoginButton] Discord sign-in failed (details are logged server-side only)",
-                err
-            )
+            const name = err instanceof Error ? err.name : "Error"
+            const message = err instanceof Error ? err.message : String(err)
+            console.error("[LoginButton] Discord sign-in failed", name, message)
             window.alert("Sign-in failed. Please try again.")
         }
     }

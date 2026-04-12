@@ -133,6 +133,8 @@ export async function playerPOST(
                 await player.queue.shuffle()
                 break
             case "autoplay":
+                // Autoplay is Lavalink player session state (same as `/autoplay`); it is not persisted
+                // to guild DB — toggling only affects this player until it is destroyed.
                 player.set("autoplay", !player.get("autoplay"))
                 break
         }

@@ -112,6 +112,7 @@ export default async (client: BotClient) => {
             client.debug(
                 `[LavaMgrEvents] Player destroyed for Guild: ${player.guildId}, Reason: ${reason}`
             )
+            lastQueueUpdateBroadcastAtMs.delete(player.guildId)
             player.set(DASHBOARD_REQUESTER_KEY, undefined)
             scheduleControlMessageUpdate(client, player.guildId, "playerDestroy")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, null, "playerDestroy")

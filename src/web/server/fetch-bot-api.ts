@@ -105,21 +105,31 @@ export async function serverFetchBot(
         return res
     } catch (e) {
         const message = e instanceof Error ? e.message : "Fetch failed"
-        logBotApiVerbose("serverFetchBot ✖ fetch threw", {
-            method,
-            url,
-            ms: Date.now() - started,
-            error: message,
-        })
+        const isAbort =
+            (e instanceof Error && (e.name === "AbortError" || /aborted|abort/i.test(message))) ||
+            (typeof DOMException !== "undefined" &&
+                e instanceof DOMException &&
+                e.name === "AbortError")
+        logBotApiVerbose(
+            isAbort ? "serverFetchBot ✖ fetch timed out" : "serverFetchBot ✖ fetch threw",
+            {
+                method,
+                url,
+                ms: Date.now() - started,
+                error: message,
+            }
+        )
         return new Response(
             JSON.stringify({
                 ok: false,
                 error: {
-                    error: "Bot API unreachable",
-                    details: "Unable to reach Bot API",
+                    error: isAbort ? "Bot API request timed out" : "Bot API unreachable",
+                    details: isAbort
+                        ? "Upstream bot did not respond before the timeout."
+                        : "Unable to reach Bot API",
                 },
             }),
-            { status: 502, headers: { "content-type": "application/json" } }
+            { status: isAbort ? 504 : 502, headers: { "content-type": "application/json" } }
         )
     } finally {
         if (timeoutId !== undefined) {

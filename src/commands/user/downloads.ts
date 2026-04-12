@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from "discord.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import fs from "fs"
+import { promises as fsp } from "fs"
 import { access as fsAccess, stat as fsStat } from "fs/promises"
 import path from "path"
 import { formatDistanceToNow } from "date-fns"
@@ -115,6 +116,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         client.debug(`[Downloads] Executing ${subcommand} subcommand`)
 
         if (subcommand === "list") {
+            // Ephemeral: file list can include URLs/paths the user may not want visible in-channel.
             await interaction.deferReply({ ephemeral: true })
 
             const dedupedEntries = dedupeMetadataByFileName(metadata, guildId)
@@ -212,6 +214,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         }
 
         if (subcommand === "cleanup") {
+            // Visible reply: cleanup is a moderator-style server action; summary is not treated as private DM content.
             await interaction.deferReply()
             const removeAll = interaction.options.getBoolean("all") || false
             const days = interaction.options.getInteger("days") || 7
@@ -251,11 +254,20 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
             for (const file of files) {
                 try {
-                    if (fs.existsSync(file.path)) {
-                        const stats = fs.statSync(file.path)
-                        fs.unlinkSync(file.path)
+                    try {
+                        const stats = await fsp.stat(file.path)
+                        await fsp.unlink(file.path)
                         totalSize += stats.size
                         deletedCount++
+                    } catch (err: unknown) {
+                        const code =
+                            err && typeof err === "object" && "code" in err
+                                ? (err as NodeJS.ErrnoException).code
+                                : ""
+                        if (code !== "ENOENT") {
+                            const msg = err instanceof Error ? err.message : String(err)
+                            errors.push(`${file.name}: ${msg}`)
+                        }
                     }
                     for (const metaKey of downloadMetadataKeysForFile(
                         metadata,

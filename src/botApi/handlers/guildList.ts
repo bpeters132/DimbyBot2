@@ -1,7 +1,8 @@
+import { Collection } from "discord.js"
 import { auth } from "../../web/auth-node.js"
 import { fetchDiscordUserGuilds } from "../../util/discordUserGuilds.js"
 import { getAuthenticatedSession } from "../../web/lib/api-auth.js"
-import { getBotClient, tryGetBotClient } from "../../web/lib/botClient.js"
+import { tryGetBotClient } from "../../web/lib/botClient.js"
 import type { ApiResponse } from "../../types/apiPayloads.js"
 import type { GuildListResponse } from "../../types/web.js"
 
@@ -68,7 +69,12 @@ export async function guildListGET(
         discordGuilds = await fetchDiscordUserGuilds(accessToken)
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
-        console.error("[guildListGET] fetchDiscordUserGuilds threw", { message })
+        const client = tryGetBotClient()
+        if (client) {
+            client.error("[guildListGET] fetchDiscordUserGuilds threw", { message, err })
+        } else {
+            console.error("[guildListGET] fetchDiscordUserGuilds threw", { message })
+        }
         return {
             status: 502,
             body: {
@@ -88,7 +94,8 @@ export async function guildListGET(
     }
 
     const userGuilds = discordGuilds.guilds
-    const botGuilds = getBotClient().guilds.cache
+    const botClient = tryGetBotClient()
+    const botGuilds = botClient?.guilds.cache ?? new Collection()
     const mutualGuilds = userGuilds
         .filter((guild) => botGuilds.has(guild.id))
         .map((guild) => ({

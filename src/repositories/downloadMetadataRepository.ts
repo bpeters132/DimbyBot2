@@ -1,6 +1,10 @@
 import { Prisma } from "@prisma/client"
 import { getPrismaClient } from "../lib/database.js"
-import type { DownloadFileMetadata, DownloadsMetadataStore } from "../types/index.js"
+import type {
+    DownloadFileMetadata,
+    DownloadMetadataStoreSkippedEntry,
+    DownloadsMetadataStore,
+} from "../types/index.js"
 import {
     downloadMetadataStoreKey,
     effectiveDownloadMetadataGuildId,
@@ -32,11 +36,7 @@ function storeKeyIsComposite(storeKey: string): boolean {
     return parsed.guildId !== null && parsed.guildId.length > 0
 }
 
-export type SkippedDownloadMetadataEntry = {
-    key: string
-    reason: "unresolvable-guild-id"
-    fileName: string
-}
+export type SkippedDownloadMetadataEntry = DownloadMetadataStoreSkippedEntry
 
 type NormalizedDownloadMetadataRow = {
     fileName: string
@@ -147,6 +147,7 @@ export async function replaceDownloadMetadataStoreInDatabase(
 
     const UPSERT_BATCH = 32
 
+    // One parameterized batch delete: avoids N+1 round-trips and keeps VALUES bound (not string-concat) for safety/perf.
     await prisma.$transaction(async (tx) => {
         const valueTuples = rows.map((r) => Prisma.sql`(${r.guildId}, ${r.fileName})`)
         await tx.$executeRaw`

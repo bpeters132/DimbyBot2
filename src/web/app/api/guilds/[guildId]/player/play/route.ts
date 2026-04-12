@@ -1,36 +1,6 @@
-import { headers } from "next/headers"
 import { NextResponse } from "next/server"
-import { resolveAuthenticatedGuildAccess } from "@/lib/api-auth"
+import { guardGuildAccess } from "@/lib/guild-api-route-guard"
 import { proxyBotApi } from "@/server/bot-api-proxy"
-
-async function guardGuildAccess(guildId: string): Promise<NextResponse | null> {
-    try {
-        const h = await headers()
-        const headerRecord: Record<string, string> = {}
-        for (const [k, v] of h.entries()) {
-            headerRecord[k] = v
-        }
-        const ctx = await resolveAuthenticatedGuildAccess(headerRecord, guildId)
-        if (ctx.ok === false) {
-            return NextResponse.json(
-                { ok: false, error: { error: ctx.error, details: ctx.details } },
-                { status: ctx.status }
-            )
-        }
-        return null
-    } catch {
-        return NextResponse.json(
-            {
-                ok: false,
-                error: {
-                    error: "internal_error",
-                    details: "authentication failed",
-                },
-            },
-            { status: 500 }
-        )
-    }
-}
 
 /**
  * Uses a Route Handler (not a server action) so the inbound browser {@link Request} — method,
@@ -48,6 +18,21 @@ export async function POST(
         return await proxyBotApi(request)
     } catch (error: unknown) {
         console.error("[api/guilds/.../player/play] proxy failed", error)
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+        const details =
+            error instanceof Error
+                ? error.message
+                : typeof error === "string"
+                  ? error
+                  : JSON.stringify(error)
+        return NextResponse.json(
+            {
+                ok: false,
+                error: {
+                    error: "Internal Server Error",
+                    details,
+                },
+            },
+            { status: 500 }
+        )
     }
 }

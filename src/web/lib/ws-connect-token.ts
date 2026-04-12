@@ -11,9 +11,13 @@ function wsConnectHmacKey(secret: string): Buffer {
 }
 
 export function createWsConnectToken(userId: string, secret: string, ttlSeconds = 120): string {
+    const key = wsConnectHmacKey(secret)
+    if (!key.length) {
+        throw new Error("empty secret for createWsConnectToken")
+    }
     const exp = Math.floor(Date.now() / 1000) + ttlSeconds
     const payload = Buffer.from(JSON.stringify({ userId, exp }), "utf8").toString("base64url")
-    const sig = createHmac("sha256", wsConnectHmacKey(secret)).update(payload).digest("base64url")
+    const sig = createHmac("sha256", key).update(payload).digest("base64url")
     return `${payload}${SEP}${sig}`
 }
 

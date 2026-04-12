@@ -118,63 +118,85 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
                 socket.send(JSON.stringify({ type: "subscribe", guildId }))
             }
 
-            socket.onmessage = (event) => {
-                let parsed: Partial<WSMessage> & {
-                    state?: PlayerStateResponse
-                    queue?: QueueTrackSummary[]
-                    inVoiceWithBot?: boolean
-                    botInVoiceChannel?: boolean
-                    canQueueTracks?: boolean
-                    message?: string
-                    code?: string
-                }
-                try {
-                    parsed = JSON.parse(event.data as string) as typeof parsed
-                } catch {
-                    console.warn("[usePlayerSocket] Ignoring non-JSON WS payload:", event.data)
-                    return
-                }
-
-                if (parsed.type === "error" && typeof parsed.message === "string") {
-                    setLiveUpdatesError(parsed.message)
-                    return
-                }
-
-                if (parsed.type === "subscribed") {
-                    reconnectAttemptsRef.current = 0
-                    setLiveUpdatesError(null)
-                    return
-                }
-
-                if (
-                    parsed.type === "trackStart" ||
-                    parsed.type === "trackEnd" ||
-                    parsed.type === "playerPause" ||
-                    parsed.type === "playerResume" ||
-                    parsed.type === "queueUpdate" ||
-                    parsed.type === "playerDestroy"
-                ) {
-                    if (parsed.state) setPlayerState(sanitizePlayerState(parsed.state))
-                    if (parsed.queue !== undefined) setQueue(parsed.queue)
-                    return
-                }
-
-                if (
-                    parsed.type === "voiceStateChange" &&
-                    typeof parsed.userId === "string" &&
-                    parsed.userId === userId
-                ) {
-                    setPlayerState((prev) =>
-                        prev
-                            ? {
-                                  ...prev,
-                                  inVoiceWithBot: Boolean(parsed.inVoiceWithBot),
-                                  botInVoiceChannel: Boolean(parsed.botInVoiceChannel),
-                                  canQueueTracks: Boolean(parsed.canQueueTracks),
-                              }
-                            : prev
+            async function wsPayloadToString(data: MessageEvent["data"]): Promise<string> {
+                if (typeof data === "string") return data
+                if (data instanceof Blob) return data.text()
+                if (data instanceof ArrayBuffer) return new TextDecoder().decode(data)
+                if (ArrayBuffer.isView(data)) {
+                    const view = data as ArrayBufferView
+                    return new TextDecoder().decode(
+                        view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength)
                     )
                 }
+                return String(data)
+            }
+
+            socket.onmessage = (event) => {
+                void (async () => {
+                    let text: string
+                    try {
+                        text = await wsPayloadToString(event.data)
+                    } catch {
+                        console.warn("[usePlayerSocket] Ignoring unreadable WS payload")
+                        return
+                    }
+                    let parsed: Partial<WSMessage> & {
+                        state?: PlayerStateResponse
+                        queue?: QueueTrackSummary[]
+                        inVoiceWithBot?: boolean
+                        botInVoiceChannel?: boolean
+                        canQueueTracks?: boolean
+                        message?: string
+                        code?: string
+                    }
+                    try {
+                        parsed = JSON.parse(text) as typeof parsed
+                    } catch {
+                        console.warn("[usePlayerSocket] Ignoring non-JSON WS payload:", text)
+                        return
+                    }
+
+                    if (parsed.type === "error" && typeof parsed.message === "string") {
+                        setLiveUpdatesError(parsed.message)
+                        return
+                    }
+
+                    if (parsed.type === "subscribed") {
+                        reconnectAttemptsRef.current = 0
+                        setLiveUpdatesError(null)
+                        return
+                    }
+
+                    if (
+                        parsed.type === "trackStart" ||
+                        parsed.type === "trackEnd" ||
+                        parsed.type === "playerPause" ||
+                        parsed.type === "playerResume" ||
+                        parsed.type === "queueUpdate" ||
+                        parsed.type === "playerDestroy"
+                    ) {
+                        if (parsed.state) setPlayerState(sanitizePlayerState(parsed.state))
+                        if (parsed.queue !== undefined) setQueue(parsed.queue)
+                        return
+                    }
+
+                    if (
+                        parsed.type === "voiceStateChange" &&
+                        typeof parsed.userId === "string" &&
+                        parsed.userId === userId
+                    ) {
+                        setPlayerState((prev) =>
+                            prev
+                                ? {
+                                      ...prev,
+                                      inVoiceWithBot: Boolean(parsed.inVoiceWithBot),
+                                      botInVoiceChannel: Boolean(parsed.botInVoiceChannel),
+                                      canQueueTracks: Boolean(parsed.canQueueTracks),
+                                  }
+                                : prev
+                        )
+                    }
+                })()
             }
 
             socket.onclose = () => {

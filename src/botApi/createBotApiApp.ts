@@ -8,16 +8,24 @@ import { queueDELETE, queueGET, queuePOST } from "./handlers/queue.js"
 import { queueIndexDELETE, queueIndexPATCH } from "./handlers/queueIndex.js"
 import { BotClientNotInitializedError } from "../web/lib/botClient.js"
 
+/** Redacts credentials and long base64-like blobs from bot API error strings before JSON responses. */
+function redactBotApiErrorText(text: string): string {
+    return text
+        .replace(/(token|secret|password|cookie)\s*[=:]\s*[^\s]+/gi, "$1=[redacted]")
+        .replace(/Bearer\s+[^\s]+/gi, "Bearer [redacted]")
+        .replace(/([a-z][a-z0-9+.-]*:\/\/)[^@/?#\s]+@/gi, "$1[redacted]@")
+        .replace(/[A-Za-z0-9+/]{40,}={0,2}/g, "[redacted]")
+}
+
 function sanitizeBotApiError(err: unknown): {
     name: string
     message: string
     safeStack?: string
 } {
     if (err instanceof Error) {
-        const redactedMessage = err.message
-            .replace(/(token|secret|password|cookie)\s*[=:]\s*[^\s]+/gi, "$1=[redacted]")
-            .replace(/Bearer\s+[^\s]+/gi, "Bearer [redacted]")
-        const safeStack = err.stack?.split("\n")[0]
+        const redactedMessage = redactBotApiErrorText(err.message)
+        const firstLine = err.stack?.split("\n")[0]
+        const safeStack = firstLine ? redactBotApiErrorText(firstLine) : undefined
         return { name: err.name, message: redactedMessage, safeStack }
     }
     if (typeof err === "string") {

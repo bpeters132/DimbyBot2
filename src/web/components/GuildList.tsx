@@ -27,6 +27,20 @@ function isValidGuildIconUrl(url: string | null | undefined): url is string {
     return /^https:\/\/.+/i.test(trimmed)
 }
 
+function isValidBotInviteUrl(url: string | null | undefined): url is string {
+    if (typeof url !== "string") return false
+    const trimmed = url.trim()
+    if (!trimmed) return false
+    try {
+        const u = new URL(trimmed)
+        if (u.protocol !== "https:") return false
+        const host = u.hostname.toLowerCase()
+        return host === "discord.com" || host === "discord.gg"
+    } catch {
+        return false
+    }
+}
+
 /** Renders the dashboard guild list from a server-loaded result (no client-side refetch race). */
 export function GuildList({ result }: GuildListProps) {
     if (result.ok === false) {
@@ -67,12 +81,12 @@ export function GuildList({ result }: GuildListProps) {
         return (
             <div className="rounded border bg-card p-4 text-card-foreground">
                 <p>The bot is not in any of your servers yet.</p>
-                {data.botInviteUrl ? (
+                {isValidBotInviteUrl(data.botInviteUrl) ? (
                     <a
                         className="mt-3 inline-block rounded bg-primary px-3 py-2 text-primary-foreground no-underline hover:opacity-90"
                         href={data.botInviteUrl}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                     >
                         Invite bot to a server
                     </a>

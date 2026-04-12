@@ -1,12 +1,45 @@
 import { Prisma } from "@prisma/client"
 import { getPrismaClient } from "../lib/database.js"
-import type { GuildDiscordLogSettings, GuildSettings, GuildSettingsStore } from "../types/index.js"
+import type {
+    DiscordLogLevelName,
+    GuildDiscordLogSettings,
+    GuildSettings,
+    GuildSettingsStore,
+} from "../types/index.js"
+
+const LOG_LEVELS: ReadonlySet<DiscordLogLevelName> = new Set(["debug", "info", "warn", "error"])
+
+function isDiscordLogLevelName(v: unknown): v is DiscordLogLevelName {
+    return typeof v === "string" && LOG_LEVELS.has(v as DiscordLogLevelName)
+}
 
 function parseGuildDiscordLog(value: Prisma.JsonValue | null): GuildDiscordLogSettings | undefined {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
         return undefined
     }
-    return value as GuildDiscordLogSettings
+    const raw = value as Record<string, unknown>
+    const out: GuildDiscordLogSettings = {}
+    if (typeof raw.allChannelId === "string" && raw.allChannelId.trim()) {
+        out.allChannelId = raw.allChannelId.trim()
+    }
+    if (raw.minLevel !== undefined && raw.minLevel !== null) {
+        if (!isDiscordLogLevelName(raw.minLevel)) return undefined
+        out.minLevel = raw.minLevel
+    }
+    if (raw.byLevel !== undefined && raw.byLevel !== null) {
+        if (typeof raw.byLevel !== "object" || Array.isArray(raw.byLevel)) return undefined
+        const by: Partial<Record<DiscordLogLevelName, string>> = {}
+        for (const [k, v] of Object.entries(raw.byLevel as Record<string, unknown>)) {
+            if (!isDiscordLogLevelName(k)) return undefined
+            if (typeof v !== "string" || !v.trim()) return undefined
+            by[k] = v.trim()
+        }
+        if (Object.keys(by).length > 0) out.byLevel = by
+    }
+    if (!out.allChannelId && !out.byLevel && !out.minLevel) {
+        return undefined
+    }
+    return out
 }
 
 function toGuildSettingsStoreEntry(row: {

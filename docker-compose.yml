@@ -86,6 +86,8 @@ services:
             - LOG_LEVEL=${LOG_LEVEL}
             - WEB_ENABLED=${WEB_ENABLED:-true}
             - WEB_PORT=${WEB_PORT:-3001}
+            # Next standalone listens on `PORT` (defaults 3000); keep host publish in sync via `DASHBOARD_PORT`.
+            - PORT=${DASHBOARD_PORT:-3000}
             - API_PROXY_TARGET=${API_PROXY_TARGET:-http://localhost:3001}
             # Optional absolute player WebSocket URL (ws/wss); when unset, the dashboard derives `/ws` from the browser URL.
             - WEBSOCKET_CLIENT_URL=${WEBSOCKET_CLIENT_URL:-}
@@ -113,8 +115,9 @@ services:
             - dimbybot-storage:/app/storage
             - dimbybot-logs:/app/logs
             - dimbybot-downloads:/app/downloads
+        # Next standalone dashboard port (see `WEB_PORT` in `.env.example` for the bot/Express listener).
         ports:
-            - "3000:3000"
+            - "${DASHBOARD_PORT:-3000}:${DASHBOARD_PORT:-3000}"
             - "${WEB_PORT:-3001}:${WEB_PORT:-3001}"
         networks:
             - internal

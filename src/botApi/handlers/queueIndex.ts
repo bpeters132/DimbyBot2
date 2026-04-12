@@ -118,7 +118,8 @@ export async function queueIndexPATCH(
         }
 
         const [track] = await player.queue.splice(sourceIndex, 1)
-        await player.queue.splice(destinationIndex, 0, track)
+        const insertIndex = destinationIndex > sourceIndex ? destinationIndex - 1 : destinationIndex
+        await player.queue.splice(insertIndex, 0, track)
 
         return {
             status: 200,

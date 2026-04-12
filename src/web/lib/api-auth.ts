@@ -78,15 +78,6 @@ function asHeaders(headers: Headers | Record<string, string>): Headers {
     return new Headers(headers)
 }
 
-/** Permissions that mutate playback, queue, or guild settings — require bot-backed resolution, not OAuth-only. */
-const WRITE_DASHBOARD_PERMISSIONS: WebPermission[] = [
-    WebPermission.CONTROL_PLAYBACK,
-    WebPermission.MANAGE_QUEUE,
-    WebPermission.MANAGE_GUILD_SETTINGS,
-    WebPermission.MANAGE_MESSAGES,
-    WebPermission.DEVELOPER_ACCESS,
-]
-
 /**
  * Resolves the authenticated Better Auth session from request headers.
  */
@@ -373,11 +364,7 @@ export async function requirePermissions(
                 guildId,
                 ctx.discordUserId
             )
-            const needsWrite = requiredPerms.some((p) => WRITE_DASHBOARD_PERMISSIONS.includes(p))
-            if (
-                (!needsWrite || botClient) &&
-                hasRequiredPermissions(fallback.permissions, requiredPerms)
-            ) {
+            if (hasRequiredPermissions(fallback.permissions, requiredPerms)) {
                 permissionResolution = fallback
             }
         }

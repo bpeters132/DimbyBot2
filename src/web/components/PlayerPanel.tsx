@@ -732,9 +732,7 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                             {visibleQueue.map((track, index) => (
                                 <QueueTrackRow
                                     key={
-                                        track.encoded ??
-                                        track.uri ??
-                                        `${queueRangeStart + index}-${track.title}`
+                                        track.encoded ?? track.uri ?? `q-${queueRangeStart + index}`
                                     }
                                     track={track}
                                     queueIndex={queueRangeStart + index}

@@ -24,10 +24,11 @@ export async function fetchDiscordCurrentUserId(accessToken: string): Promise<st
         })
         if (!response.ok) return null
         const data = (await response.json()) as { id?: string }
-        if (typeof data.id !== "string" || !/^\d{17,22}$/.test(data.id.trim())) {
+        const id = typeof data.id === "string" ? data.id.trim() : ""
+        if (!id || !/^\d{17,22}$/.test(id)) {
             return null
         }
-        return data.id.trim()
+        return id
     } catch {
         return null
     } finally {

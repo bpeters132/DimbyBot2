@@ -101,7 +101,6 @@ class PlayerBroadcaster {
             console.error("[PlayerBroadcaster] broadcastGuildVoiceState failed", {
                 guildId,
                 message,
-                error,
             })
         }
     }
