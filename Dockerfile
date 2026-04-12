@@ -9,9 +9,8 @@ ARG BETTER_AUTH_SECRET=fake-better-auth-secret
 ARG CLIENT_ID=000000000000000000
 ARG DISCORD_CLIENT_SECRET=build-time-discord-client-secret
 ENV BETTER_AUTH_URL=${BETTER_AUTH_URL}
-ENV BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
 ENV CLIENT_ID=${CLIENT_ID}
-ENV DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
+# BETTER_AUTH_SECRET and DISCORD_CLIENT_SECRET must be injected at runtime (compose/env), not image build.
 
 COPY docker/ytdlp-requirements.txt /tmp/ytdlp-requirements.txt
 # Native build tools (e.g. sodium) + ffmpeg for any runtime checks during build.

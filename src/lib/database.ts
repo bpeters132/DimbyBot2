@@ -18,6 +18,14 @@ const adapter = new PrismaPg({
 })
 const prisma = new PrismaClient({ adapter })
 
+function sanitizeMigrateOutput(text: string): string {
+    return text
+        .replace(/postgres(?:ql)?:\/\/[^\s"'`]+/gi, "[REDACTED_DATABASE_URL]")
+        .replace(/(password|passwd|pwd)\s*[=:]\s*[^\s"'`]+/gi, "$1=[REDACTED]")
+        .replace(/(token|secret|apikey|api[_-]?key)\s*[=:]\s*[^\s"'`]+/gi, "$1=[REDACTED]")
+        .replace(/Bearer\s+[^\s"'`]+/gi, "Bearer [REDACTED]")
+}
+
 function getLogger(loggerInstance?: Partial<LoggerInterface>): LoggerInterface {
     if (
         loggerInstance &&
@@ -100,8 +108,9 @@ export async function runPrismaMigrateDeploy(
                 return
             }
             const combined = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n")
+            const redactedCombined = sanitizeMigrateOutput(combined)
             logger.debug(
-                `[Database][migrate] Full migrate output on failure (${combined.length} chars):\n${combined}`
+                `[Database][migrate] Full migrate output on failure (${redactedCombined.length} chars):\n${redactedCombined}`
             )
             reject(
                 new Error(

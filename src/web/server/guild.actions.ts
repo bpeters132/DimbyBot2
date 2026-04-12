@@ -72,8 +72,15 @@ async function parseGuildListBotResponse(res: Response): Promise<GuildListAction
  * a 429 error after a successful load).
  */
 export async function loadGuildListForDashboard(): Promise<GuildListActionResult> {
-    const res = await serverFetchBot("/api/guilds")
-    return parseGuildListBotResponse(res)
+    try {
+        const res = await serverFetchBot("/api/guilds")
+        return parseGuildListBotResponse(res)
+    } catch (error: unknown) {
+        return {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+        }
+    }
 }
 
 /** Same as {@link loadGuildListForDashboard}; use when invoking from a client as a server action. */

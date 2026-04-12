@@ -127,6 +127,10 @@ export interface WsPingMessage {
     type: "ping"
 }
 
+export interface WsPongMessage {
+    type: "pong"
+}
+
 /** Server-side failure (e.g. subscribe denied); not the same as missing voice or no Lavalink player. */
 export interface WsErrorMessage {
     type: "error"
@@ -142,4 +146,5 @@ export type WSMessage =
     | WsSubscribedMessage
     | WsUnsubscribedMessage
     | WsPingMessage
+    | WsPongMessage
     | WsErrorMessage

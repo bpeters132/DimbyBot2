@@ -73,6 +73,7 @@ export async function ensurePlayerConnected(
         client.debug(
             `[MusicManager] Lavalink player not connected or in wrong channel. Player state: Connected=${player.connected}, Player VC=${player.voiceChannelId}, Target VC=${voiceChannel.id}. Reconnecting/Moving.`
         )
+        const previousVoiceChannelId = player.voiceChannelId
         player.voiceChannelId = voiceChannel.id
         const timeoutMs = 10000
         let disposeMoveWait: (() => void) | undefined
@@ -119,6 +120,7 @@ export async function ensurePlayerConnected(
             await Promise.all([player.connect(), movePromise])
         } catch (error) {
             disposeMoveWait?.()
+            player.voiceChannelId = previousVoiceChannelId
             const msg = error instanceof Error ? error.message : String(error)
             if (msg === "Lavalink player failed to confirm connection.") {
                 client.warn(
@@ -160,6 +162,7 @@ export async function handleQueryAndPlay(
     let searchError: Error | null = null
     let searchAttempts: SearchAttempt[] = []
     let skipLocalMatch = false
+    let previousVoiceChannelIdBeforeEnsure: string | null = null
 
     try {
         if (
@@ -451,6 +454,7 @@ export async function handleQueryAndPlay(
                     client.debug(
                         `[MusicManager] Existing Lavalink player found. State - Connected: ${newPlayerInstance.connected}, VC: ${newPlayerInstance.voiceChannelId}. Ensuring target VC.`
                     )
+                    previousVoiceChannelIdBeforeEnsure = newPlayerInstance.voiceChannelId
                     newPlayerInstance.voiceChannelId = voiceChannel.id
                     newPlayerInstance.textChannelId = textChannel.id
                 }
@@ -606,6 +610,7 @@ export async function handleQueryAndPlay(
             )
             try {
                 await ensurePlayerConnected(client, player, voiceChannel)
+                previousVoiceChannelIdBeforeEnsure = null
 
                 if (isPlaylistEnqueue && searchResult.tracks.length > 0) {
                     stampRequesterUserIdOnTracks(searchResult.tracks, requester.id)
@@ -641,6 +646,9 @@ export async function handleQueryAndPlay(
                     )
                 }
             } catch (playError: unknown) {
+                if (previousVoiceChannelIdBeforeEnsure !== null) {
+                    player.voiceChannelId = previousVoiceChannelIdBeforeEnsure
+                }
                 client.error(`[MusicManager] Error starting Lavalink player:`, playError)
                 const originalFeedback = feedbackText
                 const pem = playError instanceof Error ? playError.message : String(playError)

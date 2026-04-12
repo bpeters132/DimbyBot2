@@ -147,6 +147,8 @@ export default async (client: BotClient) => {
             const dashReq = track ? snapshotFromRequester(track.requester) : null
             if (dashReq) {
                 player.set(DASHBOARD_REQUESTER_KEY, dashReq)
+            } else {
+                player.set(DASHBOARD_REQUESTER_KEY, null)
             }
             client.debug(
                 `[LavaMgrEvents] Track started in Guild: ${player.guildId}, Title: ${track.info.title}`

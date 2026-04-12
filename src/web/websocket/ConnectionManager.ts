@@ -68,31 +68,52 @@ export class ConnectionManager {
             const parsed = new URL(rawUrl, "http://127.0.0.1")
             const ticket = parsed.searchParams.get("ticket")
             if (ticket && secret) {
-                const betterAuthUserId = parseWsConnectToken(ticket, secret)
-                if (betterAuthUserId) {
-                    const discordUserId = await resolveDiscordUserSnowflake(
-                        betterAuthUserId,
-                        headers
-                    )
-                    if (discordUserId) {
-                        return { userId: discordUserId }
+                try {
+                    const betterAuthUserId = parseWsConnectToken(ticket, secret)
+                    if (betterAuthUserId) {
+                        const discordUserId = await resolveDiscordUserSnowflake(
+                            betterAuthUserId,
+                            headers
+                        )
+                        if (discordUserId) {
+                            return { userId: discordUserId }
+                        }
                     }
+                } catch (error: unknown) {
+                    webPlayerWarn("WS ticket auth failed", {
+                        message: error instanceof Error ? error.name : "auth_error",
+                    })
+                    return null
                 }
             }
         } catch {
             // ignore malformed upgrade URL
         }
 
-        const session = (await auth.api.getSession({
-            headers,
-        })) as { user?: { id?: string } } | null
-
+        let session: { user?: { id?: string } } | null
+        try {
+            session = (await auth.api.getSession({
+                headers,
+            })) as { user?: { id?: string } } | null
+        } catch (error: unknown) {
+            webPlayerWarn("WS fallback session auth failed", {
+                message: error instanceof Error ? error.name : "auth_error",
+            })
+            return null
+        }
         if (!session?.user?.id) {
             return null
         }
         const betterAuthUserId = session.user.id
-        const discordUserId = await resolveDiscordUserSnowflake(betterAuthUserId, headers)
-        return discordUserId ? { userId: discordUserId } : null
+        try {
+            const discordUserId = await resolveDiscordUserSnowflake(betterAuthUserId, headers)
+            return discordUserId ? { userId: discordUserId } : null
+        } catch (error: unknown) {
+            webPlayerWarn("WS fallback discord snowflake resolve failed", {
+                message: error instanceof Error ? error.name : "auth_error",
+            })
+            return null
+        }
     }
 
     registerConnection(socket: WebSocket, userId: string): void {
@@ -124,9 +145,7 @@ export class ConnectionManager {
     broadcast(guildId: string, message: WSMessage): void {
         const payload = JSON.stringify(message)
         for (const socket of this.getGuildConnections(guildId)) {
-            if (socket.readyState === socket.OPEN) {
-                socket.send(payload)
-            }
+            void this.sendToSocketIfAuthorized(socket, guildId, payload)
         }
     }
 
@@ -134,9 +153,66 @@ export class ConnectionManager {
         for (const socket of this.getGuildConnections(guildId)) {
             const meta = this.socketMeta.get(socket)
             if (!meta || socket.readyState !== socket.OPEN) continue
-            const payload = factory(meta.userId)
-            if (!payload) continue
-            socket.send(JSON.stringify(payload))
+            void (async () => {
+                const allowed = await this.canViewPlayer(socket, guildId, meta.userId)
+                if (!allowed) return
+                const payload = factory(meta.userId)
+                if (!payload) return
+                socket.send(JSON.stringify(payload))
+            })()
+        }
+    }
+
+    private async sendToSocketIfAuthorized(
+        socket: WebSocket,
+        guildId: string,
+        payload: string
+    ): Promise<void> {
+        const meta = this.socketMeta.get(socket)
+        if (!meta || socket.readyState !== socket.OPEN) return
+        const allowed = await this.canViewPlayer(socket, guildId, meta.userId)
+        if (!allowed) return
+        socket.send(payload)
+    }
+
+    private async canViewPlayer(
+        socket: WebSocket,
+        guildId: string,
+        userId: string
+    ): Promise<boolean> {
+        const botClient = tryGetBotClient()
+        if (!botClient) {
+            this.forceUnsubscribeSocket(socket, guildId, "BOT_UNAVAILABLE")
+            return false
+        }
+        try {
+            const resolution = await resolveUserPermissions(botClient, guildId, userId)
+            const allowed = hasRequiredPermissions(resolution.permissions, [
+                WebPermission.VIEW_PLAYER,
+            ])
+            if (!allowed) {
+                this.forceUnsubscribeSocket(socket, guildId, "SUBSCRIBE_FORBIDDEN")
+                return false
+            }
+            return true
+        } catch {
+            this.forceUnsubscribeSocket(socket, guildId, "SUBSCRIBE_FORBIDDEN")
+            return false
+        }
+    }
+
+    private forceUnsubscribeSocket(socket: WebSocket, guildId: string, code: string): void {
+        this.unsubscribe(socket, guildId)
+        if (socket.readyState === socket.OPEN) {
+            socket.send(
+                JSON.stringify({
+                    type: "error",
+                    code,
+                    message:
+                        "Live updates were removed because your access to this guild player changed.",
+                })
+            )
+            socket.send(JSON.stringify({ type: "unsubscribed", guildId }))
         }
     }
 
@@ -171,7 +247,8 @@ export class ConnectionManager {
                     JSON.stringify({
                         type: "error",
                         code: "BOT_UNAVAILABLE",
-                        message: "Live updates require the bot process to be running with this dashboard.",
+                        message:
+                            "Live updates require the bot process to be running with this dashboard.",
                     })
                 )
                 return

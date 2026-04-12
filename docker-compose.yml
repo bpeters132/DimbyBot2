@@ -75,10 +75,11 @@ services:
             - DEV_MODE=${DEV_MODE}
             - LOG_LEVEL=${LOG_LEVEL}
             - WEB_ENABLED=${WEB_ENABLED:-true}
-            - WEB_PORT=${WEB_PORT:-3000}
-            - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
-            - BETTER_AUTH_URL=${BETTER_AUTH_URL:?BETTER_AUTH_URL is required}
-            - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:?DISCORD_CLIENT_SECRET is required}
+            - WEB_PORT=${WEB_PORT:-3001}
+            # Web auth secrets are validated by application startup when WEB_ENABLED=true.
+            - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+            - BETTER_AUTH_URL=${BETTER_AUTH_URL}
+            - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
             - EMAIL_PASS=${EMAIL_PASS}
             - EMAIL_USER=${EMAIL_USER}
             - FEEDBACK_EMAIL=${FEEDBACK_EMAIL}
@@ -100,7 +101,7 @@ services:
             - dimbybot-logs:/app/logs
             - dimbybot-downloads:/app/downloads
         ports:
-            - "${WEB_PORT:-3000}:${WEB_PORT:-3000}"
+            - "${WEB_PORT:-3001}:${WEB_PORT:-3001}"
         networks:
             - internal
 

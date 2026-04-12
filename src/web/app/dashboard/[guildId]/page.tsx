@@ -10,7 +10,24 @@ interface GuildPageProps {
 export default async function GuildPage({ params }: GuildPageProps) {
     const { guildId } = await params
 
-    const permResult = await getGuildDashboardSnapshotAction(guildId)
+    let permResult: Awaited<ReturnType<typeof getGuildDashboardSnapshotAction>>
+    try {
+        permResult = await getGuildDashboardSnapshotAction(guildId)
+    } catch (error: unknown) {
+        console.error("[dashboard] failed to load guild snapshot", {
+            guildId,
+            name: error instanceof Error ? error.name : "Error",
+        })
+        return (
+            <section className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm">
+                <p className="font-medium text-destructive">Dashboard unavailable</p>
+                <p className="mt-2 text-muted-foreground">
+                    We could not load this guild dashboard right now. Please try again in a
+                    moment.
+                </p>
+            </section>
+        )
+    }
 
     if (permResult.ok === false) {
         return (

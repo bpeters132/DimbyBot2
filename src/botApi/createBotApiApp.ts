@@ -8,6 +8,24 @@ import { queueDELETE, queueGET, queuePOST } from "./handlers/queue.js"
 import { queueIndexDELETE, queueIndexPATCH } from "./handlers/queueIndex.js"
 import { BotClientNotInitializedError } from "../web/lib/botClient.js"
 
+function sanitizeBotApiError(err: unknown): {
+    name: string
+    message: string
+    safeStack?: string
+} {
+    if (err instanceof Error) {
+        const redactedMessage = err.message
+            .replace(/(token|secret|password|cookie)\s*[=:]\s*[^\s]+/gi, "$1=[redacted]")
+            .replace(/Bearer\s+[^\s]+/gi, "Bearer [redacted]")
+        const safeStack = err.stack?.split("\n")[0]
+        return { name: err.name, message: redactedMessage, safeStack }
+    }
+    if (typeof err === "string") {
+        return { name: "Error", message: "[redacted]" }
+    }
+    return { name: "UnknownError", message: "Unexpected error shape" }
+}
+
 /**
  * Express app for bot-backed REST routes (`/api/guilds/...`) shared with Next route handlers.
  */
@@ -137,12 +155,19 @@ export function createBotApiApp(): express.Express {
     app.use(
         (
             err: unknown,
-            _req: express.Request,
+            req: express.Request,
             res: express.Response,
             // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Express error middleware requires a 4-arg signature
             _next: express.NextFunction
         ) => {
-            console.error("[botApi]", err)
+            const safeError = sanitizeBotApiError(err)
+            const pathOnly = (req.originalUrl ?? req.url ?? "").split("?")[0]
+            console.error("[botApi] request failed", {
+                method: req.method,
+                path: pathOnly,
+                status: res.statusCode || 500,
+                error: safeError,
+            })
             const parseError =
                 err instanceof SyntaxError &&
                 typeof err === "object" &&

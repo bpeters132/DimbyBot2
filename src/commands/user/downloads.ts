@@ -89,9 +89,29 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         client.debug(`[Downloads] Executing ${subcommand} subcommand`)
 
         if (subcommand === "list") {
-            const files = Object.entries(metadata)
-                .filter(([key, info]) => downloadMetadataEntryMatchesGuild(key, info, guildId))
-                .map(([key, info]) => {
+            const dedupedEntries = new Map<
+                string,
+                { key: string; info: DownloadsMetadataStore[string] }
+            >()
+            for (const [key, info] of Object.entries(metadata)) {
+                if (!downloadMetadataEntryMatchesGuild(key, info, guildId)) continue
+                const fileName = parseDownloadMetadataStoreKey(key).fileName
+                const existing = dedupedEntries.get(fileName)
+                if (!existing) {
+                    dedupedEntries.set(fileName, { key, info })
+                    continue
+                }
+                const existingDate = existing.info.downloadDate
+                    ? new Date(existing.info.downloadDate).getTime()
+                    : 0
+                const candidateDate = info.downloadDate ? new Date(info.downloadDate).getTime() : 0
+                if (candidateDate >= existingDate) {
+                    dedupedEntries.set(fileName, { key, info })
+                }
+            }
+
+            const files = [...dedupedEntries.values()]
+                .map(({ key, info }) => {
                     const file = parseDownloadMetadataStoreKey(key).fileName
                     const filePath = path.join(downloadsDir, file)
                     if (!fs.existsSync(filePath)) return null
@@ -184,9 +204,29 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             const cutoffDate = new Date()
             cutoffDate.setDate(cutoffDate.getDate() - days)
 
-            const files = Object.entries(metadata)
-                .filter(([key, info]) => downloadMetadataEntryMatchesGuild(key, info, guildId))
-                .map(([key, info]) => {
+            const dedupedEntries = new Map<
+                string,
+                { key: string; info: DownloadsMetadataStore[string] }
+            >()
+            for (const [key, info] of Object.entries(metadata)) {
+                if (!downloadMetadataEntryMatchesGuild(key, info, guildId)) continue
+                const fileName = parseDownloadMetadataStoreKey(key).fileName
+                const existing = dedupedEntries.get(fileName)
+                if (!existing) {
+                    dedupedEntries.set(fileName, { key, info })
+                    continue
+                }
+                const existingDate = existing.info.downloadDate
+                    ? new Date(existing.info.downloadDate).getTime()
+                    : 0
+                const candidateDate = info.downloadDate ? new Date(info.downloadDate).getTime() : 0
+                if (candidateDate >= existingDate) {
+                    dedupedEntries.set(fileName, { key, info })
+                }
+            }
+
+            const files = [...dedupedEntries.values()]
+                .map(({ key, info }) => {
                     const file = parseDownloadMetadataStoreKey(key).fileName
                     const filePath = path.join(downloadsDir, file)
                     const date = info.downloadDate

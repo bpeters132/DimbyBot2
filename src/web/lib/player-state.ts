@@ -14,6 +14,10 @@ import { getRequesterUserId } from "../../util/rrqDisconnect.js"
 import { getBotClient, tryGetBotClient } from "./botClient.js"
 import { webPlayerDebug, webPlayerTrace, webPlayerWarn } from "./web-player-debug-log.js"
 
+const REQUESTER_FETCH_CONCURRENCY = 6
+const REQUESTER_MISS_CACHE_TTL_MS = 120_000
+const requesterMissCache = new Map<string, number>()
+
 function repeatModeToLabel(mode: unknown): "off" | "track" | "queue" {
     if (mode === "track" || mode === "queue") {
         return mode
@@ -119,27 +123,43 @@ async function buildRequesterDisplayMap(
         if (cached) {
             map.set(id, cached)
         } else {
+            const missCacheKey = `${guildId}:${id}`
+            const missExpiresAt = requesterMissCache.get(missCacheKey)
+            if (missExpiresAt && missExpiresAt > Date.now()) {
+                continue
+            }
+            requesterMissCache.delete(missCacheKey)
             needFetch.add(id)
         }
     }
 
-    await Promise.all(
-        [...needFetch].map(async (id) => {
-            if (map.has(id)) return
-            const member = await guild.members.fetch(id).catch((err: unknown) => {
-                webPlayerTrace("members.fetch failed for requester label", {
-                    guildId,
-                    userIdPrefix: id.slice(0, 8),
-                    message: err instanceof Error ? err.message : String(err),
+    const queue = [...needFetch]
+    const workers = Array.from({ length: Math.min(REQUESTER_FETCH_CONCURRENCY, queue.length) }, () =>
+        (async () => {
+            while (queue.length > 0) {
+                const id = queue.shift()
+                if (!id || map.has(id)) continue
+                const missCacheKey = `${guildId}:${id}`
+                const member = await guild.members.fetch(id).catch((err: unknown) => {
+                    requesterMissCache.set(missCacheKey, Date.now() + REQUESTER_MISS_CACHE_TTL_MS)
+                    webPlayerTrace("members.fetch failed for requester label", {
+                        guildId,
+                        userIdPrefix: id.slice(0, 8),
+                        message: err instanceof Error ? err.message : String(err),
+                    })
+                    return null
                 })
-                return null
-            })
-            if (!member) return
-            const u = member.user
-            const label = member.displayName || u.globalName || u.username
-            if (label) map.set(id, label)
-        })
+                if (!member) continue
+                const u = member.user
+                const label = member.displayName || u.globalName || u.username
+                if (label) {
+                    map.set(id, label)
+                    requesterMissCache.delete(missCacheKey)
+                }
+            }
+        })()
     )
+    await Promise.all(workers)
 
     webPlayerDebug("buildRequesterDisplayMap", {
         guildId,

@@ -24,7 +24,8 @@ export function StatusChecker() {
             const json = await getServiceStatusAction()
             setData(json)
         } catch (e) {
-            setError(e instanceof Error ? e.message : "Failed to load status")
+            console.error("[StatusChecker] failed to load status", e)
+            setError("Failed to load status")
             setData(null)
         } finally {
             setLoading(false)

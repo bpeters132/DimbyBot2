@@ -209,10 +209,21 @@ export async function resolveAuthenticatedGuildAccess(
     }
 
     const resolvedHeaders = asHeaders(headers)
-    const discordUserId = await resolveDiscordUserSnowflake(
-        sessionResult.session.user.id,
-        resolvedHeaders
-    )
+    let discordUserId: string | null
+    try {
+        discordUserId = await resolveDiscordUserSnowflake(
+            sessionResult.session.user.id,
+            resolvedHeaders
+        )
+    } catch (error: unknown) {
+        const details = error instanceof Error ? error.message : "could not resolve Discord user id"
+        return {
+            ok: false,
+            status: 403,
+            error: "Discord account required",
+            details,
+        }
+    }
     if (!discordUserId) {
         return {
             ok: false,

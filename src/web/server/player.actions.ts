@@ -44,19 +44,25 @@ async function readQueueResult(res: Response): Promise<Ok<QueueResponse> | Err> 
 export async function getPlayerStateAction(
     guildId: string
 ): Promise<Ok<PlayerStateResponse> | Err> {
-    const res = await serverFetchBot(`/api/guilds/${guildId}/player`)
-    const out = await readPlayerStateResult(res)
-    if (out.ok === false) {
-        webPlayerWarn("getPlayerStateAction: error", { guildId, error: out.error })
+    try {
+        const res = await serverFetchBot(`/api/guilds/${guildId}/player`)
+        const out = await readPlayerStateResult(res)
+        if (out.ok === false) {
+            webPlayerWarn("getPlayerStateAction: error", { guildId, error: out.error })
+            return out
+        }
+        webPlayerDebug("getPlayerStateAction: ok", {
+            guildId,
+            inVoiceWithBot: out.data.inVoiceWithBot,
+            requesterId: out.data.currentTrack?.requesterId,
+            requesterUsername: out.data.currentTrack?.requesterUsername,
+        })
         return out
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Failed to load player state."
+        webPlayerWarn("getPlayerStateAction: transport/parse failure", { guildId, error: message })
+        return { ok: false, error: message }
     }
-    webPlayerDebug("getPlayerStateAction: ok", {
-        guildId,
-        inVoiceWithBot: out.data.inVoiceWithBot,
-        requesterId: out.data.currentTrack?.requesterId,
-        requesterUsername: out.data.currentTrack?.requesterUsername,
-    })
-    return out
 }
 
 export async function getPlayerQueueAction(
@@ -64,29 +70,40 @@ export async function getPlayerQueueAction(
     page: number,
     limit: number
 ): Promise<Ok<QueueResponse> | Err> {
-    const search = new URLSearchParams({
-        page: String(page),
-        limit: String(limit),
-    })
-    const res = await serverFetchBot(`/api/guilds/${guildId}/queue?${search.toString()}`)
-    const out = await readQueueResult(res)
-    if (out.ok === false) {
-        webPlayerWarn("getPlayerQueueAction: error", { guildId, page, error: out.error })
+    try {
+        const search = new URLSearchParams({
+            page: String(page),
+            limit: String(limit),
+        })
+        const res = await serverFetchBot(`/api/guilds/${guildId}/queue?${search.toString()}`)
+        const out = await readQueueResult(res)
+        if (out.ok === false) {
+            webPlayerWarn("getPlayerQueueAction: error", { guildId, page, error: out.error })
+            return out
+        }
+        webPlayerDebug("getPlayerQueueAction: ok", {
+            guildId,
+            page,
+            limit,
+            itemCount: out.data.items.length,
+            firstRequester: out.data.items[0]
+                ? {
+                      id: out.data.items[0].requesterId,
+                      username: out.data.items[0].requesterUsername,
+                  }
+                : null,
+        })
         return out
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Failed to load queue."
+        webPlayerWarn("getPlayerQueueAction: transport/parse failure", {
+            guildId,
+            page,
+            limit,
+            error: message,
+        })
+        return { ok: false, error: message }
     }
-    webPlayerDebug("getPlayerQueueAction: ok", {
-        guildId,
-        page,
-        limit,
-        itemCount: out.data.items.length,
-        firstRequester: out.data.items[0]
-            ? {
-                  id: out.data.items[0].requesterId,
-                  username: out.data.items[0].requesterUsername,
-              }
-            : null,
-    })
-    return out
 }
 
 export async function postPlayerCommandAction(
@@ -94,12 +111,22 @@ export async function postPlayerCommandAction(
     command: PlayerCommand,
     value?: number
 ): Promise<Ok<PlayerStateResponse> | Err> {
-    const res = await serverFetchBot(`/api/guilds/${guildId}/player`, {
-        method: "POST",
-        body: JSON.stringify({ action: command, value }),
-        contentType: "application/json",
-    })
-    return readPlayerStateResult(res)
+    try {
+        const res = await serverFetchBot(`/api/guilds/${guildId}/player`, {
+            method: "POST",
+            body: JSON.stringify({ action: command, value }),
+            contentType: "application/json",
+        })
+        return readPlayerStateResult(res)
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Failed to send player command."
+        webPlayerWarn("postPlayerCommandAction: transport/parse failure", {
+            guildId,
+            command,
+            error: message,
+        })
+        return { ok: false, error: message }
+    }
 }
 
 export async function postPlayerPlayAction(
@@ -107,10 +134,20 @@ export async function postPlayerPlayAction(
     query: string,
     requesterDiscordUserId: string
 ): Promise<Ok<PlayerStateResponse> | Err> {
-    const res = await serverFetchBot(`/api/guilds/${guildId}/player/play`, {
-        method: "POST",
-        body: JSON.stringify({ query, requesterDiscordUserId }),
-        contentType: "application/json",
-    })
-    return readPlayerStateResult(res)
+    try {
+        const res = await serverFetchBot(`/api/guilds/${guildId}/player/play`, {
+            method: "POST",
+            body: JSON.stringify({ query, requesterDiscordUserId }),
+            contentType: "application/json",
+        })
+        return readPlayerStateResult(res)
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Failed to queue track."
+        webPlayerWarn("postPlayerPlayAction: transport/parse failure", {
+            guildId,
+            query,
+            error: message,
+        })
+        return { ok: false, error: message }
+    }
 }

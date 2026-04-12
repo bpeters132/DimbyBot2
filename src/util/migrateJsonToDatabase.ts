@@ -175,7 +175,7 @@ export async function migrateDownloadMetadata(
                 typeof metadata.guildId === "string" && metadata.guildId.trim().length > 0
                     ? metadata.guildId.trim()
                     : ""
-            const storeKey = downloadMetadataStoreKey(gid, fileName)
+            const storeKey = gid ? downloadMetadataStoreKey(gid, fileName) : fileName
             validEntries[storeKey] = {
                 ...metadata,
                 guildId: gid,

@@ -59,7 +59,11 @@ export function UserHeader() {
                 >
                     Log out
                 </button>
-                {signOutError ? <span className="text-xs text-destructive">{signOutError}</span> : null}
+                {signOutError ? (
+                    <span className="text-xs text-destructive" role="alert" aria-live="assertive">
+                        {signOutError}
+                    </span>
+                ) : null}
             </div>
         </div>
     )

@@ -51,6 +51,9 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
 
     useEffect(() => {
         let cancelled = false
+        setPlayerState(null)
+        setQueue(undefined)
+        setLiveUpdatesError(null)
 
         const connect = async () => {
             if (cancelled) return

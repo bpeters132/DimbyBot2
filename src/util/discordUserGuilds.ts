@@ -8,6 +8,7 @@ const GUILD_LIST_MAX_ATTEMPTS = 8
 /** Upper bound on a single wait so one bad payload cannot stall the server unbounded. */
 const GUILD_LIST_MAX_RETRY_WAIT_MS = 60_000
 const GUILD_LIST_MIN_RETRY_WAIT_MS = 500
+const GUILD_LIST_REQUEST_TIMEOUT_MS = 10_000
 
 /** Re-use recent successful OAuth guild fetches to avoid bursty `/users/@me/guilds` calls (e.g. dashboard ↔ guild). */
 const GUILD_LIST_SUCCESS_CACHE_TTL_MS = 120_000
@@ -111,15 +112,31 @@ function discordRetryAfterMs(response: Response, bodyText: string): number {
 async function fetchDiscordUserGuildsOnce(accessToken: string): Promise<FetchUserGuildsResult> {
     for (let attempt = 1; attempt <= GUILD_LIST_MAX_ATTEMPTS; attempt++) {
         let response: Response
+        const controller = new AbortController()
+        const timeoutHandle = setTimeout(() => controller.abort(), GUILD_LIST_REQUEST_TIMEOUT_MS)
         try {
             response = await fetch("https://discord.com/api/v10/users/@me/guilds", {
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
                     "User-Agent": DISCORD_USER_API_UA,
                 },
+                signal: controller.signal,
             })
-        } catch {
+        } catch (error: unknown) {
+            if (attempt < GUILD_LIST_MAX_ATTEMPTS) {
+                await delay(GUILD_LIST_MIN_RETRY_WAIT_MS)
+                continue
+            }
+            if (error instanceof Error && error.name === "AbortError") {
+                return {
+                    ok: false,
+                    status: 0,
+                    message: "Timed out reaching Discord while loading guilds.",
+                }
+            }
             return { ok: false, status: 0, message: "Network error reaching Discord." }
+        } finally {
+            clearTimeout(timeoutHandle)
         }
 
         if (response.ok) {

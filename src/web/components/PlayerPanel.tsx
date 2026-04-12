@@ -358,6 +358,10 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
 
         const load = async () => {
             if (requestId !== requestIdRef.current) return
+            setBaseState(null)
+            setBaseQueue([])
+            setBaseQueueTotal(0)
+            setBaseQueuePage(1)
             setLoading(true)
             setQueueLoading(true)
             setError(null)
@@ -749,8 +753,9 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                     <>
                         <ol className="space-y-2" start={queueRangeStart}>
                             {visibleQueue.map((track, index) => (
+                                // Queue position is the stable identity for rows in this paged list.
                                 <QueueTrackRow
-                                    key={track.encoded ?? track.uri ?? track.title}
+                                    key={queueRangeStart + index}
                                     track={track}
                                     queueIndex={queueRangeStart + index}
                                 />

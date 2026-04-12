@@ -30,29 +30,43 @@ export const betterAuthBaseConfig = {
             refreshAccessToken: async (refreshToken: string) => {
                 const clientId = getRequiredEnv("CLIENT_ID")
                 const clientSecret = getRequiredEnv("DISCORD_CLIENT_SECRET")
-                const tokenResponse = await fetch("https://discord.com/api/oauth2/token", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: new URLSearchParams({
-                        client_id: clientId,
-                        client_secret: clientSecret,
-                        grant_type: "refresh_token",
-                        refresh_token: refreshToken,
-                    }),
-                })
-                if (!tokenResponse.ok) {
-                    const text = await tokenResponse.text()
-                    throw new Error(`Discord OAuth refresh failed (${tokenResponse.status}): ${text}`)
-                }
-                const data = (await tokenResponse.json()) as {
-                    access_token: string
-                    expires_in: number
-                    refresh_token?: string
-                }
-                return {
-                    accessToken: data.access_token,
-                    accessTokenExpiresAt: new Date(Date.now() + data.expires_in * 1000),
-                    refreshToken: data.refresh_token ?? refreshToken,
+                const controller = new AbortController()
+                const timeoutHandle = setTimeout(() => controller.abort(), 10_000)
+                try {
+                    const tokenResponse = await fetch("https://discord.com/api/oauth2/token", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: new URLSearchParams({
+                            client_id: clientId,
+                            client_secret: clientSecret,
+                            grant_type: "refresh_token",
+                            refresh_token: refreshToken,
+                        }),
+                        signal: controller.signal,
+                    })
+                    if (!tokenResponse.ok) {
+                        const text = await tokenResponse.text()
+                        throw new Error(
+                            `Discord OAuth refresh failed (${tokenResponse.status}): ${text}`
+                        )
+                    }
+                    const data = (await tokenResponse.json()) as {
+                        access_token: string
+                        expires_in: number
+                        refresh_token?: string
+                    }
+                    return {
+                        accessToken: data.access_token,
+                        accessTokenExpiresAt: new Date(Date.now() + data.expires_in * 1000),
+                        refreshToken: data.refresh_token ?? refreshToken,
+                    }
+                } catch (error: unknown) {
+                    if (error instanceof Error && error.name === "AbortError") {
+                        throw new Error("Discord OAuth refresh timed out", { cause: error })
+                    }
+                    throw error
+                } finally {
+                    clearTimeout(timeoutHandle)
                 }
             },
         },

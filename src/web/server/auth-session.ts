@@ -25,8 +25,7 @@ export async function readSessionSafe(): Promise<SessionReadResult> {
         return { ok: true, session }
     } catch (e: unknown) {
         const name = e instanceof Error ? e.name : "Error"
-        const message = e instanceof Error ? e.message : String(e)
-        console.error("[auth-session] failed to load session", { name, message })
+        console.error("[auth-session] failed to load session", { name, message: "[redacted]" })
         return { ok: false, message: "Failed to load session" }
     }
 }

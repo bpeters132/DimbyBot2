@@ -124,6 +124,7 @@ export async function queuePOST(
     }
 
     let player = client.lavalink.getPlayer(guildId)
+    let createdHere = false
     if (!player) {
         player = await client.lavalink.createPlayer({
             guildId,
@@ -132,6 +133,12 @@ export async function queuePOST(
             selfDeaf: true,
             volume: 100,
         })
+        createdHere = true
+    }
+
+    const cleanupCreatedPlayer = async (): Promise<void> => {
+        if (!createdHere) return
+        await client.lavalink.destroyPlayer(guildId).catch(() => undefined)
     }
 
     try {
@@ -139,12 +146,14 @@ export async function queuePOST(
         const refreshedMember = await guild.members.fetch(requester.requesterId).catch(() => null)
         const refreshedVoiceChannel = refreshedMember?.voice?.channel
         if (!refreshedVoiceChannel || refreshedVoiceChannel.id !== voiceChannel.id) {
+            await cleanupCreatedPlayer()
             return {
                 status: 400,
                 body: { ok: false, error: { error: "Join a voice channel first." } },
             }
         }
     } catch (err: unknown) {
+        await cleanupCreatedPlayer()
         const message = err instanceof Error ? err.message : "Voice connection failed."
         return {
             status: 503,

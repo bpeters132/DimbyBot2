@@ -19,8 +19,8 @@ export function getRequesterUserId(requester: unknown): string | null {
         const id = (requester as { id: unknown }).id
         if (typeof id === "string") return id
         if (typeof id === "bigint") return id.toString()
-        if (typeof id === "number" && Number.isFinite(id)) {
-            return String(Math.trunc(id))
+        if (typeof id === "number" && Number.isSafeInteger(id) && id > 0) {
+            return String(id)
         }
     }
     return null
