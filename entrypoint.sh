@@ -155,11 +155,11 @@ if [ "$(id -u)" -eq 0 ]; then
     echo "Bot Entrypoint: Executing '$*' as node..."
     exec su-exec node "$@"
   fi
+  trap forward_shutdown INT TERM
   start_web_server "node-user"
   echo "Bot Entrypoint: Executing 'yarn start' as node..."
   su-exec node yarn start &
   BOT_PID=$!
-  trap forward_shutdown INT TERM
   wait_for_bot
 fi
 
@@ -169,9 +169,9 @@ if [ "$#" -gt 0 ]; then
   exec "$@"
 fi
 
+trap forward_shutdown INT TERM
 start_web_server
 echo "Bot Entrypoint: Executing 'yarn start'..."
 yarn start &
 BOT_PID=$!
-trap forward_shutdown INT TERM
 wait_for_bot

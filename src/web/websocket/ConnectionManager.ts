@@ -1,5 +1,5 @@
 import type { IncomingMessage } from "http"
-import type { WebSocket } from "ws"
+import WebSocket from "ws"
 import {
     WebPermission,
     hasRequiredPermissions,
@@ -134,7 +134,7 @@ export class ConnectionManager {
             this.handleMessage(socket, buffer.toString()).catch((err: unknown) => {
                 const message = err instanceof Error ? err.message : String(err)
                 webPlayerWarn("WS handleMessage unhandled error", { message })
-                if (socket.readyState === socket.OPEN) {
+                if (socket.readyState === WebSocket.OPEN) {
                     socket.send(
                         JSON.stringify({
                             type: "error",
@@ -163,7 +163,7 @@ export class ConnectionManager {
     broadcastWithResolver(guildId: string, factory: (userId: string) => WSMessage | null): void {
         for (const socket of this.getGuildConnections(guildId)) {
             const meta = this.socketMeta.get(socket)
-            if (!meta || socket.readyState !== socket.OPEN) continue
+            if (!meta || socket.readyState !== WebSocket.OPEN) continue
             void (async () => {
                 const allowed = await this.canViewPlayer(socket, guildId, meta.userId)
                 if (!allowed) return
@@ -180,7 +180,7 @@ export class ConnectionManager {
         payload: string
     ): Promise<void> {
         const meta = this.socketMeta.get(socket)
-        if (!meta || socket.readyState !== socket.OPEN) return
+        if (!meta || socket.readyState !== WebSocket.OPEN) return
         const allowed = await this.canViewPlayer(socket, guildId, meta.userId)
         if (!allowed) return
         socket.send(payload)
@@ -214,7 +214,7 @@ export class ConnectionManager {
 
     private forceUnsubscribeSocket(socket: WebSocket, guildId: string, code: string): void {
         this.unsubscribe(socket, guildId)
-        if (socket.readyState === socket.OPEN) {
+        if (socket.readyState === WebSocket.OPEN) {
             socket.send(
                 JSON.stringify({
                     type: "error",

@@ -121,7 +121,7 @@ async function run(): Promise<void> {
             }
             res.statusCode = 404
             res.setHeader("Content-Type", "application/json")
-            res.end(JSON.stringify({ ok: false, error: { error: "Not found" } }))
+            res.end(JSON.stringify({ ok: false, error: "Not found" }))
         })
 
         server.on("upgrade", (req, socket, head) => {

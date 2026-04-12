@@ -8,7 +8,6 @@ ARG BETTER_AUTH_URL=http://localhost:3000
 ARG BETTER_AUTH_SECRET=fake-better-auth-secret
 ARG CLIENT_ID=000000000000000000
 ARG DISCORD_CLIENT_SECRET=build-time-discord-client-secret
-ARG NEXT_PUBLIC_WS_URL=ws://localhost:3001/ws
 
 COPY docker/ytdlp-requirements.txt /tmp/ytdlp-requirements.txt
 # Native build tools (e.g. sodium) + ffmpeg for any runtime checks during build.
@@ -55,7 +54,7 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder /app/src/web/.next/standalone ./src/web/.next/standalone
-COPY --from=builder /app/src/web/.next/static ./src/web/.next/static
+COPY --from=builder /app/src/web/.next/static ./src/web/.next/standalone/.next/static
 
 # Runtime environment (inject via compose/K8s; do not bake secrets into the image):
 #   Required for Lavalink: LAVALINK_HOST, LAVALINK_PORT, LAVALINK_PASSWORD, LAVALINK_NODE_ID, LAVALINK_SECURE

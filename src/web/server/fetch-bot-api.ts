@@ -15,7 +15,26 @@ export async function serverFetchBot(
         contentType?: string
     }
 ): Promise<Response> {
-    const origin = getBotApiOrigin()
+    let origin: string | null
+    try {
+        origin = getBotApiOrigin()
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Invalid API_PROXY_TARGET"
+        logBotApiVerbose("serverFetchBot: invalid API_PROXY_TARGET", {
+            path: pathnameAndSearch,
+            message,
+        })
+        return new Response(
+            JSON.stringify({
+                ok: false,
+                error: {
+                    error: "Bot API misconfigured",
+                    details: message,
+                },
+            }),
+            { status: 503, headers: { "content-type": "application/json" } }
+        )
+    }
     if (!origin) {
         logBotApiVerbose("serverFetchBot: no origin (set API_PROXY_TARGET or use dev default)", {
             path: pathnameAndSearch,

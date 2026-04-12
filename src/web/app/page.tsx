@@ -5,6 +5,7 @@ import { readSessionSafe } from "@/server/auth-session"
 
 export default async function HomePage() {
     const sessionResult = await readSessionSafe()
+    const sessionReadError = sessionResult.ok === false ? sessionResult : null
 
     if (sessionResult.ok && sessionResult.session?.user?.id) {
         redirect("/dashboard")
@@ -16,12 +17,17 @@ export default async function HomePage() {
             <p className="mt-2 text-muted-foreground">
                 Sign in with Discord to control music playback.
             </p>
-            {!sessionResult.ok ? (
+            {sessionReadError ? (
                 <div className="mt-6 w-full max-w-md rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-left text-sm">
-                    <p className="font-medium text-foreground">Sign-in status could not be verified</p>
+                    <p className="font-medium text-foreground">
+                        Sign-in status could not be verified
+                    </p>
                     <p className="mt-2 text-muted-foreground">
                         The auth database may be offline or misconfigured. You can still try signing
                         in; if it fails, check services on the status page.
+                    </p>
+                    <p className="mt-2 font-mono text-xs text-muted-foreground">
+                        Reference: {sessionReadError.correlationId}
                     </p>
                     <Link
                         href="/status"

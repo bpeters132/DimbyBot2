@@ -216,12 +216,12 @@ export async function resolveAuthenticatedGuildAccess(
             resolvedHeaders
         )
     } catch (error: unknown) {
-        const details = error instanceof Error ? error.message : "could not resolve Discord user id"
+        const msg = error instanceof Error ? error.message : String(error)
+        console.error("[api-auth] resolveDiscordUserSnowflake failed:", msg)
         return {
             ok: false,
             status: 403,
             error: "Discord account required",
-            details,
         }
     }
     if (!discordUserId) {
@@ -303,28 +303,43 @@ export async function getGuildDashboardPermissionSnapshot(
         }
     }
 
-    const primary = await resolveUserPermissions(botClient, guildId, ctx.discordUserId, {
-        applyVoiceGating: false,
-    })
-    /** Same voice-aware fallback as API; only primary snapshot skips voice stripping (role entitlements). */
-    const oauth = resolveOauthGuildPermissionFallback(botClient, guildId, ctx.discordUserId)
+    try {
+        const primary = await resolveUserPermissions(botClient, guildId, ctx.discordUserId, {
+            applyVoiceGating: false,
+        })
+        /** Same voice-aware fallback as API; only primary snapshot skips voice stripping (role entitlements). */
+        const oauth = resolveOauthGuildPermissionFallback(botClient, guildId, ctx.discordUserId)
 
-    webPlayerDebug("getGuildDashboardPermissionSnapshot", {
-        guildId,
-        discordUserIdPrefix: ctx.discordUserId.slice(0, 8),
-        memberResolved: ctx.memberResolved,
-        primary: primary.permissions,
-        oauth: oauth.permissions,
-    })
-
-    return {
-        ok: true,
-        snapshot: {
+        webPlayerDebug("getGuildDashboardPermissionSnapshot", {
+            guildId,
+            discordUserIdPrefix: ctx.discordUserId.slice(0, 8),
             memberResolved: ctx.memberResolved,
-            primaryPermissions: primary.permissions,
-            oauthPermissions: oauth.permissions,
-        },
-        discordUserId: ctx.discordUserId,
+            primary: primary.permissions,
+            oauth: oauth.permissions,
+        })
+
+        return {
+            ok: true,
+            snapshot: {
+                memberResolved: ctx.memberResolved,
+                primaryPermissions: primary.permissions,
+                oauthPermissions: oauth.permissions,
+            },
+            discordUserId: ctx.discordUserId,
+        }
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error)
+        console.error(
+            "[api-auth] getGuildDashboardPermissionSnapshot permission resolution failed:",
+            msg
+        )
+        return {
+            ok: false,
+            status: 503,
+            error: "Permission check unavailable",
+            details:
+                "Could not load dashboard permissions for this server. Try again shortly or refresh the page.",
+        }
     }
 }
 
@@ -342,21 +357,38 @@ export async function requirePermissions(
     }
 
     const botClient = tryGetBotClient()
-    let permissionResolution = botClient
-        ? await resolveUserPermissions(botClient, guildId, ctx.discordUserId)
-        : resolveOauthGuildPermissionFallback(null, guildId, ctx.discordUserId)
+    let permissionResolution: PermissionResolution
+    try {
+        permissionResolution = botClient
+            ? await resolveUserPermissions(botClient, guildId, ctx.discordUserId)
+            : resolveOauthGuildPermissionFallback(null, guildId, ctx.discordUserId)
 
-    if (
-        !hasRequiredPermissions(permissionResolution.permissions, requiredPerms) &&
-        ctx.memberResolved === false
-    ) {
-        const fallback = resolveOauthGuildPermissionFallback(botClient, guildId, ctx.discordUserId)
-        const needsWrite = requiredPerms.some((p) => WRITE_DASHBOARD_PERMISSIONS.includes(p))
         if (
-            (!needsWrite || botClient) &&
-            hasRequiredPermissions(fallback.permissions, requiredPerms)
+            !hasRequiredPermissions(permissionResolution.permissions, requiredPerms) &&
+            ctx.memberResolved === false
         ) {
-            permissionResolution = fallback
+            const fallback = resolveOauthGuildPermissionFallback(
+                botClient,
+                guildId,
+                ctx.discordUserId
+            )
+            const needsWrite = requiredPerms.some((p) => WRITE_DASHBOARD_PERMISSIONS.includes(p))
+            if (
+                (!needsWrite || botClient) &&
+                hasRequiredPermissions(fallback.permissions, requiredPerms)
+            ) {
+                permissionResolution = fallback
+            }
+        }
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error)
+        console.error("[api-auth] requirePermissions permission resolution failed:", msg)
+        return {
+            ok: false,
+            status: 403,
+            error: "Forbidden",
+            details:
+                "Could not verify permissions for this server. Try again in a moment or re-open the dashboard.",
         }
     }
 

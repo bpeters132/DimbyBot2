@@ -17,7 +17,11 @@ function sanitizeErrorText(s: string, maxLen: number): string {
 }
 
 /** Safe structured error info for logs (no raw credentials). */
-function sanitizeError(e: unknown): { errorType: string; redactedMessage: string; redactedStack?: string } {
+function sanitizeError(e: unknown): {
+    errorType: string
+    redactedMessage: string
+    redactedStack?: string
+} {
     const errorType = e instanceof Error ? e.name : typeof e
     const rawMessage = e instanceof Error ? e.message : String(e)
     const base = {
@@ -44,12 +48,18 @@ export async function getServiceStatusPayload(): Promise<StatusPayload> {
         console.error("[service-status] Database probe failed", sanitizeError(e))
     }
 
-    const origin = getBotApiOrigin()
-    if (!origin) {
+    let origin: string | null = null
+    try {
+        origin = getBotApiOrigin()
+    } catch (e) {
+        botApi.message = "API_PROXY_TARGET is invalid; cannot probe bot /health."
+        console.error("[service-status] API_PROXY_TARGET parse failed", sanitizeError(e))
+    }
+    if (!origin && !botApi.message) {
         botApi.message =
             "API_PROXY_TARGET is not set; cannot probe bot /health in this environment."
         logBotApiVerbose("getServiceStatusPayload: bot probe skipped (no origin)")
-    } else {
+    } else if (origin) {
         let healthUrl = ""
         let healthTarget: { host: string; pathname: string } | undefined
         try {
@@ -58,7 +68,10 @@ export async function getServiceStatusPayload(): Promise<StatusPayload> {
             healthTarget = { host: parsed.host, pathname: parsed.pathname }
         } catch (e) {
             botApi.message = "API_PROXY_TARGET is not a valid origin; cannot probe bot /health."
-            console.error("[service-status] Invalid bot API origin for /health URL", sanitizeError(e))
+            console.error(
+                "[service-status] Invalid bot API origin for /health URL",
+                sanitizeError(e)
+            )
             logBotApiVerbose("getServiceStatusPayload: bot probe skipped (invalid origin)")
         }
         if (healthUrl) {

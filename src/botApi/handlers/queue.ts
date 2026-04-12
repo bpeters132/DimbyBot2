@@ -10,9 +10,17 @@ import { toQueueResponse } from "../../web/lib/player-state.js"
 import { ensurePlayerConnected, startPlaybackIfNeeded } from "../../util/musicManager.js"
 import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
 
-function parseNumber(value: string | null, fallback: number): number {
+const MAX_QUEUE_PAGE_LIMIT = 100
+
+function clampInt(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value))
+}
+
+/** Parses a query integer, truncates toward zero, and clamps to inclusive bounds. */
+function parseNumber(value: string | null, fallback: number, min: number, max: number): number {
     const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : fallback
+    if (!Number.isFinite(parsed)) return fallback
+    return clampInt(Math.trunc(parsed), min, max)
 }
 
 export async function queueGET(
@@ -28,8 +36,8 @@ export async function queueGET(
         }
     }
 
-    const page = parseNumber(searchParams.get("page"), 1)
-    const limit = parseNumber(searchParams.get("limit"), 20)
+    const page = parseNumber(searchParams.get("page"), 1, 1, 10_000)
+    const limit = parseNumber(searchParams.get("limit"), 20, 1, MAX_QUEUE_PAGE_LIMIT)
     const player = getBotClient().lavalink.getPlayer(guildId)
     return {
         status: 200,

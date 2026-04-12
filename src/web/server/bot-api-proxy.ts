@@ -2,12 +2,36 @@ import { NextResponse } from "next/server"
 import { getBotApiOrigin } from "@/server/bot-api-origin"
 import { isBotApiVerbose, logBotApiVerbose } from "@/server/bot-api-verbose"
 
+function readBotApiProxyTimeoutMs(): number {
+    const raw = process.env.BOT_API_PROXY_TIMEOUT_MS?.trim()
+    if (!raw) return 4000
+    const n = Number.parseInt(raw, 10)
+    if (!Number.isFinite(n) || n < 1) return 4000
+    return Math.min(Math.max(n, 1000), 120_000)
+}
+
 /**
  * Forwards the request to the bot HTTP server (Express on WEB_PORT).
  * Next/Turbopack cannot reliably bundle `src/botApi` (outside this app); the bot process owns that logic.
  */
 export async function proxyBotApi(request: Request): Promise<NextResponse> {
-    const origin = getBotApiOrigin()
+    let origin: string | null
+    try {
+        origin = getBotApiOrigin()
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Invalid API_PROXY_TARGET"
+        logBotApiVerbose("proxyBotApi: invalid API_PROXY_TARGET", { message })
+        return NextResponse.json(
+            {
+                ok: false,
+                error: {
+                    error: "Bot API misconfigured",
+                    details: message,
+                },
+            },
+            { status: 503 }
+        )
+    }
     if (!origin) {
         logBotApiVerbose("proxyBotApi: no origin", {
             pathname: new URL(request.url).pathname,
@@ -58,7 +82,7 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
     }
 
     const controller = new AbortController()
-    const timeoutMs = 4000
+    const timeoutMs = readBotApiProxyTimeoutMs()
     const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs)
     try {
         const upstream = await fetch(targetUrl, { ...init, signal: controller.signal })

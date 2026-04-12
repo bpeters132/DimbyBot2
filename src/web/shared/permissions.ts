@@ -41,15 +41,43 @@ interface CachedPermissionResult {
 
 const permissionCache = new Map<string, Map<string, CachedPermissionResult>>()
 
+function purgeExpiredFromInner(inner: Map<string, CachedPermissionResult>, now: number): void {
+    for (const [uid, ent] of inner) {
+        if (now > ent.expiresAt) {
+            inner.delete(uid)
+        }
+    }
+}
+
 function readCached(guildId: string, userId: string): CachedPermissionResult | undefined {
-    return permissionCache.get(guildId)?.get(userId)
+    const inner = permissionCache.get(guildId)
+    if (!inner) return undefined
+    const entry = inner.get(userId)
+    if (!entry) return undefined
+    const now = Date.now()
+    if (now > entry.expiresAt) {
+        inner.delete(userId)
+        if (inner.size === 0) {
+            permissionCache.delete(guildId)
+        }
+        return undefined
+    }
+    return entry
 }
 
 function writeCached(guildId: string, userId: string, entry: CachedPermissionResult): void {
+    const now = Date.now()
     let inner = permissionCache.get(guildId)
     if (!inner) {
         inner = new Map()
         permissionCache.set(guildId, inner)
+    } else {
+        purgeExpiredFromInner(inner, now)
+        if (inner.size === 0) {
+            permissionCache.delete(guildId)
+            inner = new Map()
+            permissionCache.set(guildId, inner)
+        }
     }
     inner.set(userId, entry)
 }
@@ -138,7 +166,7 @@ export async function resolveUserPermissions(
     const now = Date.now()
     if (applyVoiceGating) {
         const cached = readCached(guildId, userId)
-        if (cached && cached.expiresAt > now) {
+        if (cached) {
             return cached.value
         }
     }
@@ -295,7 +323,10 @@ export function invalidatePermissionCache(guildId?: string, userId?: string): vo
         return
     }
 
-    for (const inner of permissionCache.values()) {
+    for (const [gid, inner] of [...permissionCache.entries()]) {
         inner.delete(userId)
+        if (inner.size === 0) {
+            permissionCache.delete(gid)
+        }
     }
 }

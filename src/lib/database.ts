@@ -85,17 +85,29 @@ export async function runPrismaMigrateDeploy(
 
     let stdout = ""
     let stderr = ""
+    let stdoutLineBuf = ""
+    let stderrLineBuf = ""
 
     child.stdout.on("data", (chunk: Buffer) => {
         const text = chunk.toString()
         stdout += text
-        logger.info(`[Database][migrate] ${sanitizeMigrateOutput(text).trimEnd()}`)
+        stdoutLineBuf += text
+        const lines = stdoutLineBuf.split("\n")
+        stdoutLineBuf = lines.pop() ?? ""
+        for (const line of lines) {
+            logger.info(`[Database][migrate] ${sanitizeMigrateOutput(line)}`)
+        }
     })
 
     child.stderr.on("data", (chunk: Buffer) => {
         const text = chunk.toString()
         stderr += text
-        logger.warn(`[Database][migrate] ${sanitizeMigrateOutput(text).trimEnd()}`)
+        stderrLineBuf += text
+        const lines = stderrLineBuf.split("\n")
+        stderrLineBuf = lines.pop() ?? ""
+        for (const line of lines) {
+            logger.warn(`[Database][migrate] ${sanitizeMigrateOutput(line)}`)
+        }
     })
 
     await new Promise<void>((resolve, reject) => {
@@ -103,6 +115,12 @@ export async function runPrismaMigrateDeploy(
             reject(error)
         })
         child.once("close", (code) => {
+            if (stdoutLineBuf.trim()) {
+                logger.info(`[Database][migrate] ${sanitizeMigrateOutput(stdoutLineBuf).trimEnd()}`)
+            }
+            if (stderrLineBuf.trim()) {
+                logger.warn(`[Database][migrate] ${sanitizeMigrateOutput(stderrLineBuf).trimEnd()}`)
+            }
             if (code === 0) {
                 resolve()
                 return

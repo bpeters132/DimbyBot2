@@ -106,8 +106,8 @@ jobs:
 
             - name: Verify bot image contains web build
               run: |
-                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -f /app/src/web/.next/standalone/server.js || test -f /app/src/web/.next/standalone/src/web/server.js"
-                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -d /app/src/web/.next/static"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -f /app/src/web/.next/standalone/server.js"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -d /app/src/web/.next/standalone/.next/static"
 
             - name: Build lavalink image
               run: |
@@ -146,7 +146,6 @@ jobs:
                   DISCORD_CLIENT_SECRET=${{ secrets.DISCORD_CLIENT_SECRET }}
                   BETTER_AUTH_SECRET=${{ secrets.BETTER_AUTH_SECRET }}
                   BETTER_AUTH_URL=${{ secrets.BETTER_AUTH_URL }}
-                  NEXT_PUBLIC_WS_URL=${{ secrets.NEXT_PUBLIC_WS_URL }}
                   GUILD_ID=${{ secrets.GUILD_ID }}
                   OWNER_ID=${{ secrets.OWNER_ID }}
                   DEV_MODE=${{ secrets.DEV_MODE }}
@@ -237,6 +236,21 @@ jobs:
                   port: ${{ secrets.DEPLOY_SERVER_SSH_PORT }}
                   script: |
                       set -e
-                      sleep 20
-                      curl --fail --silent http://127.0.0.1:3001/health >/dev/null
-                      curl --fail --silent http://127.0.0.1:3000/ >/dev/null
+                      max_attempts=40
+                      sleep_seconds=2
+                      attempt=1
+                      while [ "$attempt" -le "$max_attempts" ]; do
+                        ok_health=0
+                        ok_web=0
+                        if curl --fail --silent http://127.0.0.1:3001/health >/dev/null 2>&1; then ok_health=1; fi
+                        if curl --fail --silent http://127.0.0.1:3000/ >/dev/null 2>&1; then ok_web=1; fi
+                        if [ "$ok_health" -eq 1 ] && [ "$ok_web" -eq 1 ]; then
+                          echo "Health checks passed on attempt $attempt"
+                          exit 0
+                        fi
+                        echo "Health probe attempt $attempt/$max_attempts (health=$ok_health web=$ok_web) — sleeping ${sleep_seconds}s"
+                        sleep "$sleep_seconds"
+                        attempt=$((attempt + 1))
+                      done
+                      echo "Deployment health checks failed after $max_attempts attempts" >&2
+                      exit 1

@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto"
 import { headers } from "next/headers"
 import { auth, type BetterAuthSession } from "@/auth"
 
@@ -9,6 +10,7 @@ export type SessionReadSuccess = {
 export type SessionReadFailure = {
     ok: false
     message: string
+    correlationId: string
 }
 
 export type SessionReadResult = SessionReadSuccess | SessionReadFailure
@@ -24,8 +26,13 @@ export async function readSessionSafe(): Promise<SessionReadResult> {
         })) as BetterAuthSession | null
         return { ok: true, session }
     } catch (e: unknown) {
+        const correlationId = randomUUID()
         const name = e instanceof Error ? e.name : "Error"
-        console.error("[auth-session] failed to load session", { name, message: "[redacted]" })
-        return { ok: false, message: "Failed to load session" }
+        console.error("[auth-session] failed to load session", {
+            correlationId,
+            name,
+            message: "[redacted]",
+        })
+        return { ok: false, message: "Failed to load session", correlationId }
     }
 }

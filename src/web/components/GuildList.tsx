@@ -20,6 +20,13 @@ function parseSafeGuildListItem(entry: unknown): GuildListItem | null {
     return { id: String(id), name: g.name, iconUrl, memberCount }
 }
 
+function isValidGuildIconUrl(url: string | null | undefined): url is string {
+    if (typeof url !== "string") return false
+    const trimmed = url.trim()
+    if (!trimmed) return false
+    return /^https:\/\/.+/i.test(trimmed)
+}
+
 /** Renders the dashboard guild list from a server-loaded result (no client-side refetch race). */
 export function GuildList({ result }: GuildListProps) {
     if (result.ok === false) {
@@ -82,7 +89,7 @@ export function GuildList({ result }: GuildListProps) {
                     key={guild.id}
                     className="flex items-center gap-3 rounded border bg-card p-3 no-underline hover:bg-accent hover:text-accent-foreground"
                 >
-                    {guild.iconUrl ? (
+                    {isValidGuildIconUrl(guild.iconUrl) ? (
                         <img
                             src={guild.iconUrl}
                             alt={`${guild.name} icon`}

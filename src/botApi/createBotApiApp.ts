@@ -170,16 +170,35 @@ export function createBotApiApp(): express.Express {
                 "type" in err &&
                 (err as { status?: unknown; type?: unknown }).status === 400 &&
                 (err as { type?: unknown }).type === "entity.parse.failed"
-            const status =
-                (err as { status?: unknown })?.status === 400 && parseError
-                    ? 400
-                    : err instanceof BotClientNotInitializedError
-                      ? 503
-                      : 500
+            const errObj = err as { status?: unknown; statusCode?: unknown }
+            const fromStatus = typeof errObj.status === "number" ? errObj.status : undefined
+            const fromStatusCode =
+                typeof errObj.statusCode === "number" ? errObj.statusCode : undefined
+            const preferredStatus =
+                fromStatus !== undefined
+                    ? fromStatus
+                    : fromStatusCode !== undefined
+                      ? fromStatusCode
+                      : undefined
+            const numericClientError =
+                preferredStatus !== undefined &&
+                Number.isFinite(preferredStatus) &&
+                preferredStatus >= 400 &&
+                preferredStatus < 500
+                    ? Math.floor(preferredStatus)
+                    : undefined
+            let responseStatus = 500
+            if (parseError) {
+                responseStatus = 400
+            } else if (err instanceof BotClientNotInitializedError) {
+                responseStatus = 503
+            } else if (numericClientError !== undefined) {
+                responseStatus = numericClientError
+            }
             console.error("[botApi] request failed", {
                 method: req.method,
                 path: pathOnly,
-                status,
+                status: responseStatus,
                 error: safeError,
             })
             if (parseError) {
@@ -199,6 +218,14 @@ export function createBotApiApp(): express.Express {
                         error: "Bot is not ready",
                         details: err.message,
                     },
+                })
+                return
+            }
+            if (numericClientError !== undefined) {
+                const details = err instanceof Error ? err.message : "Bad request"
+                res.status(numericClientError).json({
+                    ok: false,
+                    error: { error: "Request error", details },
                 })
                 return
             }

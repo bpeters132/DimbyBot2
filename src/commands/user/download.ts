@@ -308,6 +308,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
         // Create downloads directory if it doesn't exist
         const downloadsDir = path.join(process.cwd(), "downloads")
+        const downloadFilePrefix = `${guildId}_`
         if (!fs.existsSync(downloadsDir)) {
             fs.mkdirSync(downloadsDir)
         }
@@ -353,7 +354,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 "--print",
                 "after_move:filepath",
                 "-o",
-                `${downloadsDir}/%(title)s.%(ext)s`,
+                `${downloadsDir}/${downloadFilePrefix}%(title)s.%(ext)s`,
             ])
         } catch (syncErr: unknown) {
             client.error("[Download] spawn(yt-dlp) failed synchronously:", syncErr)
@@ -465,7 +466,9 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     client.debug(`[Download] Available files: ${files.join(", ")}`)
 
                     const wavFiles = files
-                        .filter((file) => file.endsWith(".wav"))
+                        .filter(
+                            (file) => file.startsWith(downloadFilePrefix) && file.endsWith(".wav")
+                        )
                         .map((file) => ({
                             name: file,
                             path: path.join(downloadsDir, file),

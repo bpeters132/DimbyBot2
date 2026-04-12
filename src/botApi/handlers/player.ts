@@ -26,21 +26,37 @@ export async function playerGET(
         }
     }
 
-    const player = getBotClient().lavalink.getPlayer(guildId)
-    const data = await toPlayerStateResponse(guildId, guard.discordUserId, player ?? null)
-    webPlayerDebug("playerGET", {
-        guildId,
-        viewerIdPrefix: guard.discordUserId.slice(0, 8),
-        inVoiceWithBot: data.inVoiceWithBot,
-        currentRequesterId: data.currentTrack?.requesterId,
-        currentRequesterUsername: data.currentTrack?.requesterUsername,
-    })
-    return {
-        status: 200,
-        body: {
-            ok: true,
-            data,
-        },
+    try {
+        const player = getBotClient().lavalink.getPlayer(guildId)
+        const data = await toPlayerStateResponse(guildId, guard.discordUserId, player ?? null)
+        webPlayerDebug("playerGET", {
+            guildId,
+            viewerIdPrefix: guard.discordUserId.slice(0, 8),
+            inVoiceWithBot: data.inVoiceWithBot,
+            currentRequesterId: data.currentTrack?.requesterId,
+            currentRequesterUsername: data.currentTrack?.requesterUsername,
+        })
+        return {
+            status: 200,
+            body: {
+                ok: true,
+                data,
+            },
+        }
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error)
+        const stack = error instanceof Error ? error.stack : undefined
+        webPlayerDebug("playerGET failed", { guildId, message, stack })
+        return {
+            status: 500,
+            body: {
+                ok: false,
+                error: {
+                    error: "internal_error",
+                    details: message,
+                },
+            },
+        }
     }
 }
 
@@ -99,7 +115,10 @@ export async function playerPOST(
                 ) {
                     return {
                         status: 400,
-                        body: { ok: false, error: { error: "Seek value must be a positive number." } },
+                        body: {
+                            ok: false,
+                            error: { error: "Seek value must be a positive number." },
+                        },
                     }
                 }
                 await player.seek(Math.floor(body.value))
@@ -117,6 +136,15 @@ export async function playerPOST(
                 player.set("autoplay", !player.get("autoplay"))
                 break
         }
+
+        const refreshedPlayer = action === "stop" ? null : client.lavalink.getPlayer(guildId)
+        return {
+            status: 200,
+            body: {
+                ok: true,
+                data: await toPlayerStateResponse(guildId, guard.discordUserId, refreshedPlayer),
+            },
+        }
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Player action failed."
         return {
@@ -128,15 +156,5 @@ export async function playerPOST(
                 },
             },
         }
-    }
-
-    const refreshedPlayer =
-        action === "stop" ? null : client.lavalink.getPlayer(guildId)
-    return {
-        status: 200,
-        body: {
-            ok: true,
-            data: await toPlayerStateResponse(guildId, guard.discordUserId, refreshedPlayer),
-        },
     }
 }

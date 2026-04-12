@@ -67,10 +67,11 @@ function delay(ms: number): Promise<void> {
 }
 
 function readSuccessCache(accessToken: string): DiscordUserGuild[] | null {
-    const entry = successCache.get(accessTokenCacheKey(accessToken))
+    const key = accessTokenCacheKey(accessToken)
+    const entry = successCache.get(key)
     if (!entry) return null
     if (Date.now() > entry.expiresAt) {
-        successCache.delete(accessTokenCacheKey(accessToken))
+        successCache.delete(key)
         return null
     }
     return entry.guilds

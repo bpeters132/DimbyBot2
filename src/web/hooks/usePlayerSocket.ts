@@ -81,11 +81,24 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
             }
             if (cancelled) return
 
-            // Dev: Next on :3000 and bot WS on :3001; override with NEXT_PUBLIC_WS_URL in other setups.
-            const explicitWsUrl = process.env.NEXT_PUBLIC_WS_URL
+            let serverWsUrl: string | null = null
+            try {
+                const cfg = await fetch("/api/ws-config", { credentials: "include" })
+                if (cfg.ok) {
+                    const data = (await cfg.json()) as { wsUrl?: unknown }
+                    if (typeof data.wsUrl === "string" && data.wsUrl.length > 0) {
+                        serverWsUrl = data.wsUrl
+                    }
+                }
+            } catch {
+                // Same-origin default below.
+            }
+            if (cancelled) return
+
+            // Dev: Next on :3000 and bot WS on :3001. Production: same host as the page unless /api/ws-config overrides.
             const protocol = window.location.protocol === "https:" ? "wss" : "ws"
             const base =
-                explicitWsUrl ||
+                serverWsUrl ||
                 (window.location.port === "3000"
                     ? `${protocol}://${window.location.hostname}:3001/ws`
                     : `${protocol}://${window.location.host}/ws`)

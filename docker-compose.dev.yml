@@ -6,7 +6,7 @@ services:
             context: .
             dockerfile: Dockerfile.dev # Use the development Dockerfile
             args:
-                - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:3000}
+                - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:3001}
                 - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
                 - CLIENT_ID=${CLIENT_ID:-000000000000000000}
                 - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-build-time-discord-client-secret}
