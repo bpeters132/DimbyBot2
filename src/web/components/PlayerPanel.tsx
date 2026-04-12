@@ -337,9 +337,10 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
         requestIdRef.current += 1
         const requestId = requestIdRef.current
         setQueuePage(1)
+        let active = true
 
         const load = async () => {
-            if (requestId !== requestIdRef.current) return
+            if (requestId !== requestIdRef.current || !active) return
             setBaseState(null)
             setBaseQueue([])
             setBaseQueueTotal(0)
@@ -354,7 +355,7 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                     getPlayerQueueAction(guildId, 1, QUEUE_PAGE_SIZE),
                 ])
 
-                if (requestId !== requestIdRef.current) return
+                if (requestId !== requestIdRef.current || !active) return
 
                 if (playerResult.ok === false) {
                     setError(playerResult.error)
@@ -368,12 +369,12 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                 setBaseState(playerResult.data)
                 applyQueueResponse(queueResult.data)
             } catch (loadError) {
-                if (requestId !== requestIdRef.current) return
+                if (requestId !== requestIdRef.current || !active) return
                 setError(
                     loadError instanceof Error ? loadError.message : "Failed to load player state"
                 )
             } finally {
-                if (requestId === requestIdRef.current) {
+                if (active && requestId === requestIdRef.current) {
                     setLoading(false)
                     setQueueLoading(false)
                 }
@@ -383,6 +384,7 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
         void load()
 
         return () => {
+            active = false
             requestIdRef.current += 1
         }
     }, [guildId])

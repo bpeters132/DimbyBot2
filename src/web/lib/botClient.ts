@@ -13,6 +13,12 @@ export class BotClientNotInitializedError extends Error {
 
 /** Stores the process-wide bot client for web API/websocket access. */
 export function setBotClient(client: BotClient): void {
+    if (botClient) {
+        console.warn(
+            "[botClient] setBotClient called while a BotClient is already registered; ignoring duplicate assignment."
+        )
+        return
+    }
     botClient = client
 }
 

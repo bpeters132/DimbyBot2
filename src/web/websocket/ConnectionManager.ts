@@ -21,6 +21,9 @@ interface SocketMeta {
 export class ConnectionManager {
     private readonly guildConnections = new Map<string, Set<WebSocket>>()
     private readonly socketMeta = new Map<WebSocket, SocketMeta>()
+    /** Last subscribe attempt per socket (same guild) for debouncing permission resolution. */
+    private readonly subscribeLastAttempt = new Map<WebSocket, { guildId: string; at: number }>()
+    private static readonly SUBSCRIBE_DEBOUNCE_MS = 4000
     private readonly heartbeatIntervalMs: number
     private heartbeatTimer: NodeJS.Timeout | null = null
 
@@ -80,9 +83,12 @@ export class ConnectionManager {
                         }
                     }
                 } catch (error: unknown) {
-                    webPlayerWarn("WS ticket auth failed", {
-                        message: error instanceof Error ? error.name : "auth_error",
-                    })
+                    webPlayerWarn(
+                        "WS ticket auth failed",
+                        error instanceof Error
+                            ? { name: error.name, message: error.message }
+                            : { message: "auth_error" }
+                    )
                     return null
                 }
             }
@@ -96,9 +102,12 @@ export class ConnectionManager {
                 headers,
             })) as { user?: { id?: string } } | null
         } catch (error: unknown) {
-            webPlayerWarn("WS fallback session auth failed", {
-                message: error instanceof Error ? error.name : "auth_error",
-            })
+            webPlayerWarn(
+                "WS fallback session auth failed",
+                error instanceof Error
+                    ? { name: error.name, message: error.message }
+                    : { message: "auth_error" }
+            )
             return null
         }
         if (!session?.user?.id) {
@@ -109,9 +118,12 @@ export class ConnectionManager {
             const discordUserId = await resolveDiscordUserSnowflake(betterAuthUserId, headers)
             return discordUserId ? { userId: discordUserId } : null
         } catch (error: unknown) {
-            webPlayerWarn("WS fallback discord snowflake resolve failed", {
-                message: error instanceof Error ? error.name : "auth_error",
-            })
+            webPlayerWarn(
+                "WS fallback discord snowflake resolve failed",
+                error instanceof Error
+                    ? { name: error.name, message: error.message }
+                    : { message: "auth_error" }
+            )
             return null
         }
     }
@@ -270,6 +282,22 @@ export class ConnectionManager {
                 return
             }
 
+            const now = Date.now()
+            const last = this.subscribeLastAttempt.get(socket)
+            if (
+                last &&
+                last.guildId === guildId &&
+                now - last.at < ConnectionManager.SUBSCRIBE_DEBOUNCE_MS
+            ) {
+                webPlayerTrace("WS subscribe debounced (same guild)", {
+                    guildId,
+                    viewerIdPrefix: meta.userId.slice(0, 8),
+                })
+                socket.send(JSON.stringify({ type: "subscribed", guildId }))
+                return
+            }
+            this.subscribeLastAttempt.set(socket, { guildId, at: now })
+
             const resolution = await resolveUserPermissions(botClient, guildId, meta.userId)
             if (!hasRequiredPermissions(resolution.permissions, [WebPermission.VIEW_PLAYER])) {
                 webPlayerWarn("WS subscribe denied (VIEW_PLAYER missing)", {
@@ -363,6 +391,7 @@ export class ConnectionManager {
         }
 
         this.socketMeta.delete(socket)
+        this.subscribeLastAttempt.delete(socket)
     }
 }
 

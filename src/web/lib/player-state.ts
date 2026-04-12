@@ -33,10 +33,14 @@ const missPurgeGlobal = globalThis as typeof globalThis & {
     __dimbyRequesterMissPurgeTimer?: ReturnType<typeof setInterval>
 }
 if (typeof setInterval !== "undefined" && !missPurgeGlobal.__dimbyRequesterMissPurgeTimer) {
-    missPurgeGlobal.__dimbyRequesterMissPurgeTimer = setInterval(
+    const timer = setInterval(
         purgeExpiredRequesterMissCache,
         REQUESTER_MISS_CACHE_PURGE_INTERVAL_MS
     )
+    missPurgeGlobal.__dimbyRequesterMissPurgeTimer = timer
+    if (typeof timer.unref === "function") {
+        timer.unref()
+    }
 }
 
 /** Clears the requester-miss purge interval (tests, dev teardown, or graceful shutdown hooks). */

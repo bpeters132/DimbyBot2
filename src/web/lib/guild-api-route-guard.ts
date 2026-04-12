@@ -13,7 +13,7 @@ export async function guardGuildAccess(guildId: string): Promise<NextResponse | 
         const ctx = await resolveAuthenticatedGuildAccess(headerRecord, guildId)
         if (ctx.ok === false) {
             return NextResponse.json(
-                { ok: false, error: { error: ctx.error, details: ctx.details } },
+                { ok: false, status: ctx.status, error: ctx.error, details: ctx.details },
                 { status: ctx.status }
             )
         }
@@ -22,13 +22,16 @@ export async function guardGuildAccess(guildId: string): Promise<NextResponse | 
         const name = err instanceof Error ? err.name : "Error"
         const message = err instanceof Error ? err.message : String(err)
         console.error("[guild-api-route-guard] guardGuildAccess failed", `${name}: ${message}`)
+        const details =
+            err instanceof Error
+                ? { name: err.name, message: err.message }
+                : { message: String(err) }
         return NextResponse.json(
             {
                 ok: false,
-                error: {
-                    error: "internal_error",
-                    details: "authentication failed",
-                },
+                status: 500,
+                error: message || "Internal error",
+                details,
             },
             { status: 500 }
         )

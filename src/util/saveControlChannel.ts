@@ -95,7 +95,9 @@ export async function saveGuildSettings(
     try {
         const result = await replaceGuildSettingsStoreInDatabase(settings)
         guildSettingsCache = cloneGuildSettingsStore(settings)
-        logger.debug(`[guildSettings] Successfully saved ${result.rowsWritten} rows to database.`)
+        logger.debug(
+            `[guildSettings] Successfully saved guild settings (upserted=${result.rowsUpserted}, deleted=${result.rowsDeleted}, affected=${result.rowsAffected}).`
+        )
         return true
     } catch (error: unknown) {
         logger.error(`[guildSettings] Error writing guild settings to database: ${error}`)

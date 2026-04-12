@@ -73,7 +73,7 @@ case $COMMAND in
     "${DC[@]}" restart "$SERVICE"
     ;;
   exec)
-    if [ $# -lt 1 ] || [ -z "${1:-}" ]; then
+    if [ -z "${1:-}" ]; then
       echo "Error: Please specify a service to execute command in (e.g., 'bot')."
       exit 1
     fi

@@ -88,6 +88,10 @@ function redactSecrets(value: unknown, seen: WeakSet<object> = new WeakSet()): u
             clone[key] = "[REDACTED]"
             continue
         }
+        if (typeof entry === "string") {
+            clone[key] = sanitizeErrorText(entry, 4000)
+            continue
+        }
         if (entry && typeof entry === "object") {
             clone[key] = redactSecrets(entry, seen)
         }

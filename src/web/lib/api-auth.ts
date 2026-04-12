@@ -275,9 +275,8 @@ export async function getGuildDashboardPermissionSnapshot(
         const noClientCtx = { guildId, discordUserIdPrefix: ctx.discordUserId.slice(0, 8) }
         if (process.env.NODE_ENV === "development") {
             webPlayerDebug(noClientMsg, noClientCtx)
-        } else {
-            webPlayerWarn(noClientMsg, noClientCtx)
         }
+        webPlayerWarn(noClientMsg, { metric: "optimistic_dashboard_perms", ...noClientCtx })
         const defaultMemberWebPerms: WebPermission[] = [
             WebPermission.VIEW_PLAYER,
             WebPermission.CONTROL_PLAYBACK,

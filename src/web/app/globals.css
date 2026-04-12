@@ -73,7 +73,8 @@
     --radius-xl: calc(var(--radius) + 4px);
 }
 
-* {
+/* Scoped default border color for our app shell only — avoids forcing `border-border` onto every DOM node (third-party widgets). */
+:where(html, body) {
     @apply border-border;
 }
 

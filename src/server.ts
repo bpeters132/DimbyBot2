@@ -184,12 +184,32 @@ async function run(): Promise<void> {
         })
 
         await new Promise<void>((resolve, reject) => {
-            server?.once("error", reject)
-            server?.listen(webPort, () => resolve())
+            const httpServer = server
+            if (!httpServer) {
+                reject(new Error("HTTP server was not initialized"))
+                return
+            }
+            const onListenError = (err: NodeJS.ErrnoException) => {
+                httpServer.off("error", onListenError)
+                reject(err)
+            }
+            httpServer.once("error", onListenError)
+            httpServer.listen(webPort, () => {
+                httpServer.off("error", onListenError)
+                resolve()
+            })
         })
         logger.info(`Web server listening on http://localhost:${webPort}`)
-    } catch (error) {
-        logger.error("Fatal error during application startup:", error)
+    } catch (error: unknown) {
+        const errno = error as NodeJS.ErrnoException | undefined
+        if (errno && errno.code === "EADDRINUSE") {
+            logger.error(
+                `Web server could not bind to port ${webPort}: address already in use (EADDRINUSE).`,
+                error
+            )
+        } else {
+            logger.error("Fatal error during application startup:", error)
+        }
         process.exit(1)
     }
 }

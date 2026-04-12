@@ -2,7 +2,6 @@ import { SlashCommandBuilder } from "discord.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import fs from "fs"
 import { promises as fsp } from "fs"
-import { access as fsAccess, stat as fsStat } from "fs/promises"
 import path from "path"
 import { formatDistanceToNow } from "date-fns"
 import type BotClient from "../../lib/BotClient.js"
@@ -126,8 +125,8 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     const file = parseDownloadMetadataStoreKey(key).fileName
                     const filePath = path.join(downloadsDir, file)
                     try {
-                        await fsAccess(filePath)
-                        const stats = await fsStat(filePath)
+                        await fsp.access(filePath)
+                        const stats = await fsp.stat(filePath)
                         const row: {
                             name: string
                             size: number
@@ -223,22 +222,40 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
             const dedupedEntries = dedupeMetadataByFileName(metadata, guildId)
 
-            const files = [...dedupedEntries.values()]
-                .map(({ key, info }) => {
+            const fileRows = await Promise.all(
+                [...dedupedEntries.values()].map(async ({ key, info }) => {
                     const file = parseDownloadMetadataStoreKey(key).fileName
                     const filePath = path.join(downloadsDir, file)
-                    const date = info.downloadDate
-                        ? new Date(info.downloadDate)
-                        : fs.existsSync(filePath)
-                          ? fs.statSync(filePath).mtime
-                          : null
+                    let date: Date | null = info.downloadDate ? new Date(info.downloadDate) : null
+                    if (!date) {
+                        try {
+                            await fsp.access(filePath)
+                            const st = await fsp.stat(filePath)
+                            date = st.mtime
+                        } catch (err: unknown) {
+                            const code =
+                                err && typeof err === "object" && "code" in err
+                                    ? (err as NodeJS.ErrnoException).code
+                                    : ""
+                            if (code !== "ENOENT") {
+                                const msg = err instanceof Error ? err.message : String(err)
+                                client.warn(
+                                    `[Downloads] cleanup stat failed for ${file} (guildId=${guildId}): ${msg}`
+                                )
+                            }
+                            date = null
+                        }
+                    }
                     return {
                         name: file,
                         path: filePath,
                         date,
                     }
                 })
-                .filter((file) => (removeAll ? true : file.date && file.date < cutoffDate))
+            )
+            const files = fileRows.filter((file) =>
+                removeAll ? true : file.date && file.date < cutoffDate
+            )
 
             if (files.length === 0) {
                 return interaction.editReply(
@@ -316,7 +333,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         if (interaction.deferred || interaction.replied) {
             return interaction.editReply({ content: response })
         }
-        return interaction.reply({ content: response })
+        return interaction.reply({ content: response, ephemeral: true })
     }
 }
 

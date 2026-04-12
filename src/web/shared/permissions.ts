@@ -156,13 +156,27 @@ export interface ResolveUserPermissionsOptions {
 /**
  * Resolves web permissions from Discord guild membership + permission bits.
  */
+const DISCORD_SNOWFLAKE_RE = /^\d{17,19}$/
+
+function parseEnvBotOwnerId(): string | undefined {
+    const raw = process.env.OWNER_ID?.trim()
+    if (!raw) return undefined
+    if (!DISCORD_SNOWFLAKE_RE.test(raw)) {
+        console.warn(
+            "[permissions] OWNER_ID is set but is not a valid Discord snowflake; bot-owner privileges from env are disabled."
+        )
+        return undefined
+    }
+    return raw
+}
+
 export async function resolveUserPermissions(
     client: PermissionClient,
     guildId: string,
     userId: string,
     options?: ResolveUserPermissionsOptions
 ): Promise<PermissionResolution> {
-    const envBotOwnerId = process.env.OWNER_ID?.trim()
+    const envBotOwnerId = parseEnvBotOwnerId()
     const applyVoiceGating = options?.applyVoiceGating !== false
     const now = Date.now()
     if (applyVoiceGating) {

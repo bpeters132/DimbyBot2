@@ -127,7 +127,7 @@ export async function migrateGuildSettings(
         }
 
         const writeResult = await replaceGuildSettingsStoreInDatabase(validEntries)
-        result.migratedCount = writeResult.rowsWritten
+        result.migratedCount = writeResult.rowsUpserted
 
         renameJsonAsMigrated(guildSettingsJsonPath, logger)
 

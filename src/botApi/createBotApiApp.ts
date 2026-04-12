@@ -230,7 +230,7 @@ export function createBotApiApp(): express.Express {
                 return
             }
             if (numericClientError !== undefined) {
-                const details = err instanceof Error ? err.message : "Bad request"
+                const details = sanitizeBotApiError(err).message || "Bad request"
                 res.status(numericClientError).json({
                     ok: false,
                     error: { error: "Request error", details },

@@ -176,7 +176,10 @@ export async function queuePOST(
     }
 
     const searchResult = await player.search(query, {
-        requester: { id: requester.requesterId, username: guard.session.user.name || "web-user" },
+        requester: {
+            id: requester.requesterId,
+            username: guard.session.user?.name ?? "web-user",
+        },
     })
     if (!searchResult.tracks.length) {
         return {
@@ -230,12 +233,11 @@ export async function queueDELETE(
         }
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
-        const details = err instanceof Error ? (err.stack ?? err.message) : String(err)
         return {
             status: 500,
             body: {
                 ok: false,
-                error: { error: message, details },
+                error: { error: message, details: message },
             },
         }
     }

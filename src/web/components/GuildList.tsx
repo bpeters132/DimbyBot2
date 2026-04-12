@@ -1,3 +1,4 @@
+import Image from "next/image"
 import Link from "next/link"
 import type { GuildListActionResult } from "@/server/guild.actions"
 import type { GuildListItem } from "@/types/web"
@@ -104,9 +105,11 @@ export function GuildList({ result }: GuildListProps) {
                     className="flex items-center gap-3 rounded border bg-card p-3 no-underline hover:bg-accent hover:text-accent-foreground"
                 >
                     {isValidGuildIconUrl(guild.iconUrl) ? (
-                        <img
+                        <Image
                             src={guild.iconUrl}
                             alt={`${guild.name} icon`}
+                            width={40}
+                            height={40}
                             className="h-10 w-10 rounded-full"
                         />
                     ) : (

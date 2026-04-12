@@ -31,6 +31,9 @@
         "@types/react-dom": "^19.2.3",
         "@types/ws": "^8.18.1",
         "postcss": "^8.5.9",
+        "postcss-scss": "^4.0.9",
+        "stylelint": "^16.14.1",
+        "stylelint-scss": "^6.11.1",
         "tailwindcss": "^4.2.2",
         "typescript": "^5.8.2"
     }

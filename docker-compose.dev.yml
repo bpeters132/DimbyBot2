@@ -5,14 +5,9 @@ services:
         build:
             context: .
             dockerfile: Dockerfile.dev # Use the development Dockerfile
-            args:
-                - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:3001}
-                - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
-                - CLIENT_ID=${CLIENT_ID:?CLIENT_ID is required for dev image build (Discord OAuth)}
-                - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:?DISCORD_CLIENT_SECRET is required for dev image build}
         image: dimbybot-dev # Optional: Give the dev image a distinct name
         command: yarn dev # Override the default command/entrypoint to run nodemon
-        # `ports: !override` is a Docker Compose tag so this list replaces the base file's ports (merge would append and cause host port conflicts in dev).
+        # `ports: !override` replaces the base `dimbybot` publish list (Compose v2.24.4+); see README prerequisites.
         ports: !override
             - "3001:3001"
         volumes:
@@ -30,6 +25,10 @@ services:
         environment:
             # Ensure NODE_ENV is set for development if needed by any libs
             - NODE_ENV=development
+            - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:3001}
+            - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+            - CLIENT_ID=${CLIENT_ID:?CLIENT_ID is required for dev (Discord OAuth)}
+            - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:?DISCORD_CLIENT_SECRET is required for dev}
             - WEB_PORT=3001
             - WEB_ENABLED=true
             # Force color output for libraries like 'colors' or 'chalk'

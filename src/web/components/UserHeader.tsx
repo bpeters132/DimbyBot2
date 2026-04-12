@@ -6,21 +6,10 @@ import Link from "next/link"
 import { authClient } from "@/auth-client"
 import { ModeToggle } from "@/components/ModeToggle"
 
-async function signOutAndGoHome() {
-    try {
-        await authClient.signOut({
-            fetchOptions: {
-                onSuccess: () => {
-                    // Full navigation so RSC/layout re-runs with cleared cookies (client-only session clear leaves /dashboard mounted).
-                    window.location.assign("/")
-                },
-            },
-        })
-        return true
-    } catch (error) {
-        console.error("[UserHeader] sign out failed", error)
-        return false
-    }
+async function signOutAndGoHome(): Promise<void> {
+    await authClient.signOut()
+    // Full navigation so RSC/layout re-runs with cleared cookies (client-only session clear leaves /dashboard mounted).
+    window.location.assign("/")
 }
 
 export function UserHeader() {
@@ -60,10 +49,10 @@ export function UserHeader() {
                             setSignOutError(null)
                             setSignOutLoading(true)
                             try {
-                                const ok = await signOutAndGoHome()
-                                if (!ok) {
-                                    setSignOutError("Log out failed. Please try again.")
-                                }
+                                await signOutAndGoHome()
+                            } catch (error) {
+                                console.error("[UserHeader] sign out failed", error)
+                                setSignOutError("Log out failed. Please try again.")
                             } finally {
                                 signOutInFlight.current = false
                                 setSignOutLoading(false)

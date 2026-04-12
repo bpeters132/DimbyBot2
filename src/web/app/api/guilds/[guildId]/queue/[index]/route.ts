@@ -2,6 +2,7 @@
  * Proxies queue index mutations to the bot API with the caller’s cookies — preserves raw HTTP
  * (PATCH/DELETE bodies) and a single trusted hop from Next to the bot process.
  */
+import { NextResponse } from "next/server"
 import { guardGuildAccess } from "@/lib/guild-api-route-guard"
 import { proxyBotApi } from "@/server/bot-api-proxy"
 
@@ -12,7 +13,27 @@ export async function DELETE(
     const { guildId } = await ctx.params
     const denied = await guardGuildAccess(guildId)
     if (denied) return denied
-    return proxyBotApi(request)
+    try {
+        return await proxyBotApi(request)
+    } catch (error: unknown) {
+        console.error("[api/guilds/.../queue/[index]] DELETE proxy failed", error)
+        const details =
+            error instanceof Error
+                ? error.message
+                : typeof error === "string"
+                  ? error
+                  : "Internal Server Error"
+        return NextResponse.json(
+            {
+                ok: false,
+                error: {
+                    error: "Internal Server Error",
+                    details,
+                },
+            },
+            { status: 500 }
+        )
+    }
 }
 
 export async function PATCH(
@@ -22,5 +43,25 @@ export async function PATCH(
     const { guildId } = await ctx.params
     const denied = await guardGuildAccess(guildId)
     if (denied) return denied
-    return proxyBotApi(request)
+    try {
+        return await proxyBotApi(request)
+    } catch (error: unknown) {
+        console.error("[api/guilds/.../queue/[index]] PATCH proxy failed", error)
+        const details =
+            error instanceof Error
+                ? error.message
+                : typeof error === "string"
+                  ? error
+                  : "Internal Server Error"
+        return NextResponse.json(
+            {
+                ok: false,
+                error: {
+                    error: "Internal Server Error",
+                    details,
+                },
+            },
+            { status: 500 }
+        )
+    }
 }

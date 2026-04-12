@@ -196,7 +196,10 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
                                 : prev
                         )
                     }
-                })()
+                })().catch((err: unknown) => {
+                    console.error("[usePlayerSocket] unexpected WS handler error", err)
+                    setLiveUpdatesError("Unexpected socket error")
+                })
             }
 
             socket.onclose = () => {

@@ -41,9 +41,9 @@ export async function guildListGET(
         const message = err instanceof Error ? err.message : String(err)
         const client = tryGetBotClient()
         if (client) {
-            client.error("[guildListGET] getAccessToken threw", { message, err })
+            client.error("[guildListGET] getAccessToken threw", { message })
         } else {
-            console.error("[guildListGET] getAccessToken threw", { message, err })
+            console.error("[guildListGET] getAccessToken threw", { message })
         }
         return {
             status: 500,
@@ -73,7 +73,7 @@ export async function guildListGET(
         if (client) {
             client.error("[guildListGET] fetchDiscordUserGuilds threw", { message, err })
         } else {
-            console.error("[guildListGET] fetchDiscordUserGuilds threw", { message })
+            console.error("[guildListGET] fetchDiscordUserGuilds threw", { message, err })
         }
         return {
             status: 502,

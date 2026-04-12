@@ -124,7 +124,7 @@ export interface JsonMigrationResult {
 
 export type ReplaceGuildSettingsStoreFn = (
     store: GuildSettingsStore
-) => Promise<{ rowsWritten: number }>
+) => Promise<{ rowsUpserted: number; rowsDeleted: number; rowsAffected: number }>
 /** Row-level skips from {@link replaceDownloadMetadataStoreInDatabase} (e.g. unresolvable guild id). */
 export type DownloadMetadataStoreSkippedEntry = {
     key: string

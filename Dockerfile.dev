@@ -3,12 +3,6 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Optional build-time placeholders for Better Auth / Discord (runtime env from compose).
-ARG BETTER_AUTH_URL=http://localhost:3000
-ARG CLIENT_ID=000000000000000000
-ENV BETTER_AUTH_URL=${BETTER_AUTH_URL}
-ENV CLIENT_ID=${CLIENT_ID}
-
 # Install yt-dlp (pinned — bump version after testing; keep in sync with docker/ytdlp-requirements.txt).
 # Also install build tools needed for native Node.js modules.
 # Use pipx to install yt-dlp to avoid PEP 668 issues (pipx puts binaries in ~/.local/bin, not on PATH).

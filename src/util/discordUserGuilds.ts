@@ -4,11 +4,16 @@ import { createHash } from "node:crypto"
 const DISCORD_USER_API_UA = "DimbyBotDashboard/1.0 (OAuth user token)"
 
 /** Attempts including the first request; keeps dashboard guild loads from failing on transient 429s. */
-const GUILD_LIST_MAX_ATTEMPTS = 8
+const GUILD_LIST_MAX_ATTEMPTS = 4
 /** Upper bound on a single wait so one bad payload cannot stall the server unbounded. */
 const GUILD_LIST_MAX_RETRY_WAIT_MS = 60_000
 const GUILD_LIST_MIN_RETRY_WAIT_MS = 500
 const GUILD_LIST_REQUEST_TIMEOUT_MS = 10_000
+/** Wall-clock cap for the whole retry loop (per token fetch), including waits between attempts. */
+const GUILD_LIST_TOTAL_ATTEMPT_BUDGET_MS = Math.min(
+    60_000,
+    GUILD_LIST_REQUEST_TIMEOUT_MS * GUILD_LIST_MAX_ATTEMPTS
+)
 /** +/- fraction applied to retry waits so concurrent clients do not retry in lockstep after 429s. */
 const GUILD_LIST_RETRY_JITTER_RATIO = 0.15
 
@@ -74,6 +79,11 @@ function delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function guildListExponentialBackoffMs(attempt: number): number {
+    const exp = GUILD_LIST_MIN_RETRY_WAIT_MS * 2 ** Math.max(0, attempt - 1)
+    return Math.min(exp, GUILD_LIST_MAX_RETRY_WAIT_MS)
+}
+
 function readSuccessCache(accessToken: string): DiscordUserGuild[] | null {
     const key = accessTokenCacheKey(accessToken)
     const entry = successCache.get(key)
@@ -119,7 +129,16 @@ function discordRetryAfterMs(response: Response, bodyText: string): number {
 }
 
 async function fetchDiscordUserGuildsOnce(accessToken: string): Promise<FetchUserGuildsResult> {
+    const loopStartedAt = Date.now()
     for (let attempt = 1; attempt <= GUILD_LIST_MAX_ATTEMPTS; attempt++) {
+        if (Date.now() - loopStartedAt > GUILD_LIST_TOTAL_ATTEMPT_BUDGET_MS) {
+            return {
+                ok: false,
+                status: 0,
+                message: "Timed out loading Discord guilds after repeated attempts.",
+            }
+        }
+
         let response: Response
         const controller = new AbortController()
         const timeoutHandle = setTimeout(() => controller.abort(), GUILD_LIST_REQUEST_TIMEOUT_MS)
@@ -133,7 +152,18 @@ async function fetchDiscordUserGuildsOnce(accessToken: string): Promise<FetchUse
             })
         } catch (error: unknown) {
             if (attempt < GUILD_LIST_MAX_ATTEMPTS) {
-                await delay(jitteredDelayMs(GUILD_LIST_MIN_RETRY_WAIT_MS))
+                const waitMs = guildListExponentialBackoffMs(attempt)
+                if (
+                    Date.now() - loopStartedAt + jitteredDelayMs(waitMs) >
+                    GUILD_LIST_TOTAL_ATTEMPT_BUDGET_MS
+                ) {
+                    return {
+                        ok: false,
+                        status: 0,
+                        message: "Timed out loading Discord guilds after repeated attempts.",
+                    }
+                }
+                await delay(jitteredDelayMs(waitMs))
                 continue
             }
             if (error instanceof Error && error.name === "AbortError") {
@@ -175,10 +205,18 @@ async function fetchDiscordUserGuildsOnce(accessToken: string): Promise<FetchUse
         if (response.status === 429) {
             const bodyText = await response.text()
             if (attempt < GUILD_LIST_MAX_ATTEMPTS) {
-                const waitMs = Math.max(
-                    discordRetryAfterMs(response, bodyText),
-                    GUILD_LIST_MIN_RETRY_WAIT_MS
-                )
+                const exp = guildListExponentialBackoffMs(attempt)
+                const waitMs = Math.max(discordRetryAfterMs(response, bodyText), exp)
+                if (
+                    Date.now() - loopStartedAt + jitteredDelayMs(waitMs) >
+                    GUILD_LIST_TOTAL_ATTEMPT_BUDGET_MS
+                ) {
+                    return {
+                        ok: false,
+                        status: 0,
+                        message: "Timed out loading Discord guilds after repeated attempts.",
+                    }
+                }
                 await delay(jitteredDelayMs(waitMs))
                 continue
             }

@@ -77,11 +77,11 @@ export async function isGuildSettingsTableEmpty(): Promise<boolean> {
 /** Replaces all guild settings rows with the provided legacy map shape. */
 export async function replaceGuildSettingsStoreInDatabase(
     store: GuildSettingsStore
-): Promise<{ rowsWritten: number }> {
+): Promise<{ rowsUpserted: number; rowsDeleted: number; rowsAffected: number }> {
     const prisma = getPrismaClient()
     const guildIds = Object.keys(store)
 
-    const rowsWritten = await prisma.$transaction(async (tx) => {
+    const { rowsUpserted, rowsDeleted, rowsAffected } = await prisma.$transaction(async (tx) => {
         let count = 0
         for (const guildId of guildIds) {
             const settings = store[guildId]
@@ -114,8 +114,12 @@ export async function replaceGuildSettingsStoreInDatabase(
                 },
             },
         })
-        return count + deleted.count
+        return {
+            rowsUpserted: count,
+            rowsDeleted: deleted.count,
+            rowsAffected: count + deleted.count,
+        }
     })
 
-    return { rowsWritten }
+    return { rowsUpserted, rowsDeleted, rowsAffected }
 }

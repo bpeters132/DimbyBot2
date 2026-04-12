@@ -81,19 +81,19 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER user_touch_updated_at
   BEFORE UPDATE ON "user"
   FOR EACH ROW
-  EXECUTE PROCEDURE ba_touch_updated_at();
+  EXECUTE FUNCTION ba_touch_updated_at();
 
 CREATE TRIGGER session_touch_updated_at
   BEFORE UPDATE ON "session"
   FOR EACH ROW
-  EXECUTE PROCEDURE ba_touch_updated_at();
+  EXECUTE FUNCTION ba_touch_updated_at();
 
 CREATE TRIGGER account_touch_updated_at
   BEFORE UPDATE ON "account"
   FOR EACH ROW
-  EXECUTE PROCEDURE ba_touch_updated_at();
+  EXECUTE FUNCTION ba_touch_updated_at();
 
 CREATE TRIGGER verification_touch_updated_at
   BEFORE UPDATE ON "verification"
   FOR EACH ROW
-  EXECUTE PROCEDURE ba_touch_updated_at();
+  EXECUTE FUNCTION ba_touch_updated_at();

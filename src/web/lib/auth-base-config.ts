@@ -64,15 +64,41 @@ export const betterAuthBaseConfig = {
                             `Discord OAuth refresh failed (${tokenResponse.status}): ${text}`
                         )
                     }
-                    const data = (await tokenResponse.json()) as {
-                        access_token: string
-                        expires_in: number
-                        refresh_token?: string
+                    let parsed: unknown
+                    try {
+                        parsed = await tokenResponse.json()
+                    } catch {
+                        throw new Error(
+                            `Discord OAuth refresh returned invalid JSON (${tokenResponse.status})`
+                        )
+                    }
+                    if (!parsed || typeof parsed !== "object") {
+                        throw new Error(
+                            `Discord OAuth refresh returned non-object JSON (${tokenResponse.status}): ${String(parsed)}`
+                        )
+                    }
+                    const data = parsed as Record<string, unknown>
+                    if (typeof data.access_token !== "string" || data.access_token.length === 0) {
+                        throw new Error(
+                            `Discord OAuth refresh missing access_token (${tokenResponse.status}): ${JSON.stringify(parsed)}`
+                        )
+                    }
+                    if (
+                        typeof data.expires_in !== "number" ||
+                        !Number.isFinite(data.expires_in) ||
+                        data.expires_in <= 0
+                    ) {
+                        throw new Error(
+                            `Discord OAuth refresh missing expires_in (${tokenResponse.status}): ${JSON.stringify(parsed)}`
+                        )
                     }
                     return {
                         accessToken: data.access_token,
                         accessTokenExpiresAt: new Date(Date.now() + data.expires_in * 1000),
-                        refreshToken: data.refresh_token ?? refreshToken,
+                        refreshToken:
+                            typeof data.refresh_token === "string" && data.refresh_token.length > 0
+                                ? data.refresh_token
+                                : refreshToken,
                     }
                 } catch (error: unknown) {
                     if (error instanceof Error && error.name === "AbortError") {

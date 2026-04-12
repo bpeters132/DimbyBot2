@@ -60,6 +60,12 @@ export function downloadMetadataFileBelongsToGuild(
     // TODO(dimbybot#legacy-metadata): legacy fileName-only keys with missing guildId match any guild —
     // misattributes during migration. Populate guildId in migration/reconciliation (target: remove by
     // 2026-07-01 or when tracking issue is closed). Same caveat applies to other legacy fallbacks below.
+    if (legacy && (legacy.guildId === undefined || legacy.guildId === "")) {
+        console.debug("[download-metadata] legacy guildId missing; cross-guild match possible", {
+            fileName,
+            attemptedGuildId: guildId,
+        })
+    }
     return Boolean(
         legacy &&
         (legacy.guildId === guildId || legacy.guildId === undefined || legacy.guildId === "")
