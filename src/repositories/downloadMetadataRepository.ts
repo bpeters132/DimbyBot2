@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client"
 import { getPrismaClient } from "../lib/database.js"
 import type { DownloadFileMetadata, DownloadsMetadataStore } from "../types/index.js"
 import {
@@ -108,9 +109,7 @@ export async function getDownloadMetadataStoreFromDatabase(): Promise<DownloadsM
     return rows.reduce<DownloadsMetadataStore>((acc, row) => {
         const guildId = row.guildId?.trim() ?? ""
         const key =
-            guildId.length > 0
-                ? downloadMetadataStoreKey(guildId, row.fileName)
-                : row.fileName
+            guildId.length > 0 ? downloadMetadataStoreKey(guildId, row.fileName) : row.fileName
         acc[key] = toDownloadMetadataEntry({ ...row, guildId })
         return acc
     }, {})
@@ -148,30 +147,32 @@ export async function replaceDownloadMetadataStoreInDatabase(
         return { rowsWritten: 0, skippedEntries }
     }
 
-    await prisma.$transaction(async (tx) => {
-        await tx.downloadMetadata.deleteMany({
-            where: {
-                NOT: {
-                    OR: rows.map((r) => ({
-                        fileName: r.fileName,
-                        guildId: r.guildId,
-                    })),
-                },
-            },
-        })
+    const UPSERT_BATCH = 32
 
-        for (const row of rows) {
-            await tx.downloadMetadata.upsert({
-                where: {
-                    fileName_guildId: { fileName: row.fileName, guildId: row.guildId },
-                },
-                create: row,
-                update: {
-                    downloadDate: row.downloadDate,
-                    originalUrl: row.originalUrl,
-                    filePath: row.filePath,
-                },
-            })
+    await prisma.$transaction(async (tx) => {
+        const valueTuples = rows.map((r) => Prisma.sql`(${r.guildId}, ${r.fileName})`)
+        await tx.$executeRaw`
+            DELETE FROM "DownloadMetadata" AS d
+            WHERE (d."guildId", d."fileName") NOT IN (VALUES ${Prisma.join(valueTuples, ", ")})
+        `
+
+        for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
+            const batch = rows.slice(i, i + UPSERT_BATCH)
+            await Promise.all(
+                batch.map((row) =>
+                    tx.downloadMetadata.upsert({
+                        where: {
+                            fileName_guildId: { fileName: row.fileName, guildId: row.guildId },
+                        },
+                        create: row,
+                        update: {
+                            downloadDate: row.downloadDate,
+                            originalUrl: row.originalUrl,
+                            filePath: row.filePath,
+                        },
+                    })
+                )
+            )
         }
     })
 

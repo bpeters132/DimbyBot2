@@ -37,13 +37,15 @@ function formatDuration(durationMs: number, isStream = false): string {
     return `${minutes}:${String(seconds).padStart(2, "0")}`
 }
 
-function isSafeHttpUrl(value: string | null | undefined): boolean {
-    if (!value) return false
+/** Returns the normalized URL when the scheme is http(s); otherwise null. */
+function sanitizeHttpUrl(value?: string | null): string | null {
+    if (!value) return null
     try {
         const parsed = new URL(value)
-        return parsed.protocol === "http:" || parsed.protocol === "https:"
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null
+        return parsed.toString()
     } catch {
-        return false
+        return null
     }
 }
 
@@ -89,26 +91,11 @@ function QueueTrackRow({ track, queueIndex }: QueueTrackRowProps) {
     const liRef = useRef<HTMLLIElement>(null)
     const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null)
 
-    const safeQueueTrackUrl = useMemo(() => {
-        if (!track.uri) return null
-        try {
-            const parsed = new URL(track.uri)
-            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null
-            return parsed.toString()
-        } catch {
-            return null
-        }
-    }, [track.uri])
-    const safeQueueThumbnailUrl = useMemo(() => {
-        if (!track.thumbnailUrl) return null
-        try {
-            const parsed = new URL(track.thumbnailUrl)
-            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null
-            return parsed.toString()
-        } catch {
-            return null
-        }
-    }, [track.thumbnailUrl])
+    const safeQueueTrackUrl = useMemo(() => sanitizeHttpUrl(track.uri), [track.uri])
+    const safeQueueThumbnailUrl = useMemo(
+        () => sanitizeHttpUrl(track.thumbnailUrl),
+        [track.thumbnailUrl]
+    )
 
     const popoverLayout = anchor
         ? clampQueueTrackPopoverPoint(anchor.x + QUEUE_TRACK_POPOVER_CURSOR_GAP_PX, anchor.y)
@@ -234,6 +221,7 @@ function NowPlayingProgress({ playerState, track }: NowPlayingProgressProps) {
         return () => window.clearInterval(id)
     }, [playerState.status, track.isStream, track.durationMs])
 
+    // `tick` is unused in the body but listed so this memo recomputes on the interval above (smooth `livePositionMs`).
     const livePositionMs = useMemo(() => {
         if (track.isStream) return playerState.positionMs
         if (!track.durationMs || track.durationMs <= 0) return playerState.positionMs
@@ -337,13 +325,7 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
             ),
             permissionSnapshot,
         })
-    }, [
-        guildId,
-        discordUserId,
-        canControlPlayback,
-        canManageQueue,
-        permissionSnapshot,
-    ])
+    }, [guildId, discordUserId, canControlPlayback, canManageQueue, permissionSnapshot])
 
     const applyQueueResponse = (queueData: QueueResponse): void => {
         setBaseQueue(queueData.items)
@@ -507,19 +489,8 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
         }
     }
 
-    const sanitizeHttpUrl = (value?: string | null): string | null => {
-        if (!value) return null
-        try {
-            const parsed = new URL(value)
-            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null
-            return parsed.toString()
-        } catch {
-            return null
-        }
-    }
-
     const safeThumbnailUrl = sanitizeHttpUrl(nowPlaying?.thumbnailUrl)
-    const safeTrackUrl = sanitizeHttpUrl(nowPlaying?.uri) ?? "#"
+    const safeTrackUrl = sanitizeHttpUrl(nowPlaying?.uri)
 
     if (loading) {
         return <div className="text-muted-foreground">Loading player...</div>
@@ -614,14 +585,20 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                             ) : null}
                             <div className="min-w-0 flex-1 space-y-1">
                                 <div>
-                                    <a
-                                        href={safeTrackUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="font-medium text-foreground no-underline decoration-transparent transition-colors hover:text-primary hover:no-underline"
-                                    >
-                                        {nowPlaying.title}
-                                    </a>
+                                    {safeTrackUrl ? (
+                                        <a
+                                            href={safeTrackUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="font-medium text-foreground no-underline decoration-transparent transition-colors hover:text-primary hover:no-underline"
+                                        >
+                                            {nowPlaying.title}
+                                        </a>
+                                    ) : (
+                                        <span className="font-medium text-foreground">
+                                            {nowPlaying.title}
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="text-sm text-muted-foreground">
                                     Duration:{" "}

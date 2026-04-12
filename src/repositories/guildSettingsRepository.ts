@@ -48,7 +48,8 @@ export async function replaceGuildSettingsStoreInDatabase(
     const prisma = getPrismaClient()
     const guildIds = Object.keys(store)
 
-    await prisma.$transaction(async (tx) => {
+    const rowsWritten = await prisma.$transaction(async (tx) => {
+        let count = 0
         for (const guildId of guildIds) {
             const settings = store[guildId]
             const payload = {
@@ -69,16 +70,18 @@ export async function replaceGuildSettingsStoreInDatabase(
                 },
                 update: payload,
             })
+            count += 1
         }
 
-        await tx.guildSettings.deleteMany({
+        const deleted = await tx.guildSettings.deleteMany({
             where: {
                 guildId: {
                     notIn: guildIds.length > 0 ? guildIds : ["__never__"],
                 },
             },
         })
+        return count + deleted.count
     })
 
-    return { rowsWritten: guildIds.length }
+    return { rowsWritten }
 }

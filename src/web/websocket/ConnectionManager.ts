@@ -165,11 +165,16 @@ export class ConnectionManager {
             const meta = this.socketMeta.get(socket)
             if (!meta || socket.readyState !== WebSocket.OPEN) continue
             void (async () => {
-                const allowed = await this.canViewPlayer(socket, guildId, meta.userId)
-                if (!allowed) return
-                const payload = factory(meta.userId)
-                if (!payload) return
-                socket.send(JSON.stringify(payload))
+                try {
+                    const allowed = await this.canViewPlayer(socket, guildId, meta.userId)
+                    if (!allowed) return
+                    const payload = factory(meta.userId)
+                    if (!payload) return
+                    socket.send(JSON.stringify(payload))
+                } catch (err: unknown) {
+                    const message = err instanceof Error ? err.message : String(err)
+                    webPlayerWarn("broadcastWithResolver per-socket error", { guildId, message })
+                }
             })()
         }
     }

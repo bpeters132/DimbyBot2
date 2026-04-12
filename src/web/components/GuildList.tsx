@@ -47,7 +47,7 @@ export function GuildList({ result }: GuildListProps) {
         ? rawList.map(parseSafeGuildListItem).filter((g): g is GuildListItem => g !== null)
         : null
 
-    if (!guildsList) {
+    if (!rawList || !guildsList) {
         return (
             <div className="rounded border bg-card p-4 text-card-foreground">
                 <p>Unable to display the guild list (invalid response).</p>

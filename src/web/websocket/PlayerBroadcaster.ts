@@ -27,10 +27,11 @@ class PlayerBroadcaster {
         type: BroadcastEventType
     ): Promise<void> {
         try {
-            const { player: p, queueSummaries, currentTrack } = await buildPlayerBroadcastData(
-                guildId,
-                player
-            )
+            const {
+                player: p,
+                queueSummaries,
+                currentTrack,
+            } = await buildPlayerBroadcastData(guildId, player)
 
             connectionManager.broadcastWithResolver(guildId, (userId) => {
                 try {
@@ -74,26 +75,35 @@ class PlayerBroadcaster {
 
     /** Push voice-related dashboard fields to every subscribed user (bot moves use the bot’s id, not the viewer’s). */
     broadcastGuildVoiceState(guildId: string): void {
-        const client = tryGetBotClient()
-        if (!client?.lavalink) {
-            return
-        }
-        const player = client.lavalink.getPlayer(guildId) ?? null
-        connectionManager.broadcastWithResolver(guildId, (socketUserId) => {
-            const { inVoiceWithBot, botInVoiceChannel, canQueueTracks } = summarizeVoiceForWeb(
-                guildId,
-                socketUserId,
-                player
-            )
-            return {
-                type: "voiceStateChange",
-                guildId,
-                userId: socketUserId,
-                inVoiceWithBot,
-                botInVoiceChannel,
-                canQueueTracks,
+        try {
+            const client = tryGetBotClient()
+            if (!client?.lavalink) {
+                return
             }
-        })
+            const player = client.lavalink.getPlayer(guildId) ?? null
+            connectionManager.broadcastWithResolver(guildId, (socketUserId) => {
+                const { inVoiceWithBot, botInVoiceChannel, canQueueTracks } = summarizeVoiceForWeb(
+                    guildId,
+                    socketUserId,
+                    player
+                )
+                return {
+                    type: "voiceStateChange",
+                    guildId,
+                    userId: socketUserId,
+                    inVoiceWithBot,
+                    botInVoiceChannel,
+                    canQueueTracks,
+                }
+            })
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error)
+            console.error("[PlayerBroadcaster] broadcastGuildVoiceState failed", {
+                guildId,
+                message,
+                error,
+            })
+        }
     }
 }
 

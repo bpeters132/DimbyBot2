@@ -4,6 +4,15 @@ import path from "path"
 const nextConfig = {
     reactStrictMode: true,
     output: "standalone",
+    images: {
+        remotePatterns: [
+            {
+                protocol: "https",
+                hostname: "cdn.discordapp.com",
+                pathname: "/**",
+            },
+        ],
+    },
     experimental: {
         externalDir: true,
     },

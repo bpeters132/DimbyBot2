@@ -71,9 +71,9 @@ export function StatusChecker() {
                                 {statusLabel(data.database.ok)}
                             </span>
                         </div>
-                        {/* {data.database.message ? (
+                        {data.database.message ? (
                             <p className="text-xs text-muted-foreground">{data.database.message}</p>
-                        ) : null} */}
+                        ) : null}
                     </li>
                     <li className="space-y-1 border-t border-border pt-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -84,9 +84,9 @@ export function StatusChecker() {
                                 {statusLabel(data.botApi.ok)}
                             </span>
                         </div>
-                        {/* {data.botApi.message ? (
+                        {data.botApi.message ? (
                             <p className="text-xs text-muted-foreground">{data.botApi.message}</p>
-                        ) : null} */}
+                        ) : null}
                     </li>
                 </ul>
             ) : null}

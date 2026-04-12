@@ -3,7 +3,7 @@ import type BotClient from "../../lib/BotClient.js"
 let botClient: BotClient | null = null
 
 export class BotClientNotInitializedError extends Error {
-    code = "BOT_CLIENT_NOT_INITIALIZED"
+    public readonly code = "BOT_CLIENT_NOT_INITIALIZED"
 
     constructor() {
         super("Bot client is not initialized yet.")

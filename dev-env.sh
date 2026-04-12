@@ -2,6 +2,8 @@
 
 # Simple script to manage the development environment
 
+set -euo pipefail
+
 # Ensure we are in the script's directory (project root)
 cd "$(dirname "$0")" || exit 1
 
@@ -24,8 +26,8 @@ if [ "$#" -eq 0 ]; then
   usage
 fi
 
-# Command aliases for docker-compose using dev overrides
-DC="docker compose -f docker-compose.yml -f docker-compose.dev.yml"
+# Command aliases for docker-compose using dev overrides (array: safe with spaces in paths)
+DC=(docker compose -f docker-compose.yml -f docker-compose.dev.yml)
 
 # Parse command
 COMMAND=$1
@@ -34,32 +36,32 @@ shift # Remove the first argument (the command)
 case $COMMAND in
   up)
     echo "Starting development environment..."
-    $DC up --build -d "$@" # Build if needed, run detached
+    "${DC[@]}" up --build -d "$@" # Build if needed, run detached
     ;;
   down)
     echo "Stopping development environment (volumes kept)..."
-    $DC down "$@"
+    "${DC[@]}" down "$@"
     ;;
   down-volumes)
     echo "Stopping development environment and removing volumes..."
-    $DC down -v "$@"
+    "${DC[@]}" down -v "$@"
     ;;
   build)
     echo "Building development images..."
-    $DC build "$@"
+    "${DC[@]}" build "$@"
     ;;
   rebuild)
     echo "Rebuilding development environment (down, build, up)..."
     echo "Stopping..."
-    $DC down # Keep volumes so Postgres guild settings and auth data persist
+    "${DC[@]}" down # Keep volumes so Postgres guild settings and auth data persist
     echo "Building..."
-    $DC build "$@" # Build images, pass any extra args
+    "${DC[@]}" build "$@" # Build images, pass any extra args
     echo "Starting..."
-    $DC up -d # Start detached, build already done
+    "${DC[@]}" up -d "$@" # Match build service selection when args are passed
     ;;
   logs)
     echo "Following logs..."
-    $DC logs -f "$@"
+    "${DC[@]}" logs -f "$@"
     ;;
   restart)
     SERVICE=$1
@@ -68,7 +70,7 @@ case $COMMAND in
       exit 1
     fi
     echo "Restarting service '$SERVICE'..."
-    $DC restart "$SERVICE"
+    "${DC[@]}" restart "$SERVICE"
     ;;
   exec)
     SERVICE=$1
@@ -83,7 +85,7 @@ case $COMMAND in
       exit 1
     fi
     echo "Executing '${CMD[*]}' in service '$SERVICE'..."
-    $DC exec "$SERVICE" "${CMD[@]}"
+    "${DC[@]}" exec "$SERVICE" "${CMD[@]}"
     ;;
   *)
     usage
@@ -91,4 +93,3 @@ case $COMMAND in
 esac
 
 echo "Done."
-exit 0

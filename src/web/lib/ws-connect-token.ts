@@ -6,10 +6,14 @@ const SEP = "."
  * Signed, short-lived token so the browser can open a WebSocket on the bot port (different origin)
  * where session cookies are not sent. Minted by Next (`GET /api/ws-ticket`), verified on upgrade.
  */
+function wsConnectHmacKey(secret: string): Buffer {
+    return Buffer.from(secret, "base64")
+}
+
 export function createWsConnectToken(userId: string, secret: string, ttlSeconds = 120): string {
     const exp = Math.floor(Date.now() / 1000) + ttlSeconds
     const payload = Buffer.from(JSON.stringify({ userId, exp }), "utf8").toString("base64url")
-    const sig = createHmac("sha256", secret).update(payload).digest("base64url")
+    const sig = createHmac("sha256", wsConnectHmacKey(secret)).update(payload).digest("base64url")
     return `${payload}${SEP}${sig}`
 }
 
@@ -19,14 +23,13 @@ export function parseWsConnectToken(token: string, secret: string): string | nul
     if (i <= 0) return null
     const payload = token.slice(0, i)
     const sig = token.slice(i + 1)
-    const expected = createHmac("sha256", secret).update(payload).digest("base64url")
+    const expected = createHmac("sha256", wsConnectHmacKey(secret))
+        .update(payload)
+        .digest("base64url")
     try {
         if (
             sig.length !== expected.length ||
-            !timingSafeEqual(
-                Buffer.from(sig, "base64url"),
-                Buffer.from(expected, "base64url")
-            )
+            !timingSafeEqual(Buffer.from(sig, "base64url"), Buffer.from(expected, "base64url"))
         ) {
             return null
         }

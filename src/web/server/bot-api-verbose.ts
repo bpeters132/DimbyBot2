@@ -17,7 +17,9 @@ const redactedKeysLower = new Set([
     "access_token",
     "auth",
     "credentials",
-    "config",
+    "configsecret",
+    "dbconfig",
+    "client_config",
     "cookie",
     "set-cookie",
     "x-api-key",
@@ -26,7 +28,7 @@ const redactedKeysLower = new Set([
 ])
 
 const redactedKeysNormalized = new Set(
-    Array.from(redactedKeysLower).map((k) => k.replace(/[^a-z0-9]+/g, "")),
+    Array.from(redactedKeysLower).map((k) => k.replace(/[^a-z0-9]+/g, ""))
 )
 
 /** Lowercases and strips non-alphanumerics for fuzzy header / key matching. */
@@ -37,18 +39,21 @@ function normalizeSecretKey(key: string): string {
 function shouldRedactKey(key: string): boolean {
     const lower = key.toLowerCase()
     if (redactedKeysLower.has(lower)) return true
+    if (/(^|[^a-z0-9])config[^a-z0-9]*(secret|token|password|key)([^a-z0-9]|$)/i.test(key)) {
+        return true
+    }
     const norm = normalizeSecretKey(key)
     if (redactedKeysNormalized.has(norm)) return true
     if (
         /(^|[^a-z0-9])(token|secret|password|apikey|credential|authorization|bearer|cookie)([^a-z0-9]|$)/i.test(
-            key,
+            key
         )
     ) {
         return true
     }
     if (
         /(apitoken|accesstoken|refreshtoken|idtoken|apisecret|clientsecret|privatekey|sessionid)/i.test(
-            norm,
+            norm
         )
     ) {
         return true

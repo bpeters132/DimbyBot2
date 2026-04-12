@@ -1,7 +1,7 @@
 import { auth } from "../../web/auth-node.js"
 import { fetchDiscordUserGuilds } from "../../util/discordUserGuilds.js"
 import { getAuthenticatedSession } from "../../web/lib/api-auth.js"
-import { getBotClient } from "../../web/lib/botClient.js"
+import { getBotClient, tryGetBotClient } from "../../web/lib/botClient.js"
 import type { ApiResponse } from "../../types/apiPayloads.js"
 import type { GuildListResponse } from "../../types/web.js"
 
@@ -38,7 +38,12 @@ export async function guildListGET(
         })) as { accessToken?: string } | null
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
-        console.error("[guildListGET] getAccessToken threw", { message })
+        const client = tryGetBotClient()
+        if (client) {
+            client.error("[guildListGET] getAccessToken threw", { message, err })
+        } else {
+            console.error("[guildListGET] getAccessToken threw", { message, err })
+        }
         return {
             status: 500,
             body: {

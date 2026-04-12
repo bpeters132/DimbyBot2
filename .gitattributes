@@ -1,3 +1,2 @@
 *.sh text eol=lf
-dev-env.sh text eol=lf
 docker-compose*.yml text eol=lf

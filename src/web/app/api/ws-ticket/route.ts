@@ -1,6 +1,7 @@
 import { headers } from "next/headers"
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
+import type { AuthenticatedSession } from "@/lib/api-auth"
 import { createWsConnectToken } from "@/lib/ws-connect-token"
 
 /**
@@ -19,13 +20,13 @@ export async function GET(): Promise<NextResponse> {
     try {
         const session = (await auth.api.getSession({
             headers: await headers(),
-        })) as { user?: { id?: string } } | null
+        })) as AuthenticatedSession | null
 
         if (!session?.user?.id) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
-        const token = createWsConnectToken(session.user.id, secret)
+        const token = createWsConnectToken(session.user.id, secret, 60)
         return NextResponse.json({ token }, { headers: { "Cache-Control": "no-store" } })
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "unknown"

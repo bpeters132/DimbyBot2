@@ -8,12 +8,11 @@ export function resolveWebRequesterDiscordId(
     | { ok: true; requesterId: string }
     | { ok: false; status: number; error: string; details?: string } {
     const body =
-        typeof rawBody === "object" && rawBody !== null
-            ? (rawBody as Record<string, unknown>)
-            : {}
+        typeof rawBody === "object" && rawBody !== null ? (rawBody as Record<string, unknown>) : {}
     const fromBody = body.requesterDiscordUserId
     if (fromBody !== undefined && fromBody !== null) {
-        if (typeof fromBody !== "string" || !fromBody.trim()) {
+        const trimmed = typeof fromBody === "string" ? fromBody.trim() : ""
+        if (typeof fromBody !== "string" || !trimmed) {
             return {
                 ok: false,
                 status: 400,
@@ -21,7 +20,6 @@ export function resolveWebRequesterDiscordId(
                 details: "Must be a non-empty string when provided.",
             }
         }
-        const trimmed = fromBody.trim()
         if (trimmed !== sessionDiscordUserId) {
             return {
                 ok: false,

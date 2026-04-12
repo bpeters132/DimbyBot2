@@ -73,6 +73,7 @@ export async function playerPlayPOST(
         const textChannelId = await resolveWebDashboardTextChannelId(guild)
 
         let player = client.lavalink.getPlayer(guildId)
+        let createdHere = false
         if (!player) {
             player = await client.lavalink.createPlayer({
                 guildId,
@@ -81,11 +82,18 @@ export async function playerPlayPOST(
                 selfDeaf: true,
                 volume: 100,
             })
+            createdHere = true
+        }
+
+        const cleanupCreatedPlayer = async (): Promise<void> => {
+            if (!createdHere) return
+            await client.lavalink.destroyPlayer(guildId).catch(() => undefined)
         }
 
         try {
             await ensurePlayerConnected(client, player, voiceChannel)
         } catch (err: unknown) {
+            await cleanupCreatedPlayer()
             const message = err instanceof Error ? err.message : "Voice connection failed."
             return {
                 status: 503,
@@ -121,9 +129,7 @@ export async function playerPlayPOST(
             player.queue.add(searchResult.tracks[0])
         }
 
-        if (player.queue.tracks.length > 0) {
-            await startPlaybackIfNeeded(player)
-        }
+        await startPlaybackIfNeeded(player)
 
         return {
             status: 200,

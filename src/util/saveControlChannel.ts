@@ -15,6 +15,11 @@ const storageDir = path.join(__dirname, "..", "..", "storage")
 let guildSettingsCache: GuildSettingsStore = {}
 let guildSettingsInitialized = false
 
+/** Returns whether {@link initializeGuildSettingsStore} has finished loading settings from the database. */
+export function isGuildSettingsInitialized(): boolean {
+    return guildSettingsInitialized
+}
+
 function cloneGuildSettingsStore(store: GuildSettingsStore): GuildSettingsStore {
     return structuredClone(store)
 }

@@ -86,7 +86,7 @@ services:
             - LOG_LEVEL=${LOG_LEVEL}
             - WEB_ENABLED=${WEB_ENABLED:-true}
             - WEB_PORT=${WEB_PORT:-3001}
-            - API_PROXY_TARGET=http://localhost:3001
+            - API_PROXY_TARGET=${API_PROXY_TARGET:-http://localhost:3001}
             # Optional absolute player WebSocket URL (ws/wss); when unset, the dashboard derives `/ws` from the browser URL.
             - WEBSOCKET_CLIENT_URL=${WEBSOCKET_CLIENT_URL:-}
             # Web auth secrets are validated by application startup when WEB_ENABLED=true.

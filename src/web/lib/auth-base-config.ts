@@ -11,8 +11,20 @@
  *
  * OAuth tokens on `Account` rows are sensitive: use a TLS `DATABASE_URL` in production and least-privilege DB roles.
  */
+function getRequiredEnv(
+    name: "CLIENT_ID" | "DISCORD_CLIENT_SECRET" | "BETTER_AUTH_SECRET" | "BETTER_AUTH_URL"
+): string {
+    const value = process.env[name]?.trim()
+    if (!value) {
+        throw new Error(`${name} is required for auth configuration.`)
+    }
+    return value
+}
+
 const betterAuthSecret = getRequiredEnv("BETTER_AUTH_SECRET")
 const betterAuthUrl = getRequiredEnv("BETTER_AUTH_URL")
+const discordOAuthClientId = getRequiredEnv("CLIENT_ID")
+const discordOAuthClientSecret = getRequiredEnv("DISCORD_CLIENT_SECRET")
 
 export const betterAuthBaseConfig = {
     secret: betterAuthSecret,
@@ -20,16 +32,14 @@ export const betterAuthBaseConfig = {
     trustedOrigins: [betterAuthUrl],
     socialProviders: {
         discord: {
-            clientId: getRequiredEnv("CLIENT_ID"),
-            clientSecret: getRequiredEnv("DISCORD_CLIENT_SECRET"),
+            clientId: discordOAuthClientId,
+            clientSecret: discordOAuthClientSecret,
             scope: ["identify", "guilds"],
             /**
              * Discord often omits `refresh_token` in refresh responses. Better Auth otherwise may clear the stored
              * refresh token and break `getAccessToken` → `/users/@me/guilds` after the first expiry.
              */
             refreshAccessToken: async (refreshToken: string) => {
-                const clientId = getRequiredEnv("CLIENT_ID")
-                const clientSecret = getRequiredEnv("DISCORD_CLIENT_SECRET")
                 const controller = new AbortController()
                 const timeoutHandle = setTimeout(() => controller.abort(), 10_000)
                 try {
@@ -37,8 +47,8 @@ export const betterAuthBaseConfig = {
                         method: "POST",
                         headers: { "Content-Type": "application/x-www-form-urlencoded" },
                         body: new URLSearchParams({
-                            client_id: clientId,
-                            client_secret: clientSecret,
+                            client_id: discordOAuthClientId,
+                            client_secret: discordOAuthClientSecret,
                             grant_type: "refresh_token",
                             refresh_token: refreshToken,
                         }),
@@ -77,14 +87,4 @@ export const betterAuthBaseConfig = {
             maxAge: 5 * 60,
         },
     },
-}
-
-function getRequiredEnv(
-    name: "CLIENT_ID" | "DISCORD_CLIENT_SECRET" | "BETTER_AUTH_SECRET" | "BETTER_AUTH_URL"
-): string {
-    const value = process.env[name]?.trim()
-    if (!value) {
-        throw new Error(`${name} is required for auth configuration.`)
-    }
-    return value
 }

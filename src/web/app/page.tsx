@@ -5,11 +5,10 @@ import { readSessionSafe } from "@/server/auth-session"
 
 export default async function HomePage() {
     const sessionResult = await readSessionSafe()
-    const sessionReadError = sessionResult.ok === false ? sessionResult : null
-
     if (sessionResult.ok && sessionResult.session?.user?.id) {
         redirect("/dashboard")
     }
+    const sessionReadError = sessionResult.ok === false ? sessionResult : null
 
     return (
         <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center px-6 text-center">

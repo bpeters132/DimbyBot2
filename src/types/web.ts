@@ -55,8 +55,8 @@ export interface PlayerTrackSummary {
 export interface QueueTrackSummary extends PlayerTrackSummary {
     author: string | null
     sourceName: string | null
-    /** Lavalink track identifier when present (stable list keys for the dashboard). */
-    encoded?: string | null
+    /** Lavalink track identifier when present (stable list keys for the dashboard); null when unknown. */
+    encoded: string | null
 }
 
 export interface PlayerStateResponse {

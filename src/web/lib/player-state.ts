@@ -11,7 +11,7 @@ import {
     type DashboardRequesterSnapshot,
 } from "../../util/dashboardRequesterSnapshot.js"
 import { getRequesterUserId } from "../../util/rrqDisconnect.js"
-import { getBotClient, tryGetBotClient } from "./botClient.js"
+import { tryGetBotClient } from "./botClient.js"
 import { webPlayerDebug, webPlayerTrace, webPlayerWarn } from "./web-player-debug-log.js"
 
 const MAX_QUEUE_LIMIT = 100
@@ -317,7 +317,11 @@ export function resolveBotVoiceChannelId(guildId: string, player?: Player | null
     if (p?.voiceChannelId) {
         return p.voiceChannelId
     }
-    const guild = getBotClient().guilds.cache.get(guildId)
+    const client = tryGetBotClient()
+    if (!client) {
+        return null
+    }
+    const guild = client.guilds.cache.get(guildId)
     return guild?.members.me?.voice?.channelId ?? null
 }
 
@@ -327,7 +331,8 @@ export function summarizeVoiceForWeb(
     userId: string,
     player?: unknown
 ): { inVoiceWithBot: boolean; botInVoiceChannel: boolean; canQueueTracks: boolean } {
-    const guild = getBotClient().guilds.cache.get(guildId)
+    const client = tryGetBotClient()
+    const guild = client?.guilds.cache.get(guildId)
     const userVoiceChannelId = guild?.voiceStates.cache.get(userId)?.channelId ?? null
     const botVoiceChannelId = resolveBotVoiceChannelId(guildId, isPlayer(player) ? player : null)
     const botInVoiceChannel = botVoiceChannelId !== null

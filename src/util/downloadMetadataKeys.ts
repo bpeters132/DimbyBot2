@@ -48,9 +48,9 @@ export function downloadMetadataFileBelongsToGuild(
         return true
     }
     const legacy = metadata[fileName]
-    // Temporary migration fallback: legacy JSON keys were fileName-only with optional guildId.
-    // Matching undefined/"" lets old rows be attributed during one-time migration; remove once all
-    // stores use composite keys so we never treat cross-guild legacy rows as belonging to "any" guild.
+    // TODO(dimbybot#legacy-metadata): legacy fileName-only keys with missing guildId match any guild —
+    // misattributes during migration. Populate guildId in migration/reconciliation (target: remove by
+    // 2026-07-01 or when tracking issue is closed). Same caveat applies to other legacy fallbacks below.
     return Boolean(
         legacy &&
         (legacy.guildId === guildId || legacy.guildId === undefined || legacy.guildId === "")
@@ -68,6 +68,7 @@ export function downloadMetadataEntryMatchesGuild(
     if (parsed.guildId !== null) {
         return parsed.guildId === guildId
     }
+    // TODO(dimbybot#legacy-metadata): see downloadMetadataFileBelongsToGuild — reconcile guildId on legacy rows.
     return info.guildId === guildId || info.guildId === undefined || info.guildId === ""
 }
 
@@ -84,6 +85,7 @@ export function downloadMetadataKeysForFile(
     }
     if (fileName in metadata) {
         const legacy = metadata[fileName] as { guildId?: string } | undefined
+        // TODO(dimbybot#legacy-metadata): see downloadMetadataFileBelongsToGuild — reconcile guildId on legacy rows.
         if (
             legacy &&
             (legacy.guildId === guildId || legacy.guildId === undefined || legacy.guildId === "")

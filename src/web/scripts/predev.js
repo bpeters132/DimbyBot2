@@ -25,6 +25,8 @@ try {
             if (code === "ESRCH") {
                 fs.rmSync(p, { force: true })
                 console.log("Removed stale Next dev lock")
+            } else if (code === "EPERM") {
+                console.log("Next dev lock owned by another user (EPERM), leaving lock")
             } else {
                 throw e
             }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { authClient } from "@/auth-client"
 import { ModeToggle } from "@/components/ModeToggle"
@@ -38,10 +39,12 @@ export function UserHeader() {
                 </div>
                 <ModeToggle />
                 {session?.user?.image ? (
-                    <img
+                    <Image
                         src={session.user.image}
                         alt="avatar"
-                        className="h-8 w-8 rounded-full border"
+                        width={32}
+                        height={32}
+                        className="rounded-full border"
                     />
                 ) : null}
                 <button

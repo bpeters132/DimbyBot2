@@ -33,25 +33,30 @@ const playerStartLocks = new WeakMap<Player, Promise<void>>()
  * Prevents concurrent check-then-play races by serializing start attempts per player.
  */
 export async function startPlaybackIfNeeded(player: Player): Promise<void> {
-    const existingLock = playerStartLocks.get(player)
-    if (existingLock) {
-        await existingLock
+    // After waiting on another caller’s lock, re-check: that run may have left playback idle while
+    // new tracks were enqueued, so we must not return without attempting start under our own lock.
+    for (;;) {
+        const existingLock = playerStartLocks.get(player)
+        if (existingLock) {
+            await existingLock
+            continue
+        }
+
+        const startPromise = (async () => {
+            if (!player.playing && player.queue.tracks.length > 0) {
+                await player.play()
+            }
+        })()
+
+        playerStartLocks.set(player, startPromise)
+        try {
+            await startPromise
+        } finally {
+            if (playerStartLocks.get(player) === startPromise) {
+                playerStartLocks.delete(player)
+            }
+        }
         return
-    }
-
-    const startPromise = (async () => {
-        if (!player.playing && player.queue.tracks.length > 0) {
-            await player.play()
-        }
-    })()
-
-    playerStartLocks.set(player, startPromise)
-    try {
-        await startPromise
-    } finally {
-        if (playerStartLocks.get(player) === startPromise) {
-            playerStartLocks.delete(player)
-        }
     }
 }
 
@@ -269,7 +274,9 @@ export async function handleQueryAndPlay(
                     const entries = await fs.promises.readdir(downloadsDir)
                     files = entries
                         .filter((file) => file.endsWith(".wav"))
-                        .filter((file) => downloadMetadataFileBelongsToGuild(metadata, file, guildId))
+                        .filter((file) =>
+                            downloadMetadataFileBelongsToGuild(metadata, file, guildId)
+                        )
                         .map((f) => ({
                             name: f,
                             path: path.join(downloadsDir, f),

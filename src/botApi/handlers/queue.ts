@@ -217,15 +217,26 @@ export async function queueDELETE(
     }
 
     const player = getBotClient().lavalink.getPlayer(guildId)
-    if (player) {
-        player.queue.splice(0, player.queue.tracks.length)
-    }
-
-    return {
-        status: 200,
-        body: {
-            ok: true,
-            data: await toQueueResponse(guildId, player ?? null),
-        },
+    try {
+        if (player) {
+            await player.queue.splice(0, player.queue.tracks.length)
+        }
+        return {
+            status: 200,
+            body: {
+                ok: true,
+                data: await toQueueResponse(guildId, player ?? null),
+            },
+        }
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        const details = err instanceof Error ? (err.stack ?? err.message) : String(err)
+        return {
+            status: 500,
+            body: {
+                ok: false,
+                error: { error: message, details },
+            },
+        }
     }
 }

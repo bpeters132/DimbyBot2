@@ -6,25 +6,7 @@ import type { PrismaClient as PrismaClientType } from "@prisma/client"
 
 const { PrismaClient } = prismaClientPkg
 
-const databaseUrl = process.env.DATABASE_URL
-if (!databaseUrl || databaseUrl.trim() === "") {
-    throw new Error(
-        "DATABASE_URL environment variable is required but not set. Please configure DATABASE_URL before starting the application."
-    )
-}
-
-const adapter = new PrismaPg({
-    connectionString: databaseUrl,
-})
-const prisma = new PrismaClient({ adapter })
-
-function sanitizeMigrateOutput(text: string): string {
-    return text
-        .replace(/postgres(?:ql)?:\/\/[^\s"'`]+/gi, "[REDACTED_DATABASE_URL]")
-        .replace(/(password|passwd|pwd)\s*[=:]\s*[^\s"'`]+/gi, "$1=[REDACTED]")
-        .replace(/(token|secret|apikey|api[_-]?key)\s*[=:]\s*[^\s"'`]+/gi, "$1=[REDACTED]")
-        .replace(/Bearer\s+[^\s"'`]+/gi, "Bearer [REDACTED]")
-}
+let prisma: PrismaClientType | undefined
 
 function getLogger(loggerInstance?: Partial<LoggerInterface>): LoggerInterface {
     if (
@@ -49,8 +31,21 @@ function getLogger(loggerInstance?: Partial<LoggerInterface>): LoggerInterface {
     }
 }
 
-/** Returns the process-wide Prisma client singleton. */
+function sanitizeMigrateOutput(text: string): string {
+    return text
+        .replace(/postgres(?:ql)?:\/\/[^\s"'`]+/gi, "[REDACTED_DATABASE_URL]")
+        .replace(/(password|passwd|pwd)\s*[=:]\s*[^\s"'`]+/gi, "$1=[REDACTED]")
+        .replace(/(token|secret|apikey|api[_-]?key)\s*[=:]\s*[^\s"'`]+/gi, "$1=[REDACTED]")
+        .replace(/Bearer\s+[^\s"'`]+/gi, "Bearer [REDACTED]")
+}
+
+/** Returns the process-wide Prisma client singleton after {@link initializeDatabaseConnection}. */
 export function getPrismaClient(): PrismaClientType {
+    if (!prisma) {
+        throw new Error(
+            "Database connection has not been initialized. Call initializeDatabaseConnection() first."
+        )
+    }
     return prisma
 }
 
@@ -59,6 +54,18 @@ export async function initializeDatabaseConnection(
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<void> {
     const logger = getLogger(loggerInstance)
+    const databaseUrl = process.env.DATABASE_URL?.trim()
+    if (!databaseUrl) {
+        throw new Error(
+            "DATABASE_URL environment variable is required but not set. Please configure DATABASE_URL before starting the application."
+        )
+    }
+    if (!prisma) {
+        const adapter = new PrismaPg({
+            connectionString: databaseUrl,
+        })
+        prisma = new PrismaClient({ adapter })
+    }
     logger.info("[Database] Connecting to database...")
     await prisma.$connect()
     await prisma.$queryRaw`SELECT 1`
@@ -144,6 +151,9 @@ export async function runPrismaMigrateDeploy(
 /** Attempts to close the Prisma connection gracefully. */
 export async function disconnectDatabase(loggerInstance?: Partial<LoggerInterface>): Promise<void> {
     const logger = getLogger(loggerInstance)
+    if (!prisma) {
+        return
+    }
     try {
         await prisma.$disconnect()
         logger.info("[Database] Database connection closed.")

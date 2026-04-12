@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from "discord.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import fs from "fs"
+import { access as fsAccess, stat as fsStat } from "fs/promises"
 import path from "path"
 import { formatDistanceToNow } from "date-fns"
 import type BotClient from "../../lib/BotClient.js"
@@ -114,36 +115,43 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         client.debug(`[Downloads] Executing ${subcommand} subcommand`)
 
         if (subcommand === "list") {
+            await interaction.deferReply({ ephemeral: true })
+
             const dedupedEntries = dedupeMetadataByFileName(metadata, guildId)
 
-            const files = [...dedupedEntries.values()]
-                .map(({ key, info }) => {
+            const fileRows = await Promise.all(
+                [...dedupedEntries.values()].map(async ({ key, info }) => {
                     const file = parseDownloadMetadataStoreKey(key).fileName
                     const filePath = path.join(downloadsDir, file)
-                    if (!fs.existsSync(filePath)) return null
-                    const stats = fs.statSync(filePath)
-                    const row: {
-                        name: string
-                        size: number
-                        date: Date
-                        path: string
-                        originalUrl?: string
-                    } = {
-                        name: file.replace(".wav", ""),
-                        size: stats.size,
-                        date: info.downloadDate ? new Date(info.downloadDate) : stats.mtime,
-                        path: filePath,
+                    try {
+                        await fsAccess(filePath)
+                        const stats = await fsStat(filePath)
+                        const row: {
+                            name: string
+                            size: number
+                            date: Date
+                            path: string
+                            originalUrl?: string
+                        } = {
+                            name: file.replace(".wav", ""),
+                            size: stats.size,
+                            date: info.downloadDate ? new Date(info.downloadDate) : stats.mtime,
+                            path: filePath,
+                        }
+                        if (info.originalUrl) row.originalUrl = info.originalUrl
+                        return row
+                    } catch {
+                        return null
                     }
-                    if (info.originalUrl) row.originalUrl = info.originalUrl
-                    return row
                 })
+            )
+            const files = fileRows
                 .filter((x): x is NonNullable<typeof x> => x != null)
                 .sort((a, b) => b.date.getTime() - a.date.getTime())
 
             if (files.length === 0) {
-                return interaction.reply({
+                return interaction.editReply({
                     content: "No downloaded files found for this server.",
-                    ephemeral: true,
                 })
             }
 
@@ -168,7 +176,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             const maxContentLength = 2000
             const headerFits = header.length < maxContentLength
             if (headerFits && header.length + fileList.length <= maxContentLength) {
-                return interaction.reply({
+                return interaction.editReply({
                     content: header + fileList,
                 })
             }
@@ -191,14 +199,14 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             }
 
             if (chunks.length === 0) {
-                return interaction.reply({
+                return interaction.editReply({
                     content: headerFits ? header : `**Downloaded Files (${files.length})**\n`,
                 })
             }
 
-            await interaction.reply({ content: chunks[0] })
+            await interaction.editReply({ content: chunks[0] })
             for (const chunk of chunks.slice(1)) {
-                await interaction.followUp({ content: chunk })
+                await interaction.followUp({ content: chunk, ephemeral: true })
             }
             return
         }

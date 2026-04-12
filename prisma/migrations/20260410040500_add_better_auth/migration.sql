@@ -41,6 +41,8 @@ CREATE TABLE "account" (
     CONSTRAINT "account_pkey" PRIMARY KEY ("id")
 );
 
+CREATE UNIQUE INDEX "account_providerId_accountId_key" ON "account"("providerId", "accountId");
+
 CREATE TABLE "verification" (
     "id" TEXT NOT NULL,
     "identifier" TEXT NOT NULL,
