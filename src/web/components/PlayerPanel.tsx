@@ -503,11 +503,19 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
         }
     }
 
-    const safeThumbnailUrl =
-        nowPlaying?.thumbnailUrl && isSafeHttpUrl(nowPlaying.thumbnailUrl)
-            ? nowPlaying.thumbnailUrl
-            : null
-    const safeTrackUrl = nowPlaying?.uri && isSafeHttpUrl(nowPlaying.uri) ? nowPlaying.uri : "#"
+    const sanitizeHttpUrl = (value?: string | null): string | null => {
+        if (!value) return null
+        try {
+            const parsed = new URL(value)
+            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null
+            return parsed.toString()
+        } catch {
+            return null
+        }
+    }
+
+    const safeThumbnailUrl = sanitizeHttpUrl(nowPlaying?.thumbnailUrl)
+    const safeTrackUrl = sanitizeHttpUrl(nowPlaying?.uri) ?? "#"
 
     if (loading) {
         return <div className="text-muted-foreground">Loading player...</div>
