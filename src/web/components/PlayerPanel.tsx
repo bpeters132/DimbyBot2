@@ -99,8 +99,16 @@ function QueueTrackRow({ track, queueIndex }: QueueTrackRowProps) {
             return null
         }
     }, [track.uri])
-    const safeQueueThumbnailUrl =
-        track.thumbnailUrl && isSafeHttpUrl(track.thumbnailUrl) ? track.thumbnailUrl : null
+    const safeQueueThumbnailUrl = useMemo(() => {
+        if (!track.thumbnailUrl) return null
+        try {
+            const parsed = new URL(track.thumbnailUrl)
+            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null
+            return parsed.toString()
+        } catch {
+            return null
+        }
+    }, [track.thumbnailUrl])
 
     const popoverLayout = anchor
         ? clampQueueTrackPopoverPoint(anchor.x + QUEUE_TRACK_POPOVER_CURSOR_GAP_PX, anchor.y)
