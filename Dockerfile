@@ -8,9 +8,13 @@ ARG BETTER_AUTH_URL=http://localhost:3000
 ARG BETTER_AUTH_SECRET=fake-better-auth-secret
 ARG CLIENT_ID=000000000000000000
 ARG DISCORD_CLIENT_SECRET=build-time-discord-client-secret
+ARG NEXT_PUBLIC_WS_URL=ws://localhost:3001/ws
 ENV BETTER_AUTH_URL=${BETTER_AUTH_URL}
+ENV BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
 ENV CLIENT_ID=${CLIENT_ID}
-# BETTER_AUTH_SECRET and DISCORD_CLIENT_SECRET must be injected at runtime (compose/env), not image build.
+ENV DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
+ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
+# Build-time placeholders for Next.js only; runtime secrets still come from compose/env.
 
 COPY docker/ytdlp-requirements.txt /tmp/ytdlp-requirements.txt
 # Native build tools (e.g. sodium) + ffmpeg for any runtime checks during build.
@@ -32,7 +36,7 @@ COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
 
 COPY . .
-RUN yarn db:generate && yarn build:bot \
+RUN yarn db:generate && yarn build:bot && yarn web:install && yarn build:web \
     && yarn install --production --frozen-lockfile \
     && test -f node_modules/.prisma/client/default.js
 
@@ -45,7 +49,8 @@ WORKDIR /app
 RUN apk add --no-cache \
     python3 \
     ffmpeg \
-    su-exec
+    su-exec \
+    wget
 
 COPY --from=builder /opt/venv /opt/venv
 RUN ln -sf /opt/venv/bin/yt-dlp /usr/bin/yt-dlp
@@ -55,6 +60,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+COPY --from=builder /app/src/web/.next/standalone ./src/web/.next/standalone
+COPY --from=builder /app/src/web/.next/static ./src/web/.next/static
 
 # Runtime environment (inject via compose/K8s; do not bake secrets into the image):
 #   Required for Lavalink: LAVALINK_HOST, LAVALINK_PORT, LAVALINK_PASSWORD, LAVALINK_NODE_ID, LAVALINK_SECURE

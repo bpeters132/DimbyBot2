@@ -4,7 +4,9 @@ env:
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     REGISTRY: ghcr.io
     IMAGE_BOT: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:latest
+    IMAGE_BOT_SHA: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:${{ github.sha }}
     IMAGE_LAVALINK: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:latest
+    IMAGE_LAVALINK_SHA: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:${{ github.sha }}
 
 permissions:
     contents: read
@@ -21,17 +23,22 @@ on:
                 default: false
                 type: boolean
 
+concurrency:
+    group: deploy-${{ github.ref }}
+    cancel-in-progress: false
+
 jobs:
     validate-node-lts:
         runs-on: ubuntu-latest
+        timeout-minutes: 10
         permissions:
             contents: read
         steps:
             - name: Checkout code
-              uses: actions/checkout@v6
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
             - name: Set up Node.js (latest LTS)
-              uses: actions/setup-node@v5
+              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
               with:
                   node-version: "lts/*"
                   cache: "yarn"
@@ -41,6 +48,9 @@ jobs:
 
             - name: Install dependencies
               run: yarn install --frozen-lockfile
+
+            - name: Install web dependencies
+              run: yarn web:install --frozen-lockfile
 
             - name: Generate Prisma client
               run: yarn db:generate
@@ -54,40 +64,64 @@ jobs:
         needs: validate-node-lts
         if: ${{ github.event_name != 'workflow_dispatch' || !inputs.skip_build }}
         runs-on: ubuntu-latest
+        timeout-minutes: 25
         permissions:
             contents: read
             packages: write
         steps:
             - name: Checkout code
-              uses: actions/checkout@v6
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
             - name: Log in to GitHub Container Registry
-              run: |
-                  echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u "${{ github.actor }}" --password-stdin
+              uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Build bot image
-              run: |
-                  # Dockerfile is multi-stage: yarn install + yarn build (TypeScript → dist/), then runtime yarn install --production + copied dist/
-                  docker build -t "$IMAGE_BOT" -f Dockerfile .
+            - name: Build and push bot image
+              uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
+              with:
+                  context: .
+                  file: Dockerfile
+                  push: true
+                  tags: |
+                      ${{ env.IMAGE_BOT }}
+                      ${{ env.IMAGE_BOT_SHA }}
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
+                  provenance: true
+                  sbom: true
 
             - name: Verify bot image contains Prisma runtime assets
               run: |
-                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT" -c "test -f /app/dist/server.js"
-                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT" -c "test -f /app/prisma/schema.prisma"
-                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT" -c "test -d /app/prisma/migrations"
-                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT" -c "test -f /app/prisma.config.ts"
+                  docker pull "$IMAGE_BOT_SHA"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -f /app/dist/server.js"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -f /app/prisma/schema.prisma"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -d /app/prisma/migrations"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -f /app/prisma.config.ts"
+
+            - name: Verify bot image contains web build
+              run: |
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -f /app/src/web/.next/standalone/server.js || test -f /app/src/web/.next/standalone/src/web/server.js"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -d /app/src/web/.next/static"
 
             - name: Build lavalink image
               run: |
-                  docker build -t "$IMAGE_LAVALINK" -f Lavalink/Dockerfile ./Lavalink
+                  docker build -t "$IMAGE_LAVALINK" -t "$IMAGE_LAVALINK_SHA" -f Lavalink/Dockerfile ./Lavalink
 
             - name: Push bot image
               run: |
                   docker push "$IMAGE_BOT"
+                  docker push "$IMAGE_BOT_SHA"
 
             - name: Push lavalink image
               run: |
                   docker push "$IMAGE_LAVALINK"
+                  docker push "$IMAGE_LAVALINK_SHA"
 
     deploy:
         needs:
@@ -95,12 +129,13 @@ jobs:
             - build-and-push
         if: always() && needs.validate-node-lts.result == 'success' && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         permissions:
             contents: read
             packages: read
         steps:
             - name: Checkout code
-              uses: actions/checkout@v6
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
             # .env is loaded by docker compose; dimbybot receives Spotify + MusicBrainz vars via docker-compose.yml (autoplay).
             - name: Generate .env file
@@ -109,10 +144,15 @@ jobs:
                   BOT_TOKEN=${{ secrets.BOT_TOKEN }}
                   CLIENT_ID=${{ secrets.CLIENT_ID }}
                   DISCORD_CLIENT_SECRET=${{ secrets.DISCORD_CLIENT_SECRET }}
+                  BETTER_AUTH_SECRET=${{ secrets.BETTER_AUTH_SECRET }}
+                  BETTER_AUTH_URL=${{ secrets.BETTER_AUTH_URL }}
+                  NEXT_PUBLIC_WS_URL=${{ secrets.NEXT_PUBLIC_WS_URL }}
                   GUILD_ID=${{ secrets.GUILD_ID }}
                   OWNER_ID=${{ secrets.OWNER_ID }}
                   DEV_MODE=${{ secrets.DEV_MODE }}
                   LOG_LEVEL=${{ secrets.LOG_LEVEL }}
+                  WEB_ENABLED=true
+                  WEB_PORT=3001
                   LAVALINK_HOST=${{ secrets.LAVALINK_HOST }}
                   LAVALINK_PORT=${{ secrets.LAVALINK_PORT }}
                   LAVALINK_PASSWORD=${{ secrets.LAVALINK_PASSWORD }}
@@ -144,7 +184,7 @@ jobs:
                   EOF
 
             - name: Copy files to server
-              uses: appleboy/scp-action@v0.1.7
+              uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
               with:
                   host: ${{ secrets.DEPLOY_SERVER_HOST }}
                   username: ${{ secrets.DEPLOY_SERVER_USER }}
@@ -161,12 +201,11 @@ jobs:
                   set -e
                   cd /home/bot
                   export $(grep -v '^#' .env | xargs)
-                  sed -i "s|image: .*bot.*|image: ${BOT_IMAGE}|" docker-compose.yml
-                  sed -i "s|image: .*lavalink.*|image: ${LAVALINK_IMAGE}|" docker-compose.yml
                   echo "$GH_TOKEN" | /usr/bin/docker login ghcr.io -u "$GH_ACTOR" --password-stdin
                   /usr/bin/docker compose down
                   /usr/bin/docker compose pull
                   /usr/bin/docker compose up -d
+                  /usr/bin/docker image prune -f
                   EOS
 
                   # Create SSH key file with proper permissions
@@ -180,7 +219,7 @@ jobs:
                   rm -f deploy_key
 
             - name: Run deployment script on server
-              uses: appleboy/ssh-action@v1.0.3
+              uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
               with:
                   host: ${{ secrets.DEPLOY_SERVER_HOST }}
                   username: ${{ secrets.DEPLOY_SERVER_USER }}
@@ -188,3 +227,16 @@ jobs:
                   port: ${{ secrets.DEPLOY_SERVER_SSH_PORT }}
                   script: |
                       bash /home/bot/ci_deploy.sh
+
+            - name: Verify deployment health on server
+              uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
+              with:
+                  host: ${{ secrets.DEPLOY_SERVER_HOST }}
+                  username: ${{ secrets.DEPLOY_SERVER_USER }}
+                  key: ${{ secrets.SSH_PRIVATE_KEY }}
+                  port: ${{ secrets.DEPLOY_SERVER_SSH_PORT }}
+                  script: |
+                      set -e
+                      sleep 20
+                      curl --fail --silent http://127.0.0.1:3001/health >/dev/null
+                      curl --fail --silent http://127.0.0.1:3000/ >/dev/null

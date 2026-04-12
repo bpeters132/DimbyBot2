@@ -88,6 +88,60 @@ echo "Bot Entrypoint: lavaNodesConfig.js generated successfully."
 # ==============================================================================
 # Start the Bot Application
 # ==============================================================================
+# When WEB_ENABLED=true, run Next.js standalone alongside the bot process.
+
+resolve_next_server_entry() {
+  if [ -f /app/src/web/.next/standalone/server.js ]; then
+    echo "/app/src/web/.next/standalone/server.js"
+    return 0
+  fi
+  if [ -f /app/src/web/.next/standalone/src/web/server.js ]; then
+    echo "/app/src/web/.next/standalone/src/web/server.js"
+    return 0
+  fi
+  return 1
+}
+
+start_web_server() {
+  if [ "${WEB_ENABLED:-false}" != "true" ]; then
+    return 0
+  fi
+
+  NEXT_SERVER_ENTRY=$(resolve_next_server_entry || true)
+  if [ -z "$NEXT_SERVER_ENTRY" ]; then
+    echo "Bot Entrypoint: WEB_ENABLED=true but Next.js standalone build was not found." >&2
+    return 1
+  fi
+
+  echo "Bot Entrypoint: Starting Next.js web server from ${NEXT_SERVER_ENTRY}..."
+  if [ "$1" = "node-user" ]; then
+    su-exec node node "$NEXT_SERVER_ENTRY" &
+  else
+    node "$NEXT_SERVER_ENTRY" &
+  fi
+  WEB_PID=$!
+  echo "Bot Entrypoint: Next.js started (PID $WEB_PID) on port 3000"
+}
+
+forward_shutdown() {
+  if [ -n "${BOT_PID:-}" ] && kill -0 "$BOT_PID" >/dev/null 2>&1; then
+    kill "$BOT_PID" >/dev/null 2>&1 || true
+  fi
+  if [ -n "${WEB_PID:-}" ] && kill -0 "$WEB_PID" >/dev/null 2>&1; then
+    kill "$WEB_PID" >/dev/null 2>&1 || true
+  fi
+}
+
+wait_for_bot() {
+  wait "$BOT_PID"
+  BOT_EXIT_CODE=$?
+  if [ -n "${WEB_PID:-}" ] && kill -0 "$WEB_PID" >/dev/null 2>&1; then
+    kill "$WEB_PID" >/dev/null 2>&1 || true
+    wait "$WEB_PID" 2>/dev/null || true
+  fi
+  exit "$BOT_EXIT_CODE"
+}
+
 # When the container user is root (e.g. one-off `docker run --user 0`), fix volume ownership
 # then drop to `node`. Default image user is `node` (see Dockerfile) — then chown is skipped.
 # The 'exec' replaces this shell so the bot becomes PID 1 for signal handling.
@@ -101,8 +155,12 @@ if [ "$(id -u)" -eq 0 ]; then
     echo "Bot Entrypoint: Executing '$*' as node..."
     exec su-exec node "$@"
   fi
+  start_web_server "node-user"
   echo "Bot Entrypoint: Executing 'yarn start' as node..."
-  exec su-exec node yarn start
+  su-exec node yarn start &
+  BOT_PID=$!
+  trap forward_shutdown INT TERM
+  wait_for_bot
 fi
 
 mkdir -p /app/storage /app/node_modules/.prisma /app/node_modules/@prisma
@@ -111,5 +169,9 @@ if [ "$#" -gt 0 ]; then
   exec "$@"
 fi
 
+start_web_server
 echo "Bot Entrypoint: Executing 'yarn start'..."
-exec yarn start
+yarn start &
+BOT_PID=$!
+trap forward_shutdown INT TERM
+wait_for_bot
