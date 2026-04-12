@@ -40,6 +40,18 @@ function resolveDownloadMetadataJsonPath(): string | null {
     return resolveJsonPath("downloads/.metadata.json", "downloads/.metadata.json")
 }
 
+function isGuildSettingsStoreShape(parsed: unknown): parsed is GuildSettingsStore {
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return false
+    }
+    for (const [, settings] of Object.entries(parsed as Record<string, unknown>)) {
+        if (settings === null || typeof settings !== "object" || Array.isArray(settings)) {
+            return false
+        }
+    }
+    return true
+}
+
 function renameJsonAsMigrated(filePath: string, logger: LoggerInterface): void {
     const migratedPath = `${filePath}.migrated`
     try {
@@ -89,7 +101,27 @@ export async function migrateGuildSettings(
 
     try {
         const raw = fs.readFileSync(guildSettingsJsonPath, "utf8")
-        const parsed = JSON.parse(raw) as GuildSettingsStore
+        let parsedUnknown: unknown
+        try {
+            parsedUnknown = JSON.parse(raw) as unknown
+        } catch (parseErr: unknown) {
+            logger.error(
+                `[JsonMigration] guild_settings.json is not valid JSON (${guildSettingsJsonPath}):`,
+                parseErr
+            )
+            result.skipped = true
+            result.reason = "validation-failed"
+            return result
+        }
+        if (!isGuildSettingsStoreShape(parsedUnknown)) {
+            logger.error(
+                `[JsonMigration] guild_settings.json has invalid shape (expected guild id → settings object map): ${guildSettingsJsonPath}`
+            )
+            result.skipped = true
+            result.reason = "validation-failed"
+            return result
+        }
+        const parsed = parsedUnknown
         const entries = Object.entries(parsed)
         const validEntries: GuildSettingsStore = {}
         const failedEntries: string[] = []

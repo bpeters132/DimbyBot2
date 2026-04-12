@@ -22,16 +22,12 @@ export async function guardGuildAccess(guildId: string): Promise<NextResponse | 
         const name = err instanceof Error ? err.name : "Error"
         const message = err instanceof Error ? err.message : String(err)
         console.error("[guild-api-route-guard] guardGuildAccess failed", `${name}: ${message}`)
-        const details =
-            err instanceof Error
-                ? { name: err.name, message: err.message }
-                : { message: String(err) }
         return NextResponse.json(
             {
                 ok: false,
                 status: 500,
-                error: message || "Internal error",
-                details,
+                error: "Internal error",
+                details: { code: "INTERNAL_ERROR" },
             },
             { status: 500 }
         )

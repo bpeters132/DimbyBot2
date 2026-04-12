@@ -11,7 +11,7 @@ type GuildListProps = {
 function parseSafeGuildListItem(entry: unknown): GuildListItem | null {
     if (!entry || typeof entry !== "object") return null
     const g = entry as Record<string, unknown>
-    if (typeof g.name !== "string") return null
+    if (typeof g.name !== "string" || g.name.trim().length === 0) return null
     const id = g.id
     if (typeof id !== "string" && typeof id !== "number") return null
     const iconRaw = g.iconUrl

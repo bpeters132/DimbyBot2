@@ -6,7 +6,15 @@ export default {
         "scss/at-rule-no-unknown": [
             true,
             {
-                ignoreAtRules: ["custom-variant", "theme", "tailwind", "apply", "import"],
+                ignoreAtRules: [
+                    "custom-variant",
+                    "theme",
+                    "tailwind",
+                    "apply",
+                    "import",
+                    "layer",
+                    "screen",
+                ],
             },
         ],
     },

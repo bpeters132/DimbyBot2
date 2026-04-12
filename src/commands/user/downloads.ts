@@ -271,21 +271,10 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
             for (const file of files) {
                 try {
-                    try {
-                        const stats = await fsp.stat(file.path)
-                        await fsp.unlink(file.path)
-                        totalSize += stats.size
-                        deletedCount++
-                    } catch (err: unknown) {
-                        const code =
-                            err && typeof err === "object" && "code" in err
-                                ? (err as NodeJS.ErrnoException).code
-                                : ""
-                        if (code !== "ENOENT") {
-                            const msg = err instanceof Error ? err.message : String(err)
-                            errors.push(`${file.name}: ${msg}`)
-                        }
-                    }
+                    const stats = await fsp.stat(file.path)
+                    await fsp.unlink(file.path)
+                    totalSize += stats.size
+                    deletedCount++
                     for (const metaKey of downloadMetadataKeysForFile(
                         metadata,
                         file.name,
@@ -293,9 +282,15 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     )) {
                         delete metadata[metaKey]
                     }
-                } catch (error: unknown) {
-                    const msg = error instanceof Error ? error.message : String(error)
-                    errors.push(`${file.name}: ${msg}`)
+                } catch (err: unknown) {
+                    const code =
+                        err && typeof err === "object" && "code" in err
+                            ? (err as NodeJS.ErrnoException).code
+                            : ""
+                    if (code !== "ENOENT") {
+                        const msg = err instanceof Error ? err.message : String(err)
+                        errors.push(`${file.name}: ${msg}`)
+                    }
                 }
             }
 

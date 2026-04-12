@@ -22,7 +22,10 @@ export class ConnectionManager {
     private readonly guildConnections = new Map<string, Set<WebSocket>>()
     private readonly socketMeta = new Map<WebSocket, SocketMeta>()
     /** Last subscribe attempt per socket (same guild) for debouncing permission resolution. */
-    private readonly subscribeLastAttempt = new Map<WebSocket, { guildId: string; at: number }>()
+    private readonly subscribeLastAttempt = new Map<
+        WebSocket,
+        { guildId: string; at: number; success: boolean }
+    >()
     private static readonly SUBSCRIBE_DEBOUNCE_MS = 4000
     private readonly heartbeatIntervalMs: number
     private heartbeatTimer: NodeJS.Timeout | null = null
@@ -89,7 +92,6 @@ export class ConnectionManager {
                             ? { name: error.name, message: error.message }
                             : { message: "auth_error" }
                     )
-                    return null
                 }
             }
         } catch {
@@ -172,22 +174,23 @@ export class ConnectionManager {
         }
     }
 
-    broadcastWithResolver(guildId: string, factory: (userId: string) => WSMessage | null): void {
+    async broadcastWithResolver(
+        guildId: string,
+        factory: (userId: string) => WSMessage | null
+    ): Promise<void> {
         for (const socket of this.getGuildConnections(guildId)) {
             const meta = this.socketMeta.get(socket)
             if (!meta || socket.readyState !== WebSocket.OPEN) continue
-            void (async () => {
-                try {
-                    const allowed = await this.canViewPlayer(socket, guildId, meta.userId)
-                    if (!allowed) return
-                    const payload = factory(meta.userId)
-                    if (!payload) return
-                    socket.send(JSON.stringify(payload))
-                } catch (err: unknown) {
-                    const message = err instanceof Error ? err.message : String(err)
-                    webPlayerWarn("broadcastWithResolver per-socket error", { guildId, message })
-                }
-            })()
+            try {
+                const allowed = await this.canViewPlayer(socket, guildId, meta.userId)
+                if (!allowed) continue
+                const payload = factory(meta.userId)
+                if (!payload) continue
+                socket.send(JSON.stringify(payload))
+            } catch (err: unknown) {
+                const message = err instanceof Error ? err.message : String(err)
+                webPlayerWarn("broadcastWithResolver per-socket error", { guildId, message })
+            }
         }
     }
 
@@ -223,7 +226,13 @@ export class ConnectionManager {
                 return false
             }
             return true
-        } catch {
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err)
+            webPlayerWarn("WS permission resolution failed (canViewPlayer)", {
+                guildId,
+                userId,
+                message,
+            })
             this.forceUnsubscribeSocket(socket, guildId, "SUBSCRIBE_FORBIDDEN")
             return false
         }
@@ -286,6 +295,7 @@ export class ConnectionManager {
             const last = this.subscribeLastAttempt.get(socket)
             if (
                 last &&
+                last.success &&
                 last.guildId === guildId &&
                 now - last.at < ConnectionManager.SUBSCRIBE_DEBOUNCE_MS
             ) {
@@ -296,10 +306,10 @@ export class ConnectionManager {
                 socket.send(JSON.stringify({ type: "subscribed", guildId }))
                 return
             }
-            this.subscribeLastAttempt.set(socket, { guildId, at: now })
 
             const resolution = await resolveUserPermissions(botClient, guildId, meta.userId)
             if (!hasRequiredPermissions(resolution.permissions, [WebPermission.VIEW_PLAYER])) {
+                this.subscribeLastAttempt.set(socket, { guildId, at: Date.now(), success: false })
                 webPlayerWarn("WS subscribe denied (VIEW_PLAYER missing)", {
                     guildId,
                     viewerIdPrefix: meta.userId.slice(0, 8),
@@ -319,6 +329,7 @@ export class ConnectionManager {
 
             this.clearSubscriptions(socket)
             this.subscribe(socket, guildId)
+            this.subscribeLastAttempt.set(socket, { guildId, at: Date.now(), success: true })
             webPlayerTrace("WS subscribed", {
                 guildId,
                 viewerIdPrefix: meta.userId.slice(0, 8),

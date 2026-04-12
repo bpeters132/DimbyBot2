@@ -307,6 +307,7 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
     const socket = usePlayerSocket(guildId, socketUserId)
     const actions = usePlayerActions(guildId, discordUserId)
     const requestIdRef = useRef(0)
+    const isSubmittingRef = useRef(false)
 
     useEffect(() => {
         if (process.env.NODE_ENV !== "development") return
@@ -468,6 +469,8 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
     }, [playerState])
 
     const runAction = async (runner: () => Promise<PlayerStateResponse>) => {
+        if (isSubmittingRef.current) return
+        isSubmittingRef.current = true
         setSubmitting(true)
         setError(null)
         try {
@@ -487,6 +490,7 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
         } catch (actionError) {
             setError(actionError instanceof Error ? actionError.message : "Action failed")
         } finally {
+            isSubmittingRef.current = false
             setSubmitting(false)
         }
     }

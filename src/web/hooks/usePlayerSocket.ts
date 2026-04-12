@@ -27,7 +27,7 @@ function sanitizePlayerState(state: PlayerStateResponse): PlayerStateResponse {
         currentTrack: {
             ...state.currentTrack,
             uri: safeUri,
-            thumbnailUrl: safeThumbnailUrl ?? undefined,
+            thumbnailUrl: safeThumbnailUrl ?? null,
         },
     }
 }

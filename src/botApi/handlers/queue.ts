@@ -1,14 +1,11 @@
-import { PermissionFlagsBits } from "discord.js"
 import { resolveWebRequesterDiscordId } from "../resolveWebRequesterId.js"
-import { resolveWebDashboardTextChannelId } from "../webDashboardTextChannel.js"
 import { WebPermission } from "../../web/shared/permissions.js"
 import type { ApiResponse } from "../../types/apiPayloads.js"
 import type { QueueResponse } from "../../types/web.js"
 import { requirePermissions } from "../../web/lib/api-auth.js"
 import { getBotClient } from "../../web/lib/botClient.js"
 import { toQueueResponse } from "../../web/lib/player-state.js"
-import { ensurePlayerConnected, startPlaybackIfNeeded } from "../../util/musicManager.js"
-import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
+import { searchAndEnqueue } from "./searchAndEnqueue.js"
 
 const MAX_QUEUE_PAGE_LIMIT = 100
 
@@ -84,125 +81,16 @@ export async function queuePOST(
     }
 
     const client = getBotClient()
-    const guild = client.guilds.cache.get(guildId)
-    if (!guild) {
-        return {
-            status: 404,
-            body: { ok: false, error: { error: "Guild not found in bot cache." } },
-        }
+    const enqueue = await searchAndEnqueue(client, guildId, requester.requesterId, query, guard)
+    if (enqueue.ok === false) {
+        return { status: enqueue.status, body: { ok: false, error: enqueue.error } }
     }
-
-    const member = await guild.members.fetch(requester.requesterId).catch(() => null)
-    const voiceChannel = member?.voice?.channel
-    if (!voiceChannel) {
-        return {
-            status: 400,
-            body: { ok: false, error: { error: "Join a voice channel first." } },
-        }
-    }
-
-    const textChannelId = await resolveWebDashboardTextChannelId(guild)
-
-    const botUser = client.user
-    if (botUser) {
-        const joinPerms = voiceChannel.permissionsFor(botUser)
-        if (!joinPerms) {
-            return {
-                status: 403,
-                body: {
-                    ok: false,
-                    error: {
-                        error: "Could not determine bot permissions for this voice channel.",
-                    },
-                },
-            }
-        }
-        if (
-            !joinPerms.has(PermissionFlagsBits.Connect) ||
-            !joinPerms.has(PermissionFlagsBits.Speak)
-        ) {
-            return {
-                status: 403,
-                body: {
-                    ok: false,
-                    error: { error: "Bot lacks permission to join this voice channel." },
-                },
-            }
-        }
-    }
-
-    let player = client.lavalink.getPlayer(guildId)
-    let createdHere = false
-    if (!player) {
-        player = await client.lavalink.createPlayer({
-            guildId,
-            voiceChannelId: voiceChannel.id,
-            textChannelId,
-            selfDeaf: true,
-            volume: 100,
-        })
-        createdHere = true
-    }
-
-    const cleanupCreatedPlayer = async (): Promise<void> => {
-        if (!createdHere) return
-        await client.lavalink.destroyPlayer(guildId).catch(() => undefined)
-    }
-
-    try {
-        await ensurePlayerConnected(client, player, voiceChannel)
-        const refreshedMember = await guild.members.fetch(requester.requesterId).catch(() => null)
-        const refreshedVoiceChannel = refreshedMember?.voice?.channel
-        if (!refreshedVoiceChannel || refreshedVoiceChannel.id !== voiceChannel.id) {
-            await cleanupCreatedPlayer()
-            return {
-                status: 400,
-                body: { ok: false, error: { error: "Join a voice channel first." } },
-            }
-        }
-    } catch (err: unknown) {
-        await cleanupCreatedPlayer()
-        const message = err instanceof Error ? err.message : "Voice connection failed."
-        return {
-            status: 503,
-            body: {
-                ok: false,
-                error: {
-                    error: "Could not connect the player to your voice channel.",
-                    details: message,
-                },
-            },
-        }
-    }
-
-    const searchResult = await player.search(query, {
-        requester: {
-            id: requester.requesterId,
-            username: guard.session.user?.name ?? "web-user",
-        },
-    })
-    if (!searchResult.tracks.length) {
-        return {
-            status: 404,
-            body: { ok: false, error: { error: "No matches found." } },
-        }
-    }
-
-    if (searchResult.loadType === "playlist") {
-        stampRequesterUserIdOnTracks(searchResult.tracks, requester.requesterId)
-        player.queue.add(searchResult.tracks)
-    } else {
-        stampRequesterUserIdOnTracks([searchResult.tracks[0]], requester.requesterId)
-        player.queue.add(searchResult.tracks[0])
-    }
-
-    await startPlaybackIfNeeded(player)
 
     return {
         status: 200,
         body: {
             ok: true,
-            data: await toQueueResponse(guildId, player),
+            data: await toQueueResponse(guildId, enqueue.player),
         },
     }
 }

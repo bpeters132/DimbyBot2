@@ -26,10 +26,8 @@ export async function DELETE(
         return NextResponse.json(
             {
                 ok: false,
-                error: {
-                    error: "Internal Server Error",
-                    details,
-                },
+                error: "Internal Server Error",
+                details,
             },
             { status: 500 }
         )
@@ -56,10 +54,8 @@ export async function PATCH(
         return NextResponse.json(
             {
                 ok: false,
-                error: {
-                    error: "Internal Server Error",
-                    details,
-                },
+                error: "Internal Server Error",
+                details,
             },
             { status: 500 }
         )

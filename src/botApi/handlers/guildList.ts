@@ -1,4 +1,3 @@
-import { Collection } from "discord.js"
 import { auth } from "../../web/auth-node.js"
 import { fetchDiscordUserGuilds } from "../../util/discordUserGuilds.js"
 import { getAuthenticatedSession } from "../../web/lib/api-auth.js"
@@ -93,9 +92,23 @@ export async function guildListGET(
         }
     }
 
-    const userGuilds = discordGuilds.guilds
     const botClient = tryGetBotClient()
-    const botGuilds = botClient?.guilds.cache ?? new Collection()
+    if (!botClient) {
+        return {
+            status: 503,
+            body: {
+                ok: false,
+                error: {
+                    error: "Bot is starting up",
+                    details:
+                        "The Discord bot is not connected yet, so mutual servers cannot be listed. Try again in a moment.",
+                },
+            },
+        }
+    }
+
+    const userGuilds = discordGuilds.guilds
+    const botGuilds = botClient.guilds.cache
     const mutualGuilds = userGuilds
         .filter((guild) => botGuilds.has(guild.id))
         .map((guild) => ({

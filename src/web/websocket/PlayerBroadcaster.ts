@@ -33,7 +33,7 @@ class PlayerBroadcaster {
                 currentTrack,
             } = await buildPlayerBroadcastData(guildId, player)
 
-            connectionManager.broadcastWithResolver(guildId, (userId) => {
+            await connectionManager.broadcastWithResolver(guildId, (userId) => {
                 try {
                     const state = composePlayerStateResponse(guildId, userId, p, currentTrack)
                     if (type === "queueUpdate") {
@@ -75,13 +75,17 @@ class PlayerBroadcaster {
 
     /** Push voice-related dashboard fields to every subscribed user (bot moves use the bot’s id, not the viewer’s). */
     broadcastGuildVoiceState(guildId: string): void {
+        void this.dispatchGuildVoiceState(guildId)
+    }
+
+    private async dispatchGuildVoiceState(guildId: string): Promise<void> {
         try {
             const client = tryGetBotClient()
             if (!client?.lavalink) {
                 return
             }
             const player = client.lavalink.getPlayer(guildId) ?? null
-            connectionManager.broadcastWithResolver(guildId, (socketUserId) => {
+            await connectionManager.broadcastWithResolver(guildId, (socketUserId) => {
                 const { inVoiceWithBot, botInVoiceChannel, canQueueTracks } = summarizeVoiceForWeb(
                     guildId,
                     socketUserId,

@@ -191,7 +191,7 @@ async function enforceDirectoryLimit(
             if (code === "ENOENT") {
                 continue
             }
-            console.error("[download] statSync failed", { filePath, e })
+            client.error("[download] statSync failed", { filePath, e })
             continue
         }
         let date = info?.downloadDate ? new Date(info.downloadDate) : stats.mtime

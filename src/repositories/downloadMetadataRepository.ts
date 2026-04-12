@@ -146,32 +146,48 @@ export async function replaceDownloadMetadataStoreInDatabase(
     }
 
     const UPSERT_BATCH = 32
+    const KEEP_INSERT_CHUNK = 500
 
-    // One parameterized batch delete: avoids N+1 round-trips and keeps VALUES bound (not string-concat) for safety/perf.
     await prisma.$transaction(async (tx) => {
-        const valueTuples = rows.map((r) => Prisma.sql`(${r.guildId}, ${r.fileName})`)
+        await tx.$executeRaw`
+            CREATE TEMP TABLE _dimbybot_dm_keep (
+                "guildId" TEXT NOT NULL,
+                "fileName" TEXT NOT NULL
+            ) ON COMMIT DROP
+        `
+
+        for (let i = 0; i < rows.length; i += KEEP_INSERT_CHUNK) {
+            const batch = rows.slice(i, i + KEEP_INSERT_CHUNK)
+            const tuples = batch.map((r) => Prisma.sql`(${r.guildId}, ${r.fileName})`)
+            await tx.$executeRaw`
+                INSERT INTO _dimbybot_dm_keep ("guildId", "fileName")
+                VALUES ${Prisma.join(tuples, ", ")}
+            `
+        }
+
         await tx.$executeRaw`
             DELETE FROM "DownloadMetadata" AS d
-            WHERE (d."guildId", d."fileName") NOT IN (VALUES ${Prisma.join(valueTuples, ", ")})
+            WHERE NOT EXISTS (
+                SELECT 1 FROM _dimbybot_dm_keep k
+                WHERE k."guildId" = d."guildId" AND k."fileName" = d."fileName"
+            )
         `
 
         for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
             const batch = rows.slice(i, i + UPSERT_BATCH)
-            await Promise.all(
-                batch.map((row) =>
-                    tx.downloadMetadata.upsert({
-                        where: {
-                            fileName_guildId: { fileName: row.fileName, guildId: row.guildId },
-                        },
-                        create: row,
-                        update: {
-                            downloadDate: row.downloadDate,
-                            originalUrl: row.originalUrl,
-                            filePath: row.filePath,
-                        },
-                    })
-                )
-            )
+            for (const row of batch) {
+                await tx.downloadMetadata.upsert({
+                    where: {
+                        fileName_guildId: { fileName: row.fileName, guildId: row.guildId },
+                    },
+                    create: row,
+                    update: {
+                        downloadDate: row.downloadDate,
+                        originalUrl: row.originalUrl,
+                        filePath: row.filePath,
+                    },
+                })
+            }
         }
     })
 

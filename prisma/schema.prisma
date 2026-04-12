@@ -15,12 +15,12 @@ model GuildSettings {
 }
 
 model DownloadMetadata {
-    fileName     String
-    /// Discord guild id, or `UNKNOWN` for legacy rows migrated from NULL (see migration `20260410140000_downloadmetadata_composite_pk`).
-    guildId      String
-    downloadDate DateTime?
-    originalUrl  String?
-    filePath     String?
+  fileName     String
+  /// Discord guild id, or `UNKNOWN` for legacy rows migrated from NULL (see migration `20260410140000_downloadmetadata_composite_pk`).
+  guildId      String
+  downloadDate DateTime?
+  originalUrl  String?
+  filePath     String?
 
   @@id([fileName, guildId])
   @@index([guildId], name: "DownloadMetadata_guildId_idx")
@@ -58,6 +58,7 @@ model Session {
   @@map("session")
 }
 
+/// OAuth tokens are encrypted at rest via Better Auth `account.encryptOAuthTokens` (see `src/web/lib/auth-base-config.ts`).
 model Account {
   id                    String    @id
   accountId             String
@@ -88,5 +89,6 @@ model Verification {
   updatedAt  DateTime @updatedAt
 
   @@index([identifier])
+  @@index([value], name: "verification_value_idx")
   @@map("verification")
 }

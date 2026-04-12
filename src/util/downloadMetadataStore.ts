@@ -49,8 +49,17 @@ export async function saveDownloadMetadataStore(
     const logger = loggerFromPartial(loggerInstance)
     try {
         const result = await replaceDownloadMetadataStoreInDatabase(metadata)
-        downloadMetadataCache = await getDownloadMetadataStoreFromDatabase()
-        initialized = true
+        initialized = false
+        try {
+            downloadMetadataCache = await getDownloadMetadataStoreFromDatabase()
+            initialized = true
+        } catch (reloadErr: unknown) {
+            logger.warn(
+                "[downloadMetadata] replaceDownloadMetadataStoreInDatabase succeeded but getDownloadMetadataStoreFromDatabase failed; cache may be out of sync",
+                reloadErr
+            )
+            return false
+        }
         if (result.skippedEntries.length > 0) {
             logger.warn(
                 `[downloadMetadata] Skipped ${result.skippedEntries.length} metadata row(s) (no resolvable guild id); cache reloaded from database.`

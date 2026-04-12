@@ -23,13 +23,15 @@ export function createWsConnectToken(userId: string, secret: string, ttlSeconds 
 
 /** Returns Discord user id or null if invalid / expired. */
 export function parseWsConnectToken(token: string, secret: string): string | null {
+    const key = wsConnectHmacKey(secret)
+    if (!key.length) {
+        return null
+    }
     const i = token.lastIndexOf(SEP)
     if (i <= 0) return null
     const payload = token.slice(0, i)
     const sig = token.slice(i + 1)
-    const expected = createHmac("sha256", wsConnectHmacKey(secret))
-        .update(payload)
-        .digest("base64url")
+    const expected = createHmac("sha256", key).update(payload).digest("base64url")
     try {
         if (
             sig.length !== expected.length ||

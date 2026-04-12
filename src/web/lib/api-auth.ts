@@ -40,7 +40,7 @@ interface SessionGuardSuccess {
 
 export type SessionGuardResult = GuardFailure | SessionGuardSuccess
 
-interface PermissionGuardSuccess {
+export interface PermissionGuardSuccess {
     ok: true
     session: AuthenticatedSession
     /** Discord snowflake for voice/member/owner checks (Better Auth `user.id` may differ). */
@@ -50,7 +50,9 @@ interface PermissionGuardSuccess {
 
 export type PermissionGuardResult = GuardFailure | PermissionGuardSuccess
 
-export type GuildAccessResult = { ok: true; memberResolved: boolean } | { ok: false }
+export type GuildAccessResult =
+    | { ok: true; memberResolved: boolean }
+    | { ok: false; retryable: boolean; error?: string }
 
 export type AuthenticatedGuildAccessResult =
     | Extract<SessionGuardResult, { ok: false }>
@@ -134,23 +136,32 @@ export async function verifyGuildAccess(
 
                 const accessToken = accessTokenResult?.accessToken
                 if (!accessToken) {
-                    return { ok: false }
+                    return {
+                        ok: false,
+                        retryable: true,
+                        error: "Missing or expired Discord access token.",
+                    }
                 }
 
                 const discordGuilds = await fetchDiscordUserGuilds(accessToken)
-                if (!discordGuilds.ok) {
-                    return { ok: false }
+                if (discordGuilds.ok === false) {
+                    const retryable = discordGuilds.status >= 500
+                    return {
+                        ok: false,
+                        retryable,
+                        error: discordGuilds.message,
+                    }
                 }
 
                 if (discordGuilds.guilds.some((guildEntry) => guildEntry.id === guildId)) {
                     return { ok: true, memberResolved: false }
                 }
 
-                return { ok: false }
+                return { ok: false, retryable: false }
             } catch (e: unknown) {
                 const msg = e instanceof Error ? e.message : String(e)
                 console.error("[api-auth] verifyMembershipViaOAuth failed:", msg)
-                return { ok: false }
+                return { ok: false, retryable: true, error: msg }
             }
         }
 
@@ -177,7 +188,7 @@ export async function verifyGuildAccess(
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e)
         console.error("[api-auth] verifyGuildAccess failed:", msg)
-        return { ok: false }
+        return { ok: false, retryable: true, error: msg }
     }
 }
 
@@ -231,13 +242,16 @@ export async function resolveAuthenticatedGuildAccess(
         headers,
         discordUserId
     )
-    if (!guildAccess.ok) {
+    if (guildAccess.ok === false) {
+        const retryable = guildAccess.retryable === true
         return {
             ok: false,
-            status: 403,
-            error: "Forbidden",
-            details:
-                "Could not verify access to this server. The bot may not be in this guild, or your membership could not be confirmed (try re-logging in with Discord).",
+            status: retryable ? 503 : 403,
+            error: retryable ? "Service temporarily unavailable" : "Forbidden",
+            details: retryable
+                ? (guildAccess.error ??
+                  "Could not verify Discord membership right now. Try again in a moment.")
+                : "Could not verify access to this server. The bot may not be in this guild, or your membership could not be confirmed (try re-logging in with Discord).",
         }
     }
 
@@ -275,8 +289,9 @@ export async function getGuildDashboardPermissionSnapshot(
         const noClientCtx = { guildId, discordUserIdPrefix: ctx.discordUserId.slice(0, 8) }
         if (process.env.NODE_ENV === "development") {
             webPlayerDebug(noClientMsg, noClientCtx)
+        } else {
+            webPlayerWarn(noClientMsg, { metric: "optimistic_dashboard_perms", ...noClientCtx })
         }
-        webPlayerWarn(noClientMsg, { metric: "optimistic_dashboard_perms", ...noClientCtx })
         const defaultMemberWebPerms: WebPermission[] = [
             WebPermission.VIEW_PLAYER,
             WebPermission.CONTROL_PLAYBACK,

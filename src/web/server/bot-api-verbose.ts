@@ -26,6 +26,8 @@ const redactedKeysLower = new Set([
     "x-api-key",
     "client-secret",
     "client_secret",
+    "private_key",
+    "private-key",
 ])
 
 const redactedKeysNormalized = new Set(

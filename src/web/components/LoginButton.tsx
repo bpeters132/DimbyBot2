@@ -1,6 +1,7 @@
 "use client"
 
 import { authClient } from "@/auth-client"
+import { toast } from "sonner"
 
 export function LoginButton() {
     const onSignIn = async () => {
@@ -13,7 +14,7 @@ export function LoginButton() {
             const name = err instanceof Error ? err.name : "Error"
             const message = err instanceof Error ? err.message : String(err)
             console.error("[LoginButton] Discord sign-in failed", name, message)
-            window.alert("Sign-in failed. Please try again.")
+            toast.error(`Sign-in failed: ${message}`)
         }
     }
 

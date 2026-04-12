@@ -26,6 +26,29 @@ const betterAuthUrl = getRequiredEnv("BETTER_AUTH_URL")
 const discordOAuthClientId = getRequiredEnv("CLIENT_ID")
 const discordOAuthClientSecret = getRequiredEnv("DISCORD_CLIENT_SECRET")
 
+const SAFE_ERROR_SNIPPET_MAX = 200
+
+/** Redacts verbose Discord/token payloads from thrown errors (keys-only for objects, truncated strings). */
+function safeJsonSnippet(value: unknown, maxLen = SAFE_ERROR_SNIPPET_MAX): string {
+    if (value === null || value === undefined) {
+        return String(value)
+    }
+    if (typeof value === "string") {
+        return value.length > maxLen ? `${value.slice(0, maxLen)}…` : value
+    }
+    if (typeof value === "object" && !Array.isArray(value) && value !== null) {
+        const keys = Object.keys(value as Record<string, unknown>).slice(0, 16)
+        return keys.length > 0 ? `{ keys: ${keys.join(", ")} }` : "{}"
+    }
+    let serialized: string
+    try {
+        serialized = JSON.stringify(value)
+    } catch {
+        serialized = "[unserializable]"
+    }
+    return serialized.length > maxLen ? `${serialized.slice(0, maxLen)}…` : serialized
+}
+
 export const betterAuthBaseConfig = {
     secret: betterAuthSecret,
     baseURL: betterAuthUrl,
@@ -61,7 +84,7 @@ export const betterAuthBaseConfig = {
                     if (!tokenResponse.ok) {
                         const text = await tokenResponse.text()
                         throw new Error(
-                            `Discord OAuth refresh failed (${tokenResponse.status}): ${text}`
+                            `Discord OAuth refresh failed (${tokenResponse.status}): ${safeJsonSnippet(text)}`
                         )
                     }
                     let parsed: unknown
@@ -74,13 +97,13 @@ export const betterAuthBaseConfig = {
                     }
                     if (!parsed || typeof parsed !== "object") {
                         throw new Error(
-                            `Discord OAuth refresh returned non-object JSON (${tokenResponse.status}): ${String(parsed)}`
+                            `Discord OAuth refresh returned non-object JSON (${tokenResponse.status}): ${safeJsonSnippet(parsed)}`
                         )
                     }
                     const data = parsed as Record<string, unknown>
                     if (typeof data.access_token !== "string" || data.access_token.length === 0) {
                         throw new Error(
-                            `Discord OAuth refresh missing access_token (${tokenResponse.status}): ${JSON.stringify(parsed)}`
+                            `Discord OAuth refresh missing access_token (${tokenResponse.status}): ${safeJsonSnippet(parsed)}`
                         )
                     }
                     if (
@@ -89,7 +112,7 @@ export const betterAuthBaseConfig = {
                         data.expires_in <= 0
                     ) {
                         throw new Error(
-                            `Discord OAuth refresh missing expires_in (${tokenResponse.status}): ${JSON.stringify(parsed)}`
+                            `Discord OAuth refresh missing expires_in (${tokenResponse.status}): ${safeJsonSnippet(parsed)}`
                         )
                     }
                     return {

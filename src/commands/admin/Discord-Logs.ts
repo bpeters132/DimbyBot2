@@ -235,19 +235,18 @@ export default {
             }
             applyNormalizedDiscordLog(next, working)
             const nextStore = storeWithGuildRow(store, guild.id, working)
+            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] })
             const ok = await saveGuildSettings(nextStore, client)
             if (!ok) {
-                return interaction.reply({
+                return interaction.editReply({
                     content: "Could not save settings to database. Check database connectivity.",
-                    flags: [MessageFlags.Ephemeral],
                 })
             }
-            return interaction.reply({
+            return interaction.editReply({
                 content:
                     raw === "default" || raw === "debug"
                         ? "Minimum Discord log level reset to **debug** (all routed severities can be sent)."
                         : `Minimum Discord log level set to **${raw}** and above.`,
-                flags: [MessageFlags.Ephemeral],
             })
         }
 
@@ -281,16 +280,15 @@ export default {
             }
 
             const nextStore = storeWithGuildRow(store, guild.id, working)
+            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] })
             const ok = await saveGuildSettings(nextStore, client)
             if (!ok) {
-                return interaction.reply({
+                return interaction.editReply({
                     content: "Could not save settings to database. Check database connectivity.",
-                    flags: [MessageFlags.Ephemeral],
                 })
             }
-            return interaction.reply({
+            return interaction.editReply({
                 content: "Updated Discord log configuration.",
-                flags: [MessageFlags.Ephemeral],
             })
         }
 
@@ -343,21 +341,20 @@ export default {
 
             applyNormalizedDiscordLog(next, working)
             const nextStore = storeWithGuildRow(latestStore, guild.id, working)
+            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] })
             const ok = await saveGuildSettings(nextStore, client)
             if (!ok) {
-                return interaction.reply({
+                return interaction.editReply({
                     content: "Could not save settings to database. Check database connectivity.",
-                    flags: [MessageFlags.Ephemeral],
                 })
             }
 
             const mention = `<#${channelId}>`
-            return interaction.reply({
+            return interaction.editReply({
                 content:
                     scope === "all"
                         ? `Bot logs (per your minimum level) will use ${mention} for **all** severities unless a per-level route overrides.`
                         : `Bot **${scope}** logs will go to ${mention} (other levels still use “all levels” or per-level routes if set).`,
-                flags: [MessageFlags.Ephemeral],
             })
         }
 
