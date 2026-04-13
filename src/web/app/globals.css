@@ -73,17 +73,18 @@
     --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* Scoped default border color for our app shell only — avoids forcing `border-border` onto every DOM node (third-party widgets). */
-:where(html, body) {
-    @apply border-border;
-}
-
-body {
-    @apply bg-background text-foreground;
-
-    font-family: Inter, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
-    margin: 0;
-    min-height: 100vh;
+@layer base {
+    /* shadcn/ui + Tailwind: default border color on all elements so `border` uses theme tokens. */
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+        font-family:
+            Inter, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+        margin: 0;
+        min-height: 100vh;
+    }
 }
 
 .link-reset {
