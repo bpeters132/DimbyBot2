@@ -10,15 +10,23 @@ import { proxyBotApi } from "@/server/bot-api-proxy"
  * boundaries keep the bot API in a separate long-running process.
  */
 export async function GET(request: Request) {
+    let session: AuthenticatedSession | null
     try {
-        const session = (await auth.api.getSession({
+        session = (await auth.api.getSession({
             headers: await headers(),
         })) as AuthenticatedSession | null
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-        }
-        return proxyBotApi(request)
     } catch {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    if (!session?.user?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    try {
+        return await proxyBotApi(request)
+    } catch (error: unknown) {
+        console.error("[api/guilds] GET proxy failed", error)
+        return NextResponse.json({ error: "Bot API temporarily unavailable" }, { status: 503 })
     }
 }

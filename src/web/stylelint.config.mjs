@@ -3,6 +3,7 @@ export default {
     customSyntax: "postcss-scss",
     plugins: ["stylelint-scss"],
     rules: {
+        "at-rule-no-unknown": null,
         "scss/at-rule-no-unknown": [
             true,
             {

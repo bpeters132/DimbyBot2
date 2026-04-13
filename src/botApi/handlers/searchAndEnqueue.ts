@@ -1,7 +1,7 @@
 import { PermissionFlagsBits } from "discord.js"
 import type { Player } from "lavalink-client"
 import type BotClient from "../../lib/BotClient.js"
-import type { ApiErrorPayload } from "../../types/apiPayloads.js"
+import type { ApiErrorPayload } from "../../types/index.js"
 import { ensurePlayerConnected, startPlaybackIfNeeded } from "../../util/musicManager.js"
 import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
 import type { PermissionGuardSuccess } from "../../web/lib/api-auth.js"
@@ -24,6 +24,21 @@ export type SearchAndEnqueueSuccess = {
 
 export type SearchAndEnqueueResult = SearchAndEnqueueSuccess | SearchAndEnqueueFailure
 
+function isMemberFetchNotFound(error: unknown): boolean {
+    if (!error || typeof error !== "object") return false
+    const maybe = error as {
+        status?: unknown
+        code?: unknown
+        name?: unknown
+    }
+    return (
+        maybe.status === 404 ||
+        maybe.code === 404 ||
+        maybe.code === 10007 ||
+        maybe.name === "UnknownMember"
+    )
+}
+
 /**
  * Shared path for web-driven search → enqueue: resolves guild/member/voice, checks bot voice
  * permissions, (re)creates the Lavalink player, connects, searches, stamps requester ids, and
@@ -45,7 +60,23 @@ export async function searchAndEnqueue(
         }
     }
 
-    const member = await guild.members.fetch(requesterId).catch(() => null)
+    let member = null
+    try {
+        member = await guild.members.fetch(requesterId)
+    } catch (error: unknown) {
+        if (!isMemberFetchNotFound(error)) {
+            console.error("[searchAndEnqueue] requester member fetch failed", {
+                guildId,
+                requesterId,
+                error,
+            })
+            return {
+                ok: false,
+                status: 503,
+                error: { error: "Unable to verify voice state, please try again." },
+            }
+        }
+    }
     const voiceChannel = member?.voice?.channel
     if (!voiceChannel) {
         return {
@@ -101,7 +132,23 @@ export async function searchAndEnqueue(
 
     try {
         await ensurePlayerConnected(client, player, voiceChannel)
-        const refreshedMember = await guild.members.fetch(requesterId).catch(() => null)
+        let refreshedMember = null
+        try {
+            refreshedMember = await guild.members.fetch(requesterId)
+        } catch (error: unknown) {
+            if (!isMemberFetchNotFound(error)) {
+                console.error("[searchAndEnqueue] requester member refresh failed", {
+                    guildId,
+                    requesterId,
+                    error,
+                })
+                return {
+                    ok: false,
+                    status: 503,
+                    error: { error: "Unable to verify voice state, please try again." },
+                }
+            }
+        }
         const refreshedVoiceChannel = refreshedMember?.voice?.channel
         if (!refreshedVoiceChannel || refreshedVoiceChannel.id !== voiceChannel.id) {
             await cleanupCreatedPlayer()

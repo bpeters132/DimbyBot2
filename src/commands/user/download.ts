@@ -158,6 +158,13 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
  */
 type SizedFile = { name: string; path: string; date: Date; size: number }
 
+function getErrorCode(e: unknown): string | undefined {
+    if (e && typeof e === "object" && "code" in e) {
+        return (e as NodeJS.ErrnoException).code
+    }
+    return undefined
+}
+
 async function enforceDirectoryLimit(
     downloadsDir: string,
     client: BotClient,
@@ -184,10 +191,7 @@ async function enforceDirectoryLimit(
         try {
             stats = fs.statSync(filePath)
         } catch (e: unknown) {
-            const code =
-                e && typeof e === "object" && "code" in e
-                    ? (e as NodeJS.ErrnoException).code
-                    : undefined
+            const code = getErrorCode(e)
             if (code === "ENOENT") {
                 continue
             }

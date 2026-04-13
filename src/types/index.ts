@@ -160,6 +160,23 @@ export interface LoggerInterface {
     setDiscordForwarder?(callback: DiscordLogForwarder | null): void
 }
 
+export interface ApiErrorPayload {
+    error: string
+    details?: string
+}
+
+export interface ApiSuccessPayload<T> {
+    ok: true
+    data: T
+}
+
+export interface ApiFailurePayload {
+    ok: false
+    error: ApiErrorPayload
+}
+
+export type ApiResponse<T> = ApiSuccessPayload<T> | ApiFailurePayload
+
 /** Tracks a user who left voice while RRQ is active and has queued tracks. */
 export interface DisconnectedRRQUser {
     userId: string
@@ -173,10 +190,3 @@ export interface DisconnectedRRQUser {
  * Stored on the player via `player.set("rrqDisconnectedUsers", map)`.
  */
 export type RRQDisconnectedUsersMap = Map<string, DisconnectedRRQUser>
-
-export type {
-    ApiErrorPayload,
-    ApiFailurePayload,
-    ApiResponse,
-    ApiSuccessPayload,
-} from "./apiPayloads.js"

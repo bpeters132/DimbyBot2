@@ -40,6 +40,7 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
     useEffect(() => {
         let cancelled = false
         let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+        setIsConnected(false)
         setPlayerState(null)
         setQueue(undefined)
         setLiveUpdatesError(null)
@@ -101,7 +102,6 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
             socketRef.current = socket
 
             socket.onopen = () => {
-                setIsConnected(true)
                 reconnectAttemptsRef.current = 0
                 setLiveUpdatesError(null)
                 socket.send(JSON.stringify({ type: "subscribe", guildId }))
@@ -151,6 +151,7 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
                     }
 
                     if (parsed.type === "subscribed") {
+                        setIsConnected(true)
                         reconnectAttemptsRef.current = 0
                         setLiveUpdatesError(null)
                         return
@@ -226,6 +227,7 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
 
         return () => {
             cancelled = true
+            setIsConnected(false)
             if (reconnectTimer) {
                 clearTimeout(reconnectTimer)
             }

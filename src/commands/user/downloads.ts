@@ -44,6 +44,12 @@ function dedupeMetadataByFileName(
     return result
 }
 
+function parseValidDownloadDate(value: unknown): Date | null {
+    if (typeof value !== "string" && typeof value !== "number") return null
+    const parsed = new Date(value)
+    return Number.isFinite(parsed.getTime()) ? parsed : null
+}
+
 /**
  * Resolves the configured downloads size limit for a guild.
  * @param {import('../../lib/BotClient.js').default} client The bot client instance.
@@ -136,7 +142,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                         } = {
                             name: file.replace(".wav", ""),
                             size: stats.size,
-                            date: info.downloadDate ? new Date(info.downloadDate) : stats.mtime,
+                            date: parseValidDownloadDate(info.downloadDate) ?? stats.mtime,
                             path: filePath,
                         }
                         if (info.originalUrl) row.originalUrl = info.originalUrl
@@ -226,7 +232,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 [...dedupedEntries.values()].map(async ({ key, info }) => {
                     const file = parseDownloadMetadataStoreKey(key).fileName
                     const filePath = path.join(downloadsDir, file)
-                    let date: Date | null = info.downloadDate ? new Date(info.downloadDate) : null
+                    let date: Date | null = parseValidDownloadDate(info.downloadDate)
                     if (!date) {
                         try {
                             await fsp.access(filePath)
@@ -273,18 +279,12 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             const errors = []
 
             for (const file of files) {
+                const metadataKeys = downloadMetadataKeysForFile(metadata, file.name, guildId)
                 try {
                     const stats = await fsp.stat(file.path)
                     await fsp.unlink(file.path)
                     totalSize += stats.size
                     deletedCount++
-                    for (const metaKey of downloadMetadataKeysForFile(
-                        metadata,
-                        file.name,
-                        guildId
-                    )) {
-                        delete metadata[metaKey]
-                    }
                 } catch (err: unknown) {
                     const code =
                         err && typeof err === "object" && "code" in err
@@ -293,6 +293,10 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     if (code !== "ENOENT") {
                         const msg = err instanceof Error ? err.message : String(err)
                         errors.push(`${file.name}: ${msg}`)
+                    }
+                } finally {
+                    for (const metaKey of metadataKeys) {
+                        delete metadata[metaKey]
                     }
                 }
             }

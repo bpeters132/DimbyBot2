@@ -201,11 +201,11 @@ export async function resolveUserPermissions(
     // Cast: `PermissionClient` only types the cache shape we read; entries are treated as `Guild` for member/voice APIs.
     const guild = client.guilds.cache.get(guildId) as Guild | undefined
     if (!guild) {
-        return { permissions: [], inVoiceWithBot: false }
+        return { permissions: [WebPermission.VIEW_PLAYER], inVoiceWithBot: false }
     }
 
     const player = client.lavalink.getPlayer(guildId)
-    const { inVoiceWithBot, canQueueTracks } = summarizeVoiceForWeb(guildId, userId, player)
+    const { inVoiceWithBot, canQueueTracks } = summarizeVoiceForWeb(guildId, userId, player, client)
 
     const applyGate = (permissions: WebPermission[]) =>
         applyVoiceGating
@@ -309,11 +309,11 @@ export function resolveOauthGuildPermissionFallback(
     // Cast: same duck-typed client/cache as {@link resolveUserPermissions}; not a full Client at runtime.
     const guild = client.guilds.cache.get(guildId) as Guild | undefined
     if (!guild) {
-        return { permissions: [], inVoiceWithBot: false }
+        return { permissions: [WebPermission.VIEW_PLAYER], inVoiceWithBot: false }
     }
 
     const player = client.lavalink.getPlayer(guildId)
-    const { inVoiceWithBot, canQueueTracks } = summarizeVoiceForWeb(guildId, userId, player)
+    const { inVoiceWithBot, canQueueTracks } = summarizeVoiceForWeb(guildId, userId, player, client)
 
     const base: WebPermission[] = [
         WebPermission.VIEW_PLAYER,

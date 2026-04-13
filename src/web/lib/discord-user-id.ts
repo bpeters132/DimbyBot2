@@ -21,9 +21,10 @@ export async function getDiscordAccountSnowflake(betterAuthUserId: string): Prom
     } catch (e) {
         const code =
             e && typeof e === "object" && "code" in e ? String((e as { code: unknown }).code) : ""
+        const errName = e instanceof Error ? e.name : "unknown"
         console.warn(
             "[discord-user-id] account lookup skipped (database unavailable?)",
-            code || (e instanceof Error ? e.message : e)
+            code || errName || "account lookup failed"
         )
         return null
     }
@@ -72,8 +73,8 @@ export async function resolveDiscordUserSnowflake(
         }
         return await fetchDiscordCurrentUserId(accessToken)
     } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error)
-        console.warn("[discord-user-id] Discord token / @me fallback failed:", message)
+        const errName = error instanceof Error ? error.name : "unknown"
+        console.warn("[discord-user-id] Discord token / @me fallback failed:", errName)
         return null
     }
 }

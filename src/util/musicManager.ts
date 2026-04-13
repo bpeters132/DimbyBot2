@@ -43,7 +43,7 @@ export async function startPlaybackIfNeeded(player: Player): Promise<void> {
         }
 
         const startPromise = (async () => {
-            if (!player.playing && player.queue.tracks.length > 0) {
+            if (!player.playing && (player.queue.current || player.queue.tracks.length > 0)) {
                 await player.play()
             }
         })()

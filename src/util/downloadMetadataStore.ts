@@ -47,20 +47,23 @@ export async function saveDownloadMetadataStore(
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<boolean> {
     const logger = loggerFromPartial(loggerInstance)
+    const previousCache = cloneStore(downloadMetadataCache)
+    const nextCache = cloneStore(metadata)
     try {
         const result = await replaceDownloadMetadataStoreInDatabase(metadata)
-        downloadMetadataCache = cloneStore(metadata)
-        initialized = true
         try {
-            const newCache = await getDownloadMetadataStoreFromDatabase()
-            downloadMetadataCache = newCache
+            const persistedCache = await getDownloadMetadataStoreFromDatabase()
+            downloadMetadataCache =
+                result.skippedEntries.length === 0 ? nextCache : cloneStore(persistedCache)
             initialized = true
         } catch (reloadErr: unknown) {
             logger.warn(
-                "[downloadMetadata] replaceDownloadMetadataStoreInDatabase succeeded but getDownloadMetadataStoreFromDatabase failed; keeping optimistic in-memory cache",
+                "[downloadMetadata] replaceDownloadMetadataStoreInDatabase succeeded but cache reload failed; keeping previous in-memory cache",
                 reloadErr
             )
-            return true
+            downloadMetadataCache = previousCache
+            initialized = true
+            return false
         }
         if (result.skippedEntries.length > 0) {
             logger.warn(

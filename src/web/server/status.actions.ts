@@ -81,21 +81,29 @@ export async function getServiceStatusAction(): Promise<StatusPayload> {
         return await getServiceStatusPayload()
     } catch (error: unknown) {
         const safe = sanitizeErrorForLog(error)
-        writeAuditLog(
-            "error",
-            "SERVICE_STATUS_PROBE_FAILED",
-            "[status.actions] service status probe failed",
-            {
-                action: "SERVICE_STATUS_PROBE",
-                category: "service",
-                source: "status.actions",
-                severity: "error",
-                outcome: "failure",
-                actor: "system",
-                request: null,
-                error: safe,
-            }
-        )
+        try {
+            writeAuditLog(
+                "error",
+                "SERVICE_STATUS_PROBE_FAILED",
+                "[status.actions] service status probe failed",
+                {
+                    action: "SERVICE_STATUS_PROBE",
+                    category: "service",
+                    source: "status.actions",
+                    severity: "error",
+                    outcome: "failure",
+                    actor: "system",
+                    request: null,
+                    error: safe,
+                }
+            )
+        } catch (auditError: unknown) {
+            const auditErrorName = auditError instanceof Error ? auditError.name : "unknown"
+            console.warn(
+                "[status.actions] audit log failed during status probe fallback",
+                auditErrorName
+            )
+        }
         return {
             ok: false,
             checkedAt: new Date().toISOString(),

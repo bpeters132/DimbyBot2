@@ -10,10 +10,10 @@ export async function DELETE(
     request: Request,
     ctx: { params: Promise<{ guildId: string }> }
 ): Promise<Response> {
-    const { guildId } = await ctx.params
-    const denied = await guardGuildAccess(guildId)
-    if (denied) return denied
     try {
+        const { guildId } = await ctx.params
+        const denied = await guardGuildAccess(guildId)
+        if (denied) return denied
         return await proxyBotApi(request)
     } catch (error: unknown) {
         console.error("[api/guilds/.../queue/[index]] DELETE proxy failed", error)
@@ -32,10 +32,10 @@ export async function PATCH(
     request: Request,
     ctx: { params: Promise<{ guildId: string }> }
 ): Promise<Response> {
-    const { guildId } = await ctx.params
-    const denied = await guardGuildAccess(guildId)
-    if (denied) return denied
     try {
+        const { guildId } = await ctx.params
+        const denied = await guardGuildAccess(guildId)
+        if (denied) return denied
         return await proxyBotApi(request)
     } catch (error: unknown) {
         console.error("[api/guilds/.../queue/[index]] PATCH proxy failed", error)

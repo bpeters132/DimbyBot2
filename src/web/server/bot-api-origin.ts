@@ -5,8 +5,8 @@ function stripTrailingSlashes(value: string): string {
 
 /**
  * Base URL for the bot HTTP server (Express); used by API route proxies and server actions.
- * When `API_PROXY_TARGET` is set it must be a valid `http:` or `https:` URL; only the origin
- * (`protocol//host[:port]`) is retained. Empty/whitespace is treated as unset.
+ * When `API_PROXY_TARGET` is set it must be a valid `http:` or `https:` origin-only URL with no
+ * pathname/query/hash/credentials. Empty/whitespace is treated as unset.
  */
 export function getBotApiOrigin(): string | null {
     const raw = process.env.API_PROXY_TARGET?.trim()
@@ -30,6 +30,19 @@ export function getBotApiOrigin(): string | null {
         // Intentional console usage: this runs during early bootstrap config validation before app loggers initialize.
         console.error("[bot-api-origin] API_PROXY_TARGET must use http: or https: protocol")
         throw new Error("Invalid API_PROXY_TARGET: protocol must be http or https")
+    }
+
+    if (
+        parsed.pathname !== "/" ||
+        parsed.search !== "" ||
+        parsed.hash !== "" ||
+        parsed.username !== "" ||
+        parsed.password !== ""
+    ) {
+        console.error(
+            "[bot-api-origin] API_PROXY_TARGET must be an origin-only URL (no path/query/hash/credentials)."
+        )
+        throw new Error("Invalid API_PROXY_TARGET: must be an origin-only URL")
     }
 
     const origin = stripTrailingSlashes(`${parsed.protocol}//${parsed.host}`)

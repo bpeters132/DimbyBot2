@@ -182,6 +182,15 @@ export async function migrateGuildSettings(
             result.reason = "partial-validation-failures"
         }
 
+        if (Object.keys(validEntries).length === 0) {
+            logger.warn(
+                "[JsonMigration] Guild settings migration skipped: no valid entries remained after validation."
+            )
+            result.skipped = true
+            result.reason = "no-valid-entries"
+            return result
+        }
+
         const writeResult = await replaceGuildSettingsStoreInDatabase(validEntries)
         result.migratedCount = writeResult.rowsUpserted
 
@@ -302,6 +311,15 @@ export async function migrateDownloadMetadata(
             result.partial = true
             result.failedEntries = failedEntries
             result.reason = "partial-validation-failures"
+        }
+
+        if (Object.keys(validEntries).length === 0) {
+            logger.warn(
+                "[JsonMigration] Download metadata migration skipped: no valid entries remained after validation."
+            )
+            result.skipped = true
+            result.reason = "no-valid-entries"
+            return result
         }
 
         const writeResult = await replaceDownloadMetadataStoreInDatabase(validEntries)

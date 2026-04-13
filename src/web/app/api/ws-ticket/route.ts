@@ -14,7 +14,10 @@ export async function GET(): Promise<NextResponse> {
         console.error(
             "[api/ws-ticket] server misconfigured: BETTER_AUTH_SECRET is missing (set in src/web/.env or environment)"
         )
-        return NextResponse.json({ error: "Server misconfigured" }, { status: 503 })
+        return NextResponse.json(
+            { error: "Server misconfigured" },
+            { status: 503, headers: { "Cache-Control": "no-store" } }
+        )
     }
 
     try {
@@ -23,7 +26,10 @@ export async function GET(): Promise<NextResponse> {
         })) as AuthenticatedSession | null
 
         if (!session?.user?.id) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+            return NextResponse.json(
+                { error: "Unauthorized" },
+                { status: 401, headers: { "Cache-Control": "no-store" } }
+            )
         }
 
         const token = createWsConnectToken(session.user.id, secret, 60)
@@ -31,6 +37,9 @@ export async function GET(): Promise<NextResponse> {
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "unknown"
         console.error("[api/ws-ticket] failed to resolve session:", message)
-        return NextResponse.json({ error: "Auth service temporarily unavailable" }, { status: 503 })
+        return NextResponse.json(
+            { error: "Auth service temporarily unavailable" },
+            { status: 503, headers: { "Cache-Control": "no-store" } }
+        )
     }
 }

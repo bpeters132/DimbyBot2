@@ -802,7 +802,7 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                                 }
                                 return (
                                     <QueueTrackRow
-                                        key={trackKey}
+                                        key={`${trackKey}:${queueRangeStart + index}`}
                                         track={track}
                                         queueIndex={queueRangeStart + index}
                                     />

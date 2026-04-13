@@ -379,10 +379,10 @@ export async function requirePermissions(
         console.error("[api-auth] requirePermissions permission resolution failed:", msg)
         return {
             ok: false,
-            status: 403,
-            error: "Forbidden",
+            status: 503,
+            error: "Service Unavailable",
             details:
-                "Could not verify permissions for this server. Try again in a moment or re-open the dashboard.",
+                "Permission resolution is temporarily unavailable. Please retry in a moment or re-open the dashboard.",
         }
     }
 

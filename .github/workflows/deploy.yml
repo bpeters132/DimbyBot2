@@ -113,11 +113,6 @@ jobs:
               run: |
                   docker build -t "$IMAGE_LAVALINK" -t "$IMAGE_LAVALINK_SHA" -f Lavalink/Dockerfile ./Lavalink
 
-            - name: Push bot image
-              run: |
-                  docker push "$IMAGE_BOT"
-                  docker push "$IMAGE_BOT_SHA"
-
             - name: Push lavalink image
               run: |
                   docker push "$IMAGE_LAVALINK"
@@ -147,6 +142,43 @@ jobs:
                   WEBSOCKET_CLIENT_URL: ${{ secrets.WEBSOCKET_CLIENT_URL }}
                   POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
                   POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+                  BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+                  CLIENT_ID: ${{ secrets.CLIENT_ID }}
+                  DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
+                  BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+                  BETTER_AUTH_URL: ${{ secrets.BETTER_AUTH_URL }}
+                  GUILD_ID: ${{ secrets.GUILD_ID }}
+                  OWNER_ID: ${{ secrets.OWNER_ID }}
+                  DEV_MODE: ${{ secrets.DEV_MODE }}
+                  LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
+                  LAVALINK_HOST: ${{ secrets.LAVALINK_HOST }}
+                  LAVALINK_PORT: ${{ secrets.LAVALINK_PORT }}
+                  LAVALINK_PASSWORD: ${{ secrets.LAVALINK_PASSWORD }}
+                  LAVALINK_NODE_ID: ${{ secrets.LAVALINK_NODE_ID }}
+                  LAVALINK_SECURE: ${{ secrets.LAVALINK_SECURE }}
+                  LAVALINK_YOUTUBE_POT_TOKEN: ${{ secrets.LAVALINK_YOUTUBE_POT_TOKEN }}
+                  LAVALINK_YOUTUBE_POT_VISITORDATA: ${{ secrets.LAVALINK_YOUTUBE_POT_VISITORDATA }}
+                  LAVALINK_SPOTIFY_ENABLED: ${{ secrets.LAVALINK_SPOTIFY_ENABLED }}
+                  LAVALINK_SPOTIFY_CLIENT_ID: ${{ secrets.LAVALINK_SPOTIFY_CLIENT_ID }}
+                  LAVALINK_SPOTIFY_CLIENT_SECRET: ${{ secrets.LAVALINK_SPOTIFY_CLIENT_SECRET }}
+                  LAVALINK_SPOTIFY_COUNTRY_CODE: ${{ secrets.LAVALINK_SPOTIFY_COUNTRY_CODE }}
+                  LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT: ${{ secrets.LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT }}
+                  LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT: ${{ secrets.LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT }}
+                  SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+                  SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+                  MUSICBRAINZ_CONTACT: ${{ secrets.MUSICBRAINZ_CONTACT }}
+                  MUSICBRAINZ_CONTACT_URL: ${{ secrets.MUSICBRAINZ_CONTACT_URL }}
+                  MUSICBRAINZ_SIMILAR: ${{ secrets.MUSICBRAINZ_SIMILAR }}
+                  EMAIL_USER: ${{ secrets.EMAIL_USER }}
+                  EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+                  FEEDBACK_EMAIL: ${{ secrets.FEEDBACK_EMAIL }}
+                  POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+                  POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+                  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+                  BOT_IMAGE_SHA: ${{ env.IMAGE_BOT_SHA }}
+                  LAVALINK_IMAGE_SHA: ${{ env.IMAGE_LAVALINK_SHA }}
+                  GH_ACTOR: ${{ github.actor }}
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   WEB_ENABLED_VAL="${WEB_ENABLED:-true}"
                   WEB_PORT_VAL="${WEB_PORT:-3001}"
@@ -155,55 +187,52 @@ jobs:
                   WEBSOCKET_CLIENT_URL_VAL="${WEBSOCKET_CLIENT_URL:-}"
                   export POSTGRES_HOST_VAL="${POSTGRES_HOST:-postgres-db}"
                   export POSTGRES_PORT_VAL="${POSTGRES_PORT:-5432}"
-                  export POSTGRES_USER="${{ secrets.POSTGRES_USER }}"
-                  export POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
-                  export POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
                   DATABASE_URL_VAL="$(node -e "const u=process.env.POSTGRES_USER||'';const p=encodeURIComponent(process.env.POSTGRES_PASSWORD||'');const h=process.env.POSTGRES_HOST_VAL||'postgres-db';const pt=process.env.POSTGRES_PORT_VAL||'5432';const d=process.env.POSTGRES_DB||'';console.log('postgresql://'+u+':'+p+'@'+h+':'+pt+'/'+d)")"
-                  cat << EOF > .env
-                  BOT_TOKEN=${{ secrets.BOT_TOKEN }}
-                  CLIENT_ID=${{ secrets.CLIENT_ID }}
-                  DISCORD_CLIENT_SECRET=${{ secrets.DISCORD_CLIENT_SECRET }}
-                  BETTER_AUTH_SECRET=${{ secrets.BETTER_AUTH_SECRET }}
-                  BETTER_AUTH_URL=${{ secrets.BETTER_AUTH_URL }}
-                  GUILD_ID=${{ secrets.GUILD_ID }}
-                  OWNER_ID=${{ secrets.OWNER_ID }}
-                  DEV_MODE=${{ secrets.DEV_MODE }}
-                  LOG_LEVEL=${{ secrets.LOG_LEVEL }}
-                  WEB_ENABLED=${WEB_ENABLED_VAL}
-                  WEB_PORT=${WEB_PORT_VAL}
-                  DASHBOARD_PORT=${DASHBOARD_PORT_VAL}
-                  API_PROXY_TARGET=${API_PROXY_TARGET_VAL}
-                  WEBSOCKET_CLIENT_URL=${WEBSOCKET_CLIENT_URL_VAL}
-                  DATABASE_URL=${DATABASE_URL_VAL}
-                  LAVALINK_HOST=${{ secrets.LAVALINK_HOST }}
-                  LAVALINK_PORT=${{ secrets.LAVALINK_PORT }}
-                  LAVALINK_PASSWORD=${{ secrets.LAVALINK_PASSWORD }}
-                  LAVALINK_NODE_ID=${{ secrets.LAVALINK_NODE_ID }}
-                  LAVALINK_SECURE=${{ secrets.LAVALINK_SECURE }}
-                  LAVALINK_YOUTUBE_POT_TOKEN=${{ secrets.LAVALINK_YOUTUBE_POT_TOKEN }}
-                  LAVALINK_YOUTUBE_POT_VISITORDATA=${{ secrets.LAVALINK_YOUTUBE_POT_VISITORDATA }}
-                  LAVALINK_SPOTIFY_ENABLED=${{ secrets.LAVALINK_SPOTIFY_ENABLED }}
-                  LAVALINK_SPOTIFY_CLIENT_ID=${{ secrets.LAVALINK_SPOTIFY_CLIENT_ID }}
-                  LAVALINK_SPOTIFY_CLIENT_SECRET=${{ secrets.LAVALINK_SPOTIFY_CLIENT_SECRET }}
-                  LAVALINK_SPOTIFY_COUNTRY_CODE=${{ secrets.LAVALINK_SPOTIFY_COUNTRY_CODE }}
-                  LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT=${{ secrets.LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT }}
-                  LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT=${{ secrets.LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT }}
-                  SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID }}
-                  SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET }}
-                  MUSICBRAINZ_CONTACT=${{ secrets.MUSICBRAINZ_CONTACT }}
-                  MUSICBRAINZ_CONTACT_URL=${{ secrets.MUSICBRAINZ_CONTACT_URL }}
-                  MUSICBRAINZ_SIMILAR=${{ secrets.MUSICBRAINZ_SIMILAR }}
-                  EMAIL_USER=${{ secrets.EMAIL_USER }}
-                  EMAIL_PASS=${{ secrets.EMAIL_PASS }}
-                  FEEDBACK_EMAIL=${{ secrets.FEEDBACK_EMAIL }}
-                  POSTGRES_DB=${{ secrets.POSTGRES_DB }}
-                  POSTGRES_USER=${{ secrets.POSTGRES_USER }}
-                  POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-                  BOT_IMAGE=${{ env.IMAGE_BOT_SHA }}
-                  LAVALINK_IMAGE=${{ env.IMAGE_LAVALINK_SHA }}
-                  GH_ACTOR=${{ github.actor }}
-                  GH_TOKEN=${{ secrets.GITHUB_TOKEN }}
-                  EOF
+                  {
+                      printf 'BOT_TOKEN=%s\n' "$BOT_TOKEN"
+                      printf 'CLIENT_ID=%s\n' "$CLIENT_ID"
+                      printf 'DISCORD_CLIENT_SECRET=%s\n' "$DISCORD_CLIENT_SECRET"
+                      printf 'BETTER_AUTH_SECRET=%s\n' "$BETTER_AUTH_SECRET"
+                      printf 'BETTER_AUTH_URL=%s\n' "$BETTER_AUTH_URL"
+                      printf 'GUILD_ID=%s\n' "$GUILD_ID"
+                      printf 'OWNER_ID=%s\n' "$OWNER_ID"
+                      printf 'DEV_MODE=%s\n' "$DEV_MODE"
+                      printf 'LOG_LEVEL=%s\n' "$LOG_LEVEL"
+                      printf 'WEB_ENABLED=%s\n' "$WEB_ENABLED_VAL"
+                      printf 'WEB_PORT=%s\n' "$WEB_PORT_VAL"
+                      printf 'DASHBOARD_PORT=%s\n' "$DASHBOARD_PORT_VAL"
+                      printf 'API_PROXY_TARGET=%s\n' "$API_PROXY_TARGET_VAL"
+                      printf 'WEBSOCKET_CLIENT_URL=%s\n' "$WEBSOCKET_CLIENT_URL_VAL"
+                      printf 'DATABASE_URL=%s\n' "$DATABASE_URL_VAL"
+                      printf 'LAVALINK_HOST=%s\n' "$LAVALINK_HOST"
+                      printf 'LAVALINK_PORT=%s\n' "$LAVALINK_PORT"
+                      printf 'LAVALINK_PASSWORD=%s\n' "$LAVALINK_PASSWORD"
+                      printf 'LAVALINK_NODE_ID=%s\n' "$LAVALINK_NODE_ID"
+                      printf 'LAVALINK_SECURE=%s\n' "$LAVALINK_SECURE"
+                      printf 'LAVALINK_YOUTUBE_POT_TOKEN=%s\n' "$LAVALINK_YOUTUBE_POT_TOKEN"
+                      printf 'LAVALINK_YOUTUBE_POT_VISITORDATA=%s\n' "$LAVALINK_YOUTUBE_POT_VISITORDATA"
+                      printf 'LAVALINK_SPOTIFY_ENABLED=%s\n' "$LAVALINK_SPOTIFY_ENABLED"
+                      printf 'LAVALINK_SPOTIFY_CLIENT_ID=%s\n' "$LAVALINK_SPOTIFY_CLIENT_ID"
+                      printf 'LAVALINK_SPOTIFY_CLIENT_SECRET=%s\n' "$LAVALINK_SPOTIFY_CLIENT_SECRET"
+                      printf 'LAVALINK_SPOTIFY_COUNTRY_CODE=%s\n' "$LAVALINK_SPOTIFY_COUNTRY_CODE"
+                      printf 'LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT=%s\n' "$LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT"
+                      printf 'LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT=%s\n' "$LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT"
+                      printf 'SPOTIFY_CLIENT_ID=%s\n' "$SPOTIFY_CLIENT_ID"
+                      printf 'SPOTIFY_CLIENT_SECRET=%s\n' "$SPOTIFY_CLIENT_SECRET"
+                      printf 'MUSICBRAINZ_CONTACT=%s\n' "$MUSICBRAINZ_CONTACT"
+                      printf 'MUSICBRAINZ_CONTACT_URL=%s\n' "$MUSICBRAINZ_CONTACT_URL"
+                      printf 'MUSICBRAINZ_SIMILAR=%s\n' "$MUSICBRAINZ_SIMILAR"
+                      printf 'EMAIL_USER=%s\n' "$EMAIL_USER"
+                      printf 'EMAIL_PASS=%s\n' "$EMAIL_PASS"
+                      printf 'FEEDBACK_EMAIL=%s\n' "$FEEDBACK_EMAIL"
+                      printf 'POSTGRES_DB=%s\n' "$POSTGRES_DB"
+                      printf 'POSTGRES_USER=%s\n' "$POSTGRES_USER"
+                      printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+                      printf 'BOT_IMAGE=%s\n' "$BOT_IMAGE_SHA"
+                      printf 'LAVALINK_IMAGE=%s\n' "$LAVALINK_IMAGE_SHA"
+                      printf 'GH_ACTOR=%s\n' "$GH_ACTOR"
+                      printf 'GH_TOKEN=%s\n' "$GH_TOKEN"
+                  } > .env
 
             - name: Copy files to server
               uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7

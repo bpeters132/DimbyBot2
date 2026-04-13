@@ -368,12 +368,16 @@ export async function buildPlayerBroadcastData(
 }
 
 /** Bot VC from Lavalink player when set; otherwise Discord.js (covers brief desync after connect). */
-export function resolveBotVoiceChannelId(guildId: string, player?: Player | null): string | null {
+export function resolveBotVoiceChannelId(
+    guildId: string,
+    player?: Player | null,
+    clientArg?: VoiceSummaryClient | null
+): string | null {
     const p = player ?? null
     if (p?.voiceChannelId) {
         return p.voiceChannelId
     }
-    const client = tryGetBotClient()
+    const client = clientArg ?? tryGetBotClient()
     if (!client) {
         return null
     }
@@ -381,16 +385,33 @@ export function resolveBotVoiceChannelId(guildId: string, player?: Player | null
     return guild?.members.me?.voice?.channelId ?? null
 }
 
+type VoiceSummaryClient = {
+    guilds: {
+        cache: Map<
+            string,
+            {
+                members: { me?: { voice?: { channelId?: string | null } | null } | null }
+                voiceStates: { cache: Map<string, { channelId?: string | null }> }
+            }
+        >
+    }
+}
+
 /** Voice context for dashboard permission copy and queue actions. */
 export function summarizeVoiceForWeb(
     guildId: string,
     userId: string,
-    player?: unknown
+    player?: unknown,
+    clientArg?: VoiceSummaryClient | null
 ): { inVoiceWithBot: boolean; botInVoiceChannel: boolean; canQueueTracks: boolean } {
-    const client = tryGetBotClient()
+    const client = clientArg ?? tryGetBotClient()
     const guild = client?.guilds.cache.get(guildId)
     const userVoiceChannelId = guild?.voiceStates.cache.get(userId)?.channelId ?? null
-    const botVoiceChannelId = resolveBotVoiceChannelId(guildId, isPlayer(player) ? player : null)
+    const botVoiceChannelId = resolveBotVoiceChannelId(
+        guildId,
+        isPlayer(player) ? player : null,
+        client
+    )
     const botInVoiceChannel = botVoiceChannelId !== null
     const userInVoice = userVoiceChannelId !== null
     const inVoiceWithBot =

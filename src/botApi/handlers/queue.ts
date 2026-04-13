@@ -1,6 +1,6 @@
 import { resolveWebRequesterDiscordId } from "../resolveWebRequesterId.js"
 import { WebPermission } from "../../web/shared/permissions.js"
-import type { ApiResponse } from "../../types/apiPayloads.js"
+import type { ApiResponse } from "../../types/index.js"
 import type { QueueResponse } from "../../types/web.js"
 import { requirePermissions } from "../../web/lib/api-auth.js"
 import { getBotClient } from "../../web/lib/botClient.js"
@@ -15,6 +15,7 @@ function clampInt(value: number, min: number, max: number): number {
 
 /** Parses a query integer, truncates toward zero, and clamps to inclusive bounds. */
 function parseNumber(value: string | null, fallback: number, min: number, max: number): number {
+    if (value === null) return fallback
     const parsed = Number(value)
     if (!Number.isFinite(parsed)) return fallback
     return clampInt(Math.trunc(parsed), min, max)

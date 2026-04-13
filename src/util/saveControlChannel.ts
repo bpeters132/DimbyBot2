@@ -107,11 +107,12 @@ export async function saveGuildSettings(
     settings: GuildSettingsStore,
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<boolean> {
+    const settingsSnapshot = cloneGuildSettingsStore(settings)
     return withGuildSettingsSaveLock(async () => {
         const logger = loggerFromPartial(loggerInstance)
         logger.debug("[guildSettings] Attempting to save settings to database.")
         try {
-            const result = await replaceGuildSettingsStoreInDatabase(settings)
+            const result = await replaceGuildSettingsStoreInDatabase(settingsSnapshot)
             const reloaded = await readGuildSettingsFromDatabase(logger)
             guildSettingsCache = cloneGuildSettingsStore(reloaded)
             guildSettingsInitialized = true

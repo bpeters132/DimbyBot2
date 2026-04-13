@@ -135,8 +135,10 @@ forward_shutdown() {
 }
 
 wait_for_bot() {
+  set +e
   wait "$BOT_PID"
   BOT_EXIT_CODE=$?
+  set -e
   if [ -n "${WEB_PID:-}" ] && kill -0 "$WEB_PID" >/dev/null 2>&1; then
     kill "$WEB_PID" >/dev/null 2>&1 || true
     wait "$WEB_PID" 2>/dev/null || true

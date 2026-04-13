@@ -26,7 +26,7 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
             {
                 ok: false,
                 error: "Bot API misconfigured",
-                details: message,
+                details: "Bot API misconfigured",
             },
             { status: 503 }
         )

@@ -1,6 +1,6 @@
 import { resolveWebRequesterDiscordId } from "../resolveWebRequesterId.js"
 import { WebPermission } from "../../web/shared/permissions.js"
-import type { ApiResponse } from "../../types/apiPayloads.js"
+import type { ApiResponse } from "../../types/index.js"
 import type { PlayerStateResponse } from "../../types/web.js"
 import { requirePermissions } from "../../web/lib/api-auth.js"
 import { getBotClient } from "../../web/lib/botClient.js"

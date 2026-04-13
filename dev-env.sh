@@ -51,9 +51,9 @@ case $COMMAND in
     "${DC[@]}" build "$@"
     ;;
   rebuild)
-    echo "Rebuilding development environment (down, build, up)..."
-    echo "Stopping..."
-    "${DC[@]}" down # Keep volumes so Postgres guild settings and auth data persist
+    echo "Rebuilding selected development services (stop, build, up)..."
+    echo "Stopping selected services..."
+    "${DC[@]}" stop "$@"
     echo "Building..."
     "${DC[@]}" build "$@" # Build images, pass any extra args
     echo "Starting..."

@@ -14,7 +14,7 @@ export function LoginButton() {
             const name = err instanceof Error ? err.name : "Error"
             const message = err instanceof Error ? err.message : String(err)
             console.error("[LoginButton] Discord sign-in failed", name, message)
-            toast.error(`Sign-in failed: ${message}`)
+            toast.error("Sign-in failed. Please try again.")
         }
     }
 

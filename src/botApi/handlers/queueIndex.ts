@@ -1,5 +1,5 @@
 import { WebPermission } from "../../web/shared/permissions.js"
-import type { ApiResponse } from "../../types/apiPayloads.js"
+import type { ApiResponse } from "../../types/index.js"
 import type { QueueResponse } from "../../types/web.js"
 import { requirePermissions } from "../../web/lib/api-auth.js"
 import { getBotClient, tryGetBotClient } from "../../web/lib/botClient.js"
