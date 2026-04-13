@@ -646,12 +646,10 @@ export async function handleQueryAndPlay(
                 client.debug(
                     `[MusicManager] Before play check: player.playing=${player.playing}, player.queue.tracks.length=${player.queue.tracks.length}`
                 )
-                if (player.queue.tracks.length > 0) {
-                    await startPlaybackIfNeeded(player)
-                    client.debug(
-                        `[MusicManager] Lavalink player started playing [${player.queue.current?.info?.title || "track from queue"}].`
-                    )
-                }
+                await startPlaybackIfNeeded(player)
+                client.debug(
+                    `[MusicManager] Lavalink player started playing [${player.queue.current?.info?.title || "track from queue"}].`
+                )
             } catch (playError: unknown) {
                 if (previousVoiceChannelIdBeforeEnsure !== null) {
                     player.voiceChannelId = previousVoiceChannelIdBeforeEnsure

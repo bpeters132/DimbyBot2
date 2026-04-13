@@ -1,6 +1,7 @@
 "use server"
 
 import type { StatusPayload } from "@/types/web"
+import { writeAuditLog } from "@/lib/audit-log"
 import { sanitizeErrorText } from "@/lib/sanitize-log-text"
 import { getServiceStatusPayload } from "@/server/service-status"
 
@@ -67,7 +68,12 @@ export async function getServiceStatusAction(): Promise<StatusPayload> {
         return await getServiceStatusPayload()
     } catch (error: unknown) {
         const safe = sanitizeErrorForLog(error)
-        console.error("[status.actions] service status probe failed", safe)
+        writeAuditLog(
+            "error",
+            "SERVICE_STATUS_PROBE_FAILED",
+            "[status.actions] service status probe failed",
+            safe
+        )
         return {
             ok: false,
             checkedAt: new Date().toISOString(),

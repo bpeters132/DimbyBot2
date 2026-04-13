@@ -11,7 +11,7 @@ export function loggerFromPartial(
         typeof loggerInstance.warn === "function" &&
         typeof loggerInstance.error === "function"
     ) {
-        const logger = loggerInstance as Partial<LoggerInterface>
+        const logger = loggerInstance
         return {
             debug: (text: string, ...args: unknown[]) => logger.debug!(text, ...args),
             info: (text: string, ...args: unknown[]) => logger.info!(text, ...args),

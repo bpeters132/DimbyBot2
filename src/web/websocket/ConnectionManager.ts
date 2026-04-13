@@ -233,7 +233,7 @@ export class ConnectionManager {
                 userId,
                 message,
             })
-            this.forceUnsubscribeSocket(socket, guildId, "SUBSCRIBE_FORBIDDEN")
+            this.forceUnsubscribeSocket(socket, guildId, "PERMISSION_RESOLUTION_ERROR")
             return false
         }
     }

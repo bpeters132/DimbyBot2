@@ -18,11 +18,7 @@ services:
         ports:
             - "${LAVALINK_PORT}:${LAVALINK_PORT}" # Map host port to container port
         healthcheck:
-            test:
-                [
-                    "CMD-SHELL",
-                    'curl --fail -H "Authorization: ${LAVALINK_PASSWORD}" "http://127.0.0.1:${LAVALINK_PORT:-2333}/version" || exit 1',
-                ]
+            test: ["CMD", "/bin/sh", "/app/healthcheck.sh"]
             interval: 10s
             timeout: 5s
             retries: 5

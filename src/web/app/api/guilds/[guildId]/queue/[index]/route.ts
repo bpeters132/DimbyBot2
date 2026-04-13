@@ -17,17 +17,11 @@ export async function DELETE(
         return await proxyBotApi(request)
     } catch (error: unknown) {
         console.error("[api/guilds/.../queue/[index]] DELETE proxy failed", error)
-        const details =
-            error instanceof Error
-                ? error.message
-                : typeof error === "string"
-                  ? error
-                  : "Internal Server Error"
         return NextResponse.json(
             {
                 ok: false,
                 error: "Internal Server Error",
-                details,
+                details: "An unexpected error occurred.",
             },
             { status: 500 }
         )
@@ -45,17 +39,11 @@ export async function PATCH(
         return await proxyBotApi(request)
     } catch (error: unknown) {
         console.error("[api/guilds/.../queue/[index]] PATCH proxy failed", error)
-        const details =
-            error instanceof Error
-                ? error.message
-                : typeof error === "string"
-                  ? error
-                  : "Internal Server Error"
         return NextResponse.json(
             {
                 ok: false,
                 error: "Internal Server Error",
-                details,
+                details: "An unexpected error occurred.",
             },
             { status: 500 }
         )

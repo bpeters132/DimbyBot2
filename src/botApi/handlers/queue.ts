@@ -81,17 +81,28 @@ export async function queuePOST(
     }
 
     const client = getBotClient()
-    const enqueue = await searchAndEnqueue(client, guildId, requester.requesterId, query, guard)
-    if (enqueue.ok === false) {
-        return { status: enqueue.status, body: { ok: false, error: enqueue.error } }
-    }
+    try {
+        const enqueue = await searchAndEnqueue(client, guildId, requester.requesterId, query, guard)
+        if (enqueue.ok === false) {
+            return { status: enqueue.status, body: { ok: false, error: enqueue.error } }
+        }
 
-    return {
-        status: 200,
-        body: {
-            ok: true,
-            data: await toQueueResponse(guildId, enqueue.player),
-        },
+        return {
+            status: 200,
+            body: {
+                ok: true,
+                data: await toQueueResponse(guildId, enqueue.player),
+            },
+        }
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        return {
+            status: 500,
+            body: {
+                ok: false,
+                error: { error: message },
+            },
+        }
     }
 }
 

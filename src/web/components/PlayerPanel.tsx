@@ -15,6 +15,7 @@ import {
 } from "@/lib/dashboard-permissions"
 import { WEB_PERMISSION } from "@/lib/web-permission-keys"
 import { getPlayerQueueAction, getPlayerStateAction } from "@/lib/actions/player.actions"
+import { sanitizeHttpUrl } from "@/lib/url-utils"
 import { ConnectionStatus } from "@/components/ConnectionStatus"
 import { usePlayerActions } from "@/hooks/usePlayerActions"
 import { usePlayerSocket } from "@/hooks/usePlayerSocket"
@@ -35,18 +36,6 @@ function formatDuration(durationMs: number, isStream = false): string {
     const minutes = Math.floor(totalSeconds / 60)
     const seconds = totalSeconds % 60
     return `${minutes}:${String(seconds).padStart(2, "0")}`
-}
-
-/** Returns the normalized URL when the scheme is http(s); otherwise null. */
-function sanitizeHttpUrl(value?: string | null): string | null {
-    if (!value) return null
-    try {
-        const parsed = new URL(value)
-        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null
-        return parsed.toString()
-    } catch {
-        return null
-    }
 }
 
 function formatSourceName(sourceName: string | null): string {
@@ -213,6 +202,7 @@ function NowPlayingProgress({ playerState, track }: NowPlayingProgressProps) {
 
     useEffect(() => {
         setAnchor({ positionMs: playerState.positionMs, wallMs: Date.now() })
+        setTick(0)
     }, [playerState.positionMs, playerState.status, track.uri, track.durationMs])
 
     useEffect(() => {

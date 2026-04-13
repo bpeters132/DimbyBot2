@@ -3,12 +3,6 @@ FROM node:22-alpine3.22 AS builder
 
 WORKDIR /app
 
-# Build-time placeholders so Next.js can compile; runtime secrets come from compose/env.
-ARG BETTER_AUTH_URL=http://localhost:3000
-ARG BETTER_AUTH_SECRET=fake-better-auth-secret
-ARG CLIENT_ID=000000000000000000
-ARG DISCORD_CLIENT_SECRET=build-time-discord-client-secret
-
 COPY docker/ytdlp-requirements.txt /tmp/ytdlp-requirements.txt
 # Native build tools (e.g. sodium) + ffmpeg for any runtime checks during build.
 RUN apk add --no-cache \

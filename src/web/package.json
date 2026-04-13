@@ -6,7 +6,8 @@
         "predev": "node scripts/predev.js",
         "dev": "next dev --webpack --hostname 0.0.0.0 --port 3001",
         "typecheck": "tsc --noEmit",
-        "build": "next build --webpack"
+        "build": "next build --webpack",
+        "start": "next start --port 3001"
     },
     "dependencies": {
         "@prisma/adapter-pg": "^7.6.0",

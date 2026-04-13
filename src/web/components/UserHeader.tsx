@@ -53,7 +53,6 @@ export function UserHeader() {
                             } catch (error) {
                                 console.error("[UserHeader] sign out failed", error)
                                 setSignOutError("Log out failed. Please try again.")
-                            } finally {
                                 signOutInFlight.current = false
                                 setSignOutLoading(false)
                             }

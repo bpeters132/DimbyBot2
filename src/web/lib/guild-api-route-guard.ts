@@ -6,10 +6,7 @@ import { resolveAuthenticatedGuildAccess } from "@/lib/api-auth"
 export async function guardGuildAccess(guildId: string): Promise<NextResponse | null> {
     try {
         const h = await headers()
-        const headerRecord: Record<string, string> = {}
-        for (const [k, v] of h.entries()) {
-            headerRecord[k] = v
-        }
+        const headerRecord = Object.fromEntries(h.entries()) as Record<string, string>
         const ctx = await resolveAuthenticatedGuildAccess(headerRecord, guildId)
         if (ctx.ok === false) {
             return NextResponse.json(

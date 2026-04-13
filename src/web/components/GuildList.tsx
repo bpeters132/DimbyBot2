@@ -25,7 +25,7 @@ function isValidGuildIconUrl(url: string | null | undefined): url is string {
     if (typeof url !== "string") return false
     const trimmed = url.trim()
     if (!trimmed) return false
-    return /^https:\/\/.+/i.test(trimmed)
+    return /^https:\/\/(?:cdn\.discordapp\.com|images\.discordapp\.net)(?:\/|$)/i.test(trimmed)
 }
 
 function isValidBotInviteUrl(url: string | null | undefined): url is string {

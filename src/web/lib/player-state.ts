@@ -18,6 +18,7 @@ const MAX_QUEUE_LIMIT = 100
 const REQUESTER_FETCH_CONCURRENCY = 6
 const REQUESTER_MISS_CACHE_TTL_MS = 120_000
 const REQUESTER_MISS_CACHE_PURGE_INTERVAL_MS = 60_000
+const REQUESTER_MISS_CACHE_MAX_ENTRIES = 10_000
 const requesterMissCache = new Map<string, number>()
 
 function purgeExpiredRequesterMissCache(): void {
@@ -26,6 +27,15 @@ function purgeExpiredRequesterMissCache(): void {
         if (expiresAt < now) {
             requesterMissCache.delete(key)
         }
+    }
+}
+
+function setRequesterMissCacheEntry(key: string, expiresAt: number): void {
+    requesterMissCache.set(key, expiresAt)
+    while (requesterMissCache.size > REQUESTER_MISS_CACHE_MAX_ENTRIES) {
+        const oldest = requesterMissCache.keys().next()
+        if (oldest.done) break
+        requesterMissCache.delete(oldest.value)
     }
 }
 
@@ -177,12 +187,14 @@ async function buildRequesterDisplayMap(
                 while (queue.length > 0) {
                     const id = queue.shift()
                     if (!id || map.has(id)) continue
+                    map.set(id, "")
                     const missCacheKey = `${guildId}:${id}`
                     const member = await guild.members.fetch(id).catch((err: unknown) => {
-                        requesterMissCache.set(
+                        setRequesterMissCacheEntry(
                             missCacheKey,
                             Date.now() + REQUESTER_MISS_CACHE_TTL_MS
                         )
+                        map.delete(id)
                         webPlayerTrace("members.fetch failed for requester label", {
                             guildId,
                             userIdPrefix: id.slice(0, 8),
@@ -196,6 +208,8 @@ async function buildRequesterDisplayMap(
                     if (label) {
                         map.set(id, label)
                         requesterMissCache.delete(missCacheKey)
+                    } else {
+                        map.delete(id)
                     }
                 }
             })()
@@ -297,7 +311,7 @@ export function isPlayer(value: unknown): value is Player {
     const tracks = (queue as { tracks?: unknown }).tracks
     if (!Array.isArray(tracks)) return false
     if (typeof o.playing !== "boolean") return false
-    if (o.guildId !== undefined && typeof o.guildId !== "string") return false
+    if (typeof o.guildId !== "string") return false
     if (o.node !== undefined && (typeof o.node !== "object" || o.node === null)) return false
     return true
 }

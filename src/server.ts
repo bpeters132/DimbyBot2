@@ -13,6 +13,17 @@ import { setBotClient } from "./web/lib/botClient.js"
 const logFilePath = path.join(import.meta.dirname, "..", "logs", "app.log")
 const webEnabled = process.env.WEB_ENABLED === "true"
 const webPort = Number(process.env.WEB_PORT || 3001)
+const SHUTDOWN_TIMEOUT_MS = 10_000
+
+function withShutdownTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const timeoutId = setTimeout(
+            () => reject(new Error(`Timed out while waiting for ${label} (${timeoutMs}ms)`)),
+            timeoutMs
+        )
+        promise.then(resolve, reject).finally(() => clearTimeout(timeoutId))
+    })
+}
 
 function ensureLogDir(): void {
     try {
@@ -62,25 +73,40 @@ async function run(): Promise<void> {
     let stopHeartbeat: (() => void) | null = null
     const shutdown = async (signal: string): Promise<void> => {
         logger.info(`Received ${signal}, shutting down...`)
+        let shouldExitWithFailure = false
         try {
+            stopHeartbeat?.()
             if (server) {
-                await new Promise<void>((resolve) => {
+                const closePromise = new Promise<void>((resolve) => {
                     server?.close(() => resolve())
                 })
+                await withShutdownTimeout(closePromise, SHUTDOWN_TIMEOUT_MS, "web server close")
                 logger.info("Web server stopped.")
             }
-            stopHeartbeat?.()
             if (client) {
                 try {
-                    await client.destroy()
+                    await withShutdownTimeout(
+                        client.destroy(),
+                        SHUTDOWN_TIMEOUT_MS,
+                        "Discord client shutdown"
+                    )
                 } catch (destroyErr: unknown) {
+                    shouldExitWithFailure = true
                     logger.error("Error while destroying Discord client:", destroyErr)
                 }
                 logger.info("Bot client stopped.")
             }
-            await disconnectDatabase(logger)
+            try {
+                await disconnectDatabase(logger)
+            } catch (disconnectError: unknown) {
+                shouldExitWithFailure = true
+                logger.error("Error while disconnecting database:", disconnectError)
+            }
+        } catch (error: unknown) {
+            shouldExitWithFailure = true
+            logger.error("Shutdown timed out or failed:", error)
         } finally {
-            process.exit(0)
+            process.exit(shouldExitWithFailure ? 1 : 0)
         }
     }
 

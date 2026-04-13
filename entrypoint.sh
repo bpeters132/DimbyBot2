@@ -92,10 +92,12 @@ echo "Bot Entrypoint: lavaNodesConfig.js generated successfully."
 
 resolve_next_server_entry() {
   if [ -f /app/src/web/.next/standalone/server.js ]; then
+    echo "Bot Entrypoint: Resolved Next.js entry /app/src/web/.next/standalone/server.js" >&2
     echo "/app/src/web/.next/standalone/server.js"
     return 0
   fi
   if [ -f /app/src/web/.next/standalone/src/web/server.js ]; then
+    echo "Bot Entrypoint: Resolved Next.js entry /app/src/web/.next/standalone/src/web/server.js" >&2
     echo "/app/src/web/.next/standalone/src/web/server.js"
     return 0
   fi
@@ -152,6 +154,10 @@ if [ "$(id -u)" -eq 0 ]; then
   mkdir -p /app/node_modules/.prisma /app/node_modules/@prisma
   chown -R node:node /app/node_modules/.prisma /app/node_modules/@prisma 2>/dev/null || true
   if [ "$#" -gt 0 ]; then
+    if [ "${WEB_ENABLED:-false}" = "true" ]; then
+      trap forward_shutdown INT TERM
+      start_web_server "node-user"
+    fi
     echo "Bot Entrypoint: Executing '$*' as node..."
     exec su-exec node "$@"
   fi
@@ -165,6 +171,10 @@ fi
 
 mkdir -p /app/storage /app/node_modules/.prisma /app/node_modules/@prisma
 if [ "$#" -gt 0 ]; then
+  if [ "${WEB_ENABLED:-false}" = "true" ]; then
+    trap forward_shutdown INT TERM
+    start_web_server
+  fi
   echo "Bot Entrypoint: Executing '$*'..."
   exec "$@"
 fi

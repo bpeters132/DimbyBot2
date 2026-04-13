@@ -19,6 +19,7 @@ export function getBotApiOrigin(): string | null {
     try {
         parsed = new URL(raw)
     } catch {
+        // Intentional console usage: this runs during early bootstrap config validation before app loggers initialize.
         console.error(
             "[bot-api-origin] API_PROXY_TARGET is not a valid URL (expected http/https origin)."
         )
@@ -26,13 +27,9 @@ export function getBotApiOrigin(): string | null {
     }
 
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        // Intentional console usage: this runs during early bootstrap config validation before app loggers initialize.
         console.error("[bot-api-origin] API_PROXY_TARGET must use http: or https: protocol")
         throw new Error("Invalid API_PROXY_TARGET: protocol must be http or https")
-    }
-
-    if (!parsed.host) {
-        console.error("[bot-api-origin] API_PROXY_TARGET is missing a host after parsing")
-        throw new Error("Invalid API_PROXY_TARGET: missing host")
     }
 
     const origin = stripTrailingSlashes(`${parsed.protocol}//${parsed.host}`)

@@ -62,7 +62,7 @@ export async function resolveDiscordUserSnowflake(
             scopes?: string[]
             accessTokenExpiresAt?: Date
             idToken?: string
-        } | null
+        }
         const accessToken = accessResult?.accessToken
         if (!accessToken) {
             console.warn(

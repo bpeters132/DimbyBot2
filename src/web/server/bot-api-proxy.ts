@@ -24,10 +24,8 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
         return NextResponse.json(
             {
                 ok: false,
-                error: {
-                    error: "Bot API misconfigured",
-                    details: message,
-                },
+                error: "Bot API misconfigured",
+                details: message,
             },
             { status: 503 }
         )
@@ -39,11 +37,9 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
         return NextResponse.json(
             {
                 ok: false,
-                error: {
-                    error: "Bot API not configured",
-                    details:
-                        "Set API_PROXY_TARGET to the bot HTTP origin (e.g. http://localhost:3001).",
-                },
+                error: "Bot API not configured",
+                details:
+                    "Set API_PROXY_TARGET to the bot HTTP origin (e.g. http://localhost:3001).",
             },
             { status: 503 }
         )
@@ -88,7 +84,7 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
     const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs)
     try {
         const upstream = await fetch(targetUrl, { ...init, signal: controller.signal })
-        const contentType = upstream.headers.get("content-type") || "application/json"
+        const contentType = upstream.headers.get("content-type")
         const body = await upstream.arrayBuffer()
         if (isBotApiVerbose()) {
             logBotApiVerbose("proxyBotApi ← upstream", {
@@ -101,10 +97,11 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
                 contentType,
             })
         }
-        return new NextResponse(body, {
-            status: upstream.status,
-            headers: { "content-type": contentType },
-        })
+        const responseHeaders = new Headers()
+        if (contentType) {
+            responseHeaders.set("content-type", contentType)
+        }
+        return new NextResponse(body, { status: upstream.status, headers: responseHeaders })
     } catch (e) {
         const isAbort =
             e instanceof DOMException

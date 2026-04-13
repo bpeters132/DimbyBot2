@@ -21,7 +21,9 @@ export function isGuildSettingsInitialized(): boolean {
 }
 
 function cloneGuildSettingsStore(store: GuildSettingsStore): GuildSettingsStore {
-    return structuredClone(store)
+    return typeof structuredClone === "function"
+        ? structuredClone(store)
+        : (JSON.parse(JSON.stringify(store)) as GuildSettingsStore)
 }
 
 /**
@@ -94,7 +96,9 @@ export async function saveGuildSettings(
     logger.debug("[guildSettings] Attempting to save settings to database.")
     try {
         const result = await replaceGuildSettingsStoreInDatabase(settings)
-        guildSettingsCache = cloneGuildSettingsStore(settings)
+        const reloaded = await readGuildSettingsFromDatabase(logger)
+        guildSettingsCache = cloneGuildSettingsStore(reloaded)
+        guildSettingsInitialized = true
         logger.debug(
             `[guildSettings] Successfully saved guild settings (upserted=${result.rowsUpserted}, deleted=${result.rowsDeleted}, affected=${result.rowsAffected}).`
         )

@@ -45,9 +45,10 @@ const successCache = new Map<string, SuccessCacheEntry>()
 const inflight = new Map<string, Promise<FetchUserGuildsResult>>()
 
 function evictOldestCacheEntry(): void {
-    const first = successCache.keys().next().value as string | undefined
-    if (first !== undefined) {
-        successCache.delete(first)
+    const iter = successCache.keys()
+    const result = iter.next()
+    if (!result.done) {
+        successCache.delete(result.value)
     }
 }
 

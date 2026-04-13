@@ -76,5 +76,21 @@ export function dashboardHasAllWebPermissions(
     snapshot: GuildDashboardPermissionSnapshot,
     perms: WebPermissionKey[]
 ): boolean {
-    return perms.every((p) => dashboardHasWebPermission(snapshot, p))
+    const denied: WebPermissionKey[] = []
+    for (const perm of perms) {
+        const decision = resolveWebPermissionDecision(snapshot, perm)
+        if (!decision.allowed) {
+            denied.push(perm)
+        }
+    }
+    if (denied.length > 0) {
+        webPlayerTrace("dashboardHasAllWebPermissions: denied", {
+            denied,
+            memberResolved: snapshot.memberResolved,
+            primary: snapshot.primaryPermissions,
+            oauth: snapshot.oauthPermissions,
+        })
+        return false
+    }
+    return true
 }

@@ -121,7 +121,7 @@ export async function runPrismaMigrateDeploy(
         child.once("error", (error) => {
             reject(error)
         })
-        child.once("close", (code) => {
+        child.once("close", (code, signal) => {
             if (stdoutLineBuf.trim()) {
                 logger.info(`[Database][migrate] ${sanitizeMigrateOutput(stdoutLineBuf).trimEnd()}`)
             }
@@ -137,6 +137,18 @@ export async function runPrismaMigrateDeploy(
             logger.debug(
                 `[Database][migrate] Full migrate output on failure (${redactedCombined.length} chars):\n${redactedCombined}`
             )
+            if (code === null) {
+                const signalText = signal ?? "unknown"
+                logger.debug(
+                    `[Database][migrate] prisma migrate deploy terminated by signal ${signalText}`
+                )
+                reject(
+                    new Error(
+                        `prisma migrate deploy failed due to signal ${signalText} (see debug logs for full output).`
+                    )
+                )
+                return
+            }
             reject(
                 new Error(
                     `prisma migrate deploy failed with exit code ${code} (see debug logs for full output).`

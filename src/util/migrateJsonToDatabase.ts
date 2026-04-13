@@ -52,6 +52,30 @@ function isGuildSettingsStoreShape(parsed: unknown): parsed is GuildSettingsStor
     return true
 }
 
+function isDownloadMetadataEntryShape(entry: unknown): entry is DownloadsMetadataStore[string] {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        return false
+    }
+    const candidate = entry as Record<string, unknown>
+    if (candidate.guildId !== undefined && typeof candidate.guildId !== "string") {
+        return false
+    }
+    if (
+        candidate.downloadDate !== undefined &&
+        typeof candidate.downloadDate !== "string" &&
+        typeof candidate.downloadDate !== "number"
+    ) {
+        return false
+    }
+    if (candidate.originalUrl !== undefined && typeof candidate.originalUrl !== "string") {
+        return false
+    }
+    if (candidate.filePath !== undefined && typeof candidate.filePath !== "string") {
+        return false
+    }
+    return true
+}
+
 function renameJsonAsMigrated(filePath: string, logger: LoggerInterface): void {
     const migratedPath = `${filePath}.migrated`
     try {
@@ -212,14 +236,25 @@ export async function migrateDownloadMetadata(
     )
 
     try {
-        const raw = fs.readFileSync(downloadMetadataJsonPath, "utf8")
-        const parsed = JSON.parse(raw) as DownloadsMetadataStore
+        let parsed: DownloadsMetadataStore = {}
+        try {
+            const raw = fs.readFileSync(downloadMetadataJsonPath, "utf8")
+            parsed = JSON.parse(raw) as DownloadsMetadataStore
+        } catch (parseErr: unknown) {
+            const message = parseErr instanceof Error ? parseErr.message : String(parseErr)
+            logger.error(
+                `[JsonMigration] download metadata JSON parse failed (${downloadMetadataJsonPath}): ${message}`
+            )
+            result.skipped = true
+            result.reason = "validation-failed"
+            return result
+        }
         const entries = Object.entries(parsed)
         const validEntries: DownloadsMetadataStore = {}
         const failedEntries: string[] = []
 
         for (const [fileName, metadata] of entries) {
-            if (!fileName || typeof metadata !== "object" || metadata === null) {
+            if (!fileName || !isDownloadMetadataEntryShape(metadata)) {
                 result.failedCount++
                 failedEntries.push(`file:${String(fileName)}`)
                 logger.warn(

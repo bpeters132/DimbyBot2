@@ -265,7 +265,9 @@ export async function resolveAuthenticatedGuildAccess(
 
 /**
  * Primary + OAuth-fallback permission lists for dashboard UI gating (matches {@link requirePermissions}
- * merge rules per action).
+ * merge rules per action). When no in-process bot client is available, this returns an optimistic
+ * default dashboard permission set so UI controls render, while bot API endpoints still enforce
+ * authoritative permission checks.
  */
 export async function getGuildDashboardPermissionSnapshot(
     headers: Headers | Record<string, string>,
@@ -278,20 +280,13 @@ export async function getGuildDashboardPermissionSnapshot(
 
     const botClient = tryGetBotClient()
     if (!botClient) {
-        /**
-         * Next runs without `setBotClient` when using `yarn dev:web` only. Role-based resolution is
-         * impossible here, but the **bot HTTP API** still enforces permissions for playback/queue.
-         * Grant dashboard UI entitlements so controls/queue forms render; voice gating remains on
-         * live `playerState` from the bot.
-         */
         const noClientMsg =
-            "getGuildDashboardPermissionSnapshot: no BotClient in this process — using optimistic dashboard web perms (run bot+web together or set API_PROXY_TARGET to a running bot)."
-        const noClientCtx = { guildId, discordUserIdPrefix: ctx.discordUserId.slice(0, 8) }
-        if (process.env.NODE_ENV === "development") {
-            webPlayerDebug(noClientMsg, noClientCtx)
-        } else {
-            webPlayerWarn(noClientMsg, { metric: "optimistic_dashboard_perms", ...noClientCtx })
-        }
+            "OPTIMISTIC_DASHBOARD_PERMS: getGuildDashboardPermissionSnapshot using optimistic dashboard permissions because no BotClient is registered in this process."
+        webPlayerWarn(noClientMsg, {
+            guildId,
+            discordUserIdPrefix: ctx.discordUserId.slice(0, 8),
+            metric: "optimistic_dashboard_perms",
+        })
         const defaultMemberWebPerms: WebPermission[] = [
             WebPermission.VIEW_PLAYER,
             WebPermission.CONTROL_PLAYBACK,

@@ -48,7 +48,10 @@ export async function guildListGET(
             status: 500,
             body: {
                 ok: false,
-                error: { error: "Failed to retrieve Discord access token.", details: message },
+                error: {
+                    error: "Failed to retrieve Discord access token.",
+                    details: "Internal server error.",
+                },
             },
         }
     }
@@ -70,9 +73,9 @@ export async function guildListGET(
         const message = err instanceof Error ? err.message : String(err)
         const client = tryGetBotClient()
         if (client) {
-            client.error("[guildListGET] fetchDiscordUserGuilds threw", { message, err })
+            client.error("[guildListGET] fetchDiscordUserGuilds threw", { message })
         } else {
-            console.error("[guildListGET] fetchDiscordUserGuilds threw", { message, err })
+            console.error("[guildListGET] fetchDiscordUserGuilds threw", { message })
         }
         return {
             status: 502,

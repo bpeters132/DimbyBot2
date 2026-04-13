@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Install yt-dlp (pinned — bump version after testing; keep in sync with docker/ytdlp-requirements.txt).
 # Also install build tools needed for native Node.js modules.
-# Use pipx to install yt-dlp to avoid PEP 668 issues (pipx puts binaries in ~/.local/bin, not on PATH).
+# Install yt-dlp into a shared venv so non-root users can execute it.
 RUN apk add --no-cache \
         python3=3.12.13-r0 \
         py3-pip=25.1.1-r1 \
@@ -15,12 +15,11 @@ RUN apk add --no-cache \
         automake=1.18.1-r0 \
         libtool=2.5.4-r2 \
         g++=15.2.0-r2 \
-        pipx=1.8.0-r0 \
         su-exec=0.3-r0 \
         wget=1.25.0-r2 \
-    && pipx install "yt-dlp==2026.2.21" \
-    && export PATH="/root/.local/bin:${PATH}" \
-    && YTDLP_BIN="$(command -v yt-dlp)" \
+    && python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir "yt-dlp==2026.2.21" \
+    && YTDLP_BIN="/opt/venv/bin/yt-dlp" \
     && test -n "$YTDLP_BIN" && test -x "$YTDLP_BIN" \
     && ln -sf "$YTDLP_BIN" /usr/local/bin/yt-dlp \
     && yt-dlp --version

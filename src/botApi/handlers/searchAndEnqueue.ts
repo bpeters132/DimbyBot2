@@ -53,24 +53,26 @@ export async function searchAndEnqueue(
     const textChannelId = await resolveWebDashboardTextChannelId(guild)
 
     const botUser = client.user
-    if (botUser) {
-        const joinPerms = voiceChannel.permissionsFor(botUser)
-        if (!joinPerms) {
-            return {
-                ok: false,
-                status: 403,
-                error: { error: "Could not determine bot permissions for this voice channel." },
-            }
+    if (!botUser) {
+        return {
+            ok: false,
+            status: 503,
+            error: { error: "Bot not ready; cannot verify voice permissions." },
         }
-        if (
-            !joinPerms.has(PermissionFlagsBits.Connect) ||
-            !joinPerms.has(PermissionFlagsBits.Speak)
-        ) {
-            return {
-                ok: false,
-                status: 403,
-                error: { error: "Bot lacks permission to join this voice channel." },
-            }
+    }
+    const joinPerms = voiceChannel.permissionsFor(botUser)
+    if (!joinPerms) {
+        return {
+            ok: false,
+            status: 403,
+            error: { error: "Could not determine bot permissions for this voice channel." },
+        }
+    }
+    if (!joinPerms.has(PermissionFlagsBits.Connect) || !joinPerms.has(PermissionFlagsBits.Speak)) {
+        return {
+            ok: false,
+            status: 403,
+            error: { error: "Bot lacks permission to join this voice channel." },
         }
     }
 
@@ -117,7 +119,8 @@ export async function searchAndEnqueue(
         }
     }
 
-    const requesterName = guard.session.user?.name ?? "web-user"
+    const requesterName =
+        member?.user.globalName ?? member?.user.username ?? guard.session.user?.name ?? "web-user"
     const searchResult = await player.search(query, {
         requester: {
             id: requesterId,

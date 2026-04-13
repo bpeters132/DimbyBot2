@@ -9,7 +9,6 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     const sessionResult = await readSessionSafe()
 
     if (sessionResult.ok === false) {
-        const sessionError = sessionResult
         return (
             <div className="min-h-screen bg-background text-foreground">
                 <header className="border-b p-4">
@@ -30,7 +29,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
                         title="Dashboard is temporarily unavailable"
                         description="We could not load your session. Usually this means the database is not running or DATABASE_URL is wrong. Fix the connection, then refresh this page."
                         detail="Please try again later or contact support if this persists."
-                        supportReference={sessionError.correlationId}
+                        supportReference={sessionResult.correlationId}
                     />
                 </main>
             </div>

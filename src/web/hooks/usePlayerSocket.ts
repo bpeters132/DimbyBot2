@@ -2,21 +2,9 @@
 
 import { useEffect, useRef, useState } from "react"
 import type { PlayerStateResponse, QueueTrackSummary, WSMessage } from "@/types/web"
+import { sanitizeHttpUrl } from "@/lib/url-utils"
 
 const MAX_RECONNECT_ATTEMPTS = 12
-
-function sanitizeHttpUrl(value: unknown): string | null {
-    if (typeof value !== "string") return null
-    try {
-        const parsed = new URL(value)
-        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-            return parsed.toString()
-        }
-    } catch {
-        return null
-    }
-    return null
-}
 
 function sanitizePlayerState(state: PlayerStateResponse): PlayerStateResponse {
     if (!state.currentTrack) return state
@@ -204,6 +192,7 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
 
             socket.onclose = () => {
                 setIsConnected(false)
+                socketRef.current = null
                 if (cancelled) return
                 const nextAttempt = reconnectAttemptsRef.current + 1
                 if (nextAttempt > MAX_RECONNECT_ATTEMPTS) {
@@ -213,7 +202,7 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
                     return
                 }
                 reconnectAttemptsRef.current = nextAttempt
-                const delay = Math.min(30000, 1000 * 2 ** reconnectAttemptsRef.current)
+                const delay = Math.min(30000, 1000 * 2 ** (reconnectAttemptsRef.current - 1))
                 setTimeout(() => {
                     if (!cancelled) {
                         void connect()

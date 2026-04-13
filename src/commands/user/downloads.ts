@@ -253,9 +253,15 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     }
                 })
             )
-            const files = fileRows.filter((file) =>
-                removeAll ? true : file.date && file.date < cutoffDate
-            )
+            const files = fileRows.filter((file) => {
+                if (!removeAll) {
+                    return Boolean(file.date && file.date < cutoffDate)
+                }
+                if (file.date) {
+                    return true
+                }
+                return fs.existsSync(file.path)
+            })
 
             if (files.length === 0) {
                 return interaction.editReply(

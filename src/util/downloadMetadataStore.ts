@@ -49,9 +49,9 @@ export async function saveDownloadMetadataStore(
     const logger = loggerFromPartial(loggerInstance)
     try {
         const result = await replaceDownloadMetadataStoreInDatabase(metadata)
-        initialized = false
         try {
-            downloadMetadataCache = await getDownloadMetadataStoreFromDatabase()
+            const newCache = await getDownloadMetadataStoreFromDatabase()
+            downloadMetadataCache = newCache
             initialized = true
         } catch (reloadErr: unknown) {
             logger.warn(
