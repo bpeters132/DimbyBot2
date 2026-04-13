@@ -30,13 +30,37 @@ const discordOAuthClientSecret = getRequiredEnv("DISCORD_CLIENT_SECRET")
 
 const SAFE_ERROR_SNIPPET_MAX = 200
 
+function redactTokenLikeString(s: string): string {
+    let out = s
+    if (/bearer\s+\S+/i.test(out)) {
+        out = out.replace(/bearer\s+\S+/gi, "Bearer [redacted]")
+    }
+    if (/access_token\s*=\s*\S+/i.test(out)) {
+        out = out.replace(/access_token\s*=\s*\S+/gi, "access_token=[redacted]")
+    }
+    if (/refresh_token\s*=\s*\S+/i.test(out)) {
+        out = out.replace(/refresh_token\s*=\s*\S+/gi, "refresh_token=[redacted]")
+    }
+    if (/client_secret\s*=\s*\S+/i.test(out)) {
+        out = out.replace(/client_secret\s*=\s*\S+/gi, "client_secret=[redacted]")
+    }
+    if (/"access_token"\s*:\s*"[^"]*"/i.test(out)) {
+        out = out.replace(/"access_token"\s*:\s*"[^"]*"/gi, '"access_token":"[redacted]"')
+    }
+    if (/"refresh_token"\s*:\s*"[^"]*"/i.test(out)) {
+        out = out.replace(/"refresh_token"\s*:\s*"[^"]*"/gi, '"refresh_token":"[redacted]"')
+    }
+    return out
+}
+
 /** Redacts verbose Discord/token payloads from thrown errors (keys-only for objects, truncated strings). */
 function safeJsonSnippet(value: unknown, maxLen = SAFE_ERROR_SNIPPET_MAX): string {
     if (value === null || value === undefined) {
         return String(value)
     }
     if (typeof value === "string") {
-        return value.length > maxLen ? `${value.slice(0, maxLen)}…` : value
+        const redacted = redactTokenLikeString(value)
+        return redacted.length > maxLen ? `${redacted.slice(0, maxLen)}…` : redacted
     }
     if (typeof value === "object" && !Array.isArray(value) && value !== null) {
         const keys = Object.keys(value as Record<string, unknown>).slice(0, 16)

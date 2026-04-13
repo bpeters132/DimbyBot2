@@ -20,6 +20,14 @@ function sanitizePlayerState(state: PlayerStateResponse): PlayerStateResponse {
     }
 }
 
+function sanitizeQueueTrackSummaries(queue: QueueTrackSummary[]): QueueTrackSummary[] {
+    return queue.map((track) => ({
+        ...track,
+        uri: sanitizeHttpUrl(track.uri) ?? "#",
+        thumbnailUrl: sanitizeHttpUrl(track.thumbnailUrl) ?? null,
+    }))
+}
+
 interface UsePlayerSocketResult {
     isConnected: boolean
     playerState: PlayerStateResponse | null
@@ -169,7 +177,15 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
                         parsed.type === "playerDestroy"
                     ) {
                         if (parsed.state) setPlayerState(sanitizePlayerState(parsed.state))
-                        if (parsed.queue !== undefined) setQueue(parsed.queue)
+                        if (parsed.queue !== undefined) {
+                            setQueue(
+                                Array.isArray(parsed.queue)
+                                    ? sanitizeQueueTrackSummaries(
+                                          parsed.queue as QueueTrackSummary[]
+                                      )
+                                    : undefined
+                            )
+                        }
                         return
                     }
 

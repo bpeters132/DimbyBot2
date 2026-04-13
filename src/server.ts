@@ -71,11 +71,27 @@ async function run(): Promise<void> {
     let client: BotClient | null = null
     let server: http.Server | null = null
     let stopHeartbeat: (() => void) | null = null
+    let wss: WebSocketServer | null = null
     const shutdown = async (signal: string): Promise<void> => {
         logger.info(`Received ${signal}, shutting down...`)
         let shouldExitWithFailure = false
         try {
             stopHeartbeat?.()
+            if (wss) {
+                for (const ws of wss.clients) {
+                    try {
+                        ws.terminate()
+                    } catch {
+                        /* ignore */
+                    }
+                }
+                const wssClose = new Promise<void>((resolve) => {
+                    wss?.close(() => resolve())
+                })
+                await withShutdownTimeout(wssClose, SHUTDOWN_TIMEOUT_MS, "WebSocket server close")
+                wss = null
+                logger.info("WebSocket server stopped.")
+            }
             if (server) {
                 const closePromise = new Promise<void>((resolve) => {
                     server?.close(() => resolve())
@@ -125,7 +141,7 @@ async function run(): Promise<void> {
             "Serving bot HTTP: /health, /api/guilds/* (Express), /ws (WebSocket). Next.js is not used here."
         )
 
-        const wss = new WebSocketServer({ noServer: true })
+        wss = new WebSocketServer({ noServer: true })
         connectionManager.startHeartbeat()
         stopHeartbeat = () => connectionManager.stopHeartbeat()
 

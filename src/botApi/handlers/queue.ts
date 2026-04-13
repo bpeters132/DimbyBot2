@@ -5,6 +5,7 @@ import type { QueueResponse } from "../../types/web.js"
 import { requirePermissions } from "../../web/lib/api-auth.js"
 import { getBotClient } from "../../lib/botClientRegistry.js"
 import { toQueueResponse } from "../../web/lib/player-state.js"
+import { playerBroadcaster } from "../../web/websocket/PlayerBroadcaster.js"
 import { searchAndEnqueue } from "./searchAndEnqueue.js"
 
 const MAX_QUEUE_PAGE_LIMIT = 100
@@ -123,6 +124,7 @@ export async function queueDELETE(
     try {
         if (player) {
             await player.queue.splice(0, player.queue.tracks.length)
+            playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
         }
         return {
             status: 200,

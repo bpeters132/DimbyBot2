@@ -45,16 +45,23 @@ function sanitizeParsedForLog(value: unknown, depth = 0, visited = new WeakSet<o
                 out[k] = "[redacted]"
                 continue
             }
-            if (typeof v === "string" && stringLooksLikeHostOrDsn(v)) {
-                out[k] = "[redacted]"
+            if (typeof v === "string") {
+                if (stringLooksLikeHostOrDsn(v)) {
+                    out[k] = "[redacted]"
+                } else {
+                    out[k] = sanitizeErrorText(v, 800)
+                }
                 continue
             }
             out[k] = sanitizeParsedForLog(v, depth + 1, visited)
         }
         return out
     }
-    if (typeof value === "string" && stringLooksLikeHostOrDsn(value)) {
-        return "[redacted]"
+    if (typeof value === "string") {
+        if (stringLooksLikeHostOrDsn(value)) {
+            return "[redacted]"
+        }
+        return sanitizeErrorText(value, 800)
     }
     return value
 }

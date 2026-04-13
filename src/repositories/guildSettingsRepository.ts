@@ -23,18 +23,20 @@ function parseGuildDiscordLog(value: Prisma.JsonValue | null): GuildDiscordLogSe
         out.allChannelId = raw.allChannelId.trim()
     }
     if (raw.minLevel !== undefined && raw.minLevel !== null) {
-        if (!isDiscordLogLevelName(raw.minLevel)) return undefined
-        out.minLevel = raw.minLevel
+        if (isDiscordLogLevelName(raw.minLevel)) {
+            out.minLevel = raw.minLevel
+        }
     }
     if (raw.byLevel !== undefined && raw.byLevel !== null) {
-        if (typeof raw.byLevel !== "object" || Array.isArray(raw.byLevel)) return undefined
-        const by: Partial<Record<DiscordLogLevelName, string>> = {}
-        for (const [k, v] of Object.entries(raw.byLevel as Record<string, unknown>)) {
-            if (!isDiscordLogLevelName(k)) return undefined
-            if (typeof v !== "string" || !v.trim()) return undefined
-            by[k] = v.trim()
+        if (typeof raw.byLevel === "object" && !Array.isArray(raw.byLevel)) {
+            const by: Partial<Record<DiscordLogLevelName, string>> = {}
+            for (const [k, v] of Object.entries(raw.byLevel as Record<string, unknown>)) {
+                if (!isDiscordLogLevelName(k)) continue
+                if (typeof v !== "string" || !v.trim()) continue
+                by[k] = v.trim()
+            }
+            if (Object.keys(by).length > 0) out.byLevel = by
         }
-        if (Object.keys(by).length > 0) out.byLevel = by
     }
     if (!out.allChannelId && !out.byLevel && !out.minLevel) {
         return undefined

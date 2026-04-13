@@ -265,7 +265,7 @@ jobs:
                   #!/bin/bash
                   set -e
                   cd /home/bot
-                  export $(grep -v '^#' .env | xargs)
+                  # Docker Compose loads .env automatically; do not `export $(grep ... xargs)` (breaks on #, spaces, quotes).
                   echo "$GH_TOKEN" | /usr/bin/docker login ghcr.io -u "$GH_ACTOR" --password-stdin
                   /usr/bin/docker compose -f docker-compose.yml -f docker-compose.dashboard.yml down
                   /usr/bin/docker compose -f docker-compose.yml -f docker-compose.dashboard.yml pull
@@ -330,7 +330,7 @@ jobs:
                       while [ "$attempt" -le "$max_attempts" ]; do
                         ok_bot=0
                         ok_dashboard=0
-                        if curl --fail --silent "http://127.0.0.1:${BOT_API_PORT_VAL}/health" >/dev/null 2>&1; then ok_bot=1; fi
+                        if /usr/bin/docker exec dimbybot wget -q -O /dev/null "http://127.0.0.1:${BOT_API_PORT_VAL}/health" 2>/dev/null; then ok_bot=1; fi
                         if curl --fail --silent "http://127.0.0.1:${WEB_PORT_VAL}/api/status" >/dev/null 2>&1; then
                           ok_dashboard=1
                         fi
@@ -338,7 +338,7 @@ jobs:
                           echo "Health checks passed on attempt $attempt"
                           exit 0
                         fi
-                        echo "Health probe attempt $attempt/$max_attempts (bot:${BOT_API_PORT_VAL}/health=$ok_bot dashboard:${WEB_PORT_VAL}/api/status=$ok_dashboard) — sleeping ${sleep_seconds}s"
+                        echo "Health probe attempt $attempt/$max_attempts (bot:docker-exec/health=$ok_bot dashboard:${WEB_PORT_VAL}/api/status=$ok_dashboard) — sleeping ${sleep_seconds}s"
                         sleep "$sleep_seconds"
                         attempt=$((attempt + 1))
                       done

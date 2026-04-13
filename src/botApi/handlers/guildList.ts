@@ -1,3 +1,4 @@
+import { PermissionFlagsBits } from "discord.js"
 import { auth } from "../../web/auth-node.js"
 import { fetchDiscordUserGuilds } from "../../util/discordUserGuilds.js"
 import { getAuthenticatedSession } from "../../web/lib/api-auth.js"
@@ -6,10 +7,24 @@ import type { ApiResponse } from "../../types/index.js"
 import type { GuildListResponse } from "../../types/web.js"
 
 /**
- * Discord invite permissions bitset:
- * Administrator, ManageGuild, ManageMessages, Connect, Speak, and related playback controls.
+ * OAuth2 `permissions` integer for "Add to server": the least bits needed for this codebase.
+ * Keep `DISCORD_BOT_INVITE_PERMISSIONS` in `src/web/lib/discord-bot-invite.ts` in sync with this value.
+ *
+ * Covers voice (Lavalink), control-channel text + embeds + deleting user prompts / cleanup,
+ * `/clearmessages` bulk delete, Discord log forwarding (embeds), and dev commands that attach
+ * files (`/eval`, `/log-review`).
  */
-export const BOT_INVITE_PERMISSIONS = "277025509376"
+const BOT_INVITE_PERMISSION_FLAGS =
+    PermissionFlagsBits.ViewChannel |
+    PermissionFlagsBits.SendMessages |
+    PermissionFlagsBits.EmbedLinks |
+    PermissionFlagsBits.ManageMessages |
+    PermissionFlagsBits.AttachFiles |
+    PermissionFlagsBits.ReadMessageHistory |
+    PermissionFlagsBits.Connect |
+    PermissionFlagsBits.Speak
+
+export const BOT_INVITE_PERMISSIONS = BOT_INVITE_PERMISSION_FLAGS.toString()
 
 function discordGuildIconUrl(guildId: string, icon: string | null): string | null {
     if (!icon) return null
@@ -89,11 +104,15 @@ export async function guildListGET(
         }
     }
     if (discordGuilds.ok === false) {
+        const upstreamStatus = Number.isFinite(discordGuilds.status) ? discordGuilds.status : 502
         return {
-            status: 502,
+            status: upstreamStatus >= 400 && upstreamStatus <= 599 ? upstreamStatus : 502,
             body: {
                 ok: false,
-                error: { error: "Discord API request failed.", details: discordGuilds.message },
+                error: {
+                    error: "Discord API request failed.",
+                    details: "Discord API request failed.",
+                },
             },
         }
     }
@@ -124,11 +143,10 @@ export async function guildListGET(
             memberCount: botGuilds.get(guild.id)?.memberCount ?? null,
         }))
 
-    const clientId = process.env.CLIENT_ID || ""
-    const botInviteUrl =
-        mutualGuilds.length === 0 && clientId
-            ? `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=${BOT_INVITE_PERMISSIONS}&scope=bot%20applications.commands`
-            : undefined
+    const clientId = process.env.CLIENT_ID?.trim() || ""
+    const botInviteUrl = clientId
+        ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&permissions=${BOT_INVITE_PERMISSIONS}&scope=bot%20applications.commands`
+        : undefined
 
     return {
         status: 200,

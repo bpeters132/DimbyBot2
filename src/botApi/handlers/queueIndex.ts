@@ -4,6 +4,7 @@ import type { QueueResponse } from "../../types/web.js"
 import { requirePermissions } from "../../web/lib/api-auth.js"
 import { getBotClient, tryGetBotClient } from "../../lib/botClientRegistry.js"
 import { toQueueResponse } from "../../web/lib/player-state.js"
+import { playerBroadcaster } from "../../web/websocket/PlayerBroadcaster.js"
 
 function parseIndex(value: string): number | null {
     const index = Number(value)
@@ -47,6 +48,7 @@ export async function queueIndexDELETE(
         }
 
         await player.queue.splice(queueIndex, 1)
+        playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
         return {
             status: 200,
             body: {
@@ -123,8 +125,12 @@ export async function queueIndexPATCH(
         }
 
         const [track] = await player.queue.splice(sourceIndex, 1)
-        const insertIndex = destinationIndex > sourceIndex ? destinationIndex - 1 : destinationIndex
+        const insertIndexRaw =
+            destinationIndex > sourceIndex ? destinationIndex - 1 : destinationIndex
+        const lenAfterRemove = player.queue.tracks.length
+        const insertIndex = Math.min(Math.max(insertIndexRaw, 0), lenAfterRemove)
         await player.queue.splice(insertIndex, 0, track)
+        playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
 
         return {
             status: 200,

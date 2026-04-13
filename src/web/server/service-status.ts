@@ -28,8 +28,14 @@ export async function getServiceStatusPayload(): Promise<StatusPayload> {
     const database: StatusPayload["database"] = { ok: false }
     const botApi: StatusPayload["botApi"] = { ok: false }
 
+    const DB_PROBE_TIMEOUT_MS = 4000
     try {
-        await getWebPrismaClient().$queryRaw`SELECT 1`
+        await Promise.race([
+            getWebPrismaClient().$queryRaw`SELECT 1`,
+            new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error("Database probe timed out")), DB_PROBE_TIMEOUT_MS)
+            ),
+        ])
         database.ok = true
     } catch (e) {
         database.message = "Database unreachable"

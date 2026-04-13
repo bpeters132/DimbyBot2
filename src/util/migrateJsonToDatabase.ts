@@ -283,8 +283,8 @@ export async function migrateDownloadMetadata(
             const gid =
                 typeof metadata.guildId === "string" && metadata.guildId.trim().length > 0
                     ? metadata.guildId.trim()
-                    : ""
-            const storeKey = gid ? downloadMetadataStoreKey(gid, fileName) : fileName
+                    : "UNKNOWN"
+            const storeKey = downloadMetadataStoreKey(gid, fileName)
             validEntries[storeKey] = {
                 ...metadata,
                 guildId: gid,
@@ -325,7 +325,13 @@ export async function migrateDownloadMetadata(
         const writeResult = await replaceDownloadMetadataStoreInDatabase(validEntries)
         result.migratedCount = writeResult.rowsWritten
 
-        renameJsonAsMigrated(downloadMetadataJsonPath, logger)
+        if (writeResult.skippedEntries.length === 0) {
+            renameJsonAsMigrated(downloadMetadataJsonPath, logger)
+        } else {
+            logger.warn(
+                `[JsonMigration] Not renaming JSON to .migrated (${writeResult.skippedEntries.length} row(s) skipped without resolvable guild id).`
+            )
+        }
 
         logger.info(
             `[JsonMigration] Download metadata migration complete. Migrated=${result.migratedCount} Failed=${result.failedCount}`

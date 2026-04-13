@@ -63,7 +63,7 @@ export async function playerPlayPOST(
             status: 500,
             body: {
                 ok: false,
-                error: { error: "Internal server error.", details: message },
+                error: { error: "Internal server error.", details: "An internal error occurred." },
             },
         }
     }

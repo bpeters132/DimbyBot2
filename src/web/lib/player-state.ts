@@ -308,6 +308,7 @@ function trackToQueueTrackSummary(
 export function isPlayer(value: unknown): value is Player {
     if (typeof value !== "object" || value === null) return false
     const o = value as Record<string, unknown>
+    if (typeof (o as { get?: unknown }).get !== "function") return false
     const queue = o.queue
     if (!queue || typeof queue !== "object") return false
     const tracks = (queue as { tracks?: unknown }).tracks

@@ -12,13 +12,15 @@ function parseSafeGuildListItem(entry: unknown): GuildListItem | null {
     if (!entry || typeof entry !== "object") return null
     const g = entry as Record<string, unknown>
     if (typeof g.name !== "string" || g.name.trim().length === 0) return null
-    const id = g.id
-    if (typeof id !== "string" && typeof id !== "number") return null
+    const idRaw = g.id
+    if (typeof idRaw !== "string" && typeof idRaw !== "number") return null
+    const idStr = typeof idRaw === "string" ? idRaw.trim() : String(idRaw)
+    if (!/^\d+$/.test(idStr)) return null
     const iconRaw = g.iconUrl
     const iconUrl = typeof iconRaw === "string" ? iconRaw : null
     const mc = g.memberCount
     const memberCount = typeof mc === "number" && Number.isFinite(mc) ? mc : null
-    return { id: String(id), name: g.name, iconUrl, memberCount }
+    return { id: idStr, name: g.name, iconUrl, memberCount }
 }
 
 function isValidGuildIconUrl(url: string | null | undefined): url is string {
@@ -26,20 +28,6 @@ function isValidGuildIconUrl(url: string | null | undefined): url is string {
     const trimmed = url.trim()
     if (!trimmed) return false
     return /^https:\/\/(?:cdn\.discordapp\.com|images\.discordapp\.net)(?:\/|$)/i.test(trimmed)
-}
-
-function isValidBotInviteUrl(url: string | null | undefined): url is string {
-    if (typeof url !== "string") return false
-    const trimmed = url.trim()
-    if (!trimmed) return false
-    try {
-        const u = new URL(trimmed)
-        if (u.protocol !== "https:") return false
-        const host = u.hostname.toLowerCase()
-        return host === "discord.com" || host === "discord.gg"
-    } catch {
-        return false
-    }
 }
 
 /** Renders the dashboard guild list from a server-loaded result (no client-side refetch race). */
@@ -82,16 +70,10 @@ export function GuildList({ result }: GuildListProps) {
         return (
             <div className="rounded border bg-card p-4 text-card-foreground">
                 <p>The bot is not in any of your servers yet.</p>
-                {isValidBotInviteUrl(data.botInviteUrl) ? (
-                    <a
-                        className="mt-3 inline-block rounded bg-primary px-3 py-2 text-primary-foreground no-underline hover:opacity-90"
-                        href={data.botInviteUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                    >
-                        Invite bot to a server
-                    </a>
-                ) : null}
+                <p className="mt-2 text-sm text-muted-foreground">
+                    Use <strong>Add bot to a server</strong> in the header to invite it to another
+                    server you manage.
+                </p>
             </div>
         )
     }

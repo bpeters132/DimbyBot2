@@ -107,9 +107,8 @@ services:
             - dimbybot-storage:/app/storage
             - dimbybot-logs:/app/logs
             - dimbybot-downloads:/app/downloads
-        # Bot API + player WebSocket. Dashboard HTTP uses WEB_PORT on dimbybot-web (docker-compose.dashboard.yml).
-        ports:
-            - "${BOT_API_PORT:-3001}:${BOT_API_PORT:-3001}"
+        # Bot API + player WebSocket listen on BOT_API_PORT inside the container only (not published).
+        # Dashboard reaches the bot via API_PROXY_TARGET on the internal network; browsers use same-origin /ws via reverse proxy.
         networks:
             - internal
 

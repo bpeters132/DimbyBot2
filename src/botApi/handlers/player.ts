@@ -53,7 +53,7 @@ export async function playerGET(
                 ok: false,
                 error: {
                     error: "internal_error",
-                    details: message,
+                    details: "An internal error occurred.",
                 },
             },
         }
@@ -149,12 +149,14 @@ export async function playerPOST(
         }
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Player action failed."
+        webPlayerDebug("playerPOST failed", { guildId, action, message })
         return {
             status: 500,
             body: {
                 ok: false,
                 error: {
-                    error: `Player action "${action}" failed: ${message}`,
+                    error: "internal_error",
+                    details: "An internal error occurred.",
                 },
             },
         }

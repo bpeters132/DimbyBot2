@@ -2,6 +2,7 @@ import type { ButtonInteraction } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import { getGuildSettings, isGuildSettingsInitialized } from "../../util/saveControlChannel.js"
 import { toggleAutoplay } from "../../util/autoplayHistory.js"
+import { startPlaybackIfNeeded } from "../../util/musicManager.js"
 import { updateControlMessage } from "./handleControlChannel.js"
 
 export async function handleControlButtonInteraction(
@@ -293,7 +294,7 @@ export async function handleControlButtonInteraction(
                                     break // Don't try to play
                                 }
                             }
-                            await player.play()
+                            await startPlaybackIfNeeded(player)
                             client.debug("[ControlButtonHandler] Player started playing.")
                             actionTaken = true
                         } catch (playError) {

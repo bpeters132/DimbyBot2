@@ -180,6 +180,7 @@ export async function searchAndEnqueue(
         },
     })
     if (!searchResult.tracks.length) {
+        await cleanupCreatedPlayer()
         return {
             ok: false,
             status: 404,

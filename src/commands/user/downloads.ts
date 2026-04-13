@@ -241,13 +241,15 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                                 err && typeof err === "object" && "code" in err
                                     ? (err as NodeJS.ErrnoException).code
                                     : ""
-                            if (code !== "ENOENT") {
+                            if (code === "ENOENT") {
+                                date = new Date(0)
+                            } else {
                                 const msg = err instanceof Error ? err.message : String(err)
                                 client.warn(
                                     `[Downloads] cleanup stat failed for ${file} (guildId=${guildId}): ${msg}`
                                 )
+                                date = null
                             }
-                            date = null
                         }
                     }
                     return {
@@ -296,8 +298,11 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                             delete metadata[metaKey]
                         }
                     } else {
-                        const msg = err instanceof Error ? err.message : String(err)
-                        errors.push(`${file.name}: ${msg}`)
+                        client.warn(
+                            `[Downloads] cleanup unlink failed for ${file.name} (guildId=${guildId})`,
+                            err
+                        )
+                        errors.push(`${file.name}: Could not delete this file.`)
                     }
                 }
             }

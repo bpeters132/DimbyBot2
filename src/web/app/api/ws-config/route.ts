@@ -25,6 +25,9 @@ export function GET(): NextResponse {
         if (u.protocol !== "ws:" && u.protocol !== "wss:") {
             return NextResponse.json({ wsUrl: null as string | null })
         }
+        if (u.protocol === "ws:" && process.env.NODE_ENV !== "development") {
+            return NextResponse.json({ wsUrl: null as string | null })
+        }
         if (u.username || u.password) {
             return NextResponse.json({ wsUrl: null as string | null })
         }

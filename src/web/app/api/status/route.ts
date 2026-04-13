@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server"
 import { getServiceStatusPayload } from "@/server/service-status.js"
 
+export const dynamic = "force-dynamic"
+
+const noStore = { "Cache-Control": "no-store, max-age=0, must-revalidate" }
+
 /**
  * Reports whether the dashboard database and bot HTTP port respond (for local / split-stack dev).
  * Intentionally public for uptime/monitoring — do not add session middleware here.
@@ -8,7 +12,7 @@ import { getServiceStatusPayload } from "@/server/service-status.js"
 export async function GET(): Promise<NextResponse> {
     try {
         const payload = await getServiceStatusPayload()
-        return NextResponse.json(payload)
+        return NextResponse.json(payload, { headers: noStore })
     } catch (error: unknown) {
         const name = error instanceof Error ? error.name : "Error"
         console.error("[api/status] status probe failed", { name })
@@ -20,7 +24,7 @@ export async function GET(): Promise<NextResponse> {
                 database: { ok: false, message: "Status check failed" },
                 botApi: { ok: false, message: "Status check failed" },
             },
-            { status: 503 }
+            { status: 503, headers: noStore }
         )
     }
 }

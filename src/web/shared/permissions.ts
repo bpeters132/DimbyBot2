@@ -59,6 +59,20 @@ function purgeExpiredFromInner(inner: Map<string, CachedPermissionResult>, now: 
     }
 }
 
+const PERMISSION_CACHE_SWEEP_MS = 5 * 60 * 1000
+const permissionCacheSweep = setInterval(() => {
+    const now = Date.now()
+    for (const [gid, inner] of permissionCache.entries()) {
+        purgeExpiredFromInner(inner, now)
+        if (inner.size === 0) {
+            permissionCache.delete(gid)
+        }
+    }
+}, PERMISSION_CACHE_SWEEP_MS)
+if (typeof permissionCacheSweep.unref === "function") {
+    permissionCacheSweep.unref()
+}
+
 function readCached(guildId: string, userId: string): CachedPermissionResult | undefined {
     const inner = permissionCache.get(guildId)
     if (!inner) return undefined

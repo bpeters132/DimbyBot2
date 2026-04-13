@@ -28,7 +28,12 @@ export async function GET(request: Request) {
         if (numericStatus === 401 || numericStatus === 403) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
-        console.error("[api/guilds] auth session lookup failed", err)
+        const safeMessage = err instanceof Error ? err.message.slice(0, 500) : "unknown"
+        console.error("[api/guilds] auth session lookup failed", {
+            name: err instanceof Error ? err.name : typeof err,
+            message: safeMessage,
+            numericStatus,
+        })
         return NextResponse.json({ error: "Auth service unavailable" }, { status: 502 })
     }
 

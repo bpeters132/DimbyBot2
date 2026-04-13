@@ -91,6 +91,7 @@ export async function serverFetchBot(
             headers: outHeaders,
             body: method !== "GET" && method !== "HEAD" ? options?.body : undefined,
             signal: controller.signal,
+            cache: "no-store",
         })
         if (isBotApiVerbose()) {
             logBotApiVerbose("serverFetchBot ← response", {

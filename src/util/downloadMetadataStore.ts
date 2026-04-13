@@ -50,7 +50,7 @@ export async function saveDownloadMetadataStore(
     const previousCache = cloneStore(downloadMetadataCache)
     const nextCache = cloneStore(metadata)
     try {
-        const result = await replaceDownloadMetadataStoreInDatabase(metadata)
+        const result = await replaceDownloadMetadataStoreInDatabase(nextCache)
         try {
             const persistedCache = await getDownloadMetadataStoreFromDatabase()
             downloadMetadataCache =

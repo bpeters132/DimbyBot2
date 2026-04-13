@@ -35,8 +35,8 @@ export async function GET(): Promise<NextResponse> {
         const token = createWsConnectToken(session.user.id, secret, 60)
         return NextResponse.json({ token }, { headers: { "Cache-Control": "no-store" } })
     } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : "unknown"
-        console.error("[api/ws-ticket] failed to resolve session:", message)
+        const errName = error instanceof Error ? error.name : typeof error
+        console.error("[api/ws-ticket] session resolution failed", { errName })
         return NextResponse.json(
             { error: "Auth service temporarily unavailable" },
             { status: 503, headers: { "Cache-Control": "no-store" } }

@@ -409,6 +409,7 @@ export class ConnectionManager {
             }
         }
         meta.guildSubscriptions.delete(guildId)
+        this.subscribeLastAttempt.delete(socket)
     }
 
     private subscribe(socket: WebSocket, guildId: string): void {

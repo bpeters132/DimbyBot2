@@ -54,16 +54,20 @@ export function writeAuditLog(
     const prefix = `[audit:${event}] ${message}`
     const safeDetails = sanitizeAuditDetails(details)
     if (level === "error") {
-        console.error(prefix, safeDetails)
+        if (details !== undefined) console.error(prefix, safeDetails)
+        else console.error(prefix)
         return
     }
     if (level === "warn") {
-        console.warn(prefix, safeDetails)
+        if (details !== undefined) console.warn(prefix, safeDetails)
+        else console.warn(prefix)
         return
     }
     if (level === "debug") {
-        console.debug(prefix, safeDetails)
+        if (details !== undefined) console.debug(prefix, safeDetails)
+        else console.debug(prefix)
         return
     }
-    console.log(prefix, safeDetails)
+    if (details !== undefined) console.log(prefix, safeDetails)
+    else console.log(prefix)
 }
