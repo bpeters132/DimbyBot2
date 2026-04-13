@@ -106,14 +106,16 @@ export async function replaceGuildSettingsStoreInDatabase(
             count += 1
         }
 
-        // When `guildIds` is empty, use a sentinel that matches no real snowflake so we never delete every row.
-        const deleted = await tx.guildSettings.deleteMany({
-            where: {
-                guildId: {
-                    notIn: guildIds.length > 0 ? guildIds : ["__never__"],
-                },
-            },
-        })
+        const deleted =
+            guildIds.length === 0
+                ? await tx.guildSettings.deleteMany({})
+                : await tx.guildSettings.deleteMany({
+                      where: {
+                          guildId: {
+                              notIn: guildIds,
+                          },
+                      },
+                  })
         return {
             rowsUpserted: count,
             rowsDeleted: deleted.count,

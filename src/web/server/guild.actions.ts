@@ -8,6 +8,17 @@ export type GuildListActionResult =
     | { ok: true; data: GuildListResponse }
     | { ok: false; error: string }
 
+function sanitizeAuditError(error: unknown): Record<string, string> {
+    if (error instanceof Error) {
+        return {
+            name: error.name,
+            message: error.message,
+            stack: error.stack?.slice(0, 800) ?? "",
+        }
+    }
+    return { message: String(error) }
+}
+
 async function parseGuildListBotResponse(res: Response): Promise<GuildListActionResult> {
     const text = await res.text()
     if (!text.trim()) {
@@ -82,7 +93,7 @@ export async function loadGuildListForDashboard(): Promise<GuildListActionResult
             category: "guild",
             source: "guild.actions",
             outcome: "failure",
-            error,
+            error: sanitizeAuditError(error),
         })
         return {
             ok: false,

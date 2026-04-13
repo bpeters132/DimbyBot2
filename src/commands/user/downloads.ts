@@ -33,10 +33,8 @@ function dedupeMetadataByFileName(
             result.set(fileName, { key, info })
             continue
         }
-        const existingDate = existing.info.downloadDate
-            ? new Date(existing.info.downloadDate).getTime()
-            : 0
-        const candidateDate = info.downloadDate ? new Date(info.downloadDate).getTime() : 0
+        const existingDate = parseValidDownloadDate(existing.info.downloadDate)?.getTime() ?? 0
+        const candidateDate = parseValidDownloadDate(info.downloadDate)?.getTime() ?? 0
         if (candidateDate >= existingDate) {
             result.set(fileName, { key, info })
         }
@@ -285,18 +283,21 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     await fsp.unlink(file.path)
                     totalSize += stats.size
                     deletedCount++
+                    for (const metaKey of metadataKeys) {
+                        delete metadata[metaKey]
+                    }
                 } catch (err: unknown) {
                     const code =
                         err && typeof err === "object" && "code" in err
                             ? (err as NodeJS.ErrnoException).code
                             : ""
-                    if (code !== "ENOENT") {
+                    if (code === "ENOENT") {
+                        for (const metaKey of metadataKeys) {
+                            delete metadata[metaKey]
+                        }
+                    } else {
                         const msg = err instanceof Error ? err.message : String(err)
                         errors.push(`${file.name}: ${msg}`)
-                    }
-                } finally {
-                    for (const metaKey of metadataKeys) {
-                        delete metadata[metaKey]
                     }
                 }
             }

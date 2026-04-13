@@ -116,6 +116,7 @@ start_web_server() {
   fi
 
   echo "Bot Entrypoint: Starting Next.js web server from ${NEXT_SERVER_ENTRY}..."
+  export PORT="${DASHBOARD_PORT:-${PORT:-3000}}"
   if [ "$1" = "node-user" ]; then
     su-exec node node "$NEXT_SERVER_ENTRY" &
   else

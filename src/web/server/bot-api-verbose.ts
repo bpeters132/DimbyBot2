@@ -18,6 +18,7 @@ const redactedKeysLower = new Set([
     "access_token",
     "auth",
     "credentials",
+    "config",
     "configsecret",
     "dbconfig",
     "client_config",

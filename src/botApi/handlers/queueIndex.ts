@@ -18,23 +18,26 @@ export async function queueIndexDELETE(
     guildId: string,
     indexParam: string
 ): Promise<{ status: number; body: ApiResponse<QueueResponse> }> {
-    const guard = await requirePermissions(headers, guildId, [WebPermission.MANAGE_QUEUE])
-    if (guard.ok === false) {
-        return {
-            status: guard.status,
-            body: { ok: false, error: { error: guard.error, details: guard.details } },
-        }
-    }
-
-    const queueIndex = parseIndex(indexParam)
-    if (queueIndex === null) {
-        return {
-            status: 400,
-            body: { ok: false, error: { error: "Queue index must be a non-negative integer." } },
-        }
-    }
-
     try {
+        const guard = await requirePermissions(headers, guildId, [WebPermission.MANAGE_QUEUE])
+        if (guard.ok === false) {
+            return {
+                status: guard.status,
+                body: { ok: false, error: { error: guard.error, details: guard.details } },
+            }
+        }
+
+        const queueIndex = parseIndex(indexParam)
+        if (queueIndex === null) {
+            return {
+                status: 400,
+                body: {
+                    ok: false,
+                    error: { error: "Queue index must be a non-negative integer." },
+                },
+            }
+        }
+
         const player = getBotClient().lavalink.getPlayer(guildId)
         if (!player || queueIndex >= player.queue.tracks.length) {
             return {
@@ -75,32 +78,34 @@ export async function queueIndexPATCH(
     indexParam: string,
     rawBody: unknown
 ): Promise<{ status: number; body: ApiResponse<QueueResponse> }> {
-    const guard = await requirePermissions(headers, guildId, [WebPermission.MANAGE_QUEUE])
-    if (guard.ok === false) {
-        return {
-            status: guard.status,
-            body: { ok: false, error: { error: guard.error, details: guard.details } },
-        }
-    }
-
-    const sourceIndex = parseIndex(indexParam)
-    const body = (typeof rawBody === "object" && rawBody !== null ? rawBody : {}) as {
-        newIndex?: unknown
-    }
-    const destinationIndex =
-        typeof body.newIndex === "number" && Number.isInteger(body.newIndex) ? body.newIndex : null
-
-    if (sourceIndex === null || destinationIndex === null || destinationIndex < 0) {
-        return {
-            status: 400,
-            body: {
-                ok: false,
-                error: { error: "Both queue indexes must be non-negative integers." },
-            },
-        }
-    }
-
     try {
+        const guard = await requirePermissions(headers, guildId, [WebPermission.MANAGE_QUEUE])
+        if (guard.ok === false) {
+            return {
+                status: guard.status,
+                body: { ok: false, error: { error: guard.error, details: guard.details } },
+            }
+        }
+
+        const sourceIndex = parseIndex(indexParam)
+        const body = (typeof rawBody === "object" && rawBody !== null ? rawBody : {}) as {
+            newIndex?: unknown
+        }
+        const destinationIndex =
+            typeof body.newIndex === "number" && Number.isInteger(body.newIndex)
+                ? body.newIndex
+                : null
+
+        if (sourceIndex === null || destinationIndex === null || destinationIndex < 0) {
+            return {
+                status: 400,
+                body: {
+                    ok: false,
+                    error: { error: "Both queue indexes must be non-negative integers." },
+                },
+            }
+        }
+
         const player = getBotClient().lavalink.getPlayer(guildId)
         if (!player) {
             return {

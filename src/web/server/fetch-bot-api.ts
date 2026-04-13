@@ -29,7 +29,7 @@ export async function serverFetchBot(
                 ok: false,
                 error: {
                     error: "Bot API misconfigured",
-                    details: message,
+                    details: "Bot API misconfigured",
                 },
             }),
             { status: 503, headers: { "content-type": "application/json" } }

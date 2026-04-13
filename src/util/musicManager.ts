@@ -462,7 +462,6 @@ export async function handleQueryAndPlay(
                         `[MusicManager] Existing Lavalink player found. State - Connected: ${newPlayerInstance.connected}, VC: ${newPlayerInstance.voiceChannelId}. Ensuring target VC.`
                     )
                     previousVoiceChannelIdBeforeEnsure = newPlayerInstance.voiceChannelId
-                    newPlayerInstance.voiceChannelId = voiceChannel.id
                     newPlayerInstance.textChannelId = textChannel.id
                 }
                 player = newPlayerInstance
@@ -617,6 +616,7 @@ export async function handleQueryAndPlay(
             )
             try {
                 await ensurePlayerConnected(client, player, voiceChannel)
+                player.voiceChannelId = voiceChannel.id
                 previousVoiceChannelIdBeforeEnsure = null
 
                 if (isPlaylistEnqueue && searchResult.tracks.length > 0) {

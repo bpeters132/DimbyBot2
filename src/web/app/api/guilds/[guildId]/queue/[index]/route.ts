@@ -16,7 +16,8 @@ export async function DELETE(
         if (denied) return denied
         return await proxyBotApi(request)
     } catch (error: unknown) {
-        console.error("[api/guilds/.../queue/[index]] DELETE proxy failed", error)
+        const safeMessage = (error instanceof Error ? error.message : String(error)).slice(0, 500)
+        console.error(`[api/guilds/.../queue/[index]] DELETE proxy failed: ${safeMessage}`)
         return NextResponse.json(
             {
                 ok: false,
@@ -38,7 +39,8 @@ export async function PATCH(
         if (denied) return denied
         return await proxyBotApi(request)
     } catch (error: unknown) {
-        console.error("[api/guilds/.../queue/[index]] PATCH proxy failed", error)
+        const safeMessage = (error instanceof Error ? error.message : String(error)).slice(0, 500)
+        console.error(`[api/guilds/.../queue/[index]] PATCH proxy failed: ${safeMessage}`)
         return NextResponse.json(
             {
                 ok: false,

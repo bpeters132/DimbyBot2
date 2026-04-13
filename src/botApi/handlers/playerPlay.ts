@@ -12,37 +12,37 @@ export async function playerPlayPOST(
     guildId: string,
     rawBody: unknown
 ): Promise<{ status: number; body: ApiResponse<PlayerStateResponse> }> {
-    const guard = await requirePermissions(headers, guildId, [WebPermission.MANAGE_QUEUE])
-    if (guard.ok === false) {
-        return {
-            status: guard.status,
-            body: { ok: false, error: { error: guard.error, details: guard.details } },
-        }
-    }
-
-    const requester = resolveWebRequesterDiscordId(rawBody, guard.discordUserId)
-    if (requester.ok === false) {
-        return {
-            status: requester.status,
-            body: {
-                ok: false,
-                error: { error: requester.error, details: requester.details },
-            },
-        }
-    }
-
-    const body = (typeof rawBody === "object" && rawBody !== null ? rawBody : {}) as {
-        query?: unknown
-    }
-    const query = typeof body.query === "string" ? body.query.trim() : ""
-    if (!query) {
-        return {
-            status: 400,
-            body: { ok: false, error: { error: "Query is required." } },
-        }
-    }
-
     try {
+        const guard = await requirePermissions(headers, guildId, [WebPermission.MANAGE_QUEUE])
+        if (guard.ok === false) {
+            return {
+                status: guard.status,
+                body: { ok: false, error: { error: guard.error, details: guard.details } },
+            }
+        }
+
+        const requester = resolveWebRequesterDiscordId(rawBody, guard.discordUserId)
+        if (requester.ok === false) {
+            return {
+                status: requester.status,
+                body: {
+                    ok: false,
+                    error: { error: requester.error, details: requester.details },
+                },
+            }
+        }
+
+        const body = (typeof rawBody === "object" && rawBody !== null ? rawBody : {}) as {
+            query?: unknown
+        }
+        const query = typeof body.query === "string" ? body.query.trim() : ""
+        if (!query) {
+            return {
+                status: 400,
+                body: { ok: false, error: { error: "Query is required." } },
+            }
+        }
+
         const client = getBotClient()
         const enqueue = await searchAndEnqueue(client, guildId, requester.requesterId, query, guard)
         if (enqueue.ok === false) {
@@ -63,7 +63,7 @@ export async function playerPlayPOST(
             status: 500,
             body: {
                 ok: false,
-                error: { error: "Internal server error." },
+                error: { error: "Internal server error.", details: message },
             },
         }
     }

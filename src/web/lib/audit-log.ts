@@ -1,7 +1,7 @@
 export type AuditLogLevel = "debug" | "info" | "warn" | "error"
 
 const SENSITIVE_KEY_PATTERN =
-    /^(authorization|auth|token|apikey|api_key|cookie|cookies|set-cookie|password)$/i
+    /^(authorization|auth|token|access_token|refresh_token|apikey|api_key|apiKey|x-api-key|secret|client_secret|cookie|cookies|set-cookie|password)$/i
 const OMITTED_KEY_PATTERN = /^(headers|body|request|response)$/i
 const MAX_DEPTH = 4
 const MAX_STRING_LENGTH = 600

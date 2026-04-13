@@ -106,12 +106,16 @@ export async function runPrismaMigrateDeploy(
     logger.info("[Database] Running Prisma migrations (deploy)...")
 
     const yarnCommand = process.platform === "win32" ? "yarn.cmd" : "yarn"
+    const migrateEnv = { ...process.env }
+    if (typeof migrateEnv.DATABASE_URL === "string") {
+        migrateEnv.DATABASE_URL = migrateEnv.DATABASE_URL.trim()
+    }
     const child = spawn(
         yarnCommand,
         ["prisma", "migrate", "deploy", "--schema", "prisma/schema.prisma"],
         {
             cwd: process.cwd(),
-            env: process.env,
+            env: migrateEnv,
             stdio: ["ignore", "pipe", "pipe"],
         }
     )

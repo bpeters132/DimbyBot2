@@ -75,6 +75,7 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
     for (const [storeKey, fileInfo] of entries) {
         const baseFileName = parseDownloadMetadataStoreKey(storeKey).fileName
         const filePath = path.join(downloadsDir, baseFileName)
+        const metadataKeysForFile = downloadMetadataKeysForFile(metadata, baseFileName, guildId)
         let downloadDate = fileInfo?.downloadDate ? new Date(fileInfo.downloadDate) : null
         let stats = null
         if (!downloadDate || Number.isNaN(downloadDate.getTime())) {
@@ -84,10 +85,12 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
             } catch (error: unknown) {
                 const err = error as NodeJS.ErrnoException
                 if (err.code === "ENOENT") {
-                    delete metadata[storeKey]
+                    for (const metaKey of metadataKeysForFile) {
+                        delete metadata[metaKey]
+                    }
                     metadataDirty = true
                     client.debug(
-                        `[Download Cleanup] Removed "${storeKey}" entry with missing file and no valid date.`
+                        `[Download Cleanup] Removed ${metadataKeysForFile.length} metadata entr${metadataKeysForFile.length === 1 ? "y" : "ies"} for missing file "${baseFileName}" with no valid date.`
                     )
                     continue
                 }
@@ -106,10 +109,12 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
                     } catch (error: unknown) {
                         const err = error as NodeJS.ErrnoException
                         if (err.code === "ENOENT") {
-                            delete metadata[storeKey]
+                            for (const metaKey of metadataKeysForFile) {
+                                delete metadata[metaKey]
+                            }
                             metadataDirty = true
                             client.debug(
-                                `[Download Cleanup] Removed "${storeKey}" entry due to missing file.`
+                                `[Download Cleanup] Removed ${metadataKeysForFile.length} metadata entr${metadataKeysForFile.length === 1 ? "y" : "ies"} for missing file "${baseFileName}".`
                             )
                             continue
                         }
@@ -121,10 +126,12 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
                     fs.unlinkSync(filePath)
                     deletedCount++
                 }
-                delete metadata[storeKey]
+                for (const metaKey of metadataKeysForFile) {
+                    delete metadata[metaKey]
+                }
                 metadataDirty = true
                 client.debug(
-                    `[Download Cleanup] Removed "${storeKey}" entry (downloaded ${downloadDate.toISOString()}) due to age${stats ? "" : " (metadata only)"}.`
+                    `[Download Cleanup] Removed ${metadataKeysForFile.length} metadata entr${metadataKeysForFile.length === 1 ? "y" : "ies"} for "${baseFileName}" (downloaded ${downloadDate.toISOString()}) due to age${stats ? "" : " (metadata only)"}.`
                 )
             } catch (error: unknown) {
                 client.error(

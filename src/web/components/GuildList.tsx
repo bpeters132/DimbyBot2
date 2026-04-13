@@ -17,7 +17,7 @@ function parseSafeGuildListItem(entry: unknown): GuildListItem | null {
     const iconRaw = g.iconUrl
     const iconUrl = typeof iconRaw === "string" ? iconRaw : null
     const mc = g.memberCount
-    const memberCount = typeof mc === "number" ? mc : null
+    const memberCount = typeof mc === "number" && Number.isFinite(mc) ? mc : null
     return { id: String(id), name: g.name, iconUrl, memberCount }
 }
 

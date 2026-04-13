@@ -214,7 +214,7 @@ export function createBotApiApp(): express.Express {
                     ok: false,
                     error: {
                         error: "Malformed JSON",
-                        details: (err as Error).message,
+                        details: sanitizeBotApiError(err).message,
                     },
                 })
                 return

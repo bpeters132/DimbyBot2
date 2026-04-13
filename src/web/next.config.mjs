@@ -24,7 +24,9 @@ const nextConfig = {
     // Parity with bot `tsc` (NodeNext): `.js` specifiers resolve to `.ts` for webpack dev/build.
     // Turbopack does not apply this yet (see vercel/next.js#82945), so `package.json` dev uses webpack.
     webpack: (config) => {
+        const existingExtensionAlias = config.resolve.extensionAlias ?? {}
         config.resolve.extensionAlias = {
+            ...existingExtensionAlias,
             ".js": [".ts", ".tsx", ".js"],
             ".mjs": [".mts", ".mjs"],
             ".cjs": [".cts", ".cjs"],

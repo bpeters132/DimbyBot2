@@ -7,7 +7,10 @@ import { authClient } from "@/auth-client"
 import { ModeToggle } from "@/components/ModeToggle"
 
 async function signOutAndGoHome(): Promise<void> {
-    await authClient.signOut()
+    const result = await authClient.signOut()
+    if (result?.error) {
+        throw new Error(result.error.message || "Sign out failed")
+    }
     // Full navigation so RSC/layout re-runs with cleared cookies (client-only session clear leaves /dashboard mounted).
     window.location.assign("/")
 }

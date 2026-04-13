@@ -167,13 +167,15 @@ export async function replaceDownloadMetadataStoreInDatabase(
             `
         }
 
-        await tx.$executeRaw`
-            DELETE FROM "DownloadMetadata" AS d
-            WHERE NOT EXISTS (
-                SELECT 1 FROM _dimbybot_dm_keep k
-                WHERE k."guildId" = d."guildId" AND k."fileName" = d."fileName"
-            )
-        `
+        if (skippedEntries.length === 0) {
+            await tx.$executeRaw`
+                DELETE FROM "DownloadMetadata" AS d
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM _dimbybot_dm_keep k
+                    WHERE k."guildId" = d."guildId" AND k."fileName" = d."fileName"
+                )
+            `
+        }
 
         for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
             const batch = rows.slice(i, i + UPSERT_BATCH)

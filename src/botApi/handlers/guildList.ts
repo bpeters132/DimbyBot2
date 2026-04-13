@@ -81,7 +81,10 @@ export async function guildListGET(
             status: 502,
             body: {
                 ok: false,
-                error: { error: "Discord API request failed.", details: message },
+                error: {
+                    error: "Discord API request failed.",
+                    details: "Discord API request failed.",
+                },
             },
         }
     }

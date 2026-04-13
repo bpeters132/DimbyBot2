@@ -177,8 +177,6 @@ jobs:
                   POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
                   BOT_IMAGE_SHA: ${{ env.IMAGE_BOT_SHA }}
                   LAVALINK_IMAGE_SHA: ${{ env.IMAGE_LAVALINK_SHA }}
-                  GH_ACTOR: ${{ github.actor }}
-                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   WEB_ENABLED_VAL="${WEB_ENABLED:-true}"
                   WEB_PORT_VAL="${WEB_PORT:-3001}"
@@ -230,8 +228,6 @@ jobs:
                       printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
                       printf 'BOT_IMAGE=%s\n' "$BOT_IMAGE_SHA"
                       printf 'LAVALINK_IMAGE=%s\n' "$LAVALINK_IMAGE_SHA"
-                      printf 'GH_ACTOR=%s\n' "$GH_ACTOR"
-                      printf 'GH_TOKEN=%s\n' "$GH_TOKEN"
                   } > .env
 
             - name: Copy files to server
@@ -271,12 +267,18 @@ jobs:
 
             - name: Run deployment script on server
               uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
+              env:
+                  GH_ACTOR: ${{ github.actor }}
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
                   host: ${{ secrets.DEPLOY_SERVER_HOST }}
                   username: ${{ secrets.DEPLOY_SERVER_USER }}
                   key: ${{ secrets.SSH_PRIVATE_KEY }}
                   port: ${{ secrets.DEPLOY_SERVER_SSH_PORT }}
+                  envs: GH_ACTOR,GH_TOKEN
                   script: |
+                      export GH_ACTOR="$GH_ACTOR"
+                      export GH_TOKEN="$GH_TOKEN"
                       bash /home/bot/ci_deploy.sh
 
             - name: Verify deployment health on server
@@ -288,25 +290,40 @@ jobs:
                   port: ${{ secrets.DEPLOY_SERVER_SSH_PORT }}
                   script: |
                       set -e
-                      if [ -f /home/bot/.env ]; then
-                        set -a
-                        # shellcheck disable=SC1091
-                        . /home/bot/.env
-                        set +a
-                      fi
+                      read_env_value() {
+                        key="$1"
+                        default="$2"
+                        if [ ! -f /home/bot/.env ]; then
+                          printf '%s' "$default"
+                          return
+                        fi
+                        value="$(awk -F= -v k="$key" '$1==k{print substr($0, index($0,$2)); exit}' /home/bot/.env)"
+                        if [ -z "$value" ]; then
+                          printf '%s' "$default"
+                        else
+                          printf '%s' "$value"
+                        fi
+                      }
+                      WEB_ENABLED_VAL="$(read_env_value WEB_ENABLED true)"
+                      WEB_PORT_VAL="$(read_env_value WEB_PORT 3001)"
+                      DASHBOARD_PORT_VAL="$(read_env_value DASHBOARD_PORT 3000)"
                       max_attempts=40
                       sleep_seconds=2
                       attempt=1
                       while [ "$attempt" -le "$max_attempts" ]; do
                         ok_bot=0
                         ok_dashboard=0
-                        if curl --fail --silent "http://127.0.0.1:${WEB_PORT:-3001}/health" >/dev/null 2>&1; then ok_bot=1; fi
-                        if curl --fail --silent "http://127.0.0.1:${DASHBOARD_PORT:-3000}/api/status" >/dev/null 2>&1; then ok_dashboard=1; fi
+                        if curl --fail --silent "http://127.0.0.1:${WEB_PORT_VAL}/health" >/dev/null 2>&1; then ok_bot=1; fi
+                        if [ "$WEB_ENABLED_VAL" = "false" ]; then
+                          ok_dashboard=1
+                        elif curl --fail --silent "http://127.0.0.1:${DASHBOARD_PORT_VAL}/api/status" >/dev/null 2>&1; then
+                          ok_dashboard=1
+                        fi
                         if [ "$ok_bot" -eq 1 ] && [ "$ok_dashboard" -eq 1 ]; then
                           echo "Health checks passed on attempt $attempt"
                           exit 0
                         fi
-                        echo "Health probe attempt $attempt/$max_attempts (bot:${WEB_PORT:-3001}/health=$ok_bot dashboard:${DASHBOARD_PORT:-3000}/api/status=$ok_dashboard) — sleeping ${sleep_seconds}s"
+                        echo "Health probe attempt $attempt/$max_attempts (bot:${WEB_PORT_VAL}/health=$ok_bot dashboard:${DASHBOARD_PORT_VAL}/api/status=$ok_dashboard, WEB_ENABLED=${WEB_ENABLED_VAL}) — sleeping ${sleep_seconds}s"
                         sleep "$sleep_seconds"
                         attempt=$((attempt + 1))
                       done

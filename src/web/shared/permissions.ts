@@ -201,7 +201,7 @@ export async function resolveUserPermissions(
     // Cast: `PermissionClient` only types the cache shape we read; entries are treated as `Guild` for member/voice APIs.
     const guild = client.guilds.cache.get(guildId) as Guild | undefined
     if (!guild) {
-        return { permissions: [WebPermission.VIEW_PLAYER], inVoiceWithBot: false }
+        return { permissions: [], inVoiceWithBot: false }
     }
 
     const player = client.lavalink.getPlayer(guildId)

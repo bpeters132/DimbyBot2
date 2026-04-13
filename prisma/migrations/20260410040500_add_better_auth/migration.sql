@@ -57,8 +57,10 @@ CREATE TABLE "verification" (
 CREATE UNIQUE INDEX "user_email_key" ON "user"("email");
 CREATE UNIQUE INDEX "session_token_key" ON "session"("token");
 CREATE INDEX "session_userId_idx" ON "session"("userId");
+CREATE INDEX "session_expiresAt_idx" ON "session"("expiresAt");
 CREATE INDEX "account_userId_idx" ON "account"("userId");
 CREATE INDEX "verification_identifier_idx" ON "verification"("identifier");
+CREATE INDEX "verification_value_idx" ON "verification"("value");
 
 ALTER TABLE "session"
 ADD CONSTRAINT "session_userId_fkey"

@@ -11,7 +11,7 @@ const DISCORD_SNOWFLAKE_RE = /^\d{17,22}$/
 export async function getGuildDashboardSnapshotAction(
     guildId: string
 ): Promise<GuildDashboardSnapshotResult> {
-    const trimmed = guildId?.trim() ?? ""
+    const trimmed = typeof guildId === "string" ? guildId.trim() : ""
     if (!trimmed || !DISCORD_SNOWFLAKE_RE.test(trimmed)) {
         return {
             ok: false,

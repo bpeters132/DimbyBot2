@@ -43,9 +43,11 @@ export async function resolveWebDashboardTextChannelId(guild: Guild): Promise<st
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error)
         if (!message.includes("Guild settings accessed before initialization")) {
+            const errorName = error instanceof Error ? error.name : typeof error
             console.warn("[webDashboardTextChannel] failed to load guild settings", {
                 guildId: guild.id,
-                error,
+                errorName,
+                message: message.slice(0, 300),
             })
         }
         controlId = undefined

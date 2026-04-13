@@ -111,7 +111,8 @@ services:
             - dimbybot-storage:/app/storage
             - dimbybot-logs:/app/logs
             - dimbybot-downloads:/app/downloads
-        # Next standalone dashboard port (see `WEB_PORT` in `.env.example` for the bot/Express listener).
+        # Compose cannot conditionally toggle ports for a single service based on WEB_ENABLED.
+        # These mappings are always declared; when WEB_ENABLED=false the web processes do not bind them.
         ports:
             - "${DASHBOARD_PORT:-3000}:${DASHBOARD_PORT:-3000}"
             - "${WEB_PORT:-3001}:${WEB_PORT:-3001}"

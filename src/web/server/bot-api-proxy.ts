@@ -68,10 +68,6 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
         headers,
     }
 
-    if (method !== "GET" && method !== "HEAD") {
-        init.body = await request.arrayBuffer()
-    }
-
     const started = Date.now()
     const forwardCookie = Boolean(request.headers.get("cookie"))
     const forwardAuth = Boolean(request.headers.get("authorization"))
@@ -89,6 +85,9 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
     const timeoutMs = readBotApiProxyTimeoutMs()
     const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs)
     try {
+        if (method !== "GET" && method !== "HEAD") {
+            init.body = await request.arrayBuffer()
+        }
         const upstream = await fetch(targetUrl, { ...init, signal: controller.signal })
         const contentType = upstream.headers.get("content-type")
         const body = await upstream.arrayBuffer()

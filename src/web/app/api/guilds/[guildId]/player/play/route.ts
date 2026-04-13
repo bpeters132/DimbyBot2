@@ -17,13 +17,8 @@ export async function POST(
     try {
         return await proxyBotApi(request)
     } catch (error: unknown) {
-        const details =
-            error instanceof Error
-                ? error.message
-                : typeof error === "string"
-                  ? error
-                  : JSON.stringify(error)
-        console.error("[api/guilds/.../player/play] proxy failed", error, "details:", details)
+        const details = (error instanceof Error ? error.message : String(error)).slice(0, 500)
+        console.error(`[api/guilds/${guildId}/player/play] proxy failed: ${details}`)
         return NextResponse.json({ ok: false, error: "Internal Server Error" }, { status: 500 })
     }
 }

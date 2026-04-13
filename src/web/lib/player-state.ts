@@ -32,6 +32,8 @@ function purgeExpiredRequesterMissCache(): void {
 
 function setRequesterMissCacheEntry(key: string, expiresAt: number): void {
     requesterMissCache.set(key, expiresAt)
+    // Intentionally FIFO eviction by insertion order: capacity is bounded by
+    // REQUESTER_MISS_CACHE_MAX_ENTRIES, and freshness is handled by TTL expiry.
     while (requesterMissCache.size > REQUESTER_MISS_CACHE_MAX_ENTRIES) {
         const oldest = requesterMissCache.keys().next()
         if (oldest.done) break

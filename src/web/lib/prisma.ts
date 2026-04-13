@@ -1,7 +1,5 @@
-import prismaClientPkg from "@prisma/client"
+import { PrismaClient } from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
-
-const { PrismaClient } = prismaClientPkg
 
 const defaultDevDatabaseUrl = "postgresql://postgres:postgres@localhost:5432/postgres"
 const databaseUrl = process.env.DATABASE_URL?.trim()

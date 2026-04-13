@@ -25,10 +25,10 @@ export async function POST(
     request: Request,
     ctx: { params: Promise<{ guildId: string }> }
 ): Promise<Response> {
-    const { guildId } = await ctx.params
-    const denied = await guardGuildAccess(guildId)
-    if (denied) return denied
     try {
+        const { guildId } = await ctx.params
+        const denied = await guardGuildAccess(guildId)
+        if (denied) return denied
         return await proxyBotApi(request)
     } catch (error: unknown) {
         console.error("[api/guilds/.../player] POST proxy failed", error)

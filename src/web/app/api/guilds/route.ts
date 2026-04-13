@@ -15,8 +15,21 @@ export async function GET(request: Request) {
         session = (await auth.api.getSession({
             headers: await headers(),
         })) as AuthenticatedSession | null
-    } catch {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    } catch (err: unknown) {
+        const status =
+            typeof err === "object" && err !== null && "status" in err
+                ? (err as { status?: unknown }).status
+                : undefined
+        const statusCode =
+            typeof err === "object" && err !== null && "statusCode" in err
+                ? (err as { statusCode?: unknown }).statusCode
+                : undefined
+        const numericStatus = typeof status === "number" ? status : statusCode
+        if (numericStatus === 401 || numericStatus === 403) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
+        console.error("[api/guilds] auth session lookup failed", err)
+        return NextResponse.json({ error: "Auth service unavailable" }, { status: 502 })
     }
 
     if (!session?.user?.id) {

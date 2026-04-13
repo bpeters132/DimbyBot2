@@ -170,7 +170,10 @@ export class ConnectionManager {
     broadcast(guildId: string, message: WSMessage): void {
         const payload = JSON.stringify(message)
         for (const socket of this.getGuildConnections(guildId)) {
-            void this.sendToSocketIfAuthorized(socket, guildId, payload)
+            void this.sendToSocketIfAuthorized(socket, guildId, payload).catch((err: unknown) => {
+                const message = err instanceof Error ? err.message : String(err)
+                webPlayerWarn("broadcast send failed", { guildId, message })
+            })
         }
     }
 
@@ -304,7 +307,17 @@ export class ConnectionManager {
                     guildId,
                     viewerIdPrefix: meta.userId.slice(0, 8),
                 })
-                socket.send(JSON.stringify({ type: "subscribed", guildId }))
+                if (last.success) {
+                    socket.send(JSON.stringify({ type: "subscribed", guildId }))
+                } else {
+                    socket.send(
+                        JSON.stringify({
+                            type: "error",
+                            code: "SUBSCRIBE_DEBOUNCED_FAILURE",
+                            message: "Recent subscription attempt failed. Please retry shortly.",
+                        })
+                    )
+                }
                 return
             }
 
