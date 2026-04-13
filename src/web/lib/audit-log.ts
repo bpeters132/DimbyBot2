@@ -1,4 +1,4 @@
-export type AuditLogLevel = "info" | "warn" | "error"
+export type AuditLogLevel = "debug" | "info" | "warn" | "error"
 
 /**
  * Minimal centralized audit logger for web runtime paths that need consistent observability output.
@@ -16,6 +16,10 @@ export function writeAuditLog(
     }
     if (level === "warn") {
         console.warn(prefix, details)
+        return
+    }
+    if (level === "debug") {
+        console.debug(prefix, details)
         return
     }
     console.log(prefix, details)

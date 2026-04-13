@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { randomUUID } from "node:crypto"
 import { getBotApiOrigin } from "@/server/bot-api-origin"
 import { isBotApiVerbose, logBotApiVerbose } from "@/server/bot-api-verbose"
 
@@ -6,7 +7,7 @@ function readBotApiProxyTimeoutMs(): number {
     const raw = process.env.BOT_API_PROXY_TIMEOUT_MS?.trim()
     if (!raw) return 4000
     const n = Number.parseInt(raw, 10)
-    if (!Number.isFinite(n) || n < 1) return 4000
+    if (!Number.isFinite(n)) return 4000
     return Math.min(Math.max(n, 1000), 120_000)
 }
 
@@ -55,6 +56,11 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
         const value = request.headers.get(name)
         if (value) headers.set(name, value)
     }
+    const incomingCorrelationId = request.headers.get("x-correlation-id")
+    const incomingRequestId = request.headers.get("x-request-id")
+    const correlationId = incomingCorrelationId ?? incomingRequestId ?? randomUUID()
+    headers.set("x-correlation-id", correlationId)
+    headers.set("x-request-id", incomingRequestId ?? correlationId)
 
     const method = request.method
     const init: RequestInit = {
@@ -118,12 +124,10 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
         return NextResponse.json(
             {
                 ok: false,
-                error: {
-                    error: isAbort ? "Bot API timeout" : "Bot API unreachable",
-                    details: isAbort
-                        ? "Upstream bot API request timed out."
-                        : "Upstream bot API request failed.",
-                },
+                error: isAbort ? "Bot API timeout" : "Bot API unreachable",
+                details: isAbort
+                    ? "Upstream bot API request timed out."
+                    : "Upstream bot API request failed.",
             },
             { status: isAbort ? 504 : 502 }
         )

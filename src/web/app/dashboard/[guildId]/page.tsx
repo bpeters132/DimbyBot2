@@ -35,7 +35,7 @@ export default async function GuildPage({ params }: GuildPageProps) {
                     {permResult.status === 401 ? "Sign in required" : "Access denied"}
                 </p>
                 <p className="mt-2 text-muted-foreground">
-                    {permResult.details ?? permResult.error}
+                    {permResult.details ?? permResult.error ?? "An unexpected error occurred."}
                 </p>
             </section>
         )

@@ -15,7 +15,12 @@ export type SearchAndEnqueueFailure = {
     error: ApiErrorPayload
 }
 
-export type SearchAndEnqueueSuccess = { ok: true; player: Player }
+export type SearchAndEnqueueSuccess = {
+    ok: true
+    player: Player
+    playbackStarted: boolean
+    playbackError?: string
+}
 
 export type SearchAndEnqueueResult = SearchAndEnqueueSuccess | SearchAndEnqueueFailure
 
@@ -143,7 +148,16 @@ export async function searchAndEnqueue(
         player.queue.add(searchResult.tracks[0])
     }
 
-    await startPlaybackIfNeeded(player)
-
-    return { ok: true, player }
+    try {
+        await startPlaybackIfNeeded(player)
+        return { ok: true, player, playbackStarted: true }
+    } catch (error: unknown) {
+        const playbackError = error instanceof Error ? error.message : String(error)
+        return {
+            ok: true,
+            player,
+            playbackStarted: false,
+            playbackError,
+        }
+    }
 }

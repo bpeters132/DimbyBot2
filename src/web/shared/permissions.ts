@@ -38,6 +38,10 @@ type PermissionClient = {
     }
 }
 
+/**
+ * TTL for cached {@link CachedPermissionResult} entries (5 minutes): reduces repeated permission
+ * resolution cost, but Discord role/permission changes can take up to this window to appear.
+ */
 const cacheTtlMs = 5 * 60 * 1000
 
 interface CachedPermissionResult {

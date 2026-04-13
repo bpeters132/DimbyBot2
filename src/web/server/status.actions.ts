@@ -6,6 +6,7 @@ import { sanitizeErrorText } from "@/lib/sanitize-log-text"
 import { getServiceStatusPayload } from "@/server/service-status"
 
 const SENSITIVE_KEY = /\b(?:password|secret|token|uri|connectionString|connection|host|headers)\b/i
+const SANITIZE_MAX_DEPTH = 10
 
 function stringLooksLikeHostOrDsn(value: string): boolean {
     if (/:\/\//.test(value)) {
@@ -20,11 +21,23 @@ function stringLooksLikeHostOrDsn(value: string): boolean {
     return false
 }
 
-function sanitizeParsedForLog(value: unknown): unknown {
+function sanitizeParsedForLog(value: unknown, depth = 0, visited = new WeakSet<object>()): unknown {
+    if (depth > SANITIZE_MAX_DEPTH) {
+        return "[too_deep]"
+    }
     if (Array.isArray(value)) {
-        return value.map((item) => sanitizeParsedForLog(item))
+        if (visited.has(value)) {
+            return "[circular]"
+        }
+        visited.add(value)
+        return value.map((item) => sanitizeParsedForLog(item, depth + 1, visited))
     }
     if (value && typeof value === "object") {
+        const objectValue = value as Record<string, unknown>
+        if (visited.has(objectValue)) {
+            return "[circular]"
+        }
+        visited.add(objectValue)
         const obj = value as Record<string, unknown>
         const out: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(obj)) {
@@ -36,7 +49,7 @@ function sanitizeParsedForLog(value: unknown): unknown {
                 out[k] = "[redacted]"
                 continue
             }
-            out[k] = sanitizeParsedForLog(v)
+            out[k] = sanitizeParsedForLog(v, depth + 1, visited)
         }
         return out
     }
@@ -72,7 +85,16 @@ export async function getServiceStatusAction(): Promise<StatusPayload> {
             "error",
             "SERVICE_STATUS_PROBE_FAILED",
             "[status.actions] service status probe failed",
-            safe
+            {
+                action: "SERVICE_STATUS_PROBE",
+                category: "service",
+                source: "status.actions",
+                severity: "error",
+                outcome: "failure",
+                actor: "system",
+                request: null,
+                error: safe,
+            }
         )
         return {
             ok: false,

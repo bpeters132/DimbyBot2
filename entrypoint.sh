@@ -146,7 +146,7 @@ wait_for_bot() {
 
 # When the container user is root (e.g. one-off `docker run --user 0`), fix volume ownership
 # then drop to `node`. Default image user is `node` (see Dockerfile) — then chown is skipped.
-# The 'exec' replaces this shell so the bot becomes PID 1 for signal handling.
+# Keep this shell as PID 1 so traps can forward shutdown to bot + web child processes.
 
 if [ "$(id -u)" -eq 0 ]; then
   mkdir -p /app/storage
@@ -154,12 +154,14 @@ if [ "$(id -u)" -eq 0 ]; then
   mkdir -p /app/node_modules/.prisma /app/node_modules/@prisma
   chown -R node:node /app/node_modules/.prisma /app/node_modules/@prisma 2>/dev/null || true
   if [ "$#" -gt 0 ]; then
+    trap forward_shutdown INT TERM
     if [ "${WEB_ENABLED:-false}" = "true" ]; then
-      trap forward_shutdown INT TERM
       start_web_server "node-user"
     fi
     echo "Bot Entrypoint: Executing '$*' as node..."
-    exec su-exec node "$@"
+    su-exec node "$@" &
+    BOT_PID=$!
+    wait_for_bot
   fi
   trap forward_shutdown INT TERM
   start_web_server "node-user"
@@ -171,12 +173,14 @@ fi
 
 mkdir -p /app/storage /app/node_modules/.prisma /app/node_modules/@prisma
 if [ "$#" -gt 0 ]; then
+  trap forward_shutdown INT TERM
   if [ "${WEB_ENABLED:-false}" = "true" ]; then
-    trap forward_shutdown INT TERM
     start_web_server
   fi
   echo "Bot Entrypoint: Executing '$*'..."
-  exec "$@"
+  "$@" &
+  BOT_PID=$!
+  wait_for_bot
 fi
 
 trap forward_shutdown INT TERM

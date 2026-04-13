@@ -23,7 +23,7 @@ async function runCommand(
 export function usePlayerActions(guildId: string, requesterDiscordUserId: string | undefined) {
     return useMemo(
         () => ({
-            playPause: () => runCommand(guildId, "pause"),
+            pause: () => runCommand(guildId, "pause"),
             stop: () => runCommand(guildId, "stop"),
             skip: () => runCommand(guildId, "skip"),
             shuffle: () => runCommand(guildId, "shuffle"),

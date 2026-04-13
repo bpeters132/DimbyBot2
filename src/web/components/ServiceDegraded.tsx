@@ -22,10 +22,7 @@ export function ServiceDegraded({
           : detail
                 .replace(/https?:\/\/[^\s"'<>]+/gi, "[url]")
                 .replace(/[A-Z]:\\[^\s]+/g, "[path]")
-                .replace(
-                    /(^|[\s"'(>])(\/(?:etc|var|tmp|usr|home|opt|root|app|proc)\b(?:\/[\w.-]+)+)/gi,
-                    "$1[path]"
-                )
+                .replace(/(^|[\s"'(>])(\/(?:[\w.-]+\/)*[\w.-]+)/g, "$1[path]")
                 .replace(/(^|[\s"'(>])(\.{1,2}\/(?:[\w.-]+\/)*[\w.-]+)/g, "$1[path]")
                 .replace(/\b[A-Z_]*ERROR_[A-Z_0-9]+\b/g, "[error-code]")
                 .slice(0, 300)

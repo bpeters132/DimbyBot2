@@ -10,8 +10,8 @@
         "start": "next start --port 3001"
     },
     "dependencies": {
-        "@prisma/adapter-pg": "^7.6.0",
-        "@prisma/client": "^7.6.0",
+        "@prisma/adapter-pg": "^7.7.0",
+        "@prisma/client": "^7.7.0",
         "@radix-ui/react-slot": "^1.2.3",
         "better-auth": "^1.6.2",
         "class-variance-authority": "^0.7.1",

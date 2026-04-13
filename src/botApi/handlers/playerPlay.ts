@@ -58,7 +58,7 @@ export async function playerPlayPOST(
         }
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
-        console.error("[playerPlayPOST] unhandled error", { guildId, err, message })
+        console.error("[playerPlayPOST] unhandled error", { guildId, message })
         return {
             status: 500,
             body: {

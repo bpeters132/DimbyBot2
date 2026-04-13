@@ -39,6 +39,7 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
 
     useEffect(() => {
         let cancelled = false
+        let reconnectTimer: ReturnType<typeof setTimeout> | null = null
         setPlayerState(null)
         setQueue(undefined)
         setLiveUpdatesError(null)
@@ -203,10 +204,16 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
                 }
                 reconnectAttemptsRef.current = nextAttempt
                 const delay = Math.min(30000, 1000 * 2 ** (reconnectAttemptsRef.current - 1))
-                setTimeout(() => {
-                    if (!cancelled) {
-                        void connect()
-                    }
+                reconnectTimer = setTimeout(() => {
+                    if (cancelled) return
+                    void (async () => {
+                        try {
+                            await connect()
+                        } catch (error: unknown) {
+                            console.error("[usePlayerSocket] reconnect failed", error)
+                            setLiveUpdatesError("Live updates reconnect failed.")
+                        }
+                    })()
                 }, delay)
             }
 
@@ -219,6 +226,9 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
 
         return () => {
             cancelled = true
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer)
+            }
             socketRef.current?.close()
         }
     }, [guildId, userId])

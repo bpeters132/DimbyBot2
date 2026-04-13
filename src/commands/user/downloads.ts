@@ -257,10 +257,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 if (!removeAll) {
                     return Boolean(file.date && file.date < cutoffDate)
                 }
-                if (file.date) {
-                    return true
-                }
-                return fs.existsSync(file.path)
+                return true
             })
 
             if (files.length === 0) {

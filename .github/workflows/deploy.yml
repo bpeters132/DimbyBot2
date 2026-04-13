@@ -259,6 +259,12 @@ jobs:
                   port: ${{ secrets.DEPLOY_SERVER_SSH_PORT }}
                   script: |
                       set -e
+                      if [ -f /home/bot/.env ]; then
+                        set -a
+                        # shellcheck disable=SC1091
+                        . /home/bot/.env
+                        set +a
+                      fi
                       max_attempts=40
                       sleep_seconds=2
                       attempt=1

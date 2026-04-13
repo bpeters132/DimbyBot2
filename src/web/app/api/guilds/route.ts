@@ -1,3 +1,7 @@
+import { headers } from "next/headers"
+import { NextResponse } from "next/server"
+import { auth } from "@/auth"
+import type { AuthenticatedSession } from "@/lib/api-auth"
 import { proxyBotApi } from "@/server/bot-api-proxy"
 
 /**
@@ -6,5 +10,15 @@ import { proxyBotApi } from "@/server/bot-api-proxy"
  * boundaries keep the bot API in a separate long-running process.
  */
 export async function GET(request: Request) {
-    return proxyBotApi(request)
+    try {
+        const session = (await auth.api.getSession({
+            headers: await headers(),
+        })) as AuthenticatedSession | null
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
+        return proxyBotApi(request)
+    } catch {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 }

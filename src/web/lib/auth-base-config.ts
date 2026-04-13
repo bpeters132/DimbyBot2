@@ -1,3 +1,5 @@
+import { writeAuditLog } from "./audit-log.js"
+
 /**
  * Better Auth options that do not touch the database client (env + OAuth + session cookie policy only).
  *
@@ -69,6 +71,17 @@ export const betterAuthBaseConfig = {
             refreshAccessToken: async (refreshToken: string) => {
                 const controller = new AbortController()
                 const timeoutHandle = setTimeout(() => controller.abort(), 10_000)
+                const logRefreshFailure = (payload: {
+                    message: string
+                    httpStatus?: number
+                    errorSnippet: unknown
+                }) => {
+                    writeAuditLog("warn", "DISCORD_OAUTH_REFRESH_FAILURE", payload.message, {
+                        event: "discord_oauth_refresh_failure",
+                        httpStatus: payload.httpStatus,
+                        errorSnippet: safeJsonSnippet(payload.errorSnippet),
+                    })
+                }
                 try {
                     const tokenResponse = await fetch("https://discord.com/api/oauth2/token", {
                         method: "POST",
@@ -83,6 +96,11 @@ export const betterAuthBaseConfig = {
                     })
                     if (!tokenResponse.ok) {
                         const text = await tokenResponse.text()
+                        logRefreshFailure({
+                            message: "Discord OAuth refresh returned non-OK response",
+                            httpStatus: tokenResponse.status,
+                            errorSnippet: text,
+                        })
                         throw new Error(
                             `Discord OAuth refresh failed (${tokenResponse.status}): ${safeJsonSnippet(text)}`
                         )
@@ -91,17 +109,32 @@ export const betterAuthBaseConfig = {
                     try {
                         parsed = await tokenResponse.json()
                     } catch {
+                        logRefreshFailure({
+                            message: "Discord OAuth refresh returned invalid JSON",
+                            httpStatus: tokenResponse.status,
+                            errorSnippet: "invalid-json",
+                        })
                         throw new Error(
                             `Discord OAuth refresh returned invalid JSON (${tokenResponse.status})`
                         )
                     }
                     if (!parsed || typeof parsed !== "object") {
+                        logRefreshFailure({
+                            message: "Discord OAuth refresh returned non-object JSON",
+                            httpStatus: tokenResponse.status,
+                            errorSnippet: parsed,
+                        })
                         throw new Error(
                             `Discord OAuth refresh returned non-object JSON (${tokenResponse.status}): ${safeJsonSnippet(parsed)}`
                         )
                     }
                     const data = parsed as Record<string, unknown>
                     if (typeof data.access_token !== "string" || data.access_token.length === 0) {
+                        logRefreshFailure({
+                            message: "Discord OAuth refresh missing access_token",
+                            httpStatus: tokenResponse.status,
+                            errorSnippet: parsed,
+                        })
                         throw new Error(
                             `Discord OAuth refresh missing access_token (${tokenResponse.status}): ${safeJsonSnippet(parsed)}`
                         )
@@ -111,6 +144,11 @@ export const betterAuthBaseConfig = {
                         !Number.isFinite(data.expires_in) ||
                         data.expires_in <= 0
                     ) {
+                        logRefreshFailure({
+                            message: "Discord OAuth refresh missing expires_in",
+                            httpStatus: tokenResponse.status,
+                            errorSnippet: parsed,
+                        })
                         throw new Error(
                             `Discord OAuth refresh missing expires_in (${tokenResponse.status}): ${safeJsonSnippet(parsed)}`
                         )
@@ -125,6 +163,16 @@ export const betterAuthBaseConfig = {
                     }
                 } catch (error: unknown) {
                     if (error instanceof Error && error.name === "AbortError") {
+                        writeAuditLog(
+                            "warn",
+                            "DISCORD_OAUTH_REFRESH_FAILURE",
+                            "Discord OAuth refresh timed out",
+                            {
+                                event: "discord_oauth_refresh_failure",
+                                httpStatus: undefined,
+                                errorSnippet: safeJsonSnippet("AbortError"),
+                            }
+                        )
                         throw new Error("Discord OAuth refresh timed out", { cause: error })
                     }
                     throw error

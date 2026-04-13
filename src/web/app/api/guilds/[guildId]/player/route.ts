@@ -3,9 +3,16 @@
  * on the bot. Keeps a stable HTTP proxy boundary (method/body/query) that server actions do not replace.
  */
 import { NextResponse } from "next/server"
+import { guardGuildAccess } from "@/lib/guild-api-route-guard"
 import { proxyBotApi } from "@/server/bot-api-proxy"
 
-export async function GET(request: Request) {
+export async function GET(
+    request: Request,
+    ctx: { params: Promise<{ guildId: string }> }
+): Promise<Response> {
+    const { guildId } = await ctx.params
+    const denied = await guardGuildAccess(guildId)
+    if (denied) return denied
     try {
         return await proxyBotApi(request)
     } catch (error: unknown) {
@@ -14,7 +21,13 @@ export async function GET(request: Request) {
     }
 }
 
-export async function POST(request: Request) {
+export async function POST(
+    request: Request,
+    ctx: { params: Promise<{ guildId: string }> }
+): Promise<Response> {
+    const { guildId } = await ctx.params
+    const denied = await guardGuildAccess(guildId)
+    if (denied) return denied
     try {
         return await proxyBotApi(request)
     } catch (error: unknown) {

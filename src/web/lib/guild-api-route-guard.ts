@@ -1,6 +1,7 @@
 import { headers } from "next/headers"
 import { NextResponse } from "next/server"
 import { resolveAuthenticatedGuildAccess } from "@/lib/api-auth"
+import { sanitizeErrorText } from "@/lib/sanitize-log-text"
 
 /** Next route helper: forwards request headers and returns a JSON error response when access fails. */
 export async function guardGuildAccess(guildId: string): Promise<NextResponse | null> {
@@ -17,7 +18,8 @@ export async function guardGuildAccess(guildId: string): Promise<NextResponse | 
         return null
     } catch (err: unknown) {
         const name = err instanceof Error ? err.name : "Error"
-        const message = err instanceof Error ? err.message : String(err)
+        const message =
+            err instanceof Error ? sanitizeErrorText(err.message, 200) : "[REDACTED_UNKNOWN_ERROR]"
         console.error("[guild-api-route-guard] guardGuildAccess failed", `${name}: ${message}`)
         return NextResponse.json(
             {

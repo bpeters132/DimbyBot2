@@ -149,6 +149,8 @@ export async function replaceDownloadMetadataStoreInDatabase(
     const KEEP_INSERT_CHUNK = 500
 
     await prisma.$transaction(async (tx) => {
+        // PostgreSQL-specific temp table lifecycle (`ON COMMIT DROP`) is intentional; this project is
+        // configured for PostgreSQL via Prisma, and `_dimbybot_dm_keep` must be transaction-scoped.
         await tx.$executeRaw`
             CREATE TEMP TABLE _dimbybot_dm_keep (
                 "guildId" TEXT NOT NULL,
@@ -175,13 +177,32 @@ export async function replaceDownloadMetadataStoreInDatabase(
 
         for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
             const batch = rows.slice(i, i + UPSERT_BATCH)
+            const existingBefore = await tx.downloadMetadata.findMany({
+                where: {
+                    OR: batch.map((row) => ({
+                        fileName: row.fileName,
+                        guildId: row.guildId,
+                    })),
+                },
+                select: { fileName: true, guildId: true },
+            })
+
+            await tx.downloadMetadata.createMany({
+                data: batch,
+                skipDuplicates: true,
+            })
+
+            const existingKeys = new Set(
+                existingBefore.map((row) => downloadMetadataStoreKey(row.guildId, row.fileName))
+            )
             for (const row of batch) {
-                await tx.downloadMetadata.upsert({
+                const key = downloadMetadataStoreKey(row.guildId, row.fileName)
+                if (!existingKeys.has(key)) continue
+                await tx.downloadMetadata.update({
                     where: {
                         fileName_guildId: { fileName: row.fileName, guildId: row.guildId },
                     },
-                    create: row,
-                    update: {
+                    data: {
                         downloadDate: row.downloadDate,
                         originalUrl: row.originalUrl,
                         filePath: row.filePath,

@@ -1,6 +1,7 @@
 "use server"
 
 import type { ApiResponse, GuildListResponse } from "@/types/web"
+import { writeAuditLog } from "@/lib/audit-log"
 import { serverFetchBot } from "@/server/fetch-bot-api"
 
 export type GuildListActionResult =
@@ -76,7 +77,13 @@ export async function loadGuildListForDashboard(): Promise<GuildListActionResult
         const res = await serverFetchBot("/api/guilds")
         return parseGuildListBotResponse(res)
     } catch (error: unknown) {
-        console.error("[guild.actions] loadGuildListForDashboard failed:", error)
+        writeAuditLog("error", "GUILD_LIST_LOAD_FAILED", "loadGuildListForDashboard failed", {
+            action: "LOAD_GUILD_LIST_FOR_DASHBOARD",
+            category: "guild",
+            source: "guild.actions",
+            outcome: "failure",
+            error,
+        })
         return {
             ok: false,
             error: "Unable to fetch bot data.",

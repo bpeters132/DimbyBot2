@@ -33,6 +33,7 @@ export interface GuildDashboardPermissionSnapshot {
     memberResolved: boolean
     primaryPermissions: string[]
     oauthPermissions: string[]
+    optimisticBotUnavailable?: boolean
 }
 
 /** Result of loading {@link GuildDashboardPermissionSnapshot} in a server action or RSC. */

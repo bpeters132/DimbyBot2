@@ -280,6 +280,7 @@ export class ConnectionManager {
 
             const botClient = tryGetBotClient()
             if (!botClient) {
+                this.subscribeLastAttempt.set(socket, { guildId, at: Date.now(), success: false })
                 socket.send(
                     JSON.stringify({
                         type: "error",
@@ -295,10 +296,10 @@ export class ConnectionManager {
             const last = this.subscribeLastAttempt.get(socket)
             if (
                 last &&
-                last.success &&
                 last.guildId === guildId &&
                 now - last.at < ConnectionManager.SUBSCRIBE_DEBOUNCE_MS
             ) {
+                this.subscribeLastAttempt.set(socket, { guildId, at: now, success: last.success })
                 webPlayerTrace("WS subscribe debounced (same guild)", {
                     guildId,
                     viewerIdPrefix: meta.userId.slice(0, 8),
@@ -307,7 +308,26 @@ export class ConnectionManager {
                 return
             }
 
-            const resolution = await resolveUserPermissions(botClient, guildId, meta.userId)
+            let resolution: Awaited<ReturnType<typeof resolveUserPermissions>>
+            try {
+                resolution = await resolveUserPermissions(botClient, guildId, meta.userId)
+            } catch (error: unknown) {
+                this.subscribeLastAttempt.set(socket, { guildId, at: Date.now(), success: false })
+                const message = error instanceof Error ? error.message : String(error)
+                webPlayerWarn("WS subscribe permission resolution failed", {
+                    guildId,
+                    viewerIdPrefix: meta.userId.slice(0, 8),
+                    message,
+                })
+                socket.send(
+                    JSON.stringify({
+                        type: "error",
+                        code: "PERMISSION_RESOLUTION_ERROR",
+                        message: "Could not resolve permissions for this subscription request.",
+                    })
+                )
+                return
+            }
             if (!hasRequiredPermissions(resolution.permissions, [WebPermission.VIEW_PLAYER])) {
                 this.subscribeLastAttempt.set(socket, { guildId, at: Date.now(), success: false })
                 webPlayerWarn("WS subscribe denied (VIEW_PLAYER missing)", {

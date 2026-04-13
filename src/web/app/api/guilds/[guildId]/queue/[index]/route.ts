@@ -21,7 +21,7 @@ export async function DELETE(
             {
                 ok: false,
                 error: "Internal Server Error",
-                details: "An unexpected error occurred.",
+                details: { code: "INTERNAL_ERROR" },
             },
             { status: 500 }
         )
@@ -43,7 +43,7 @@ export async function PATCH(
             {
                 ok: false,
                 error: "Internal Server Error",
-                details: "An unexpected error occurred.",
+                details: { code: "INTERNAL_ERROR" },
             },
             { status: 500 }
         )

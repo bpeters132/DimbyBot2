@@ -75,10 +75,24 @@ interface QueueTrackRowProps {
     queueIndex: number
 }
 
+function queueTrackStableKey(track: QueueTrackSummary): string {
+    if (track.encoded) return `encoded:${track.encoded}`
+    if (track.uri) return `uri:${track.uri}`
+    return `meta:${[
+        track.title,
+        track.author ?? "",
+        String(track.durationMs),
+        track.sourceName ?? "",
+        track.requesterId ?? "",
+    ].join("|")}`
+}
+
 /** Queue row with a fixed-position detail card anchored to the right of the pointer (keyboard: row edge). */
 function QueueTrackRow({ track, queueIndex }: QueueTrackRowProps) {
     const liRef = useRef<HTMLLIElement>(null)
     const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null)
+    const hoverRafRef = useRef<number | null>(null)
+    const pendingAnchorRef = useRef<{ x: number; y: number } | null>(null)
 
     const safeQueueTrackUrl = useMemo(() => sanitizeHttpUrl(track.uri), [track.uri])
     const safeQueueThumbnailUrl = useMemo(
@@ -104,6 +118,31 @@ function QueueTrackRow({ track, queueIndex }: QueueTrackRowProps) {
         }
     }
 
+    const clearScheduledAnchorUpdate = () => {
+        if (hoverRafRef.current !== null) {
+            window.cancelAnimationFrame(hoverRafRef.current)
+            hoverRafRef.current = null
+        }
+        pendingAnchorRef.current = null
+    }
+
+    const scheduleAnchorUpdate = (x: number, y: number) => {
+        pendingAnchorRef.current = { x, y }
+        if (hoverRafRef.current !== null) return
+        hoverRafRef.current = window.requestAnimationFrame(() => {
+            hoverRafRef.current = null
+            if (pendingAnchorRef.current) {
+                setAnchor(pendingAnchorRef.current)
+            }
+        })
+    }
+
+    useEffect(() => {
+        return () => {
+            clearScheduledAnchorUpdate()
+        }
+    }, [])
+
     const rowLine = (
         <>
             <div className="font-medium">
@@ -120,8 +159,9 @@ function QueueTrackRow({ track, queueIndex }: QueueTrackRowProps) {
             ref={liRef}
             className="rounded border bg-background p-2"
             tabIndex={safeQueueTrackUrl ? undefined : 0}
-            onMouseMove={(event) => setAnchor({ x: event.clientX, y: event.clientY })}
+            onMouseMove={(event) => scheduleAnchorUpdate(event.clientX, event.clientY)}
             onMouseLeave={() => {
+                clearScheduledAnchorUpdate()
                 window.requestAnimationFrame(() => {
                     if (!liRef.current?.contains(document.activeElement)) {
                         setAnchor(null)
@@ -298,6 +338,7 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
     const actions = usePlayerActions(guildId, discordUserId)
     const requestIdRef = useRef(0)
     const isSubmittingRef = useRef(false)
+    const warnedQueueKeyFallbackRef = useRef(new Set<string>())
 
     useEffect(() => {
         if (process.env.NODE_ENV !== "development") return
@@ -458,8 +499,8 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
               : "Queue"
     }, [playerState])
 
-    const runAction = async (runner: () => Promise<PlayerStateResponse>) => {
-        if (isSubmittingRef.current) return
+    const runAction = async (runner: () => Promise<PlayerStateResponse>): Promise<boolean> => {
+        if (isSubmittingRef.current) return false
         isSubmittingRef.current = true
         setSubmitting(true)
         setError(null)
@@ -477,8 +518,10 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                 }
                 setQueueLoading(false)
             }
+            return true
         } catch (actionError) {
             setError(actionError instanceof Error ? actionError.message : "Action failed")
+            return false
         } finally {
             isSubmittingRef.current = false
             setSubmitting(false)
@@ -504,7 +547,10 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
             </div>
 
             {error ? (
-                <div className="rounded border border-destructive/50 bg-destructive/10 p-2 text-sm text-destructive">
+                <div
+                    className="rounded border border-destructive/50 bg-destructive/10 p-2 text-sm text-destructive"
+                    role="alert"
+                >
                     {error}
                 </div>
             ) : null}
@@ -513,6 +559,16 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                 <div className="rounded border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                     <p className="font-medium">Live updates blocked</p>
                     <p className="mt-1 text-muted-foreground">{socket.liveUpdatesError}</p>
+                </div>
+            ) : null}
+
+            {permissionSnapshot.optimisticBotUnavailable ? (
+                <div className="rounded border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-100">
+                    <p className="font-medium">Limited dashboard mode</p>
+                    <p className="mt-1 text-muted-foreground">
+                        The bot permission service is unavailable right now, so only safe view
+                        access is enabled.
+                    </p>
                 </div>
             ) : null}
 
@@ -629,7 +685,7 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                             type="button"
                             className="rounded border bg-secondary px-3 py-2 text-secondary-foreground hover:opacity-90 disabled:opacity-50"
                             disabled={playbackControlsDisabled || !playerState?.currentTrack}
-                            onClick={() => void runAction(actions.playPause)}
+                            onClick={() => void runAction(actions.pause)}
                         >
                             {playerState?.status === "playing" ? "Pause" : "Play"}
                         </button>
@@ -691,8 +747,9 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                         onSubmit={(event) => {
                             event.preventDefault()
                             if (!query.trim()) return
-                            void runAction(() => actions.addTrack(query.trim()))
-                            setQuery("")
+                            void runAction(() => actions.addTrack(query.trim())).then((ok) => {
+                                if (ok) setQuery("")
+                            })
                         }}
                     >
                         <input
@@ -700,6 +757,7 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
                             placeholder="Search or paste a URL"
+                            aria-label="Search or paste a URL"
                             disabled={addTrackDisabled}
                         />
                         <button
@@ -725,15 +783,31 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                 ) : (
                     <>
                         <ol className="space-y-2" start={queueRangeStart}>
-                            {visibleQueue.map((track, index) => (
-                                <QueueTrackRow
-                                    key={
-                                        track.encoded ?? track.uri ?? `q-${queueRangeStart + index}`
-                                    }
-                                    track={track}
-                                    queueIndex={queueRangeStart + index}
-                                />
-                            ))}
+                            {visibleQueue.map((track, index) => {
+                                const trackKey = queueTrackStableKey(track)
+                                if (
+                                    process.env.NODE_ENV === "development" &&
+                                    trackKey.startsWith("meta:") &&
+                                    !warnedQueueKeyFallbackRef.current.has(trackKey)
+                                ) {
+                                    warnedQueueKeyFallbackRef.current.add(trackKey)
+                                    console.warn(
+                                        "[PlayerPanel] queue item is missing encoded/uri key fields",
+                                        {
+                                            guildId,
+                                            title: track.title,
+                                            requesterId: track.requesterId,
+                                        }
+                                    )
+                                }
+                                return (
+                                    <QueueTrackRow
+                                        key={trackKey}
+                                        track={track}
+                                        queueIndex={queueRangeStart + index}
+                                    />
+                                )
+                            })}
                         </ol>
                         <div className="mt-3 flex items-center justify-between">
                             <div className="text-sm text-muted-foreground">

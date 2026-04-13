@@ -49,16 +49,18 @@ export async function saveDownloadMetadataStore(
     const logger = loggerFromPartial(loggerInstance)
     try {
         const result = await replaceDownloadMetadataStoreInDatabase(metadata)
+        downloadMetadataCache = cloneStore(metadata)
+        initialized = true
         try {
             const newCache = await getDownloadMetadataStoreFromDatabase()
             downloadMetadataCache = newCache
             initialized = true
         } catch (reloadErr: unknown) {
             logger.warn(
-                "[downloadMetadata] replaceDownloadMetadataStoreInDatabase succeeded but getDownloadMetadataStoreFromDatabase failed; cache may be out of sync",
+                "[downloadMetadata] replaceDownloadMetadataStoreInDatabase succeeded but getDownloadMetadataStoreFromDatabase failed; keeping optimistic in-memory cache",
                 reloadErr
             )
-            return false
+            return true
         }
         if (result.skippedEntries.length > 0) {
             logger.warn(

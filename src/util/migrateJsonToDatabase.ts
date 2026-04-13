@@ -236,10 +236,10 @@ export async function migrateDownloadMetadata(
     )
 
     try {
-        let parsed: DownloadsMetadataStore = {}
+        let parsedUnknown: unknown
         try {
             const raw = fs.readFileSync(downloadMetadataJsonPath, "utf8")
-            parsed = JSON.parse(raw) as DownloadsMetadataStore
+            parsedUnknown = JSON.parse(raw) as unknown
         } catch (parseErr: unknown) {
             const message = parseErr instanceof Error ? parseErr.message : String(parseErr)
             logger.error(
@@ -249,6 +249,15 @@ export async function migrateDownloadMetadata(
             result.reason = "validation-failed"
             return result
         }
+        if (!parsedUnknown || typeof parsedUnknown !== "object" || Array.isArray(parsedUnknown)) {
+            logger.error(
+                `[JsonMigration] download metadata JSON parse failed (${downloadMetadataJsonPath}): top-level value must be an object map`
+            )
+            result.skipped = true
+            result.reason = "validation-failed"
+            return result
+        }
+        const parsed = parsedUnknown as DownloadsMetadataStore
         const entries = Object.entries(parsed)
         const validEntries: DownloadsMetadataStore = {}
         const failedEntries: string[] = []

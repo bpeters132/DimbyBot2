@@ -154,17 +154,15 @@ async function fetchDiscordUserGuildsOnce(accessToken: string): Promise<FetchUse
         } catch (error: unknown) {
             if (attempt < GUILD_LIST_MAX_ATTEMPTS) {
                 const waitMs = guildListExponentialBackoffMs(attempt)
-                if (
-                    Date.now() - loopStartedAt + jitteredDelayMs(waitMs) >
-                    GUILD_LIST_TOTAL_ATTEMPT_BUDGET_MS
-                ) {
+                const sleepMs = jitteredDelayMs(waitMs)
+                if (Date.now() - loopStartedAt + sleepMs > GUILD_LIST_TOTAL_ATTEMPT_BUDGET_MS) {
                     return {
                         ok: false,
                         status: 0,
                         message: "Timed out loading Discord guilds after repeated attempts.",
                     }
                 }
-                await delay(jitteredDelayMs(waitMs))
+                await delay(sleepMs)
                 continue
             }
             if (error instanceof Error && error.name === "AbortError") {
@@ -208,17 +206,15 @@ async function fetchDiscordUserGuildsOnce(accessToken: string): Promise<FetchUse
             if (attempt < GUILD_LIST_MAX_ATTEMPTS) {
                 const exp = guildListExponentialBackoffMs(attempt)
                 const waitMs = Math.max(discordRetryAfterMs(response, bodyText), exp)
-                if (
-                    Date.now() - loopStartedAt + jitteredDelayMs(waitMs) >
-                    GUILD_LIST_TOTAL_ATTEMPT_BUDGET_MS
-                ) {
+                const sleepMs = jitteredDelayMs(waitMs)
+                if (Date.now() - loopStartedAt + sleepMs > GUILD_LIST_TOTAL_ATTEMPT_BUDGET_MS) {
                     return {
                         ok: false,
                         status: 0,
                         message: "Timed out loading Discord guilds after repeated attempts.",
                     }
                 }
-                await delay(jitteredDelayMs(waitMs))
+                await delay(sleepMs)
                 continue
             }
             return {

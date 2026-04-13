@@ -155,8 +155,8 @@ async function run(): Promise<void> {
         })
 
         server.on("upgrade", (req, socket, head) => {
-            const url = req.url || ""
-            if (!url.startsWith("/ws")) {
+            const pathOnly = pathnameOnly(req.url)
+            if (pathOnly !== "/ws" && pathOnly !== "/ws/") {
                 socket.destroy()
                 return
             }

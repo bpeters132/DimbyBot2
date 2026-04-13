@@ -95,12 +95,12 @@ export async function queuePOST(
             },
         }
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err)
+        console.error("[queuePOST] unhandled error", err)
         return {
             status: 500,
             body: {
                 ok: false,
-                error: { error: message },
+                error: { error: "Internal server error" },
             },
         }
     }
@@ -131,12 +131,12 @@ export async function queueDELETE(
             },
         }
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err)
+        console.error("[queueDELETE] unhandled error", err)
         return {
             status: 500,
             body: {
                 ok: false,
-                error: { error: message, details: message },
+                error: { error: "Internal server error" },
             },
         }
     }

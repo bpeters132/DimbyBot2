@@ -14,6 +14,7 @@ const storageDir = path.join(__dirname, "..", "..", "storage")
 /** In-memory store loaded from database at startup. */
 let guildSettingsCache: GuildSettingsStore = {}
 let guildSettingsInitialized = false
+let saveGuildSettingsChain: Promise<void> = Promise.resolve()
 
 /** Returns whether {@link initializeGuildSettingsStore} has finished loading settings from the database. */
 export function isGuildSettingsInitialized(): boolean {
@@ -84,6 +85,20 @@ export function getGuildSettings(): GuildSettingsStore {
     return cloneGuildSettingsStore(guildSettingsCache)
 }
 
+async function withGuildSettingsSaveLock<T>(work: () => Promise<T>): Promise<T> {
+    let release: () => void = () => {}
+    const previous = saveGuildSettingsChain
+    saveGuildSettingsChain = new Promise<void>((resolve) => {
+        release = resolve
+    })
+    await previous
+    try {
+        return await work()
+    } finally {
+        release()
+    }
+}
+
 /**
  * Persists guild settings to database. On success, replaces the in-memory cache with `settings`.
  * @returns whether the database write succeeded
@@ -92,19 +107,21 @@ export async function saveGuildSettings(
     settings: GuildSettingsStore,
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<boolean> {
-    const logger = loggerFromPartial(loggerInstance)
-    logger.debug("[guildSettings] Attempting to save settings to database.")
-    try {
-        const result = await replaceGuildSettingsStoreInDatabase(settings)
-        const reloaded = await readGuildSettingsFromDatabase(logger)
-        guildSettingsCache = cloneGuildSettingsStore(reloaded)
-        guildSettingsInitialized = true
-        logger.debug(
-            `[guildSettings] Successfully saved guild settings (upserted=${result.rowsUpserted}, deleted=${result.rowsDeleted}, affected=${result.rowsAffected}).`
-        )
-        return true
-    } catch (error: unknown) {
-        logger.error(`[guildSettings] Error writing guild settings to database: ${error}`)
-        return false
-    }
+    return withGuildSettingsSaveLock(async () => {
+        const logger = loggerFromPartial(loggerInstance)
+        logger.debug("[guildSettings] Attempting to save settings to database.")
+        try {
+            const result = await replaceGuildSettingsStoreInDatabase(settings)
+            const reloaded = await readGuildSettingsFromDatabase(logger)
+            guildSettingsCache = cloneGuildSettingsStore(reloaded)
+            guildSettingsInitialized = true
+            logger.debug(
+                `[guildSettings] Successfully saved guild settings (upserted=${result.rowsUpserted}, deleted=${result.rowsDeleted}, affected=${result.rowsAffected}).`
+            )
+            return true
+        } catch (error: unknown) {
+            logger.error(`[guildSettings] Error writing guild settings to database: ${error}`)
+            return false
+        }
+    })
 }

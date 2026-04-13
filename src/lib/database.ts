@@ -39,6 +39,32 @@ function sanitizeMigrateOutput(text: string): string {
         .replace(/Bearer\s+[^\s"'`]+/gi, "Bearer [REDACTED]")
 }
 
+function classifyMigrateFailure(text: string): { tag: string; category: string } {
+    const lower = text.toLowerCase()
+    if (
+        /\bp1001\b/i.test(text) ||
+        /\beconnrefused\b/i.test(text) ||
+        lower.includes("connection refused") ||
+        lower.includes("can't reach database server")
+    ) {
+        return { tag: "[network]", category: "database connectivity failure" }
+    }
+    if (/\beacces\b/i.test(text) || lower.includes("permission denied")) {
+        return { tag: "[permission]", category: "permission failure" }
+    }
+    if (
+        /\bp2002\b/i.test(text) ||
+        /\bp2003\b/i.test(text) ||
+        /\bp3006\b/i.test(text) ||
+        /\bp3018\b/i.test(text) ||
+        lower.includes("schema") ||
+        lower.includes("constraint")
+    ) {
+        return { tag: "[schema-conflict]", category: "schema or constraint failure" }
+    }
+    return { tag: "[exit-code]", category: "migration command failure" }
+}
+
 /** Returns the process-wide Prisma client singleton after {@link initializeDatabaseConnection}. */
 export function getPrismaClient(): PrismaClientType {
     if (!prisma) {
@@ -139,19 +165,23 @@ export async function runPrismaMigrateDeploy(
             )
             if (code === null) {
                 const signalText = signal ?? "unknown"
-                logger.debug(
-                    `[Database][migrate] prisma migrate deploy terminated by signal ${signalText}`
+                logger.warn(
+                    `[Database][migrate] [signal] prisma migrate deploy terminated by signal ${signalText}`
                 )
                 reject(
                     new Error(
-                        `prisma migrate deploy failed due to signal ${signalText} (see debug logs for full output).`
+                        `[signal] prisma migrate deploy failed due to signal ${signalText}. Output: ${redactedCombined || "(no output)"}`
                     )
                 )
                 return
             }
+            const classified = classifyMigrateFailure(redactedCombined)
+            logger.warn(
+                `[Database][migrate] ${classified.tag} prisma migrate deploy exited with code ${code} (${classified.category})`
+            )
             reject(
                 new Error(
-                    `prisma migrate deploy failed with exit code ${code} (see debug logs for full output).`
+                    `${classified.tag} prisma migrate deploy failed with exit code ${code} (${classified.category}). Output: ${redactedCombined || "(no output)"}`
                 )
             )
         })

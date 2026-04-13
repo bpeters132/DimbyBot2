@@ -14,7 +14,7 @@ function redactBotApiErrorText(text: string): string {
         .replace(/(token|secret|password|cookie)\s*[=:]\s*[^\s]+/gi, "$1=[redacted]")
         .replace(/Bearer\s+[^\s]+/gi, "Bearer [redacted]")
         .replace(/([a-z][a-z0-9+.-]*:\/\/)[^@/?#\s]+@/gi, "$1[redacted]@")
-        .replace(/[A-Za-z0-9+/]{40,}={0,2}/g, "[redacted]")
+        .replace(/\b[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[redacted]")
 }
 
 function sanitizeBotApiError(err: unknown): {

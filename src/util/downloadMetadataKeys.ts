@@ -1,3 +1,5 @@
+import type { LoggerInterface } from "../types/index.js"
+
 /** Unit separator — not used in Discord snowflakes or typical `.wav` names; stable composite store keys. */
 export const DOWNLOAD_METADATA_KEY_SEP = "\x1f"
 
@@ -50,21 +52,25 @@ export function effectiveDownloadMetadataGuildId(
 export function downloadMetadataFileBelongsToGuild(
     metadata: Record<string, { guildId?: string } | undefined>,
     fileName: string,
-    guildId: string
+    guildId: string,
+    loggerInstance?: Pick<LoggerInterface, "debug">
 ): boolean {
     const compositeKey = downloadMetadataStoreKey(guildId, fileName)
     if (metadata[compositeKey]) {
         return true
     }
     const legacy = metadata[fileName]
-    // TODO(dimbybot#legacy-metadata): legacy fileName-only keys with missing guildId match any guild —
+    // TODO(https://github.com/bpeters132/DimbyBot2/issues?q=is%3Aissue+legacy+metadata): legacy fileName-only keys with missing guildId match any guild —
     // misattributes during migration. Populate guildId in migration/reconciliation (target: remove by
     // 2026-07-01 or when tracking issue is closed). Same caveat applies to other legacy fallbacks below.
     if (legacy && (legacy.guildId === undefined || legacy.guildId === "")) {
-        console.debug("[download-metadata] legacy guildId missing; cross-guild match possible", {
-            fileName,
-            attemptedGuildId: guildId,
-        })
+        loggerInstance?.debug(
+            "[download-metadata] legacy guildId missing; cross-guild match possible",
+            {
+                fileName,
+                attemptedGuildId: guildId,
+            }
+        )
     }
     return Boolean(
         legacy &&
@@ -83,7 +89,7 @@ export function downloadMetadataEntryMatchesGuild(
     if (parsed.guildId !== null) {
         return parsed.guildId === guildId
     }
-    // TODO(dimbybot#legacy-metadata): see downloadMetadataFileBelongsToGuild — reconcile guildId on legacy rows.
+    // TODO(https://github.com/bpeters132/DimbyBot2/issues?q=is%3Aissue+legacy+metadata): see downloadMetadataFileBelongsToGuild — reconcile guildId on legacy rows.
     return info.guildId === guildId || info.guildId === undefined || info.guildId === ""
 }
 
@@ -100,7 +106,7 @@ export function downloadMetadataKeysForFile(
     }
     if (fileName in metadata) {
         const legacy = metadata[fileName] as { guildId?: string } | undefined
-        // TODO(dimbybot#legacy-metadata): see downloadMetadataFileBelongsToGuild — reconcile guildId on legacy rows.
+        // TODO(https://github.com/bpeters132/DimbyBot2/issues?q=is%3Aissue+legacy+metadata): see downloadMetadataFileBelongsToGuild — reconcile guildId on legacy rows.
         if (
             legacy &&
             (legacy.guildId === guildId || legacy.guildId === undefined || legacy.guildId === "")

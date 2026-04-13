@@ -5,10 +5,10 @@
 set -e
 
 if [ "${WEB_ENABLED:-false}" = "true" ]; then
-  BOT_PORT="${WEB_PORT:-3001}"
+  WEB_PORT_VALUE="${WEB_PORT:-3001}"
   DASHBOARD_PORT="${DASHBOARD_PORT:-3000}"
-  if ! wget --timeout=5 --tries=1 -qO- "http://127.0.0.1:${BOT_PORT}/health" >/dev/null 2>&1; then
-    echo "healthcheck: bot /health not reachable on WEB_PORT=${BOT_PORT}" >&2
+  if ! wget --timeout=5 --tries=1 -qO- "http://127.0.0.1:${WEB_PORT_VALUE}/health" >/dev/null 2>&1; then
+    echo "healthcheck: bot /health not reachable on WEB_PORT=${WEB_PORT_VALUE}" >&2
     exit 1
   fi
   if ! wget --timeout=5 --tries=1 -qO- "http://127.0.0.1:${DASHBOARD_PORT}/api/status" >/dev/null 2>&1; then

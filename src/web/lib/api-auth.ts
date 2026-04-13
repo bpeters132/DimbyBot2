@@ -287,17 +287,14 @@ export async function getGuildDashboardPermissionSnapshot(
             discordUserIdPrefix: ctx.discordUserId.slice(0, 8),
             metric: "optimistic_dashboard_perms",
         })
-        const defaultMemberWebPerms: WebPermission[] = [
-            WebPermission.VIEW_PLAYER,
-            WebPermission.CONTROL_PLAYBACK,
-            WebPermission.MANAGE_QUEUE,
-        ]
+        const defaultMemberWebPerms: WebPermission[] = [WebPermission.VIEW_PLAYER]
         return {
             ok: true,
             snapshot: {
                 memberResolved: ctx.memberResolved,
                 primaryPermissions: defaultMemberWebPerms,
                 oauthPermissions: [],
+                optimisticBotUnavailable: true,
             },
             discordUserId: ctx.discordUserId,
         }
