@@ -7,7 +7,7 @@ import {
 } from "../shared/permissions.js"
 import type { WSMessage } from "../types/web.js"
 import { auth } from "../auth-node.js"
-import { tryGetBotClient } from "../lib/botClient.js"
+import { tryGetBotClient } from "../../lib/botClientRegistry.js"
 import { resolveDiscordUserSnowflake } from "../lib/discord-user-id.js"
 import { parseWsConnectToken } from "../lib/ws-connect-token.js"
 import { webPlayerTrace, webPlayerWarn } from "../lib/web-player-debug-log.js"

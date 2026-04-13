@@ -1,3 +1,5 @@
+import { resolvedBotApiPort } from "../../lib/botApiPortEnv.js"
+
 /** Strips every trailing slash from an origin-shaped URL string. */
 function stripTrailingSlashes(value: string): string {
     return value.replace(/\/+$/, "")
@@ -11,7 +13,9 @@ function stripTrailingSlashes(value: string): string {
 export function getBotApiOrigin(): string | null {
     const raw = process.env.API_PROXY_TARGET?.trim()
     if (!raw) {
-        if (process.env.NODE_ENV === "development") return "http://localhost:3001"
+        if (process.env.NODE_ENV === "development") {
+            return `http://localhost:${resolvedBotApiPort()}`
+        }
         return null
     }
 

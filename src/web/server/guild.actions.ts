@@ -22,7 +22,10 @@ function sanitizeAuditError(error: unknown): Record<string, string> {
 async function parseGuildListBotResponse(res: Response): Promise<GuildListActionResult> {
     const text = await res.text()
     if (!text.trim()) {
-        return { ok: false, error: "Empty response from bot API (is the bot running on WEB_PORT?)" }
+        return {
+            ok: false,
+            error: "Empty response from bot API (is the bot running on BOT_API_PORT?)",
+        }
     }
 
     let payload: unknown

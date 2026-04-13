@@ -26,5 +26,5 @@
         "resolveJsonModule": true
     },
     "include": ["**/*", "next-env.d.ts", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"],
-    "exclude": ["node_modules", ".next/cache"]
+    "exclude": ["node_modules", ".next/cache", "websocket"]
 }

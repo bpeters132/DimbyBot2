@@ -23,7 +23,7 @@ COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
 
 COPY . .
-RUN yarn db:generate && yarn build:bot && yarn web:install && yarn build:web \
+RUN yarn db:generate && yarn build:bot \
     && yarn install --production --frozen-lockfile \
     && test -f node_modules/.prisma/client/default.js
 
@@ -47,8 +47,6 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
-COPY --from=builder /app/src/web/.next/standalone ./src/web/.next/standalone
-COPY --from=builder /app/src/web/.next/static ./src/web/.next/standalone/.next/static
 
 # Runtime environment (inject via compose/K8s; do not bake secrets into the image):
 #   Required for Lavalink: LAVALINK_HOST, LAVALINK_PORT, LAVALINK_PASSWORD, LAVALINK_NODE_ID, LAVALINK_SECURE
@@ -72,6 +70,6 @@ USER node
 
 ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
 
-# When WEB_ENABLED=true, healthcheck.sh probes GET /health on WEB_PORT.
+# healthcheck.sh probes GET /health on BOT_API_PORT (Express bot API).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
     CMD /bin/sh /app/healthcheck.sh

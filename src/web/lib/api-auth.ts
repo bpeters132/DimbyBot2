@@ -7,11 +7,13 @@ import {
     resolveUserPermissions,
 } from "../shared/permissions.js"
 import type { GuildDashboardSnapshotResult } from "../types/web.js"
+import type BotClient from "../../lib/BotClient.js"
 import { fetchDiscordUserGuilds } from "./discord-rest.js"
 import { resolveDiscordUserSnowflake } from "./discord-user-id.js"
 import { auth } from "../auth-node.js"
 import { tryGetBotClient } from "./botClient.js"
 import { webPlayerDebug, webPlayerWarn } from "./web-player-debug-log.js"
+import { getBotApiOrigin } from "../server/bot-api-origin.js"
 
 export interface AuthenticatedSession {
     user: {
@@ -58,6 +60,9 @@ export type AuthenticatedGuildAccessResult =
     | Extract<SessionGuardResult, { ok: false }>
     | AuthGuildForbidden
     | AuthGuildOk
+
+/** Narrow success type for {@link finishGuildDashboardPermissionSnapshot}. */
+export type AuthenticatedGuildAccessOk = Extract<AuthenticatedGuildAccessResult, { ok: true }>
 
 interface AuthGuildForbidden {
     ok: false
@@ -263,43 +268,122 @@ export async function resolveAuthenticatedGuildAccess(
     }
 }
 
-/**
- * Primary + OAuth-fallback permission lists for dashboard UI gating (matches {@link requirePermissions}
- * merge rules per action). When no in-process bot client is available, this returns an optimistic
- * default dashboard permission set so UI controls render, while bot API endpoints still enforce
- * authoritative permission checks.
- */
-export async function getGuildDashboardPermissionSnapshot(
-    headers: Headers | Record<string, string>,
-    guildId: string
-): Promise<GuildDashboardSnapshotResult> {
-    const ctx = await resolveAuthenticatedGuildAccess(headers, guildId)
-    if (ctx.ok === false) {
-        return { ok: false, status: ctx.status, error: ctx.error, details: ctx.details }
-    }
+const DASHBOARD_PERM_UPSTREAM_FETCH_MS = 10_000
 
-    const botClient = tryGetBotClient()
-    if (!botClient) {
-        const noClientMsg =
-            "OPTIMISTIC_DASHBOARD_PERMS: getGuildDashboardPermissionSnapshot using optimistic dashboard permissions because no BotClient is registered in this process."
-        webPlayerWarn(noClientMsg, {
-            guildId,
-            discordUserIdPrefix: ctx.discordUserId.slice(0, 8),
-            metric: "optimistic_dashboard_perms",
-        })
-        const defaultMemberWebPerms: WebPermission[] = [WebPermission.VIEW_PLAYER]
+function snapshotErrorMessageFromPayload(body: Record<string, unknown>): string {
+    if (typeof body.error === "string") return body.error
+    const nested = body.error
+    if (nested && typeof nested === "object" && nested !== null && "error" in nested) {
+        const inner = (nested as { error?: unknown }).error
+        if (typeof inner === "string") return inner
+    }
+    return "Request failed"
+}
+
+function snapshotErrorDetailsFromPayload(body: Record<string, unknown>): string | undefined {
+    if (typeof body.details === "string") return body.details
+    const nested = body.error
+    if (nested && typeof nested === "object" && nested !== null && "details" in nested) {
+        const d = (nested as { details?: unknown }).details
+        if (typeof d === "string") return d
+    }
+    return undefined
+}
+
+/**
+ * Maps bot Express JSON (including generic `{ ok: false, error: { error } }` errors) into
+ * {@link GuildDashboardSnapshotResult}.
+ */
+function normalizeDashboardPermissionSnapshotResponse(
+    parsed: unknown,
+    httpStatus: number
+): GuildDashboardSnapshotResult {
+    if (!parsed || typeof parsed !== "object" || !("ok" in parsed)) {
         return {
-            ok: true,
-            snapshot: {
-                memberResolved: ctx.memberResolved,
-                primaryPermissions: defaultMemberWebPerms,
-                oauthPermissions: [],
-                optimisticBotUnavailable: true,
-            },
-            discordUserId: ctx.discordUserId,
+            ok: false,
+            status: httpStatus >= 400 ? httpStatus : 502,
+            error: "Invalid bot response",
+            details: "The bot API returned an unexpected payload for dashboard permissions.",
+        }
+    }
+    const body = parsed as Record<string, unknown>
+    if (body.ok === false) {
+        const status =
+            typeof body.status === "number" && Number.isFinite(body.status)
+                ? Math.floor(body.status)
+                : httpStatus >= 400
+                  ? httpStatus
+                  : 502
+        return {
+            ok: false,
+            status,
+            error: snapshotErrorMessageFromPayload(body),
+            details: snapshotErrorDetailsFromPayload(body),
+        }
+    }
+    if (body.ok !== true) {
+        return {
+            ok: false,
+            status: 502,
+            error: "Invalid bot response",
+            details: "The bot API returned an unexpected `ok` field for dashboard permissions.",
         }
     }
 
+    const discordUserId = body.discordUserId
+    if (typeof discordUserId !== "string") {
+        return {
+            ok: false,
+            status: 502,
+            error: "Invalid bot response",
+            details: "Dashboard permission snapshot is missing `discordUserId`.",
+        }
+    }
+
+    const snap = body.snapshot
+    if (!snap || typeof snap !== "object") {
+        return {
+            ok: false,
+            status: 502,
+            error: "Invalid bot response",
+            details: "Dashboard permission snapshot is missing `snapshot`.",
+        }
+    }
+    const s = snap as Record<string, unknown>
+    const primary = s.primaryPermissions
+    const oauth = s.oauthPermissions
+    if (!Array.isArray(primary) || !Array.isArray(oauth)) {
+        return {
+            ok: false,
+            status: 502,
+            error: "Invalid bot response",
+            details: "Dashboard permission snapshot has invalid permission arrays.",
+        }
+    }
+
+    return {
+        ok: true,
+        snapshot: {
+            memberResolved: Boolean(s.memberResolved),
+            primaryPermissions: primary as string[],
+            oauthPermissions: oauth as string[],
+            ...(typeof s.optimisticBotUnavailable === "boolean"
+                ? { optimisticBotUnavailable: s.optimisticBotUnavailable }
+                : {}),
+        },
+        discordUserId,
+    }
+}
+
+/**
+ * Resolves primary + OAuth permission lists when a {@link BotClient} is already available (in-process
+ * or in the bot HTTP handler).
+ */
+export async function finishGuildDashboardPermissionSnapshot(
+    ctx: AuthenticatedGuildAccessOk,
+    botClient: BotClient,
+    guildId: string
+): Promise<GuildDashboardSnapshotResult> {
     try {
         const primary = await resolveUserPermissions(botClient, guildId, ctx.discordUserId, {
             applyVoiceGating: false,
@@ -307,7 +391,7 @@ export async function getGuildDashboardPermissionSnapshot(
         /** Same voice-aware fallback as API; only primary snapshot skips voice stripping (role entitlements). */
         const oauth = resolveOauthGuildPermissionFallback(botClient, guildId, ctx.discordUserId)
 
-        webPlayerDebug("getGuildDashboardPermissionSnapshot", {
+        webPlayerDebug("finishGuildDashboardPermissionSnapshot", {
             guildId,
             discordUserIdPrefix: ctx.discordUserId.slice(0, 8),
             memberResolved: ctx.memberResolved,
@@ -327,7 +411,7 @@ export async function getGuildDashboardPermissionSnapshot(
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error)
         console.error(
-            "[api-auth] getGuildDashboardPermissionSnapshot permission resolution failed:",
+            "[api-auth] finishGuildDashboardPermissionSnapshot permission resolution failed:",
             msg
         )
         return {
@@ -338,6 +422,152 @@ export async function getGuildDashboardPermissionSnapshot(
                 "Could not load dashboard permissions for this server. Try again shortly or refresh the page.",
         }
     }
+}
+
+/**
+ * Calls the bot HTTP API for a permission snapshot (Next.js runs without an in-process {@link BotClient}).
+ * Always returns a structured result (never `null`); normalizes Express error bodies that omit top-level `status`.
+ */
+async function fetchGuildDashboardPermissionSnapshotFromBot(
+    headers: Headers | Record<string, string>,
+    guildId: string
+): Promise<GuildDashboardSnapshotResult> {
+    let origin: string | null
+    try {
+        origin = getBotApiOrigin()
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error)
+        webPlayerWarn("getBotApiOrigin failed for dashboard permission snapshot", {
+            guildId,
+            message: msg,
+        })
+        return {
+            ok: false,
+            status: 503,
+            error: "Bot API misconfigured",
+            details:
+                "API_PROXY_TARGET is invalid. Set it to the bot HTTP origin (origin only, no path).",
+        }
+    }
+
+    if (!origin) {
+        return {
+            ok: false,
+            status: 503,
+            error: "Bot API not configured",
+            details:
+                "Set API_PROXY_TARGET to your bot HTTP origin (e.g. http://localhost:3001 locally, or http://dimbybot:3001 in Docker).",
+        }
+    }
+
+    const url = `${origin}/api/guilds/${encodeURIComponent(guildId)}/dashboard-permissions`
+    const h = asHeaders(headers)
+    const outHeaders = new Headers()
+    const cookie = h.get("cookie")
+    if (cookie) outHeaders.set("cookie", cookie)
+    const authorization = h.get("authorization")
+    if (authorization) outHeaders.set("authorization", authorization)
+
+    let res: Response
+    try {
+        res = await fetch(url, {
+            method: "GET",
+            headers: outHeaders,
+            signal: AbortSignal.timeout(DASHBOARD_PERM_UPSTREAM_FETCH_MS),
+            cache: "no-store",
+        } as RequestInit)
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error)
+        webPlayerWarn("dashboard permission snapshot upstream fetch failed", {
+            guildId,
+            message: msg,
+        })
+        return {
+            ok: false,
+            status: 503,
+            error: "Bot API unreachable",
+            details:
+                "Could not reach the bot HTTP server for permission data. Confirm the bot is running and API_PROXY_TARGET matches BOT_API_PORT.",
+        }
+    }
+
+    const ct = res.headers.get("content-type") ?? ""
+    if (!ct.includes("application/json")) {
+        webPlayerWarn("dashboard permission snapshot upstream returned non-JSON", {
+            guildId,
+            status: res.status,
+            contentType: ct || undefined,
+        })
+        return {
+            ok: false,
+            status: res.status >= 400 ? res.status : 502,
+            error:
+                res.status === 404
+                    ? "Dashboard permission route not found"
+                    : "Invalid bot response",
+            details:
+                res.status === 404
+                    ? "The bot process may be running an older build without GET /api/guilds/:guildId/dashboard-permissions — rebuild the bot (yarn build:bot) and restart it."
+                    : "Expected JSON from the bot API for dashboard permissions.",
+        }
+    }
+
+    let parsed: unknown
+    try {
+        parsed = await res.json()
+    } catch {
+        webPlayerWarn("dashboard permission snapshot upstream JSON parse failed", {
+            guildId,
+            status: res.status,
+        })
+        return {
+            ok: false,
+            status: res.status >= 400 ? res.status : 502,
+            error: "Invalid bot response",
+            details: "The bot API returned malformed JSON for dashboard permissions.",
+        }
+    }
+
+    const normalized = normalizeDashboardPermissionSnapshotResponse(parsed, res.status)
+    if (normalized.ok === false) {
+        webPlayerWarn("dashboard permission snapshot upstream returned error payload", {
+            guildId,
+            httpStatus: res.status,
+            status: normalized.status,
+            error: normalized.error,
+        })
+    }
+    return normalized
+}
+
+/**
+ * Primary + OAuth-fallback permission lists for dashboard UI gating (matches {@link requirePermissions}
+ * merge rules per action). When this Node process has no {@link BotClient} (typical for the Next
+ * server), delegates to the bot HTTP API using {@link getBotApiOrigin} (`cache: no-store` so Next
+ * does not reuse a stale first response).
+ */
+export async function getGuildDashboardPermissionSnapshot(
+    headers: Headers | Record<string, string>,
+    guildId: string
+): Promise<GuildDashboardSnapshotResult> {
+    const ctx = await resolveAuthenticatedGuildAccess(headers, guildId)
+    if (ctx.ok === false) {
+        return { ok: false, status: ctx.status, error: ctx.error, details: ctx.details }
+    }
+
+    const botClient = tryGetBotClient()
+    if (botClient) {
+        return finishGuildDashboardPermissionSnapshot(ctx, botClient, guildId)
+    }
+
+    const upstream = await fetchGuildDashboardPermissionSnapshotFromBot(headers, guildId)
+    if (upstream.ok === true) {
+        webPlayerDebug("getGuildDashboardPermissionSnapshot via bot HTTP", {
+            guildId,
+            discordUserIdPrefix: ctx.discordUserId.slice(0, 8),
+        })
+    }
+    return upstream
 }
 
 /**

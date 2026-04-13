@@ -2,7 +2,7 @@ import { WebPermission } from "../../web/shared/permissions.js"
 import type { ApiResponse } from "../../types/index.js"
 import type { QueueResponse } from "../../types/web.js"
 import { requirePermissions } from "../../web/lib/api-auth.js"
-import { getBotClient, tryGetBotClient } from "../../web/lib/botClient.js"
+import { getBotClient, tryGetBotClient } from "../../lib/botClientRegistry.js"
 import { toQueueResponse } from "../../web/lib/player-state.js"
 
 function parseIndex(value: string): number | null {

@@ -6,7 +6,8 @@ import { playerGET, playerPOST } from "./handlers/player.js"
 import { playerPlayPOST } from "./handlers/playerPlay.js"
 import { queueDELETE, queueGET, queuePOST } from "./handlers/queue.js"
 import { queueIndexDELETE, queueIndexPATCH } from "./handlers/queueIndex.js"
-import { BotClientNotInitializedError } from "../web/lib/botClient.js"
+import { dashboardPermissionsGET } from "./handlers/dashboardPermissions.js"
+import { BotClientNotInitializedError } from "../lib/botClientRegistry.js"
 
 /** Redacts credentials and long base64-like blobs from bot API error strings before JSON responses. */
 function redactBotApiErrorText(text: string): string {
@@ -64,6 +65,18 @@ export function createBotApiApp(): express.Express {
     app.get("/api/guilds", async (req, res, next) => {
         try {
             const r = await guildListGET(incomingMessageToHeaders(req))
+            res.status(r.status).json(r.body)
+        } catch (error) {
+            next(error)
+        }
+    })
+
+    app.get("/api/guilds/:guildId/dashboard-permissions", async (req, res, next) => {
+        try {
+            const r = await dashboardPermissionsGET(
+                incomingMessageToHeaders(req),
+                req.params.guildId
+            )
             res.status(r.status).json(r.body)
         } catch (error) {
             next(error)

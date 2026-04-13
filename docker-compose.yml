@@ -80,14 +80,10 @@ services:
             - OWNER_ID=${OWNER_ID}
             - DEV_MODE=${DEV_MODE}
             - LOG_LEVEL=${LOG_LEVEL}
-            - WEB_ENABLED=${WEB_ENABLED:-true}
-            - WEB_PORT=${WEB_PORT:-3001}
-            # Next standalone listens on `PORT` (defaults 3000); keep host publish in sync via `DASHBOARD_PORT`.
-            - PORT=${DASHBOARD_PORT:-3000}
-            - API_PROXY_TARGET=${API_PROXY_TARGET:-http://localhost:3001}
-            # Optional absolute player WebSocket URL (ws/wss); when unset, the dashboard derives `/ws` from the browser URL.
+            - BOT_API_PORT=${BOT_API_PORT:-3001}
+            # Optional absolute player WebSocket URL (ws/wss) for the dashboard container; see docker-compose.dashboard.yml.
             - WEBSOCKET_CLIENT_URL=${WEBSOCKET_CLIENT_URL:-}
-            # Web auth secrets are validated by application startup when WEB_ENABLED=true.
+            # Session verification for dashboard → bot API. The Next container (docker-compose.dashboard.yml) needs the same auth secrets.
             - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
             - BETTER_AUTH_URL=${BETTER_AUTH_URL}
             - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
@@ -111,11 +107,9 @@ services:
             - dimbybot-storage:/app/storage
             - dimbybot-logs:/app/logs
             - dimbybot-downloads:/app/downloads
-        # Compose cannot conditionally toggle ports for a single service based on WEB_ENABLED.
-        # These mappings are always declared; when WEB_ENABLED=false the web processes do not bind them.
+        # Bot API + player WebSocket. Dashboard HTTP uses WEB_PORT on dimbybot-web (docker-compose.dashboard.yml).
         ports:
-            - "${DASHBOARD_PORT:-3000}:${DASHBOARD_PORT:-3000}"
-            - "${WEB_PORT:-3001}:${WEB_PORT:-3001}"
+            - "${BOT_API_PORT:-3001}:${BOT_API_PORT:-3001}"
         networks:
             - internal
 

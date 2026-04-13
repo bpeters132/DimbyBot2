@@ -12,7 +12,7 @@ function readBotApiProxyTimeoutMs(): number {
 }
 
 /**
- * Forwards the request to the bot HTTP server (Express on WEB_PORT).
+ * Forwards the request to the bot HTTP server (Express + `/ws` on BOT_API_PORT).
  * Next/Turbopack cannot reliably bundle `src/botApi` (outside this app); the bot process owns that logic.
  */
 export async function proxyBotApi(request: Request): Promise<NextResponse> {

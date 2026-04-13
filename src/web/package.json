@@ -4,10 +4,10 @@
     "type": "module",
     "scripts": {
         "predev": "node scripts/predev.js",
-        "dev": "next dev --webpack --hostname 0.0.0.0 --port 3001",
+        "dev": "next dev --webpack --hostname 0.0.0.0",
         "typecheck": "tsc --noEmit",
         "build": "next build --webpack",
-        "start": "next start --port 3001"
+        "start": "next start"
     },
     "dependencies": {
         "@prisma/adapter-pg": "^7.7.0",

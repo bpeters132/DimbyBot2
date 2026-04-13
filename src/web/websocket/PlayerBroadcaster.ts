@@ -1,5 +1,5 @@
 import type { PlayerUpdateMessage, QueueUpdateMessage } from "../types/web.js"
-import { tryGetBotClient } from "../lib/botClient.js"
+import { tryGetBotClient } from "../../lib/botClientRegistry.js"
 import {
     buildPlayerBroadcastData,
     composePlayerStateResponse,

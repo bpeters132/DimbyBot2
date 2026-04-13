@@ -85,12 +85,15 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
             }
             if (cancelled) return
 
-            // Dev: Next on :3000 and bot WS on :3001. Production: same host as the page unless /api/ws-config overrides.
+            // Dev: bot WS on BOT_API_PORT (via /api/ws-config when fetch succeeds). Fallback uses NEXT_PUBLIC_BOT_API_PORT.
             const protocol = window.location.protocol === "https:" ? "wss" : "ws"
+            const devWsPort =
+                (typeof process !== "undefined" && process.env.NEXT_PUBLIC_BOT_API_PORT?.trim()) ||
+                "3001"
             const base =
                 serverWsUrl ||
-                (window.location.port === "3000"
-                    ? `${protocol}://${window.location.hostname}:3001/ws`
+                (process.env.NODE_ENV === "development"
+                    ? `${protocol}://${window.location.hostname}:${devWsPort}/ws`
                     : `${protocol}://${window.location.host}/ws`)
 
             const url = new URL(base)

@@ -1,7 +1,7 @@
 import { auth } from "../../web/auth-node.js"
 import { fetchDiscordUserGuilds } from "../../util/discordUserGuilds.js"
 import { getAuthenticatedSession } from "../../web/lib/api-auth.js"
-import { tryGetBotClient } from "../../web/lib/botClient.js"
+import { tryGetBotClient } from "../../lib/botClientRegistry.js"
 import type { ApiResponse } from "../../types/index.js"
 import type { GuildListResponse } from "../../types/web.js"
 

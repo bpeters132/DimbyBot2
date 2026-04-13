@@ -10,16 +10,37 @@
     - `src/util/` shared utilities.
     - `src/types/` shared type definitions (`src/types/index.ts`).
     - `src/index.ts` app entry point.
+- `src/web/` is the **Next.js dashboard** (web UI and controls). It is a **separate application** from the bot: own `package.json`, install/build commands, and **its own container image** (`Dockerfile.web`). The root TypeScript project **does not compile** `src/web` (see `tsconfig.json` `exclude` and **Web dashboard vs. bot runtime** below). The main bot image builds with **`yarn build:bot`** only.
 - `Lavalink/` holds the Lavalink service files.
 - `downloads/`, `logs/`, `storage/` are runtime directories and should stay out of commits.
+
+## Web dashboard vs. bot runtime
+
+These rules keep the **Discord bot** and the **Next.js dashboard** separate at build and deploy time, even though both live under the same repository.
+
+- **Two applications**: Bot logic and the HTTP/WebSocket bot API live under `src/` (except `src/web/`). The dashboard and web player UI live in **`src/web/`** as its own Next.js app (`package.json`, lockfile, `next.config`, etc.).
+- **Bot TypeScript scope**: Root `tsc` uses **`rootDir`: `src`** but **`exclude`: `["src/web"]`**, so **`yarn build:bot`** does not compile or emit the Next.js tree into `dist/`. The **`yarn typecheck`** script runs root **`tsc --noEmit`** (same exclusion) and then typechecks **`src/web`** as its own project.
+- **Bot container**: The main **`Dockerfile`** runs **`yarn build:bot`** (not `yarn build`), so the bot image does not run the Next production build. Runtime is `node` + `dist/` + shared root deps as defined in that image.
+- **Web container**: **`Dockerfile.web`** builds the dashboard (`yarn --cwd src/web build`, standalone output) and runs it as a **separate image/service** from the bot.
+- **When to build what**: Use **`yarn build:bot`** for bot-only or bot image work; use **`yarn build:web`** or dashboard Docker for the UI; use **`yarn build`** for a full local/CI verification of both halves.
+
+### Optional: moving `src/web` out of `src/`
+
+The current layout is intentional and supported: exclusion in `tsconfig.json` plus split Dockerfiles already prevent the bot image from compiling the web app. Relocate only if the nested path causes confusion or you want a formal monorepo layout.
+
+- **Typical target**: `web/` or `apps/web/` at the **repository root** (alongside `src/`), still versioned in the same repo.
+- **What to update**: Root `package.json` scripts that use `yarn --cwd src/web` → new path; **`Dockerfile.web`** `COPY`/`WORKDIR` and paths to `.next/standalone`; any **CI/deploy** or compose files that reference `src/web`; **ESLint/Prettier** globs; Cursor rules that mention `src/web` (e.g. `next-app-no-lib.mdc`).
+- **Yarn workspaces (optional)**: Add `"workspaces": ["apps/web"]` (and later `packages/bot` if you split further) so installs hoist consistently; keep **no direct TypeScript imports** from web into bot sources (the contract stays HTTP/WS and env-configured URLs).
+- **Tradeoff**: Moving is a one-time path churn; benefit is a clearer boundary (`src` = bot only) and no need to remember the `exclude` for new contributors.
 
 ## Build, Test, and Development Commands
 
 - `yarn install` installs dependencies.
-- `yarn build` runs `tsc` and emits JavaScript to `dist/`.
-- `yarn typecheck` runs `tsc --noEmit` (typecheck only, no `dist/` output).
+- `yarn build` runs **`build:bot` and `build:web`** (full stack). **`yarn build:bot`** runs root `tsc` and emits bot JavaScript to `dist/` (Next.js is not part of this emit).
+- **`yarn build:web`**, **`yarn dev:web`**, and **`yarn web:install`** operate on `src/web/` only.
+- `yarn typecheck` runs root **`tsc --noEmit`**, then **`yarn web:install`**, then **`yarn --cwd src/web typecheck`** (both halves; no `dist/` emit from the root step).
 - `yarn lint` runs ESLint on the repo (`eslint.config.js`).
-- `yarn start` runs the compiled bot (`node dist/index.js`). Run `yarn build` first (or use Docker, which builds in the image).
+- `yarn start` runs the compiled bot entry (`node dist/server.js` per `package.json`). Run `yarn build:bot` (or `yarn build`) first, or use Docker: the **bot** image runs `build:bot` only; the **web** image is built separately (`Dockerfile.web`).
 - `yarn dev` runs `tsc --watch` and `nodemon` together so `dist/` stays up to date.
 - Docker dev environment:
     - `./dev-env.sh build` builds images.

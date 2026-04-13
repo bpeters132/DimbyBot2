@@ -8,11 +8,11 @@ import { isBotApiVerbose } from "./util/botApiVerboseEnv.js"
 import BotClient from "./lib/BotClient.js"
 import { disconnectDatabase } from "./lib/database.js"
 import Logger from "./lib/Logger.js"
-import { setBotClient } from "./web/lib/botClient.js"
+import { setBotClient } from "./lib/botClientRegistry.js"
+import { resolvedBotApiPort } from "./lib/botApiPortEnv.js"
 
 const logFilePath = path.join(import.meta.dirname, "..", "logs", "app.log")
-const webEnabled = process.env.WEB_ENABLED === "true"
-const webPort = Number(process.env.WEB_PORT || 3001)
+const botApiPort = resolvedBotApiPort()
 const SHUTDOWN_TIMEOUT_MS = 10_000
 
 function withShutdownTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -116,11 +116,6 @@ async function run(): Promise<void> {
     try {
         client = await startBot(logger)
 
-        if (!webEnabled) {
-            logger.info("WEB_ENABLED is false; running bot-only mode.")
-            return
-        }
-
         const { connectionManager } = await import("./web/websocket/ConnectionManager.js")
         const { invalidatePermissionCache } = await import("./web/shared/permissions.js")
         const { playerBroadcaster } = await import("./web/websocket/PlayerBroadcaster.js")
@@ -220,17 +215,17 @@ async function run(): Promise<void> {
                 reject(err)
             }
             httpServer.once("error", onListenError)
-            httpServer.listen(webPort, () => {
+            httpServer.listen(botApiPort, () => {
                 httpServer.off("error", onListenError)
                 resolve()
             })
         })
-        logger.info(`Web server listening on http://localhost:${webPort}`)
+        logger.info(`Bot API (HTTP + /ws) listening on http://localhost:${botApiPort}`)
     } catch (error: unknown) {
         const errno = error as NodeJS.ErrnoException | undefined
         if (errno && errno.code === "EADDRINUSE") {
             logger.error(
-                `Web server could not bind to port ${webPort}: address already in use (EADDRINUSE).`,
+                `Bot API server could not bind to port ${botApiPort}: address already in use (EADDRINUSE).`,
                 error
             )
         } else {

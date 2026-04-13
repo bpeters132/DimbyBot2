@@ -36,8 +36,10 @@ COPY . .
 # Copy the entrypoint script outside /app so the dev bind mount
 # does not overwrite it with the host copy.
 COPY --chmod=755 entrypoint.sh /usr/local/bin/dimbybot-entrypoint.sh
+COPY --chmod=755 entrypoint.dev.sh /usr/local/bin/dimbybot-dev-entrypoint.sh
 
 RUN addgroup -S devuser && adduser -S devuser -G devuser \
+    && mkdir -p /app/dist \
     && chown -R devuser:devuser /app
 
 # Runtime environment (see Dockerfile in repo root for the full list):
@@ -48,10 +50,11 @@ RUN addgroup -S devuser && adduser -S devuser -G devuser \
 # Use the same entrypoint as production so dev containers generate
 # lavaNodesConfig.js from compose environment before starting nodemon.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD sh -c 'wget -qO- http://127.0.0.1:${WEB_PORT:-3001}/health || exit 1'
+    CMD sh -c 'wget -qO- http://127.0.0.1:${BOT_API_PORT:-3001}/health || exit 1'
 
-USER devuser
+# Root only for dimbybot-dev-entrypoint.sh (chown /app/dist) then su-exec to devuser.
+USER root
 
-ENTRYPOINT ["/usr/local/bin/dimbybot-entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/dimbybot-dev-entrypoint.sh"]
 
 CMD ["yarn", "dev"]

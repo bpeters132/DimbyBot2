@@ -88,50 +88,11 @@ echo "Bot Entrypoint: lavaNodesConfig.js generated successfully."
 # ==============================================================================
 # Start the Bot Application
 # ==============================================================================
-# When WEB_ENABLED=true, run Next.js standalone alongside the bot process.
-
-resolve_next_server_entry() {
-  if [ -f /app/src/web/.next/standalone/server.js ]; then
-    echo "Bot Entrypoint: Resolved Next.js entry /app/src/web/.next/standalone/server.js" >&2
-    echo "/app/src/web/.next/standalone/server.js"
-    return 0
-  fi
-  if [ -f /app/src/web/.next/standalone/src/web/server.js ]; then
-    echo "Bot Entrypoint: Resolved Next.js entry /app/src/web/.next/standalone/src/web/server.js" >&2
-    echo "/app/src/web/.next/standalone/src/web/server.js"
-    return 0
-  fi
-  return 1
-}
-
-start_web_server() {
-  if [ "${WEB_ENABLED:-false}" != "true" ]; then
-    return 0
-  fi
-
-  NEXT_SERVER_ENTRY=$(resolve_next_server_entry || true)
-  if [ -z "$NEXT_SERVER_ENTRY" ]; then
-    echo "Bot Entrypoint: WEB_ENABLED=true but Next.js standalone build was not found." >&2
-    return 1
-  fi
-
-  echo "Bot Entrypoint: Starting Next.js web server from ${NEXT_SERVER_ENTRY}..."
-  export PORT="${DASHBOARD_PORT:-${PORT:-3000}}"
-  if [ "$1" = "node-user" ]; then
-    su-exec node node "$NEXT_SERVER_ENTRY" &
-  else
-    node "$NEXT_SERVER_ENTRY" &
-  fi
-  WEB_PID=$!
-  echo "Bot Entrypoint: Next.js started (PID $WEB_PID) on port ${PORT:-3000}"
-}
+# Next.js runs in a separate container (Dockerfile.web). This process is Discord + Express bot API only.
 
 forward_shutdown() {
   if [ -n "${BOT_PID:-}" ] && kill -0 "$BOT_PID" >/dev/null 2>&1; then
     kill "$BOT_PID" >/dev/null 2>&1 || true
-  fi
-  if [ -n "${WEB_PID:-}" ] && kill -0 "$WEB_PID" >/dev/null 2>&1; then
-    kill "$WEB_PID" >/dev/null 2>&1 || true
   fi
 }
 
@@ -140,16 +101,12 @@ wait_for_bot() {
   wait "$BOT_PID"
   BOT_EXIT_CODE=$?
   set -e
-  if [ -n "${WEB_PID:-}" ] && kill -0 "$WEB_PID" >/dev/null 2>&1; then
-    kill "$WEB_PID" >/dev/null 2>&1 || true
-    wait "$WEB_PID" 2>/dev/null || true
-  fi
   exit "$BOT_EXIT_CODE"
 }
 
 # When the container user is root (e.g. one-off `docker run --user 0`), fix volume ownership
 # then drop to `node`. Default image user is `node` (see Dockerfile) — then chown is skipped.
-# Keep this shell as PID 1 so traps can forward shutdown to bot + web child processes.
+# Keep this shell as PID 1 so traps can forward shutdown to the bot child process.
 
 if [ "$(id -u)" -eq 0 ]; then
   mkdir -p /app/storage
@@ -158,16 +115,12 @@ if [ "$(id -u)" -eq 0 ]; then
   chown -R node:node /app/node_modules/.prisma /app/node_modules/@prisma 2>/dev/null || true
   if [ "$#" -gt 0 ]; then
     trap forward_shutdown INT TERM
-    if [ "${WEB_ENABLED:-false}" = "true" ]; then
-      start_web_server "node-user"
-    fi
     echo "Bot Entrypoint: Executing '$*' as node..."
     su-exec node "$@" &
     BOT_PID=$!
     wait_for_bot
   fi
   trap forward_shutdown INT TERM
-  start_web_server "node-user"
   echo "Bot Entrypoint: Executing 'yarn start' as node..."
   su-exec node yarn start &
   BOT_PID=$!
@@ -177,9 +130,6 @@ fi
 mkdir -p /app/storage /app/node_modules/.prisma /app/node_modules/@prisma
 if [ "$#" -gt 0 ]; then
   trap forward_shutdown INT TERM
-  if [ "${WEB_ENABLED:-false}" = "true" ]; then
-    start_web_server
-  fi
   echo "Bot Entrypoint: Executing '$*'..."
   "$@" &
   BOT_PID=$!
@@ -187,7 +137,6 @@ if [ "$#" -gt 0 ]; then
 fi
 
 trap forward_shutdown INT TERM
-start_web_server
 echo "Bot Entrypoint: Executing 'yarn start'..."
 yarn start &
 BOT_PID=$!

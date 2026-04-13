@@ -1,28 +1,10 @@
 #!/bin/sh
-# Docker HEALTHCHECK:
-# - If WEB_ENABLED=true, verify web endpoint is reachable.
-# - Otherwise, fallback to cheap liveness by checking PID 1 cmdline includes node.
+# Docker HEALTHCHECK for the bot image: verify Express bot API GET /health on BOT_API_PORT.
 set -e
 
-if [ "${WEB_ENABLED:-false}" = "true" ]; then
-  BOT_PORT="${WEB_PORT:-3001}"
-  DASHBOARD_PORT="${DASHBOARD_PORT:-3000}"
-  if ! wget --timeout=5 --tries=1 -qO- "http://127.0.0.1:${BOT_PORT}/health" >/dev/null 2>&1; then
-    echo "healthcheck: bot /health not reachable on WEB_PORT=${BOT_PORT}" >&2
+BOT_PORT="${BOT_API_PORT:-3001}"
+if ! wget --timeout=5 --tries=1 -qO- "http://127.0.0.1:${BOT_PORT}/health" >/dev/null 2>&1; then
+    echo "healthcheck: bot /health not reachable on BOT_API_PORT=${BOT_PORT}" >&2
     exit 1
-  fi
-  if ! wget --timeout=5 --tries=1 -qO- "http://127.0.0.1:${DASHBOARD_PORT}/api/status" >/dev/null 2>&1; then
-    echo "healthcheck: Next.js dashboard /api/status not reachable on DASHBOARD_PORT=${DASHBOARD_PORT}" >&2
-    exit 1
-  fi
-  exit 0
 fi
-
-cmd=$(tr '\0' ' ' < /proc/1/cmdline 2>/dev/null || true)
-case "$cmd" in
-  *node*) exit 0 ;;
-  *)
-    echo "healthcheck: unexpected PID 1 cmdline: $cmd" >&2
-    exit 1
-    ;;
-esac
+exit 0
