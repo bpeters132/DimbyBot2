@@ -1,6 +1,6 @@
 services:
     lavalink:
-        image: placeholder-lavalink # This will be replaced by the deploy script
+        image: ${LAVALINK_IMAGE}
         container_name: lavalink
         restart: unless-stopped
         environment:
@@ -17,6 +17,12 @@ services:
             - LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT=${LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT}
         ports:
             - "${LAVALINK_PORT}:${LAVALINK_PORT}" # Map host port to container port
+        healthcheck:
+            test: ["CMD", "/bin/sh", "/app/healthcheck.sh"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 15s
         volumes:
             - lavalink-plugins:/app/plugins
             - dimbybot-downloads:/app/downloads
@@ -52,7 +58,7 @@ services:
             - internal
 
     dimbybot:
-        image: placeholder-bot # This will be replaced by the deploy script
+        image: ${BOT_IMAGE}
         container_name: dimbybot
         restart: unless-stopped
         depends_on:
@@ -74,6 +80,17 @@ services:
             - OWNER_ID=${OWNER_ID}
             - DEV_MODE=${DEV_MODE}
             - LOG_LEVEL=${LOG_LEVEL}
+            - WEB_ENABLED=${WEB_ENABLED:-true}
+            - WEB_PORT=${WEB_PORT:-3001}
+            # Next standalone listens on `PORT` (defaults 3000); keep host publish in sync via `DASHBOARD_PORT`.
+            - PORT=${DASHBOARD_PORT:-3000}
+            - API_PROXY_TARGET=${API_PROXY_TARGET:-http://localhost:3001}
+            # Optional absolute player WebSocket URL (ws/wss); when unset, the dashboard derives `/ws` from the browser URL.
+            - WEBSOCKET_CLIENT_URL=${WEBSOCKET_CLIENT_URL:-}
+            # Web auth secrets are validated by application startup when WEB_ENABLED=true.
+            - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+            - BETTER_AUTH_URL=${BETTER_AUTH_URL}
+            - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
             - EMAIL_PASS=${EMAIL_PASS}
             - EMAIL_USER=${EMAIL_USER}
             - FEEDBACK_EMAIL=${FEEDBACK_EMAIL}
@@ -94,6 +111,10 @@ services:
             - dimbybot-storage:/app/storage
             - dimbybot-logs:/app/logs
             - dimbybot-downloads:/app/downloads
+        # Next standalone dashboard port (see `WEB_PORT` in `.env.example` for the bot/Express listener).
+        ports:
+            - "${DASHBOARD_PORT:-3000}:${DASHBOARD_PORT:-3000}"
+            - "${WEB_PORT:-3001}:${WEB_PORT:-3001}"
         networks:
             - internal
 

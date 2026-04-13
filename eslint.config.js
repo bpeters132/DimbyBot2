@@ -5,7 +5,15 @@ import tseslint from "typescript-eslint"
 
 export default tseslint.config(
     {
-        ignores: ["downloads/**", "logs/**", "node_modules/**", "storage/**", "dist/**"],
+        ignores: [
+            "downloads/**",
+            "logs/**",
+            "node_modules/**",
+            "storage/**",
+            "dist/**",
+            ".next/**",
+            "src/web/.next/**",
+        ],
     },
     js.configs.recommended,
     {

@@ -6,9 +6,10 @@ DC := docker compose -f docker-compose.yml -f docker-compose.dev.yml
 help:
 	@echo "Available commands:"
 	@echo "  make up         - Build (if needed) and start all services in detached mode"
-	@echo "  make down       - Stop and remove containers, networks, and volumes"
+	@echo "  make down            - Stop containers (named volumes kept — DB persists)"
+	@echo "  make down-volumes    - Stop and remove containers and volumes (full wipe)"
 	@echo "  make build     - Force build/rebuild images for services"
-	@echo "  make rebuild   - Stop, force build/rebuild, and start all services"
+	@echo "  make rebuild   - Stop (volumes kept), build, and start all services"
 	@echo "                   Use 'service=<name>' to rebuild specific service"
 	@echo "  make logs      - Follow logs for all services"
 	@echo "  make restart   - Restart a specific service (e.g., 'make restart service=bot')"
@@ -21,7 +22,12 @@ up:
 
 .PHONY: down
 down:
-	@echo "Stopping development environment..."
+	@echo "Stopping development environment (volumes kept)..."
+	$(DC) down $(filter-out $@,$(MAKECMDGOALS))
+
+.PHONY: down-volumes
+down-volumes:
+	@echo "Stopping development environment and removing volumes..."
 	$(DC) down -v $(filter-out $@,$(MAKECMDGOALS))
 
 .PHONY: build
@@ -45,7 +51,7 @@ rebuild:
 	else \
 		echo "Rebuilding all services..."; \
 		echo "Stopping..."; \
-		$(DC) down -v; \
+		$(DC) down; \
 		echo "Building..."; \
 		$(DC) build $(filter-out $@,$(MAKECMDGOALS)); \
 		echo "Starting..."; \

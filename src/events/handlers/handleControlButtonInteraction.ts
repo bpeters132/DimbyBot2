@@ -1,6 +1,6 @@
 import type { ButtonInteraction } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
-import { getGuildSettings } from "../../util/saveControlChannel.js"
+import { getGuildSettings, isGuildSettingsInitialized } from "../../util/saveControlChannel.js"
 import { toggleAutoplay } from "../../util/autoplayHistory.js"
 import { updateControlMessage } from "./handleControlChannel.js"
 
@@ -13,6 +13,21 @@ export async function handleControlButtonInteraction(
     client.debug(
         `[ControlButtonHandler] Handling button interaction: ${customId} in guild ${guildId}`
     )
+
+    if (!isGuildSettingsInitialized()) {
+        client.warn(
+            `[ControlButtonHandler] Guild settings not initialized yet; ignoring button ${customId} in guild ${guildId}.`
+        )
+        try {
+            await interaction.reply({
+                content: "Bot is still starting up. Please try again in a moment.",
+                ephemeral: true,
+            })
+        } catch {
+            /* Ignore */
+        }
+        return
+    }
 
     const guildSettings = getGuildSettings()
     const settings = guildSettings[guildId]

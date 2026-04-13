@@ -4,7 +4,9 @@ env:
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     REGISTRY: ghcr.io
     IMAGE_BOT: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:latest
+    IMAGE_BOT_SHA: ghcr.io/${{ github.repository_owner }}/dimbybot2/bot:${{ github.sha }}
     IMAGE_LAVALINK: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:latest
+    IMAGE_LAVALINK_SHA: ghcr.io/${{ github.repository_owner }}/dimbybot2/lavalink:${{ github.sha }}
 
 permissions:
     contents: read
@@ -21,17 +23,22 @@ on:
                 default: false
                 type: boolean
 
+concurrency:
+    group: deploy-${{ github.ref }}
+    cancel-in-progress: false
+
 jobs:
     validate-node-lts:
         runs-on: ubuntu-latest
+        timeout-minutes: 10
         permissions:
             contents: read
         steps:
             - name: Checkout code
-              uses: actions/checkout@v6
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
             - name: Set up Node.js (latest LTS)
-              uses: actions/setup-node@v5
+              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
               with:
                   node-version: "lts/*"
                   cache: "yarn"
@@ -41,6 +48,9 @@ jobs:
 
             - name: Install dependencies
               run: yarn install --frozen-lockfile
+
+            - name: Install web dependencies
+              run: yarn web:install --frozen-lockfile
 
             - name: Generate Prisma client
               run: yarn db:generate
@@ -54,40 +64,59 @@ jobs:
         needs: validate-node-lts
         if: ${{ github.event_name != 'workflow_dispatch' || !inputs.skip_build }}
         runs-on: ubuntu-latest
+        timeout-minutes: 25
         permissions:
             contents: read
             packages: write
         steps:
             - name: Checkout code
-              uses: actions/checkout@v6
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
             - name: Log in to GitHub Container Registry
-              run: |
-                  echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u "${{ github.actor }}" --password-stdin
+              uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Build bot image
-              run: |
-                  # Dockerfile is multi-stage: yarn install + yarn build (TypeScript → dist/), then runtime yarn install --production + copied dist/
-                  docker build -t $IMAGE_BOT -f Dockerfile .
+            - name: Build and push bot image
+              uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
+              with:
+                  context: .
+                  file: Dockerfile
+                  push: true
+                  tags: |
+                      ${{ env.IMAGE_BOT }}
+                      ${{ env.IMAGE_BOT_SHA }}
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
+                  provenance: true
+                  sbom: true
 
             - name: Verify bot image contains Prisma runtime assets
               run: |
-                  docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -f /app/dist/index.js"
-                  docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -f /app/prisma/schema.prisma"
-                  docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -d /app/prisma/migrations"
-                  docker run --rm --entrypoint /bin/sh $IMAGE_BOT -c "test -f /app/prisma.config.ts"
+                  docker pull "$IMAGE_BOT_SHA"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -f /app/dist/server.js"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -f /app/prisma/schema.prisma"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -d /app/prisma/migrations"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -f /app/prisma.config.ts"
+
+            - name: Verify bot image contains web build
+              run: |
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -f /app/src/web/.next/standalone/server.js"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -d /app/src/web/.next/standalone/.next/static"
 
             - name: Build lavalink image
               run: |
-                  docker build -t $IMAGE_LAVALINK -f Lavalink/Dockerfile ./Lavalink
-
-            - name: Push bot image
-              run: |
-                  docker push $IMAGE_BOT
+                  docker build -t "$IMAGE_LAVALINK" -t "$IMAGE_LAVALINK_SHA" -f Lavalink/Dockerfile ./Lavalink
 
             - name: Push lavalink image
               run: |
-                  docker push $IMAGE_LAVALINK
+                  docker push "$IMAGE_LAVALINK"
+                  docker push "$IMAGE_LAVALINK_SHA"
 
     deploy:
         needs:
@@ -95,55 +124,118 @@ jobs:
             - build-and-push
         if: always() && needs.validate-node-lts.result == 'success' && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         permissions:
             contents: read
             packages: read
         steps:
             - name: Checkout code
-              uses: actions/checkout@v6
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
             # .env is loaded by docker compose; dimbybot receives Spotify + MusicBrainz vars via docker-compose.yml (autoplay).
             - name: Generate .env file
+              env:
+                  WEB_ENABLED: ${{ secrets.WEB_ENABLED }}
+                  WEB_PORT: ${{ secrets.WEB_PORT }}
+                  DASHBOARD_PORT: ${{ secrets.DASHBOARD_PORT }}
+                  API_PROXY_TARGET: ${{ secrets.API_PROXY_TARGET }}
+                  WEBSOCKET_CLIENT_URL: ${{ secrets.WEBSOCKET_CLIENT_URL }}
+                  POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+                  POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+                  BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+                  CLIENT_ID: ${{ secrets.CLIENT_ID }}
+                  DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
+                  BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+                  BETTER_AUTH_URL: ${{ secrets.BETTER_AUTH_URL }}
+                  GUILD_ID: ${{ secrets.GUILD_ID }}
+                  OWNER_ID: ${{ secrets.OWNER_ID }}
+                  DEV_MODE: ${{ secrets.DEV_MODE }}
+                  LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
+                  LAVALINK_HOST: ${{ secrets.LAVALINK_HOST }}
+                  LAVALINK_PORT: ${{ secrets.LAVALINK_PORT }}
+                  LAVALINK_PASSWORD: ${{ secrets.LAVALINK_PASSWORD }}
+                  LAVALINK_NODE_ID: ${{ secrets.LAVALINK_NODE_ID }}
+                  LAVALINK_SECURE: ${{ secrets.LAVALINK_SECURE }}
+                  LAVALINK_YOUTUBE_POT_TOKEN: ${{ secrets.LAVALINK_YOUTUBE_POT_TOKEN }}
+                  LAVALINK_YOUTUBE_POT_VISITORDATA: ${{ secrets.LAVALINK_YOUTUBE_POT_VISITORDATA }}
+                  LAVALINK_SPOTIFY_ENABLED: ${{ secrets.LAVALINK_SPOTIFY_ENABLED }}
+                  LAVALINK_SPOTIFY_CLIENT_ID: ${{ secrets.LAVALINK_SPOTIFY_CLIENT_ID }}
+                  LAVALINK_SPOTIFY_CLIENT_SECRET: ${{ secrets.LAVALINK_SPOTIFY_CLIENT_SECRET }}
+                  LAVALINK_SPOTIFY_COUNTRY_CODE: ${{ secrets.LAVALINK_SPOTIFY_COUNTRY_CODE }}
+                  LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT: ${{ secrets.LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT }}
+                  LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT: ${{ secrets.LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT }}
+                  SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+                  SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+                  MUSICBRAINZ_CONTACT: ${{ secrets.MUSICBRAINZ_CONTACT }}
+                  MUSICBRAINZ_CONTACT_URL: ${{ secrets.MUSICBRAINZ_CONTACT_URL }}
+                  MUSICBRAINZ_SIMILAR: ${{ secrets.MUSICBRAINZ_SIMILAR }}
+                  EMAIL_USER: ${{ secrets.EMAIL_USER }}
+                  EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+                  FEEDBACK_EMAIL: ${{ secrets.FEEDBACK_EMAIL }}
+                  POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+                  POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+                  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+                  BOT_IMAGE_SHA: ${{ env.IMAGE_BOT_SHA }}
+                  LAVALINK_IMAGE_SHA: ${{ env.IMAGE_LAVALINK_SHA }}
+                  GH_ACTOR: ${{ github.actor }}
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
-                  cat << EOF > .env
-                  BOT_TOKEN=${{ secrets.BOT_TOKEN }}
-                  CLIENT_ID=${{ secrets.CLIENT_ID }}
-                  GUILD_ID=${{ secrets.GUILD_ID }}
-                  OWNER_ID=${{ secrets.OWNER_ID }}
-                  DEV_MODE=${{ secrets.DEV_MODE }}
-                  LOG_LEVEL=${{ secrets.LOG_LEVEL }}
-                  LAVALINK_HOST=${{ secrets.LAVALINK_HOST }}
-                  LAVALINK_PORT=${{ secrets.LAVALINK_PORT }}
-                  LAVALINK_PASSWORD=${{ secrets.LAVALINK_PASSWORD }}
-                  LAVALINK_NODE_ID=${{ secrets.LAVALINK_NODE_ID }}
-                  LAVALINK_SECURE=${{ secrets.LAVALINK_SECURE }}
-                  LAVALINK_YOUTUBE_POT_TOKEN=${{ secrets.LAVALINK_YOUTUBE_POT_TOKEN }}
-                  LAVALINK_YOUTUBE_POT_VISITORDATA=${{ secrets.LAVALINK_YOUTUBE_POT_VISITORDATA }}
-                  LAVALINK_SPOTIFY_ENABLED=${{ secrets.LAVALINK_SPOTIFY_ENABLED }}
-                  LAVALINK_SPOTIFY_CLIENT_ID=${{ secrets.LAVALINK_SPOTIFY_CLIENT_ID }}
-                  LAVALINK_SPOTIFY_CLIENT_SECRET=${{ secrets.LAVALINK_SPOTIFY_CLIENT_SECRET }}
-                  LAVALINK_SPOTIFY_COUNTRY_CODE=${{ secrets.LAVALINK_SPOTIFY_COUNTRY_CODE }}
-                  LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT=${{ secrets.LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT }}
-                  LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT=${{ secrets.LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT }}
-                  SPOTIFY_CLIENT_ID=${{ secrets.SPOTIFY_CLIENT_ID }}
-                  SPOTIFY_CLIENT_SECRET=${{ secrets.SPOTIFY_CLIENT_SECRET }}
-                  MUSICBRAINZ_CONTACT=${{ secrets.MUSICBRAINZ_CONTACT }}
-                  MUSICBRAINZ_CONTACT_URL=${{ secrets.MUSICBRAINZ_CONTACT_URL }}
-                  MUSICBRAINZ_SIMILAR=${{ secrets.MUSICBRAINZ_SIMILAR }}
-                  EMAIL_USER=${{ secrets.EMAIL_USER }}
-                  EMAIL_PASS=${{ secrets.EMAIL_PASS }}
-                  FEEDBACK_EMAIL=${{ secrets.FEEDBACK_EMAIL }}
-                  POSTGRES_DB=${{ secrets.POSTGRES_DB }}
-                  POSTGRES_USER=${{ secrets.POSTGRES_USER }}
-                  POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-                  BOT_IMAGE=${{ env.IMAGE_BOT }}
-                  LAVALINK_IMAGE=${{ env.IMAGE_LAVALINK }}
-                  GH_ACTOR=${{ github.actor }}
-                  GH_TOKEN=${{ secrets.GITHUB_TOKEN }}
-                  EOF
+                  WEB_ENABLED_VAL="${WEB_ENABLED:-true}"
+                  WEB_PORT_VAL="${WEB_PORT:-3001}"
+                  DASHBOARD_PORT_VAL="${DASHBOARD_PORT:-3000}"
+                  API_PROXY_TARGET_VAL="${API_PROXY_TARGET:-http://127.0.0.1:${WEB_PORT_VAL}}"
+                  WEBSOCKET_CLIENT_URL_VAL="${WEBSOCKET_CLIENT_URL:-}"
+                  export POSTGRES_HOST_VAL="${POSTGRES_HOST:-postgres-db}"
+                  export POSTGRES_PORT_VAL="${POSTGRES_PORT:-5432}"
+                  DATABASE_URL_VAL="$(node -e "const u=process.env.POSTGRES_USER||'';const p=encodeURIComponent(process.env.POSTGRES_PASSWORD||'');const h=process.env.POSTGRES_HOST_VAL||'postgres-db';const pt=process.env.POSTGRES_PORT_VAL||'5432';const d=process.env.POSTGRES_DB||'';console.log('postgresql://'+u+':'+p+'@'+h+':'+pt+'/'+d)")"
+                  {
+                      printf 'BOT_TOKEN=%s\n' "$BOT_TOKEN"
+                      printf 'CLIENT_ID=%s\n' "$CLIENT_ID"
+                      printf 'DISCORD_CLIENT_SECRET=%s\n' "$DISCORD_CLIENT_SECRET"
+                      printf 'BETTER_AUTH_SECRET=%s\n' "$BETTER_AUTH_SECRET"
+                      printf 'BETTER_AUTH_URL=%s\n' "$BETTER_AUTH_URL"
+                      printf 'GUILD_ID=%s\n' "$GUILD_ID"
+                      printf 'OWNER_ID=%s\n' "$OWNER_ID"
+                      printf 'DEV_MODE=%s\n' "$DEV_MODE"
+                      printf 'LOG_LEVEL=%s\n' "$LOG_LEVEL"
+                      printf 'WEB_ENABLED=%s\n' "$WEB_ENABLED_VAL"
+                      printf 'WEB_PORT=%s\n' "$WEB_PORT_VAL"
+                      printf 'DASHBOARD_PORT=%s\n' "$DASHBOARD_PORT_VAL"
+                      printf 'API_PROXY_TARGET=%s\n' "$API_PROXY_TARGET_VAL"
+                      printf 'WEBSOCKET_CLIENT_URL=%s\n' "$WEBSOCKET_CLIENT_URL_VAL"
+                      printf 'DATABASE_URL=%s\n' "$DATABASE_URL_VAL"
+                      printf 'LAVALINK_HOST=%s\n' "$LAVALINK_HOST"
+                      printf 'LAVALINK_PORT=%s\n' "$LAVALINK_PORT"
+                      printf 'LAVALINK_PASSWORD=%s\n' "$LAVALINK_PASSWORD"
+                      printf 'LAVALINK_NODE_ID=%s\n' "$LAVALINK_NODE_ID"
+                      printf 'LAVALINK_SECURE=%s\n' "$LAVALINK_SECURE"
+                      printf 'LAVALINK_YOUTUBE_POT_TOKEN=%s\n' "$LAVALINK_YOUTUBE_POT_TOKEN"
+                      printf 'LAVALINK_YOUTUBE_POT_VISITORDATA=%s\n' "$LAVALINK_YOUTUBE_POT_VISITORDATA"
+                      printf 'LAVALINK_SPOTIFY_ENABLED=%s\n' "$LAVALINK_SPOTIFY_ENABLED"
+                      printf 'LAVALINK_SPOTIFY_CLIENT_ID=%s\n' "$LAVALINK_SPOTIFY_CLIENT_ID"
+                      printf 'LAVALINK_SPOTIFY_CLIENT_SECRET=%s\n' "$LAVALINK_SPOTIFY_CLIENT_SECRET"
+                      printf 'LAVALINK_SPOTIFY_COUNTRY_CODE=%s\n' "$LAVALINK_SPOTIFY_COUNTRY_CODE"
+                      printf 'LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT=%s\n' "$LAVALINK_SPOTIFY_PLAYLIST_LOAD_LIMIT"
+                      printf 'LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT=%s\n' "$LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT"
+                      printf 'SPOTIFY_CLIENT_ID=%s\n' "$SPOTIFY_CLIENT_ID"
+                      printf 'SPOTIFY_CLIENT_SECRET=%s\n' "$SPOTIFY_CLIENT_SECRET"
+                      printf 'MUSICBRAINZ_CONTACT=%s\n' "$MUSICBRAINZ_CONTACT"
+                      printf 'MUSICBRAINZ_CONTACT_URL=%s\n' "$MUSICBRAINZ_CONTACT_URL"
+                      printf 'MUSICBRAINZ_SIMILAR=%s\n' "$MUSICBRAINZ_SIMILAR"
+                      printf 'EMAIL_USER=%s\n' "$EMAIL_USER"
+                      printf 'EMAIL_PASS=%s\n' "$EMAIL_PASS"
+                      printf 'FEEDBACK_EMAIL=%s\n' "$FEEDBACK_EMAIL"
+                      printf 'POSTGRES_DB=%s\n' "$POSTGRES_DB"
+                      printf 'POSTGRES_USER=%s\n' "$POSTGRES_USER"
+                      printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+                      printf 'BOT_IMAGE=%s\n' "$BOT_IMAGE_SHA"
+                      printf 'LAVALINK_IMAGE=%s\n' "$LAVALINK_IMAGE_SHA"
+                      printf 'GH_ACTOR=%s\n' "$GH_ACTOR"
+                      printf 'GH_TOKEN=%s\n' "$GH_TOKEN"
+                  } > .env
 
             - name: Copy files to server
-              uses: appleboy/scp-action@v0.1.7
+              uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
               with:
                   host: ${{ secrets.DEPLOY_SERVER_HOST }}
                   username: ${{ secrets.DEPLOY_SERVER_USER }}
@@ -160,12 +252,11 @@ jobs:
                   set -e
                   cd /home/bot
                   export $(grep -v '^#' .env | xargs)
-                  sed -i "s|image: .*bot.*|image: $BOT_IMAGE|" docker-compose.yml
-                  sed -i "s|image: .*lavalink.*|image: $LAVALINK_IMAGE|" docker-compose.yml
                   echo "$GH_TOKEN" | /usr/bin/docker login ghcr.io -u "$GH_ACTOR" --password-stdin
                   /usr/bin/docker compose down
                   /usr/bin/docker compose pull
                   /usr/bin/docker compose up -d
+                  /usr/bin/docker image prune -f
                   EOS
 
                   # Create SSH key file with proper permissions
@@ -179,7 +270,7 @@ jobs:
                   rm -f deploy_key
 
             - name: Run deployment script on server
-              uses: appleboy/ssh-action@v1.0.3
+              uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
               with:
                   host: ${{ secrets.DEPLOY_SERVER_HOST }}
                   username: ${{ secrets.DEPLOY_SERVER_USER }}
@@ -187,3 +278,37 @@ jobs:
                   port: ${{ secrets.DEPLOY_SERVER_SSH_PORT }}
                   script: |
                       bash /home/bot/ci_deploy.sh
+
+            - name: Verify deployment health on server
+              uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
+              with:
+                  host: ${{ secrets.DEPLOY_SERVER_HOST }}
+                  username: ${{ secrets.DEPLOY_SERVER_USER }}
+                  key: ${{ secrets.SSH_PRIVATE_KEY }}
+                  port: ${{ secrets.DEPLOY_SERVER_SSH_PORT }}
+                  script: |
+                      set -e
+                      if [ -f /home/bot/.env ]; then
+                        set -a
+                        # shellcheck disable=SC1091
+                        . /home/bot/.env
+                        set +a
+                      fi
+                      max_attempts=40
+                      sleep_seconds=2
+                      attempt=1
+                      while [ "$attempt" -le "$max_attempts" ]; do
+                        ok_bot=0
+                        ok_dashboard=0
+                        if curl --fail --silent "http://127.0.0.1:${WEB_PORT:-3001}/health" >/dev/null 2>&1; then ok_bot=1; fi
+                        if curl --fail --silent "http://127.0.0.1:${DASHBOARD_PORT:-3000}/api/status" >/dev/null 2>&1; then ok_dashboard=1; fi
+                        if [ "$ok_bot" -eq 1 ] && [ "$ok_dashboard" -eq 1 ]; then
+                          echo "Health checks passed on attempt $attempt"
+                          exit 0
+                        fi
+                        echo "Health probe attempt $attempt/$max_attempts (bot:${WEB_PORT:-3001}/health=$ok_bot dashboard:${DASHBOARD_PORT:-3000}/api/status=$ok_dashboard) — sleeping ${sleep_seconds}s"
+                        sleep "$sleep_seconds"
+                        attempt=$((attempt + 1))
+                      done
+                      echo "Deployment health checks failed after $max_attempts attempts" >&2
+                      exit 1

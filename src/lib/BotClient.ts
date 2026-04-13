@@ -82,10 +82,6 @@ export default class BotClient extends Client {
                 `BotClient start: Guild settings migration status attempted=${guildSettingsMigration.attempted} skipped=${guildSettingsMigration.skipped} migrated=${guildSettingsMigration.migratedCount} failed=${guildSettingsMigration.failedCount}`
             )
             if (guildSettingsMigration.failedCount > 0) {
-                this.error(
-                    "BotClient start: Guild settings migration had failures; startup aborted.",
-                    guildSettingsMigration
-                )
                 throw new Error(
                     `Guild settings migration failed: ${guildSettingsMigration.failedCount} entries failed. Reason: ${guildSettingsMigration.reason || "unknown"}`
                 )
@@ -95,10 +91,6 @@ export default class BotClient extends Client {
                 `BotClient start: Download metadata migration status attempted=${downloadsMigration.attempted} skipped=${downloadsMigration.skipped} migrated=${downloadsMigration.migratedCount} failed=${downloadsMigration.failedCount}`
             )
             if (downloadsMigration.failedCount > 0) {
-                this.error(
-                    "BotClient start: Download metadata migration had failures; startup aborted.",
-                    downloadsMigration
-                )
                 throw new Error(
                     `Download metadata migration failed: ${downloadsMigration.failedCount} entries failed. Reason: ${downloadsMigration.reason || "unknown"}`
                 )

@@ -1,17 +1,54 @@
 import { SlashCommandBuilder } from "discord.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import fs from "fs"
+import { promises as fsp } from "fs"
 import path from "path"
 import { formatDistanceToNow } from "date-fns"
 import type BotClient from "../../lib/BotClient.js"
 import { getGuildSettings } from "../../util/saveControlChannel.js"
 import type { DownloadsMetadataStore } from "../../types/index.js"
 import {
+    downloadMetadataEntryMatchesGuild,
+    downloadMetadataKeysForFile,
+    parseDownloadMetadataStoreKey,
+} from "../../util/downloadMetadataKeys.js"
+import {
     getDownloadMetadataStore,
     saveDownloadMetadataStore,
 } from "../../util/downloadMetadataStore.js"
 
 const DEFAULT_MAX_DIR_SIZE_MB = 1000
+
+/** Selects the latest metadata entry per physical fileName for a guild. */
+function dedupeMetadataByFileName(
+    metadata: DownloadsMetadataStore,
+    guildId: string
+): Map<string, { key: string; info: DownloadsMetadataStore[string] }> {
+    const result = new Map<string, { key: string; info: DownloadsMetadataStore[string] }>()
+    for (const [key, info] of Object.entries(metadata)) {
+        if (!downloadMetadataEntryMatchesGuild(key, info, guildId)) continue
+        const fileName = parseDownloadMetadataStoreKey(key).fileName
+        const existing = result.get(fileName)
+        if (!existing) {
+            result.set(fileName, { key, info })
+            continue
+        }
+        const existingDate = existing.info.downloadDate
+            ? new Date(existing.info.downloadDate).getTime()
+            : 0
+        const candidateDate = info.downloadDate ? new Date(info.downloadDate).getTime() : 0
+        if (candidateDate >= existingDate) {
+            result.set(fileName, { key, info })
+        }
+    }
+    return result
+}
+
+function parseValidDownloadDate(value: unknown): Date | null {
+    if (typeof value !== "string" && typeof value !== "number") return null
+    const parsed = new Date(value)
+    return Number.isFinite(parsed.getTime()) ? parsed : null
+}
 
 /**
  * Resolves the configured downloads size limit for a guild.
@@ -64,7 +101,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         const downloadsDir = path.join(process.cwd(), "downloads")
         const guildId = interaction.guildId
         if (!guildId) {
-            return interaction.reply({ content: "Use this command in a server." })
+            return interaction.reply({ content: "Use this command in a server.", ephemeral: true })
         }
 
         // Ensure downloads directory exists
@@ -72,6 +109,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             client.debug(`[Downloads] Downloads directory not found at ${downloadsDir}`)
             return interaction.reply({
                 content: "No downloads directory found.",
+                ephemeral: true,
             })
         }
 
@@ -83,32 +121,45 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         client.debug(`[Downloads] Executing ${subcommand} subcommand`)
 
         if (subcommand === "list") {
-            const files = Object.entries(metadata)
-                .filter(([, info]) => info && info.guildId === guildId)
-                .map(([file, info]) => {
+            // Ephemeral: file list can include URLs/paths the user may not want visible in-channel.
+            await interaction.deferReply({ ephemeral: true })
+
+            const dedupedEntries = dedupeMetadataByFileName(metadata, guildId)
+
+            const fileRows = await Promise.all(
+                [...dedupedEntries.values()].map(async ({ key, info }) => {
+                    const file = parseDownloadMetadataStoreKey(key).fileName
                     const filePath = path.join(downloadsDir, file)
-                    if (!fs.existsSync(filePath)) return null
-                    const stats = fs.statSync(filePath)
-                    const row: {
-                        name: string
-                        size: number
-                        date: Date
-                        path: string
-                        originalUrl?: string
-                    } = {
-                        name: file.replace(".wav", ""),
-                        size: stats.size,
-                        date: info.downloadDate ? new Date(info.downloadDate) : stats.mtime,
-                        path: filePath,
+                    try {
+                        await fsp.access(filePath)
+                        const stats = await fsp.stat(filePath)
+                        const row: {
+                            name: string
+                            size: number
+                            date: Date
+                            path: string
+                            originalUrl?: string
+                        } = {
+                            name: file.replace(".wav", ""),
+                            size: stats.size,
+                            date: parseValidDownloadDate(info.downloadDate) ?? stats.mtime,
+                            path: filePath,
+                        }
+                        if (info.originalUrl) row.originalUrl = info.originalUrl
+                        return row
+                    } catch {
+                        return null
                     }
-                    if (info.originalUrl) row.originalUrl = info.originalUrl
-                    return row
                 })
+            )
+            const files = fileRows
                 .filter((x): x is NonNullable<typeof x> => x != null)
                 .sort((a, b) => b.date.getTime() - a.date.getTime())
 
             if (files.length === 0) {
-                return interaction.reply("No downloaded files found for this server.")
+                return interaction.editReply({
+                    content: "No downloaded files found for this server.",
+                })
             }
 
             // Calculate total size and limit
@@ -132,7 +183,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             const maxContentLength = 2000
             const headerFits = header.length < maxContentLength
             if (headerFits && header.length + fileList.length <= maxContentLength) {
-                return interaction.reply({
+                return interaction.editReply({
                     content: header + fileList,
                 })
             }
@@ -155,41 +206,65 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             }
 
             if (chunks.length === 0) {
-                return interaction.reply({
+                return interaction.editReply({
                     content: headerFits ? header : `**Downloaded Files (${files.length})**\n`,
                 })
             }
 
-            await interaction.reply({ content: chunks[0] })
+            await interaction.editReply({ content: chunks[0] })
             for (const chunk of chunks.slice(1)) {
-                await interaction.followUp({ content: chunk })
+                await interaction.followUp({ content: chunk, ephemeral: true })
             }
             return
         }
 
         if (subcommand === "cleanup") {
+            // Visible reply: cleanup is a moderator-style server action; summary is not treated as private DM content.
             await interaction.deferReply()
             const removeAll = interaction.options.getBoolean("all") || false
             const days = interaction.options.getInteger("days") || 7
             const cutoffDate = new Date()
             cutoffDate.setDate(cutoffDate.getDate() - days)
 
-            const files = Object.entries(metadata)
-                .filter(([, info]) => info && info.guildId === guildId)
-                .map(([file, info]) => {
+            const dedupedEntries = dedupeMetadataByFileName(metadata, guildId)
+
+            const fileRows = await Promise.all(
+                [...dedupedEntries.values()].map(async ({ key, info }) => {
+                    const file = parseDownloadMetadataStoreKey(key).fileName
                     const filePath = path.join(downloadsDir, file)
-                    const date = info.downloadDate
-                        ? new Date(info.downloadDate)
-                        : fs.existsSync(filePath)
-                          ? fs.statSync(filePath).mtime
-                          : null
+                    let date: Date | null = parseValidDownloadDate(info.downloadDate)
+                    if (!date) {
+                        try {
+                            await fsp.access(filePath)
+                            const st = await fsp.stat(filePath)
+                            date = st.mtime
+                        } catch (err: unknown) {
+                            const code =
+                                err && typeof err === "object" && "code" in err
+                                    ? (err as NodeJS.ErrnoException).code
+                                    : ""
+                            if (code !== "ENOENT") {
+                                const msg = err instanceof Error ? err.message : String(err)
+                                client.warn(
+                                    `[Downloads] cleanup stat failed for ${file} (guildId=${guildId}): ${msg}`
+                                )
+                            }
+                            date = null
+                        }
+                    }
                     return {
                         name: file,
                         path: filePath,
                         date,
                     }
                 })
-                .filter((file) => (removeAll ? true : file.date && file.date < cutoffDate))
+            )
+            const files = fileRows.filter((file) => {
+                if (!removeAll) {
+                    return Boolean(file.date && file.date < cutoffDate)
+                }
+                return true
+            })
 
             if (files.length === 0) {
                 return interaction.editReply(
@@ -204,20 +279,25 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             const errors = []
 
             for (const file of files) {
+                const metadataKeys = downloadMetadataKeysForFile(metadata, file.name, guildId)
                 try {
-                    if (fs.existsSync(file.path)) {
-                        const stats = fs.statSync(file.path)
-                        totalSize += stats.size
-                        fs.unlinkSync(file.path)
-                        deletedCount++
+                    const stats = await fsp.stat(file.path)
+                    await fsp.unlink(file.path)
+                    totalSize += stats.size
+                    deletedCount++
+                } catch (err: unknown) {
+                    const code =
+                        err && typeof err === "object" && "code" in err
+                            ? (err as NodeJS.ErrnoException).code
+                            : ""
+                    if (code !== "ENOENT") {
+                        const msg = err instanceof Error ? err.message : String(err)
+                        errors.push(`${file.name}: ${msg}`)
                     }
-                    // Remove from metadata
-                    if (metadata[file.name]) {
-                        delete metadata[file.name]
+                } finally {
+                    for (const metaKey of metadataKeys) {
+                        delete metadata[metaKey]
                     }
-                } catch (error: unknown) {
-                    const msg = error instanceof Error ? error.message : String(error)
-                    errors.push(`${file.name}: ${msg}`)
                 }
             }
 
@@ -255,7 +335,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         if (interaction.deferred || interaction.replied) {
             return interaction.editReply({ content: response })
         }
-        return interaction.reply({ content: response })
+        return interaction.reply({ content: response, ephemeral: true })
     }
 }
 

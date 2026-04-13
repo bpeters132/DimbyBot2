@@ -1,12 +1,45 @@
-import type { Prisma } from "@prisma/client"
+import { Prisma } from "@prisma/client"
 import { getPrismaClient } from "../lib/database.js"
-import type { GuildDiscordLogSettings, GuildSettings, GuildSettingsStore } from "../types/index.js"
+import type {
+    DiscordLogLevelName,
+    GuildDiscordLogSettings,
+    GuildSettings,
+    GuildSettingsStore,
+} from "../types/index.js"
+
+const LOG_LEVELS: ReadonlySet<DiscordLogLevelName> = new Set(["debug", "info", "warn", "error"])
+
+function isDiscordLogLevelName(v: unknown): v is DiscordLogLevelName {
+    return typeof v === "string" && LOG_LEVELS.has(v as DiscordLogLevelName)
+}
 
 function parseGuildDiscordLog(value: Prisma.JsonValue | null): GuildDiscordLogSettings | undefined {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
         return undefined
     }
-    return value as GuildDiscordLogSettings
+    const raw = value as Record<string, unknown>
+    const out: GuildDiscordLogSettings = {}
+    if (typeof raw.allChannelId === "string" && raw.allChannelId.trim()) {
+        out.allChannelId = raw.allChannelId.trim()
+    }
+    if (raw.minLevel !== undefined && raw.minLevel !== null) {
+        if (!isDiscordLogLevelName(raw.minLevel)) return undefined
+        out.minLevel = raw.minLevel
+    }
+    if (raw.byLevel !== undefined && raw.byLevel !== null) {
+        if (typeof raw.byLevel !== "object" || Array.isArray(raw.byLevel)) return undefined
+        const by: Partial<Record<DiscordLogLevelName, string>> = {}
+        for (const [k, v] of Object.entries(raw.byLevel as Record<string, unknown>)) {
+            if (!isDiscordLogLevelName(k)) return undefined
+            if (typeof v !== "string" || !v.trim()) return undefined
+            by[k] = v.trim()
+        }
+        if (Object.keys(by).length > 0) out.byLevel = by
+    }
+    if (!out.allChannelId && !out.byLevel && !out.minLevel) {
+        return undefined
+    }
+    return out
 }
 
 function toGuildSettingsStoreEntry(row: {
@@ -44,41 +77,49 @@ export async function isGuildSettingsTableEmpty(): Promise<boolean> {
 /** Replaces all guild settings rows with the provided legacy map shape. */
 export async function replaceGuildSettingsStoreInDatabase(
     store: GuildSettingsStore
-): Promise<{ rowsWritten: number }> {
+): Promise<{ rowsUpserted: number; rowsDeleted: number; rowsAffected: number }> {
     const prisma = getPrismaClient()
     const guildIds = Object.keys(store)
 
-    await prisma.$transaction(async (tx) => {
+    const { rowsUpserted, rowsDeleted, rowsAffected } = await prisma.$transaction(async (tx) => {
+        let count = 0
         for (const guildId of guildIds) {
             const settings = store[guildId]
+            const payload = {
+                controlChannelId: settings?.controlChannelId ?? null,
+                controlMessageId: settings?.controlMessageId ?? null,
+                downloadsMaxMb:
+                    typeof settings?.downloadsMaxMb === "number" ? settings.downloadsMaxMb : null,
+                discordLog:
+                    settings?.discordLog != null
+                        ? (settings.discordLog as Prisma.InputJsonValue)
+                        : Prisma.DbNull,
+            }
             await tx.guildSettings.upsert({
                 where: { guildId },
                 create: {
                     guildId,
-                    controlChannelId: settings?.controlChannelId ?? null,
-                    controlMessageId: settings?.controlMessageId ?? null,
-                    downloadsMaxMb:
-                        typeof settings?.downloadsMaxMb === "number" ? settings.downloadsMaxMb : null,
-                    discordLog: (settings?.discordLog as Prisma.InputJsonValue | undefined) ?? null,
+                    ...payload,
                 },
-                update: {
-                    controlChannelId: settings?.controlChannelId ?? null,
-                    controlMessageId: settings?.controlMessageId ?? null,
-                    downloadsMaxMb:
-                        typeof settings?.downloadsMaxMb === "number" ? settings.downloadsMaxMb : null,
-                    discordLog: (settings?.discordLog as Prisma.InputJsonValue | undefined) ?? null,
-                },
+                update: payload,
             })
+            count += 1
         }
 
-        await tx.guildSettings.deleteMany({
+        // When `guildIds` is empty, use a sentinel that matches no real snowflake so we never delete every row.
+        const deleted = await tx.guildSettings.deleteMany({
             where: {
                 guildId: {
                     notIn: guildIds.length > 0 ? guildIds : ["__never__"],
                 },
             },
         })
+        return {
+            rowsUpserted: count,
+            rowsDeleted: deleted.count,
+            rowsAffected: count + deleted.count,
+        }
     })
 
-    return { rowsWritten: guildIds.length }
+    return { rowsUpserted, rowsDeleted, rowsAffected }
 }

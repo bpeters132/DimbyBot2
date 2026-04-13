@@ -6,6 +6,7 @@ import {
     getGuildSettingsStoreFromDatabase,
     replaceGuildSettingsStoreInDatabase,
 } from "../repositories/guildSettingsRepository.js"
+import { loggerFromPartial } from "./loggerFromPartial.js"
 
 const __dirname = import.meta.dirname
 
@@ -13,49 +14,24 @@ const storageDir = path.join(__dirname, "..", "..", "storage")
 /** In-memory store loaded from database at startup. */
 let guildSettingsCache: GuildSettingsStore = {}
 let guildSettingsInitialized = false
+let saveGuildSettingsChain: Promise<void> = Promise.resolve()
 
-function cloneGuildSettingsStore(store: GuildSettingsStore): GuildSettingsStore {
-    return structuredClone(store)
+/** Returns whether {@link initializeGuildSettingsStore} has finished loading settings from the database. */
+export function isGuildSettingsInitialized(): boolean {
+    return guildSettingsInitialized
 }
 
-function getLogger(logger: Partial<LoggerInterface> | undefined): LoggerInterface {
-    if (
-        logger &&
-        typeof logger.debug === "function" &&
-        typeof logger.info === "function" &&
-        typeof logger.warn === "function" &&
-        typeof logger.error === "function"
-    ) {
-        const l = logger as Partial<LoggerInterface>
-        return {
-            debug: (text: string, ...args: unknown[]) => l.debug!(text, ...args),
-            info: (text: string, ...args: unknown[]) => l.info!(text, ...args),
-            warn: (text: string, ...args: unknown[]) => l.warn!(text, ...args),
-            error: (text: string, ...args: unknown[]) => l.error!(text, ...args),
-            setDebugEnabled:
-                typeof l.setDebugEnabled === "function" ? l.setDebugEnabled.bind(l) : () => {},
-            getDebugEnabled:
-                typeof l.getDebugEnabled === "function" ? l.getDebugEnabled.bind(l) : () => false,
-            getLogFilePath:
-                typeof l.getLogFilePath === "function" ? l.getLogFilePath.bind(l) : () => null,
-        }
-    }
-    return {
-        debug: () => {},
-        info: () => {},
-        warn: () => {},
-        error: () => {},
-        setDebugEnabled: () => {},
-        getDebugEnabled: () => false,
-        getLogFilePath: () => null,
-    }
+function cloneGuildSettingsStore(store: GuildSettingsStore): GuildSettingsStore {
+    return typeof structuredClone === "function"
+        ? structuredClone(store)
+        : (JSON.parse(JSON.stringify(store)) as GuildSettingsStore)
 }
 
 /**
  * Ensures that the storage directory exists, creating it if necessary.
  */
 export function ensureStorageDir(loggerInstance?: Partial<LoggerInterface>) {
-    const logger = getLogger(loggerInstance)
+    const logger = loggerFromPartial(loggerInstance)
     if (!fs.existsSync(storageDir)) {
         logger.debug(
             `[guildSettings] Storage directory ${storageDir} not found, attempting creation.`
@@ -72,7 +48,7 @@ export function ensureStorageDir(loggerInstance?: Partial<LoggerInterface>) {
 async function readGuildSettingsFromDatabase(
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<GuildSettingsStore> {
-    const logger = getLogger(loggerInstance)
+    const logger = loggerFromPartial(loggerInstance)
     logger.debug("[guildSettings] Attempting to load settings from database.")
     try {
         const store = await getGuildSettingsStoreFromDatabase()
@@ -109,6 +85,20 @@ export function getGuildSettings(): GuildSettingsStore {
     return cloneGuildSettingsStore(guildSettingsCache)
 }
 
+async function withGuildSettingsSaveLock<T>(work: () => Promise<T>): Promise<T> {
+    let release: () => void = () => {}
+    const previous = saveGuildSettingsChain
+    saveGuildSettingsChain = new Promise<void>((resolve) => {
+        release = resolve
+    })
+    await previous
+    try {
+        return await work()
+    } finally {
+        release()
+    }
+}
+
 /**
  * Persists guild settings to database. On success, replaces the in-memory cache with `settings`.
  * @returns whether the database write succeeded
@@ -117,15 +107,22 @@ export async function saveGuildSettings(
     settings: GuildSettingsStore,
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<boolean> {
-    const logger = getLogger(loggerInstance)
-    logger.debug("[guildSettings] Attempting to save settings to database.")
-    try {
-        const result = await replaceGuildSettingsStoreInDatabase(settings)
-        guildSettingsCache = cloneGuildSettingsStore(settings)
-        logger.debug(`[guildSettings] Successfully saved ${result.rowsWritten} rows to database.`)
-        return true
-    } catch (error: unknown) {
-        logger.error(`[guildSettings] Error writing guild settings to database: ${error}`)
-        return false
-    }
+    const settingsSnapshot = cloneGuildSettingsStore(settings)
+    return withGuildSettingsSaveLock(async () => {
+        const logger = loggerFromPartial(loggerInstance)
+        logger.debug("[guildSettings] Attempting to save settings to database.")
+        try {
+            const result = await replaceGuildSettingsStoreInDatabase(settingsSnapshot)
+            const reloaded = await readGuildSettingsFromDatabase(logger)
+            guildSettingsCache = cloneGuildSettingsStore(reloaded)
+            guildSettingsInitialized = true
+            logger.debug(
+                `[guildSettings] Successfully saved guild settings (upserted=${result.rowsUpserted}, deleted=${result.rowsDeleted}, affected=${result.rowsAffected}).`
+            )
+            return true
+        } catch (error: unknown) {
+            logger.error(`[guildSettings] Error writing guild settings to database: ${error}`)
+            return false
+        }
+    })
 }

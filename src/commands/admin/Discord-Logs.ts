@@ -8,7 +8,11 @@ import type {
     GuildSettingsStore,
 } from "../../types/index.js"
 import { discordLogLevelAllowed, resolveDiscordLogChannelId } from "../../util/discordLogForward.js"
-import { getGuildSettings, saveGuildSettings } from "../../util/saveControlChannel.js"
+import {
+    getGuildSettings,
+    isGuildSettingsInitialized,
+    saveGuildSettings,
+} from "../../util/saveControlChannel.js"
 
 const LEVEL_CHOICES: DiscordLogLevelName[] = ["debug", "info", "warn", "error"]
 
@@ -197,6 +201,12 @@ export default {
         }
 
         const sub = interaction.options.getSubcommand()
+        if (!isGuildSettingsInitialized()) {
+            return interaction.reply({
+                content: "Bot is still starting up. Please try again in a moment.",
+                flags: [MessageFlags.Ephemeral],
+            })
+        }
         const store = getGuildSettings()
 
         if (sub === "show") {
@@ -225,20 +235,33 @@ export default {
             }
             applyNormalizedDiscordLog(next, working)
             const nextStore = storeWithGuildRow(store, guild.id, working)
-            const ok = await saveGuildSettings(nextStore, client)
-            if (!ok) {
+            try {
+                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] })
+                const ok = await saveGuildSettings(nextStore, client)
+                if (!ok) {
+                    return interaction.editReply({
+                        content:
+                            "Could not save settings to database. Check database connectivity.",
+                    })
+                }
+                return interaction.editReply({
+                    content:
+                        raw === "default" || raw === "debug"
+                            ? "Minimum Discord log level reset to **debug** (all routed severities can be sent)."
+                            : `Minimum Discord log level set to **${raw}** and above.`,
+                })
+            } catch (error: unknown) {
+                client.error("[Discord-Logs] Failed to save min-level configuration", { error })
+                if (interaction.deferred || interaction.replied) {
+                    return interaction.editReply({
+                        content: "Failed to update Discord log settings. Please try again.",
+                    })
+                }
                 return interaction.reply({
-                    content: "Could not save settings to database. Check database connectivity.",
+                    content: "Failed to update Discord log settings. Please try again.",
                     flags: [MessageFlags.Ephemeral],
                 })
             }
-            return interaction.reply({
-                content:
-                    raw === "default" || raw === "debug"
-                        ? "Minimum Discord log level reset to **debug** (all routed severities can be sent)."
-                        : `Minimum Discord log level set to **${raw}** and above.`,
-                flags: [MessageFlags.Ephemeral],
-            })
         }
 
         if (sub === "unset") {
@@ -271,17 +294,30 @@ export default {
             }
 
             const nextStore = storeWithGuildRow(store, guild.id, working)
-            const ok = await saveGuildSettings(nextStore, client)
-            if (!ok) {
+            try {
+                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] })
+                const ok = await saveGuildSettings(nextStore, client)
+                if (!ok) {
+                    return interaction.editReply({
+                        content:
+                            "Could not save settings to database. Check database connectivity.",
+                    })
+                }
+                return interaction.editReply({
+                    content: "Updated Discord log configuration.",
+                })
+            } catch (error: unknown) {
+                client.error("[Discord-Logs] Failed to save unset configuration", { error })
+                if (interaction.deferred || interaction.replied) {
+                    return interaction.editReply({
+                        content: "Failed to update Discord log settings. Please try again.",
+                    })
+                }
                 return interaction.reply({
-                    content: "Could not save settings to database. Check database connectivity.",
+                    content: "Failed to update Discord log settings. Please try again.",
                     flags: [MessageFlags.Ephemeral],
                 })
             }
-            return interaction.reply({
-                content: "Updated Discord log configuration.",
-                flags: [MessageFlags.Ephemeral],
-            })
         }
 
         if (sub === "set") {
@@ -333,22 +369,35 @@ export default {
 
             applyNormalizedDiscordLog(next, working)
             const nextStore = storeWithGuildRow(latestStore, guild.id, working)
-            const ok = await saveGuildSettings(nextStore, client)
-            if (!ok) {
+            try {
+                await interaction.deferReply({ flags: [MessageFlags.Ephemeral] })
+                const ok = await saveGuildSettings(nextStore, client)
+                if (!ok) {
+                    return interaction.editReply({
+                        content:
+                            "Could not save settings to database. Check database connectivity.",
+                    })
+                }
+
+                const mention = `<#${channelId}>`
+                return interaction.editReply({
+                    content:
+                        scope === "all"
+                            ? `Bot logs (per your minimum level) will use ${mention} for **all** severities unless a per-level route overrides.`
+                            : `Bot **${scope}** logs will go to ${mention} (other levels still use “all levels” or per-level routes if set).`,
+                })
+            } catch (error: unknown) {
+                client.error("[Discord-Logs] Failed to save route configuration", { error })
+                if (interaction.deferred || interaction.replied) {
+                    return interaction.editReply({
+                        content: "Failed to update Discord log settings. Please try again.",
+                    })
+                }
                 return interaction.reply({
-                    content: "Could not save settings to database. Check database connectivity.",
+                    content: "Failed to update Discord log settings. Please try again.",
                     flags: [MessageFlags.Ephemeral],
                 })
             }
-
-            const mention = `<#${channelId}>`
-            return interaction.reply({
-                content:
-                    scope === "all"
-                        ? `Bot logs (per your minimum level) will use ${mention} for **all** severities unless a per-level route overrides.`
-                        : `Bot **${scope}** logs will go to ${mention} (other levels still use “all levels” or per-level routes if set).`,
-                flags: [MessageFlags.Ephemeral],
-            })
         }
 
         return interaction.reply({

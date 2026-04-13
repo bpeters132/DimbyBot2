@@ -19,6 +19,7 @@ Author is just a dude that can barely code but can figure things out.
 
 - Node.js - current LTS
 - [Yarn](https://yarnpkg.com/) (this repo uses Yarn 1.x; see `packageManager` in `package.json`)
+- **Docker Compose v2.24.4 or newer** if you use `./dev-env.sh` / `docker-compose.dev.yml` (the dev override uses `ports: !override`, which requires that Compose version)
 
 ## Installation
 

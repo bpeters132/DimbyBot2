@@ -3,34 +3,42 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Install yt-dlp and its dependencies (always latest from pip)
-# Also install build tools needed for native Node.js modules
-# Use pipx to install yt-dlp to avoid PEP 668 issues
-RUN apk add --no-cache python3 py3-pip ffmpeg build-base autoconf automake libtool g++ pipx su-exec \
-    && pipx install yt-dlp \
-    && (pipx ensurepath || true) \
-    # Optionally, create a symlink if yt-dlp installed by pipx isn't automatically in the default PATH 
-    # for subsequent RUN commands or the ENTRYPOINT. The pipx ensurepath might handle this for the user
-    # running the command, but for system-wide access or other users, a symlink is safer.
-    # Check common pipx bin locations:
-    && (if [ -f /root/.local/bin/yt-dlp ]; then ln -s /root/.local/bin/yt-dlp /usr/local/bin/yt-dlp; fi || \
-        if [ -f /usr/local/bin/yt-dlp ]; then echo "yt-dlp already in /usr/local/bin"; else echo "yt-dlp not found in common pipx paths"; exit 1; fi)
+# Install yt-dlp (pinned — bump version after testing; keep in sync with docker/ytdlp-requirements.txt).
+# Also install build tools needed for native Node.js modules.
+# Install yt-dlp into a shared venv so non-root users can execute it.
+RUN apk add --no-cache \
+        python3=3.12.13-r0 \
+        py3-pip=25.1.1-r1 \
+        ffmpeg=8.0.1-r1 \
+        build-base=0.5-r3 \
+        autoconf=2.72-r1 \
+        automake=1.18.1-r0 \
+        libtool=2.5.4-r2 \
+        g++=15.2.0-r2 \
+        su-exec=0.3-r0 \
+        wget=1.25.0-r2 \
+    && python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir "yt-dlp==2026.2.21" \
+    && YTDLP_BIN="/opt/venv/bin/yt-dlp" \
+    && test -n "$YTDLP_BIN" && test -x "$YTDLP_BIN" \
+    && ln -sf "$YTDLP_BIN" /usr/local/bin/yt-dlp \
+    && yt-dlp --version
 
 # Copy package files and install ALL dependencies (including dev)
 COPY package.json yarn.lock ./
-RUN yarn install
+RUN yarn install && yarn cache clean --all
 
 # Copy the rest of the application code (will be overridden by mounts in dev)
 COPY . .
 
-# Compile TypeScript so `docker compose build` fails on TS errors and the image
-# is coherent. At runtime `./:/app` replaces /app; `yarn dev` still runs `yarn build`
-# first so dist/ always matches the mounted source.
-RUN yarn build
+# Dev image skips a production build; bind-mounted source + `yarn dev` (tsc watch + nodemon).
 
 # Copy the entrypoint script outside /app so the dev bind mount
 # does not overwrite it with the host copy.
 COPY --chmod=755 entrypoint.sh /usr/local/bin/dimbybot-entrypoint.sh
+
+RUN addgroup -S devuser && adduser -S devuser -G devuser \
+    && chown -R devuser:devuser /app
 
 # Runtime environment (see Dockerfile in repo root for the full list):
 # Autoplay: Spotify API on the bot (compose / .env):
@@ -39,6 +47,11 @@ COPY --chmod=755 entrypoint.sh /usr/local/bin/dimbybot-entrypoint.sh
 
 # Use the same entrypoint as production so dev containers generate
 # lavaNodesConfig.js from compose environment before starting nodemon.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD sh -c 'wget -qO- http://127.0.0.1:${WEB_PORT:-3001}/health || exit 1'
+
+USER devuser
+
 ENTRYPOINT ["/usr/local/bin/dimbybot-entrypoint.sh"]
 
-CMD ["yarn", "dev"] 
+CMD ["yarn", "dev"]

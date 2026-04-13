@@ -1,6 +1,23 @@
 #!/bin/sh
-# Docker HEALTHCHECK: cheap liveness — after entrypoint `exec`, PID 1 should be Node (yarn start -> node).
+# Docker HEALTHCHECK:
+# - If WEB_ENABLED=true, verify web endpoint is reachable.
+# - Otherwise, fallback to cheap liveness by checking PID 1 cmdline includes node.
 set -e
+
+if [ "${WEB_ENABLED:-false}" = "true" ]; then
+  WEB_PORT_VALUE="${WEB_PORT:-3001}"
+  DASHBOARD_PORT="${DASHBOARD_PORT:-3000}"
+  if ! wget --timeout=5 --tries=1 -qO- "http://127.0.0.1:${WEB_PORT_VALUE}/health" >/dev/null 2>&1; then
+    echo "healthcheck: bot /health not reachable on WEB_PORT=${WEB_PORT_VALUE}" >&2
+    exit 1
+  fi
+  if ! wget --timeout=5 --tries=1 -qO- "http://127.0.0.1:${DASHBOARD_PORT}/api/status" >/dev/null 2>&1; then
+    echo "healthcheck: Next.js dashboard /api/status not reachable on DASHBOARD_PORT=${DASHBOARD_PORT}" >&2
+    exit 1
+  fi
+  exit 0
+fi
+
 cmd=$(tr '\0' ' ' < /proc/1/cmdline 2>/dev/null || true)
 case "$cmd" in
   *node*) exit 0 ;;
