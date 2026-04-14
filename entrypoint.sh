@@ -85,27 +85,59 @@ export { nodes };
 EOF
 echo "Bot Entrypoint: lavaNodesConfig.js generated successfully."
 
-# Named volumes (e.g. dimbybot-storage) are often root-owned; the bot runs as `node` and must write guild_settings.json.
-mkdir -p /app/storage
-chown -R node:node /app/storage 2>/dev/null || true
-
-# Dev bind mounts + anonymous /app/node_modules volumes can leave Prisma client artifacts root-owned.
-# `yarn dev` runs `prisma generate` during build, which needs write access to these directories.
-mkdir -p /app/node_modules/.prisma /app/node_modules/@prisma
-chown -R node:node /app/node_modules/.prisma /app/node_modules/@prisma 2>/dev/null || true
-
 # ==============================================================================
 # Start the Bot Application
 # ==============================================================================
-# The 'exec' command replaces the current shell process with the 'yarn start' process.
-# This ensures that 'yarn start' becomes the main process (PID 1) in the container,
-# which is important for signal handling (like stopping the container).
-# su-exec drops from root (entrypoint) to `node` after fixing storage permissions.
+# Next.js runs in a separate container (Dockerfile.web). This process is Discord + Express bot API only.
 
-if [ "$#" -gt 0 ]; then
-  echo "Bot Entrypoint: Executing '$*'..."
-  exec su-exec node "$@"
+forward_shutdown() {
+  if [ -n "${BOT_PID:-}" ] && kill -0 "$BOT_PID" >/dev/null 2>&1; then
+    kill "$BOT_PID" >/dev/null 2>&1 || true
+  fi
+}
+
+wait_for_bot() {
+  set +e
+  wait "$BOT_PID"
+  BOT_EXIT_CODE=$?
+  set -e
+  exit "$BOT_EXIT_CODE"
+}
+
+# When the container user is root (e.g. one-off `docker run --user 0`), fix volume ownership
+# then drop to `node`. Default image user is `node` (see Dockerfile) — then chown is skipped.
+# Keep this shell as PID 1 so traps can forward shutdown to the bot child process.
+
+if [ "$(id -u)" -eq 0 ]; then
+  mkdir -p /app/storage
+  chown -R node:node /app/storage 2>/dev/null || true
+  mkdir -p /app/node_modules/.prisma /app/node_modules/@prisma
+  chown -R node:node /app/node_modules/.prisma /app/node_modules/@prisma 2>/dev/null || true
+  if [ "$#" -gt 0 ]; then
+    trap forward_shutdown INT TERM
+    echo "Bot Entrypoint: Executing '$*' as node..."
+    su-exec node "$@" &
+    BOT_PID=$!
+    wait_for_bot
+  fi
+  trap forward_shutdown INT TERM
+  echo "Bot Entrypoint: Executing 'yarn start' as node..."
+  su-exec node yarn start &
+  BOT_PID=$!
+  wait_for_bot
 fi
 
+mkdir -p /app/storage /app/node_modules/.prisma /app/node_modules/@prisma
+if [ "$#" -gt 0 ]; then
+  trap forward_shutdown INT TERM
+  echo "Bot Entrypoint: Executing '$*'..."
+  "$@" &
+  BOT_PID=$!
+  wait_for_bot
+fi
+
+trap forward_shutdown INT TERM
 echo "Bot Entrypoint: Executing 'yarn start'..."
-exec su-exec node yarn start
+yarn start &
+BOT_PID=$!
+wait_for_bot

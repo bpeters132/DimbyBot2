@@ -18,12 +18,14 @@ RUN apk add --no-cache \
 ARG LAVALINK_VERSION=4.2.2
 RUN curl --fail -L "https://github.com/lavalink-devs/Lavalink/releases/download/${LAVALINK_VERSION}/Lavalink.jar" -o Lavalink.jar
 
-# Copy the entrypoint script
+# Copy startup and healthcheck scripts
 COPY entrypoint.sh entrypoint.sh
+COPY healthcheck.sh healthcheck.sh
 # Ensure script has correct line endings (LF) and is executable
 # Ensure /tmp exists and has correct permissions
-RUN dos2unix entrypoint.sh \
+RUN dos2unix entrypoint.sh healthcheck.sh \
     && chmod +x entrypoint.sh \
+    && chmod +x healthcheck.sh \
     && mkdir -p /tmp \
     && chmod 1777 /tmp
 
@@ -33,7 +35,7 @@ EXPOSE 2333
 # Health check to see if Lavalink is ready
 # Requires LAVALINK_PORT and LAVALINK_PASSWORD env vars to be set
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=5 \
-  CMD curl --fail -H "Authorization: ${LAVALINK_PASSWORD}" http://localhost:${LAVALINK_PORT:-2333}/version || exit 1
+  CMD /bin/sh /app/healthcheck.sh || exit 1
 
 # Run the entrypoint script which generates application.yml and starts Lavalink
 # Use absolute path and explicitly invoke sh to bypass shebang issues

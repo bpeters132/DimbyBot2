@@ -3,81 +3,82 @@ import {
     getDownloadMetadataStoreFromDatabase,
     replaceDownloadMetadataStoreInDatabase,
 } from "../repositories/downloadMetadataRepository.js"
+import { loggerFromPartial } from "./loggerFromPartial.js"
 
 let downloadMetadataCache: DownloadsMetadataStore = {}
 let initialized = false
 
-function getLogger(loggerInstance: Partial<LoggerInterface> | undefined): LoggerInterface {
-    if (
-        loggerInstance &&
-        typeof loggerInstance.debug === "function" &&
-        typeof loggerInstance.info === "function" &&
-        typeof loggerInstance.warn === "function" &&
-        typeof loggerInstance.error === "function"
-    ) {
-        const logger = loggerInstance as Partial<LoggerInterface>
-        return {
-            debug: (text: string, ...args: unknown[]) => logger.debug!(text, ...args),
-            info: (text: string, ...args: unknown[]) => logger.info!(text, ...args),
-            warn: (text: string, ...args: unknown[]) => logger.warn!(text, ...args),
-            error: (text: string, ...args: unknown[]) => logger.error!(text, ...args),
-            setDebugEnabled:
-                typeof logger.setDebugEnabled === "function"
-                    ? logger.setDebugEnabled.bind(logger)
-                    : () => {},
-            getDebugEnabled:
-                typeof logger.getDebugEnabled === "function"
-                    ? logger.getDebugEnabled.bind(logger)
-                    : () => false,
-            getLogFilePath:
-                typeof logger.getLogFilePath === "function"
-                    ? logger.getLogFilePath.bind(logger)
-                    : () => null,
-        }
-    }
-    return {
-        debug: () => {},
-        info: () => {},
-        warn: () => {},
-        error: () => {},
-        setDebugEnabled: () => {},
-        getDebugEnabled: () => false,
-        getLogFilePath: () => null,
-    }
+function cloneStore(store: DownloadsMetadataStore): DownloadsMetadataStore {
+    return typeof structuredClone === "function"
+        ? structuredClone(store)
+        : (JSON.parse(JSON.stringify(store)) as DownloadsMetadataStore)
 }
 
 /** Loads download metadata from the database into the in-memory cache. */
 export async function initializeDownloadMetadataStore(
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<void> {
-    const logger = getLogger(loggerInstance)
-    const loaded = await getDownloadMetadataStoreFromDatabase()
-    downloadMetadataCache = loaded
-    initialized = true
-    logger.info(
-        `[downloadMetadata] Loaded ${Object.keys(downloadMetadataCache).length} metadata entries from database.`
-    )
+    const logger = loggerFromPartial(loggerInstance)
+    try {
+        const loaded = await getDownloadMetadataStoreFromDatabase()
+        downloadMetadataCache = loaded
+        initialized = true
+        logger.info(
+            `[downloadMetadata] Loaded ${Object.keys(downloadMetadataCache).length} metadata entries from database.`
+        )
+    } catch (error: unknown) {
+        logger.error("[downloadMetadata] Failed to load metadata from database:", error)
+        initialized = false
+        throw error
+    }
 }
 
-/** Returns the mutable metadata cache used by command handlers and utilities. */
+/** Returns a clone of the metadata cache so callers cannot mutate shared state. */
 export function getDownloadMetadataStore(): DownloadsMetadataStore {
-    return downloadMetadataCache
+    if (!initialized) {
+        throw new Error("Download metadata store not initialized")
+    }
+    return cloneStore(downloadMetadataCache)
 }
 
-/** Persists the provided metadata map to the database and updates the in-memory cache. */
+/** Persists the provided metadata map to the database and replaces the in-memory cache with a deep clone. */
 export async function saveDownloadMetadataStore(
     metadata: DownloadsMetadataStore,
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<boolean> {
-    const logger = getLogger(loggerInstance)
+    const logger = loggerFromPartial(loggerInstance)
+    const previousCache = cloneStore(downloadMetadataCache)
+    const nextCache = cloneStore(metadata)
     try {
-        const result = await replaceDownloadMetadataStoreInDatabase(metadata)
-        downloadMetadataCache = metadata
-        initialized = true
+        const result = await replaceDownloadMetadataStoreInDatabase(nextCache)
+        try {
+            if (result.skippedEntries.length === 0) {
+                downloadMetadataCache = nextCache
+                initialized = true
+            } else {
+                const persistedCache = await getDownloadMetadataStoreFromDatabase()
+                downloadMetadataCache = cloneStore(persistedCache)
+                initialized = true
+            }
+        } catch (reloadErr: unknown) {
+            logger.warn(
+                "[downloadMetadata] replaceDownloadMetadataStoreInDatabase succeeded but cache reload failed; keeping previous in-memory cache",
+                reloadErr
+            )
+            downloadMetadataCache = previousCache
+            initialized = true
+            return false
+        }
+        if (result.skippedEntries.length > 0) {
+            logger.warn(
+                `[downloadMetadata] Skipped ${result.skippedEntries.length} metadata row(s) (no resolvable guild id); cache reloaded from database.`
+            )
+        }
         logger.debug(
             `[downloadMetadata] Saved metadata store to database (${result.rowsWritten} rows).`
         )
-        return true
+        // Success only when nothing was skipped (including empty saves: 0 rows written, 0 skipped).
+        return result.skippedEntries.length === 0
     } catch (error: unknown) {
         logger.error("[downloadMetadata] Failed saving metadata store to database:", error)
         return false

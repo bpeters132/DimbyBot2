@@ -108,6 +108,13 @@ export interface DownloadMetadataRecord {
     metadata: DownloadFileMetadata
 }
 
+/** Row-level skips from {@link replaceDownloadMetadataStoreInDatabase} (e.g. unresolvable guild id). */
+export type DownloadMetadataStoreSkippedEntry = {
+    key: string
+    reason: "unresolvable-guild-id"
+    fileName: string
+}
+
 /** Result summary for one JSON-to-database migration source. */
 export interface JsonMigrationResult {
     source: "guildSettings" | "downloadMetadata"
@@ -116,14 +123,31 @@ export interface JsonMigrationResult {
     migratedCount: number
     failedCount: number
     reason?: string
+    /** When {@link JsonMigrationOptions.allowPartialMigration} is true and some rows failed validation. */
+    partial?: boolean
+    /** Keys or descriptions of entries that failed validation (partial mode only). */
+    failedEntries?: string[]
+    /** Rows skipped during DB write for download metadata migration (e.g. unresolvable guild id). */
+    downloadMetadataWriteSkipped?: DownloadMetadataStoreSkippedEntry[]
 }
 
 export type ReplaceGuildSettingsStoreFn = (
     store: GuildSettingsStore
-) => Promise<{ rowsWritten: number }>
+) => Promise<{ rowsUpserted: number; rowsDeleted: number; rowsAffected: number }>
+
+export type ReplaceDownloadMetadataStoreResult = {
+    rowsWritten: number
+    skippedEntries: DownloadMetadataStoreSkippedEntry[]
+}
+
 export type ReplaceDownloadMetadataStoreFn = (
     store: DownloadsMetadataStore
-) => Promise<{ rowsWritten: number }>
+) => Promise<ReplaceDownloadMetadataStoreResult>
+
+/** Options for JSON → DB migration helpers. */
+export interface JsonMigrationOptions {
+    allowPartialMigration?: boolean
+}
 
 export type DiscordLogForwarder = (level: DiscordLogLevelName, message: string) => void
 
@@ -138,6 +162,23 @@ export interface LoggerInterface {
     /** When set, each log line is forwarded (e.g. to Discord) after console/file logging. */
     setDiscordForwarder?(callback: DiscordLogForwarder | null): void
 }
+
+export interface ApiErrorPayload {
+    error: string
+    details?: string
+}
+
+export interface ApiSuccessPayload<T> {
+    ok: true
+    data: T
+}
+
+export interface ApiFailurePayload {
+    ok: false
+    error: ApiErrorPayload
+}
+
+export type ApiResponse<T> = ApiSuccessPayload<T> | ApiFailurePayload
 
 /** Tracks a user who left voice while RRQ is active and has queued tracks. */
 export interface DisconnectedRRQUser {

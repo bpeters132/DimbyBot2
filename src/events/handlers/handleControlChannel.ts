@@ -359,7 +359,16 @@ export async function updateControlMessage(
  * Called once after login; staggered to reduce rate limits.
  */
 export async function refreshAllControlMessages(client: BotClient): Promise<void> {
-    const store = getGuildSettings()
+    let store: ReturnType<typeof getGuildSettings>
+    try {
+        store = getGuildSettings()
+    } catch (err: unknown) {
+        client.error(
+            "[ControlHandler] refreshAllControlMessages: getGuildSettings failed; skipping startup control refresh.",
+            err
+        )
+        return
+    }
     const guildIds = Object.keys(store).filter(
         (id) => store[id]?.controlChannelId && store[id]?.controlMessageId
     )

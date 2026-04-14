@@ -5,9 +5,16 @@
 # Node specific
 node_modules
 dist
+src/web/.next
+.next
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Runtime / local data (exclude from image build context)
+downloads/
+logs/
+storage/
 
 # Docker specific
 Dockerfile
@@ -31,4 +38,4 @@ Lavalink/application.yml
 lavaNodesConfig.js
 
 # Don't include Lavalink build context in bot build context
-Lavalink/ 
+Lavalink/

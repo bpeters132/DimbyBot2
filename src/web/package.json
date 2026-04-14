@@ -1,0 +1,42 @@
+{
+    "name": "dimbybot2-web",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "predev": "node scripts/predev.js",
+        "dev": "next dev --webpack --hostname 0.0.0.0",
+        "typecheck": "tsc --noEmit",
+        "build": "next build --webpack",
+        "start": "next start"
+    },
+    "dependencies": {
+        "@prisma/adapter-pg": "^7.7.0",
+        "@prisma/client": "^7.7.0",
+        "@radix-ui/react-slot": "^1.2.3",
+        "better-auth": "^1.6.2",
+        "class-variance-authority": "^0.7.1",
+        "clsx": "^2.1.1",
+        "lavalink-client": "^2.9.9",
+        "lucide-react": "^1.8.0",
+        "next": "^16.2.3",
+        "next-themes": "^0.4.6",
+        "react": "^19.2.5",
+        "react-dom": "^19.2.5",
+        "sonner": "^2.0.7",
+        "tailwind-merge": "^3.5.0",
+        "ws": "^8.20.0"
+    },
+    "devDependencies": {
+        "@tailwindcss/postcss": "^4.2.2",
+        "@types/node": "^22.13.10",
+        "@types/react": "^19.2.14",
+        "@types/react-dom": "^19.2.3",
+        "@types/ws": "^8.18.1",
+        "postcss": "^8.5.9",
+        "postcss-scss": "^4.0.9",
+        "stylelint": "^16.14.1",
+        "stylelint-scss": "^6.11.1",
+        "tailwindcss": "^4.2.2",
+        "typescript": "^5.8.2"
+    }
+}

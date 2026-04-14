@@ -3,6 +3,9 @@ node_modules/
 
 # TypeScript build output
 dist/
+src/web/.next/
+next-env.d.ts
+src/web/next-env.d.ts
 
 # Logs
 logs
@@ -11,6 +14,9 @@ yarn-error.log
 
 # Optional config files (use .example)
 .env
+.env.*
+!.env.example
+!**/.env.example
 
 # Generated config files
 Lavalink/application.yml
@@ -18,13 +24,16 @@ lavaNodesConfig.js
 
 # Data storage (e.g., guild settings)
 storage/
-storage/guild_settings.json
+
+# Runtime media artifacts
+downloads/
 
 # Cursor
 .cursor/
-.cursor/rules/code-style.mdc
 
 # VSCode
 .vscode/
-.vscode/settings.json
 .kilocode/mcp.json
+
+# TypeScript incremental build info (web subproject)
+*.tsbuildinfo

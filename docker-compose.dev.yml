@@ -1,5 +1,7 @@
 # Local development overrides merged with docker-compose.yml (e.g. dev-env.sh, Makefile, yarn docker:dev:*).
-# Production deploy (.github/workflows/deploy.yml) copies only docker-compose.yml — this file is never used on the server.
+# IMPORTANT: Requires Docker Compose v2.24.4+ (`ports: !override` below). Older Compose fails with an "unknown tag" error — upgrade Docker Desktop / the compose plugin (see README Prerequisites).
+# Production deploy copies `docker-compose.yml` + `docker-compose.dashboard.yml` (see `.github/workflows/deploy.yml`).
+# This file is never used on the server.
 services:
     dimbybot:
         build:
@@ -7,20 +9,40 @@ services:
             dockerfile: Dockerfile.dev # Use the development Dockerfile
         image: dimbybot-dev # Optional: Give the dev image a distinct name
         command: yarn dev # Override the default command/entrypoint to run nodemon
+        # `ports: !override` replaces the base `dimbybot` publish list (Compose v2.24.4+); see README prerequisites.
+        # Do not publish WEB_PORT/3000 here — that is for the Next.js dashboard (`yarn dev:web` on the host, or `dimbybot-web` in production).
+        ports: !override
+            - "${BOT_API_HOST:-127.0.0.1}:${BOT_API_PORT:-3001}:${BOT_API_PORT:-3001}"
         volumes:
             # Mount the entire source code directory into the container
             # Note: Exclude node_modules to use the ones installed in the container
             - ./:/app
             - /app/node_modules # Anonymous volume to prevent local node_modules overwrite
-            # Override dimbybot-storage from docker-compose.yml: otherwise /app/storage is a named
-            # volume and `compose down -v` removes guild_settings.json (incl. discord-log routes).
+            # Hide host-only nested install so `tsc -w` in the image does not see two lavalink-client copies.
+            - /app/src/web/node_modules
+            # Writable `dist/` for `tsc -w`: host `./dist` on bind mount is often root/other UID vs `devuser` → EACCES and missing `.js` at runtime.
+            - /app/dist
+            # Bind ./storage for dev. Guild settings live in Postgres; use `yarn docker:dev:down`
+            # (no -v) or `./dev-env.sh down` so the `postgres-data` volume is kept. Only
+            # `yarn docker:dev:down:volumes` / `./dev-env.sh down-volumes` wipes the DB.
             # Do not bind ./downloads here — Lavalink still uses the shared dimbybot-downloads volume.
             - ./storage:/app/storage
         environment:
             # Ensure NODE_ENV is set for development if needed by any libs
             - NODE_ENV=development
+            - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:3000}
+            - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+            - CLIENT_ID=${CLIENT_ID:?CLIENT_ID is required for dev (Discord OAuth)}
+            - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:?DISCORD_CLIENT_SECRET is required for dev}
+            - BOT_API_PORT=${BOT_API_PORT:-3001}
+            # Host / tooling may call the API from non-RFC1918 addresses; default off in dev (override in .env if needed).
+            - BOT_API_REQUIRE_PRIVATE_CLIENT_IP=${BOT_API_REQUIRE_PRIVATE_CLIENT_IP:-0}
             # Force color output for libraries like 'colors' or 'chalk'
             - FORCE_COLOR=true
+            # Docker Desktop bind mounts can miss fs events; force polling for hot reload.
+            - CHOKIDAR_USEPOLLING=true
+            - WATCHPACK_POLLING=true
+            - WATCHPACK_POLLING_INTERVAL=1000
 
     lavalink: # Add the lavalink service definition for development
         build:
@@ -28,6 +50,9 @@ services:
             dockerfile: Dockerfile # Assuming the Dockerfile is named 'Dockerfile'
         image: lavalink-dev # Optional: Give the dev image a distinct name
 
+    postgres-db:
+        ports:
+            - "127.0.0.1:5432:5432"
 
     # Define other services ONLY if you need to override something specific
     # for them in development (e.g., different ports, debug flags).

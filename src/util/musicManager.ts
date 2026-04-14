@@ -19,6 +19,7 @@ import {
     rebalancePlayerQueueRoundRobin,
     stampRequesterUserIdOnTracks,
 } from "./rrqDisconnect.js"
+import { downloadMetadataFileBelongsToGuild } from "./downloadMetadataKeys.js"
 import { getDownloadMetadataStore } from "./downloadMetadataStore.js"
 
 type SearchAttempt =
@@ -26,6 +27,38 @@ type SearchAttempt =
     | { source: string; success: false; error?: string }
 
 type PlayerSearchResult = Awaited<ReturnType<Player["search"]>>
+const playerStartLocks = new WeakMap<Player, Promise<void>>()
+
+/**
+ * Prevents concurrent check-then-play races by serializing start attempts per player.
+ */
+export async function startPlaybackIfNeeded(player: Player): Promise<void> {
+    // After waiting on another caller’s lock, re-check: that run may have left playback idle while
+    // new tracks were enqueued, so we must not return without attempting start under our own lock.
+    for (;;) {
+        const existingLock = playerStartLocks.get(player)
+        if (existingLock) {
+            await existingLock
+            continue
+        }
+
+        const startPromise = (async () => {
+            if (!player.playing && (player.queue.current || player.queue.tracks.length > 0)) {
+                await player.play()
+            }
+        })()
+
+        playerStartLocks.set(player, startPromise)
+        try {
+            await startPromise
+        } finally {
+            if (playerStartLocks.get(player) === startPromise) {
+                playerStartLocks.delete(player)
+            }
+        }
+        return
+    }
+}
 
 function syntheticTrackResult(track: Track | UnresolvedTrack): PlayerSearchResult {
     return {
@@ -36,7 +69,7 @@ function syntheticTrackResult(track: Track | UnresolvedTrack): PlayerSearchResul
     } as unknown as PlayerSearchResult
 }
 
-async function ensurePlayerConnected(
+export async function ensurePlayerConnected(
     client: BotClient,
     player: Player,
     voiceChannel: VoiceBasedChannel
@@ -45,6 +78,8 @@ async function ensurePlayerConnected(
         client.debug(
             `[MusicManager] Lavalink player not connected or in wrong channel. Player state: Connected=${player.connected}, Player VC=${player.voiceChannelId}, Target VC=${voiceChannel.id}. Reconnecting/Moving.`
         )
+        const previousVoiceChannelId = player.voiceChannelId
+        player.voiceChannelId = voiceChannel.id
         const timeoutMs = 10000
         let disposeMoveWait: (() => void) | undefined
         const movePromise = new Promise<void>((resolve, reject) => {
@@ -90,6 +125,7 @@ async function ensurePlayerConnected(
             await Promise.all([player.connect(), movePromise])
         } catch (error) {
             disposeMoveWait?.()
+            player.voiceChannelId = previousVoiceChannelId
             const msg = error instanceof Error ? error.message : String(error)
             if (msg === "Lavalink player failed to confirm connection.") {
                 client.warn(
@@ -131,6 +167,7 @@ export async function handleQueryAndPlay(
     let searchError: Error | null = null
     let searchAttempts: SearchAttempt[] = []
     let skipLocalMatch = false
+    let previousVoiceChannelIdBeforeEnsure: string | null = null
 
     try {
         if (
@@ -237,7 +274,9 @@ export async function handleQueryAndPlay(
                     const entries = await fs.promises.readdir(downloadsDir)
                     files = entries
                         .filter((file) => file.endsWith(".wav"))
-                        .filter((file) => metadata[file]?.guildId === guildId)
+                        .filter((file) =>
+                            downloadMetadataFileBelongsToGuild(metadata, file, guildId)
+                        )
                         .map((f) => ({
                             name: f,
                             path: path.join(downloadsDir, f),
@@ -422,7 +461,7 @@ export async function handleQueryAndPlay(
                     client.debug(
                         `[MusicManager] Existing Lavalink player found. State - Connected: ${newPlayerInstance.connected}, VC: ${newPlayerInstance.voiceChannelId}. Ensuring target VC.`
                     )
-                    newPlayerInstance.voiceChannelId = voiceChannel.id
+                    previousVoiceChannelIdBeforeEnsure = newPlayerInstance.voiceChannelId
                     newPlayerInstance.textChannelId = textChannel.id
                 }
                 player = newPlayerInstance
@@ -577,6 +616,8 @@ export async function handleQueryAndPlay(
             )
             try {
                 await ensurePlayerConnected(client, player, voiceChannel)
+                player.voiceChannelId = voiceChannel.id
+                previousVoiceChannelIdBeforeEnsure = null
 
                 if (isPlaylistEnqueue && searchResult.tracks.length > 0) {
                     stampRequesterUserIdOnTracks(searchResult.tracks, requester.id)
@@ -605,13 +646,14 @@ export async function handleQueryAndPlay(
                 client.debug(
                     `[MusicManager] Before play check: player.playing=${player.playing}, player.queue.tracks.length=${player.queue.tracks.length}`
                 )
-                if (!player.playing && player.queue.tracks.length > 0) {
-                    await player.play()
-                    client.debug(
-                        `[MusicManager] Lavalink player started playing [${player.queue.current?.info?.title || "track from queue"}].`
-                    )
-                }
+                await startPlaybackIfNeeded(player)
+                client.debug(
+                    `[MusicManager] Lavalink player started playing [${player.queue.current?.info?.title || "track from queue"}].`
+                )
             } catch (playError: unknown) {
+                if (previousVoiceChannelIdBeforeEnsure !== null) {
+                    player.voiceChannelId = previousVoiceChannelIdBeforeEnsure
+                }
                 client.error(`[MusicManager] Error starting Lavalink player:`, playError)
                 const originalFeedback = feedbackText
                 const pem = playError instanceof Error ? playError.message : String(playError)

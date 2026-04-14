@@ -1,0 +1,108 @@
+import Image from "next/image"
+import Link from "next/link"
+import type { GuildListActionResult } from "@/server/guild.actions"
+import type { GuildListItem } from "@/types/web"
+
+type GuildListProps = {
+    result: GuildListActionResult
+}
+
+/** Accepts loose API data so a single bad row cannot crash the dashboard. */
+function parseSafeGuildListItem(entry: unknown): GuildListItem | null {
+    if (!entry || typeof entry !== "object") return null
+    const g = entry as Record<string, unknown>
+    if (typeof g.name !== "string" || g.name.trim().length === 0) return null
+    const name = g.name.trim()
+    const idRaw = g.id
+    if (typeof idRaw !== "string") return null
+    const idStr = idRaw.trim()
+    if (!/^\d+$/.test(idStr)) return null
+    const iconRaw = g.iconUrl
+    const iconUrl = typeof iconRaw === "string" ? iconRaw.trim() : null
+    const mc = g.memberCount
+    const memberCount = typeof mc === "number" && Number.isInteger(mc) && mc >= 0 ? mc : null
+    return { id: idStr, name, iconUrl, memberCount }
+}
+
+function isValidGuildIconUrl(url: string | null | undefined): url is string {
+    if (typeof url !== "string") return false
+    const trimmed = url.trim()
+    if (!trimmed) return false
+    return /^https:\/\/(?:cdn\.discordapp\.com|images\.discordapp\.net)(?:\/|$)/i.test(trimmed)
+}
+
+/** Renders the dashboard guild list from a server-loaded result (no client-side refetch race). */
+export function GuildList({ result }: GuildListProps) {
+    if (result.ok === false) {
+        return (
+            <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm">
+                <p className="text-destructive">{result.error}</p>
+                <Link href="/status" className="text-primary underline-offset-4 hover:underline">
+                    Check service status
+                </Link>
+            </div>
+        )
+    }
+
+    const { data } = result
+    const guilds = data.guilds
+    const rawList = Array.isArray(guilds) ? guilds : null
+    const guildsList =
+        rawList?.map(parseSafeGuildListItem).filter((g): g is GuildListItem => g !== null) ?? []
+
+    if (!rawList || (rawList.length > 0 && guildsList.length === 0)) {
+        return (
+            <div className="rounded border bg-card p-4 text-card-foreground">
+                <p>Unable to display the guild list (invalid response).</p>
+            </div>
+        )
+    }
+
+    if (guildsList.length === 0) {
+        return (
+            <div className="rounded border bg-card p-4 text-card-foreground">
+                <p>The bot is not in any of your servers yet.</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                    Use <strong>Add bot to a server</strong> in the header to invite it to another
+                    server you manage.
+                </p>
+            </div>
+        )
+    }
+
+    return (
+        <div className="grid gap-3 md:grid-cols-2">
+            {guildsList.map((guild) => (
+                <Link
+                    href={`/dashboard/${guild.id}`}
+                    key={guild.id}
+                    className="flex items-center gap-3 rounded border bg-card p-3 no-underline hover:bg-accent hover:text-accent-foreground"
+                >
+                    {isValidGuildIconUrl(guild.iconUrl) ? (
+                        <Image
+                            src={guild.iconUrl}
+                            alt={`${guild.name} icon`}
+                            width={40}
+                            height={40}
+                            className="h-10 w-10 rounded-full"
+                        />
+                    ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                            {guild.name.slice(0, 1)}
+                        </div>
+                    )}
+                    <div>
+                        <div className="font-medium">{guild.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                            {typeof guild.memberCount === "number"
+                                ? guild.memberCount === 1
+                                    ? "1 member"
+                                    : `${guild.memberCount} members`
+                                : "Member count unavailable"}
+                        </div>
+                    </div>
+                </Link>
+            ))}
+        </div>
+    )
+}

@@ -6,17 +6,7 @@ import type { PrismaClient as PrismaClientType } from "@prisma/client"
 
 const { PrismaClient } = prismaClientPkg
 
-const databaseUrl = process.env.DATABASE_URL
-if (!databaseUrl || databaseUrl.trim() === "") {
-    throw new Error(
-        "DATABASE_URL environment variable is required but not set. Please configure DATABASE_URL before starting the application."
-    )
-}
-
-const adapter = new PrismaPg({
-    connectionString: databaseUrl,
-})
-const prisma = new PrismaClient({ adapter })
+let prisma: PrismaClientType | undefined
 
 function getLogger(loggerInstance?: Partial<LoggerInterface>): LoggerInterface {
     if (
@@ -41,8 +31,47 @@ function getLogger(loggerInstance?: Partial<LoggerInterface>): LoggerInterface {
     }
 }
 
-/** Returns the process-wide Prisma client singleton. */
+function sanitizeMigrateOutput(text: string): string {
+    return text
+        .replace(/postgres(?:ql)?:\/\/[^\s"'`]+/gi, "[REDACTED_DATABASE_URL]")
+        .replace(/(password|passwd|pwd)\s*[=:]\s*[^\s"'`]+/gi, "$1=[REDACTED]")
+        .replace(/(token|secret|apikey|api[_-]?key)\s*[=:]\s*[^\s"'`]+/gi, "$1=[REDACTED]")
+        .replace(/Bearer\s+[^\s"'`]+/gi, "Bearer [REDACTED]")
+}
+
+function classifyMigrateFailure(text: string): { tag: string; category: string } {
+    const lower = text.toLowerCase()
+    if (
+        /\bp1001\b/i.test(text) ||
+        /\beconnrefused\b/i.test(text) ||
+        lower.includes("connection refused") ||
+        lower.includes("can't reach database server")
+    ) {
+        return { tag: "[network]", category: "database connectivity failure" }
+    }
+    if (/\beacces\b/i.test(text) || lower.includes("permission denied")) {
+        return { tag: "[permission]", category: "permission failure" }
+    }
+    if (
+        /\bp2002\b/i.test(text) ||
+        /\bp2003\b/i.test(text) ||
+        /\bp3006\b/i.test(text) ||
+        /\bp3018\b/i.test(text) ||
+        lower.includes("schema") ||
+        lower.includes("constraint")
+    ) {
+        return { tag: "[schema-conflict]", category: "schema or constraint failure" }
+    }
+    return { tag: "[exit-code]", category: "migration command failure" }
+}
+
+/** Returns the process-wide Prisma client singleton after {@link initializeDatabaseConnection}. */
 export function getPrismaClient(): PrismaClientType {
+    if (!prisma) {
+        throw new Error(
+            "Database connection has not been initialized. Call initializeDatabaseConnection() first."
+        )
+    }
     return prisma
 }
 
@@ -51,6 +80,18 @@ export async function initializeDatabaseConnection(
     loggerInstance?: Partial<LoggerInterface>
 ): Promise<void> {
     const logger = getLogger(loggerInstance)
+    const databaseUrl = process.env.DATABASE_URL?.trim()
+    if (!databaseUrl) {
+        throw new Error(
+            "DATABASE_URL environment variable is required but not set. Please configure DATABASE_URL before starting the application."
+        )
+    }
+    if (!prisma) {
+        const adapter = new PrismaPg({
+            connectionString: databaseUrl,
+        })
+        prisma = new PrismaClient({ adapter })
+    }
     logger.info("[Database] Connecting to database...")
     await prisma.$connect()
     await prisma.$queryRaw`SELECT 1`
@@ -65,42 +106,88 @@ export async function runPrismaMigrateDeploy(
     logger.info("[Database] Running Prisma migrations (deploy)...")
 
     const yarnCommand = process.platform === "win32" ? "yarn.cmd" : "yarn"
+    const migrateEnv = { ...process.env }
+    if (typeof migrateEnv.DATABASE_URL === "string") {
+        migrateEnv.DATABASE_URL = migrateEnv.DATABASE_URL.trim()
+    }
     const child = spawn(
         yarnCommand,
         ["prisma", "migrate", "deploy", "--schema", "prisma/schema.prisma"],
         {
             cwd: process.cwd(),
-            env: process.env,
+            env: migrateEnv,
             stdio: ["ignore", "pipe", "pipe"],
         }
     )
 
     let stdout = ""
     let stderr = ""
+    let stdoutLineBuf = ""
+    let stderrLineBuf = ""
 
     child.stdout.on("data", (chunk: Buffer) => {
         const text = chunk.toString()
         stdout += text
-        logger.info(`[Database][migrate] ${text.trimEnd()}`)
+        stdoutLineBuf += text
+        const lines = stdoutLineBuf.split("\n")
+        stdoutLineBuf = lines.pop() ?? ""
+        for (const line of lines) {
+            logger.info(`[Database][migrate] ${sanitizeMigrateOutput(line)}`)
+        }
     })
 
     child.stderr.on("data", (chunk: Buffer) => {
         const text = chunk.toString()
         stderr += text
-        logger.warn(`[Database][migrate] ${text.trimEnd()}`)
+        stderrLineBuf += text
+        const lines = stderrLineBuf.split("\n")
+        stderrLineBuf = lines.pop() ?? ""
+        for (const line of lines) {
+            logger.warn(`[Database][migrate] ${sanitizeMigrateOutput(line)}`)
+        }
     })
 
     await new Promise<void>((resolve, reject) => {
         child.once("error", (error) => {
             reject(error)
         })
-        child.once("close", (code) => {
+        child.once("close", (code, signal) => {
+            if (stdoutLineBuf.trim()) {
+                logger.info(`[Database][migrate] ${sanitizeMigrateOutput(stdoutLineBuf).trimEnd()}`)
+            }
+            if (stderrLineBuf.trim()) {
+                logger.warn(`[Database][migrate] ${sanitizeMigrateOutput(stderrLineBuf).trimEnd()}`)
+            }
             if (code === 0) {
                 resolve()
                 return
             }
             const combined = [stdout.trim(), stderr.trim()].filter(Boolean).join("\n")
-            reject(new Error(`prisma migrate deploy failed with exit code ${code}\n${combined}`))
+            const redactedCombined = sanitizeMigrateOutput(combined)
+            logger.debug(
+                `[Database][migrate] Full migrate output on failure (${redactedCombined.length} chars):\n${redactedCombined}`
+            )
+            if (code === null) {
+                const signalText = signal ?? "unknown"
+                logger.warn(
+                    `[Database][migrate] [signal] prisma migrate deploy terminated by signal ${signalText}`
+                )
+                reject(
+                    new Error(
+                        `[signal] prisma migrate deploy failed due to signal ${signalText}. Output: ${redactedCombined || "(no output)"}`
+                    )
+                )
+                return
+            }
+            const classified = classifyMigrateFailure(redactedCombined)
+            logger.warn(
+                `[Database][migrate] ${classified.tag} prisma migrate deploy exited with code ${code} (${classified.category})`
+            )
+            reject(
+                new Error(
+                    `${classified.tag} prisma migrate deploy failed with exit code ${code} (${classified.category}). Output: ${redactedCombined || "(no output)"}`
+                )
+            )
         })
     })
 
@@ -110,10 +197,14 @@ export async function runPrismaMigrateDeploy(
 /** Attempts to close the Prisma connection gracefully. */
 export async function disconnectDatabase(loggerInstance?: Partial<LoggerInterface>): Promise<void> {
     const logger = getLogger(loggerInstance)
+    if (!prisma) {
+        return
+    }
     try {
         await prisma.$disconnect()
         logger.info("[Database] Database connection closed.")
     } catch (error: unknown) {
-        logger.warn("[Database] Failed to disconnect cleanly:", error)
+        const message = error instanceof Error ? error.message : String(error)
+        logger.warn("[Database] Failed to disconnect cleanly:", message)
     }
 }

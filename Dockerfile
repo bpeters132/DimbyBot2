@@ -23,7 +23,7 @@ COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
 
 COPY . .
-RUN yarn build \
+RUN yarn db:generate && yarn build:bot \
     && yarn install --production --frozen-lockfile \
     && test -f node_modules/.prisma/client/default.js
 
@@ -36,7 +36,8 @@ WORKDIR /app
 RUN apk add --no-cache \
     python3 \
     ffmpeg \
-    su-exec
+    su-exec \
+    wget
 
 COPY --from=builder /opt/venv /opt/venv
 RUN ln -sf /opt/venv/bin/yt-dlp /usr/bin/yt-dlp
@@ -64,9 +65,11 @@ RUN apk add --no-cache dos2unix \
     && apk del dos2unix \
     && chown -R node:node /app
 
-# Run as root so entrypoint can chown the mounted storage volume, then drop to `node` via su-exec.
+# Default non-root; entrypoint still supports `docker run --user 0` for one-time volume chown + su-exec.
+USER node
+
 ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
 
-# No HTTP /health on this Discord bot; probe PID 1 cmdline (Node after exec) with a short interval.
+# healthcheck.sh probes GET /health on BOT_API_PORT (Express bot API).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
     CMD /bin/sh /app/healthcheck.sh
