@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto"
 import { headers } from "next/headers"
 import { auth, type BetterAuthSession } from "@/auth"
+import { sanitizeErrorText } from "@/lib/sanitize-log-text.js"
 
 export type SessionReadSuccess = {
     ok: true
@@ -28,10 +29,11 @@ export async function readSessionSafe(): Promise<SessionReadResult> {
     } catch (e: unknown) {
         const correlationId = randomUUID()
         const name = e instanceof Error ? e.name : "Error"
+        const rawMessage = e instanceof Error ? e.message : String(e)
         console.error("[auth-session] failed to load session", {
             correlationId,
             name,
-            message: "[redacted]",
+            message: sanitizeErrorText(rawMessage, 800),
         })
         return { ok: false, message: "Failed to load session", correlationId }
     }

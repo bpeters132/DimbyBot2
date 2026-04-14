@@ -6,7 +6,9 @@ import { writeAuditLog } from "./audit-log.js"
  *
  * **Runtime split**
  * - **Next.js** (`auth.ts`): OAuth callbacks, sign-in UI, `nextCookies()`, and `getSession` in RSC/server actions.
- *   `BETTER_AUTH_URL` must be the **dashboard origin** (e.g. `http://localhost:3000`).
+ *   `BETTER_AUTH_URL` must be the **public dashboard origin** you use in the browser (production:
+ *   `https://dashboard.dimbybot.com`; local dev: `http://localhost:3000`). Better Auth `trustedOrigins` follows this
+ *   value only — there is no separate trusted-origins env var.
  * - **Bot / Express** (`auth-node.ts`): Validates the same session cookies against the same Postgres when handling
  *   `/api/guilds/*` and `/ws`. No Next.js runtime; do not import `better-auth/next-js` there.
  *
