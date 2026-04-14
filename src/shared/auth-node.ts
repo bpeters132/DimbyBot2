@@ -1,11 +1,11 @@
 import { betterAuth } from "better-auth"
 import { prismaAdapter } from "better-auth/adapters/prisma"
-import { betterAuthBaseConfig } from "./auth-base-config.js"
+import { getBetterAuthBaseConfig } from "./auth-base-config.js"
 import { getWebPrismaClient } from "../lib/webPrisma.js"
 
 function createAuthInstance() {
     return betterAuth({
-        ...betterAuthBaseConfig,
+        ...getBetterAuthBaseConfig(),
         database: prismaAdapter(getWebPrismaClient(), { provider: "postgresql" }),
     })
 }
@@ -30,7 +30,10 @@ function initAuth(): AuthInstance {
  */
 export const auth: AuthInstance = new Proxy({} as AuthInstance, {
     get(_, prop) {
-        return (initAuth() as never)[prop]
+        return Reflect.get(initAuth() as object, prop) as never
+    },
+    has(_, prop) {
+        return Reflect.has(initAuth() as object, prop)
     },
 })
 
