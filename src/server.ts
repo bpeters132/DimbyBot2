@@ -198,6 +198,7 @@ async function run(): Promise<void> {
                 return
             }
             void (async () => {
+                const currentWss = wss
                 try {
                     const session = await connectionManager.authenticateUpgrade(req)
                     if (!session) {
@@ -205,9 +206,22 @@ async function run(): Promise<void> {
                         socket.destroy()
                         return
                     }
-                    wss.handleUpgrade(req, socket, head, (ws) => {
+                    if (!currentWss) {
+                        socket.write("HTTP/1.1 503 Service Unavailable\r\n\r\n")
+                        socket.destroy()
+                        return
+                    }
+                    currentWss.handleUpgrade(req, socket, head, (ws) => {
+                        if (!currentWss) {
+                            try {
+                                ws.close()
+                            } catch {
+                                /* ignore */
+                            }
+                            return
+                        }
                         connectionManager.registerConnection(ws, session.userId)
-                        wss.emit("connection", ws, req)
+                        currentWss.emit("connection", ws, req)
                     })
                 } catch (error) {
                     logger.error("WebSocket upgrade authentication failed:", error)

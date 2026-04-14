@@ -1,1 +1,1 @@
-export { getBotApiOrigin } from "../../lib/bot-api-origin.js"
+export { getBotApiOrigin } from "@/shared/bot-api-origin"

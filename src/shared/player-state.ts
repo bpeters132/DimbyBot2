@@ -19,9 +19,21 @@ const REQUESTER_FETCH_CONCURRENCY = 6
 const REQUESTER_MISS_CACHE_TTL_MS = 120_000
 const REQUESTER_MISS_CACHE_PURGE_INTERVAL_MS = 60_000
 const REQUESTER_MISS_CACHE_MAX_ENTRIES = 10_000
-const requesterMissCache = new Map<string, number>()
+
+const missPurgeGlobal = globalThis as typeof globalThis & {
+    __dimbyRequesterMissPurgeTimer?: ReturnType<typeof setInterval>
+    __dimbyRequesterMissCache?: Map<string, number>
+}
+
+function getRequesterMissCache(): Map<string, number> {
+    if (!missPurgeGlobal.__dimbyRequesterMissCache) {
+        missPurgeGlobal.__dimbyRequesterMissCache = new Map()
+    }
+    return missPurgeGlobal.__dimbyRequesterMissCache
+}
 
 function purgeExpiredRequesterMissCache(): void {
+    const requesterMissCache = getRequesterMissCache()
     const now = Date.now()
     for (const [key, expiresAt] of requesterMissCache.entries()) {
         if (expiresAt < now) {
@@ -31,6 +43,7 @@ function purgeExpiredRequesterMissCache(): void {
 }
 
 function setRequesterMissCacheEntry(key: string, expiresAt: number): void {
+    const requesterMissCache = getRequesterMissCache()
     requesterMissCache.set(key, expiresAt)
     // Intentionally FIFO eviction by insertion order: capacity is bounded by
     // REQUESTER_MISS_CACHE_MAX_ENTRIES, and freshness is handled by TTL expiry.
@@ -41,10 +54,8 @@ function setRequesterMissCacheEntry(key: string, expiresAt: number): void {
     }
 }
 
-const missPurgeGlobal = globalThis as typeof globalThis & {
-    __dimbyRequesterMissPurgeTimer?: ReturnType<typeof setInterval>
-}
 if (typeof setInterval !== "undefined" && !missPurgeGlobal.__dimbyRequesterMissPurgeTimer) {
+    getRequesterMissCache()
     const timer = setInterval(
         purgeExpiredRequesterMissCache,
         REQUESTER_MISS_CACHE_PURGE_INTERVAL_MS
@@ -172,11 +183,11 @@ async function buildRequesterDisplayMap(
             map.set(id, cached)
         } else {
             const missCacheKey = `${guildId}:${id}`
-            const missExpiresAt = requesterMissCache.get(missCacheKey)
+            const missExpiresAt = getRequesterMissCache().get(missCacheKey)
             if (missExpiresAt && missExpiresAt > Date.now()) {
                 continue
             }
-            requesterMissCache.delete(missCacheKey)
+            getRequesterMissCache().delete(missCacheKey)
             needFetch.add(id)
         }
     }
@@ -209,7 +220,7 @@ async function buildRequesterDisplayMap(
                     const label = member.displayName || u.globalName || u.username
                     if (label) {
                         map.set(id, label)
-                        requesterMissCache.delete(missCacheKey)
+                        getRequesterMissCache().delete(missCacheKey)
                     } else {
                         map.delete(id)
                     }

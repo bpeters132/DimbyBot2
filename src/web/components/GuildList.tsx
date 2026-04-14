@@ -12,15 +12,16 @@ function parseSafeGuildListItem(entry: unknown): GuildListItem | null {
     if (!entry || typeof entry !== "object") return null
     const g = entry as Record<string, unknown>
     if (typeof g.name !== "string" || g.name.trim().length === 0) return null
+    const name = g.name.trim()
     const idRaw = g.id
-    if (typeof idRaw !== "string" && typeof idRaw !== "number") return null
-    const idStr = typeof idRaw === "string" ? idRaw.trim() : String(idRaw)
+    if (typeof idRaw !== "string") return null
+    const idStr = idRaw.trim()
     if (!/^\d+$/.test(idStr)) return null
     const iconRaw = g.iconUrl
-    const iconUrl = typeof iconRaw === "string" ? iconRaw : null
+    const iconUrl = typeof iconRaw === "string" ? iconRaw.trim() : null
     const mc = g.memberCount
     const memberCount = typeof mc === "number" && Number.isInteger(mc) && mc >= 0 ? mc : null
-    return { id: idStr, name: g.name, iconUrl, memberCount }
+    return { id: idStr, name, iconUrl, memberCount }
 }
 
 function isValidGuildIconUrl(url: string | null | undefined): url is string {

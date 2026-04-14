@@ -12,26 +12,17 @@ export enum WebPermission {
     DEVELOPER_ACCESS = "DEVELOPER_ACCESS",
 }
 
+/** Guild fields read from `client.guilds.cache` for permission resolution (matches typical `Guild` cache entries). */
+type PermissionCachedGuild = Pick<Guild, "voiceStates" | "members" | "ownerId">
+
 /**
  * Minimal Discord client shape for permission resolution in the web stack.
  * Intentionally duck-typed so this module does not depend on the full `discord.js` `Client` type;
- * callers may pass a partial client — only the fields below are read. Do not assume full Guild
- * semantics on cached entries beyond what this file uses.
+ * callers may pass a partial client — only the fields below are read.
  */
 type PermissionClient = {
     guilds: {
-        cache: Map<
-            string,
-            {
-                members: {
-                    me?: { voice?: { channelId?: string | null } | null } | null
-                    fetch: (userId: string) => Promise<{
-                        permissions: { has: (permission: bigint) => boolean }
-                    } | null>
-                }
-                voiceStates: { cache: Map<string, { channelId?: string | null }> }
-            }
-        >
+        cache: Map<string, PermissionCachedGuild>
     }
     lavalink: {
         getPlayer: (guildId: string) => { voiceChannelId?: string | null } | null | undefined
@@ -148,7 +139,7 @@ function getOwnerPermissions(): WebPermission[] {
  * a channel — `members.fetch` alone can fail or lag while `verifyGuildAccess` still passes via OAuth.
  */
 export async function resolveGuildMemberForPermissions(
-    guild: Guild,
+    guild: Pick<Guild, "voiceStates" | "members">,
     userId: string
 ): Promise<GuildMember | null> {
     const voiceState = guild.voiceStates.cache.get(userId)
@@ -206,8 +197,7 @@ export async function resolveUserPermissions(
         }
     }
 
-    // Cast: `PermissionClient` only types the cache shape we read; entries are treated as `Guild` for member/voice APIs.
-    const guild = client.guilds.cache.get(guildId) as Guild | undefined
+    const guild = client.guilds.cache.get(guildId)
     if (!guild) {
         return { permissions: [], inVoiceWithBot: false }
     }
@@ -314,8 +304,7 @@ export function resolveOauthGuildPermissionFallback(
         }
     }
 
-    // Cast: same duck-typed client/cache as {@link resolveUserPermissions}; not a full Client at runtime.
-    const guild = client.guilds.cache.get(guildId) as Guild | undefined
+    const guild = client.guilds.cache.get(guildId)
     if (!guild) {
         return { permissions: [WebPermission.VIEW_PLAYER], inVoiceWithBot: false }
     }

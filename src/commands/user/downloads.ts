@@ -286,6 +286,15 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 return true
             })
 
+            if (!removeAll) {
+                const skippedCount = fileRows.filter((f) => f.date === null).length
+                if (skippedCount > 0) {
+                    client.warn(
+                        `[Downloads] Skipped ${skippedCount} file(s) due to stat errors (date=null); cleanup may be incomplete (guildId=${guildId}).`
+                    )
+                }
+            }
+
             if (files.length === 0) {
                 return interaction.editReply(
                     removeAll

@@ -5,6 +5,7 @@ import { requirePermissions } from "../../shared/api-auth.js"
 import { getBotClient } from "../../lib/botClientRegistry.js"
 import { toPlayerStateResponse } from "../../shared/player-state.js"
 import { webPlayerDebug } from "../../shared/web-player-debug-log.js"
+import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 
 type PlayerAction = "pause" | "skip" | "stop" | "seek" | "loop" | "shuffle" | "autoplay"
 
@@ -140,6 +141,11 @@ export async function playerPOST(
         }
 
         const refreshedPlayer = action === "stop" ? null : client.lavalink.getPlayer(guildId)
+        if (action === "stop") {
+            playerBroadcaster.broadcastPlayerEvent(guildId, null, "playerDestroy")
+        } else {
+            playerBroadcaster.broadcastPlayerEvent(guildId, refreshedPlayer, "queueUpdate")
+        }
         return {
             status: 200,
             body: {

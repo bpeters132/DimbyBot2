@@ -1,6 +1,6 @@
 import { auth } from "../../shared/auth-node.js"
 import { fetchDiscordUserGuilds } from "../../util/discordUserGuilds.js"
-import { DISCORD_BOT_INVITE_PERMISSIONS } from "../../util/discordBotPermissions.js"
+import { DISCORD_BOT_INVITE_PERMISSIONS } from "../../shared/discordBotPermissions.js"
 import { getAuthenticatedSession } from "../../shared/api-auth.js"
 import { tryGetBotClient } from "../../lib/botClientRegistry.js"
 import type { ApiResponse } from "../../types/index.js"

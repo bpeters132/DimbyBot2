@@ -9,8 +9,15 @@ const globalForPrisma = globalThis as unknown as {
 
 function createWebPrismaClient(): InstanceType<typeof PrismaClient> {
     const databaseUrl = process.env.DATABASE_URL?.trim()
-    if (!databaseUrl && process.env.NODE_ENV !== "development") {
-        throw new Error("DATABASE_URL is required outside development environments.")
+    if (!databaseUrl) {
+        if (process.env.NODE_ENV !== "development") {
+            throw new Error("DATABASE_URL is required outside development environments.")
+        }
+        if (process.env.ALLOW_DEV_DATABASE_FALLBACK !== "true") {
+            throw new Error(
+                "DATABASE_URL is required. In development you may set ALLOW_DEV_DATABASE_FALLBACK=true to use the built-in local default (see .env.example)."
+            )
+        }
     }
     const adapter = new PrismaPg({
         connectionString: databaseUrl || DEFAULT_DEV_DATABASE_URL,

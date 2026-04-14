@@ -13,7 +13,7 @@ import { resolveDiscordUserSnowflake } from "./discord-user-id.js"
 import { auth } from "./auth-node.js"
 import { tryGetBotClient } from "../lib/botClientRegistry.js"
 import { webPlayerDebug, webPlayerWarn } from "./web-player-debug-log.js"
-import { getBotApiOrigin } from "../lib/bot-api-origin.js"
+import { getBotApiOrigin } from "./bot-api-origin.js"
 
 export interface AuthenticatedSession {
     user: {
@@ -352,7 +352,11 @@ function normalizeDashboardPermissionSnapshotResponse(
     const s = snap as Record<string, unknown>
     const primary = s.primaryPermissions
     const oauth = s.oauthPermissions
-    if (!Array.isArray(primary) || !Array.isArray(oauth)) {
+    const allowedWebPermissions = new Set<string>(Object.values(WebPermission))
+    const isValidPermissionList = (value: unknown): value is string[] =>
+        Array.isArray(value) &&
+        value.every((p) => typeof p === "string" && allowedWebPermissions.has(p))
+    if (!isValidPermissionList(primary) || !isValidPermissionList(oauth)) {
         return {
             ok: false,
             status: 502,
@@ -365,8 +369,8 @@ function normalizeDashboardPermissionSnapshotResponse(
         ok: true,
         snapshot: {
             memberResolved: Boolean(s.memberResolved),
-            primaryPermissions: primary as string[],
-            oauthPermissions: oauth as string[],
+            primaryPermissions: primary,
+            oauthPermissions: oauth,
             ...(typeof s.optimisticBotUnavailable === "boolean"
                 ? { optimisticBotUnavailable: s.optimisticBotUnavailable }
                 : {}),
@@ -562,6 +566,19 @@ export async function getGuildDashboardPermissionSnapshot(
 
     const upstream = await fetchGuildDashboardPermissionSnapshotFromBot(headers, guildId)
     if (upstream.ok === true) {
+        if (upstream.discordUserId !== ctx.discordUserId) {
+            webPlayerWarn("dashboard permission snapshot discordUserId mismatch", {
+                guildId,
+                ctxDiscordUserId: ctx.discordUserId,
+                upstreamDiscordUserId: upstream.discordUserId,
+            })
+            return {
+                ok: false,
+                status: 403,
+                error: "Forbidden",
+                details: "Permission snapshot could not be verified for this session.",
+            }
+        }
         webPlayerDebug("getGuildDashboardPermissionSnapshot via bot HTTP", {
             guildId,
             discordUserIdPrefix: ctx.discordUserId.slice(0, 8),

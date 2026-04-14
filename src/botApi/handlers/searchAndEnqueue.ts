@@ -115,14 +115,24 @@ export async function searchAndEnqueue(
     let player = client.lavalink.getPlayer(guildId)
     let createdHere = false
     if (!player) {
-        player = await client.lavalink.createPlayer({
-            guildId,
-            voiceChannelId: voiceChannel.id,
-            textChannelId,
-            selfDeaf: true,
-            volume: 100,
-        })
-        createdHere = true
+        try {
+            player = await client.lavalink.createPlayer({
+                guildId,
+                voiceChannelId: voiceChannel.id,
+                textChannelId,
+                selfDeaf: true,
+                volume: 100,
+            })
+            createdHere = true
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err)
+            console.error("[searchAndEnqueue] createPlayer failed", { guildId, requesterId, err })
+            return {
+                ok: false,
+                status: 503,
+                error: { error: "Could not create the player.", details: message },
+            }
+        }
     }
 
     const cleanupCreatedPlayer = async (): Promise<void> => {
@@ -130,19 +140,20 @@ export async function searchAndEnqueue(
         await client.lavalink.destroyPlayer(guildId).catch(() => undefined)
     }
 
-    try {
-        await ensurePlayerConnected(client, player, voiceChannel)
-        let refreshedMember = null
+    if (!createdHere) {
+        let refreshedMemberEarly = null
         try {
-            refreshedMember = await guild.members.fetch(requesterId)
+            refreshedMemberEarly = await guild.members.fetch(requesterId)
         } catch (error: unknown) {
             if (!isMemberFetchNotFound(error)) {
-                console.error("[searchAndEnqueue] requester member refresh failed", {
-                    guildId,
-                    requesterId,
-                    error,
-                })
-                await cleanupCreatedPlayer()
+                console.error(
+                    "[searchAndEnqueue] requester member refresh failed (existing player)",
+                    {
+                        guildId,
+                        requesterId,
+                        error,
+                    }
+                )
                 return {
                     ok: false,
                     status: 503,
@@ -150,13 +161,45 @@ export async function searchAndEnqueue(
                 }
             }
         }
-        const refreshedVoiceChannel = refreshedMember?.voice?.channel
-        if (!refreshedVoiceChannel || refreshedVoiceChannel.id !== voiceChannel.id) {
-            await cleanupCreatedPlayer()
+        const refreshedVoiceEarly = refreshedMemberEarly?.voice?.channel
+        if (!refreshedVoiceEarly || refreshedVoiceEarly.id !== voiceChannel.id) {
             return {
                 ok: false,
                 status: 400,
                 error: { error: "Join a voice channel first." },
+            }
+        }
+    }
+
+    try {
+        await ensurePlayerConnected(client, player, voiceChannel)
+        if (createdHere) {
+            let refreshedMember = null
+            try {
+                refreshedMember = await guild.members.fetch(requesterId)
+            } catch (error: unknown) {
+                if (!isMemberFetchNotFound(error)) {
+                    console.error("[searchAndEnqueue] requester member refresh failed", {
+                        guildId,
+                        requesterId,
+                        error,
+                    })
+                    await cleanupCreatedPlayer()
+                    return {
+                        ok: false,
+                        status: 503,
+                        error: { error: "Unable to verify voice state, please try again." },
+                    }
+                }
+            }
+            const refreshedVoiceChannel = refreshedMember?.voice?.channel
+            if (!refreshedVoiceChannel || refreshedVoiceChannel.id !== voiceChannel.id) {
+                await cleanupCreatedPlayer()
+                return {
+                    ok: false,
+                    status: 400,
+                    error: { error: "Join a voice channel first." },
+                }
             }
         }
     } catch (err: unknown) {

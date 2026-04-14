@@ -329,6 +329,9 @@ export async function migrateDownloadMetadata(
             result.partial = true
             result.failedCount += writeResult.skippedEntries.length
             result.downloadMetadataWriteSkipped = writeResult.skippedEntries
+            if (allowPartial) {
+                result.reason = "partial-write-skips"
+            }
             logger.warn(
                 `[JsonMigration] Not renaming JSON to .migrated (${writeResult.skippedEntries.length} row(s) skipped without resolvable guild id).`
             )

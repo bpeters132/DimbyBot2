@@ -125,8 +125,7 @@ export async function queueIndexPATCH(
         }
 
         const [track] = await player.queue.splice(sourceIndex, 1)
-        const insertIndexRaw =
-            destinationIndex > sourceIndex ? destinationIndex - 1 : destinationIndex
+        const insertIndexRaw = destinationIndex
         const lenAfterRemove = player.queue.tracks.length
         const insertIndex = Math.min(Math.max(insertIndexRaw, 0), lenAfterRemove)
         await player.queue.splice(insertIndex, 0, track)

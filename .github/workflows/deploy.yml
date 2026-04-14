@@ -24,6 +24,18 @@ on:
                 required: true
                 default: false
                 type: boolean
+            bot_image_tag:
+                description: "When skip_build: full GHCR image ref for bot (e.g. ghcr.io/owner/dimbybot2/bot:<sha>); empty = compose default from this workflow's IMAGE_BOT_SHA"
+                required: false
+                type: string
+            web_image_tag:
+                description: "When skip_build: full GHCR image ref for web; empty = IMAGE_WEB_SHA for this commit"
+                required: false
+                type: string
+            lavalink_image_tag:
+                description: "When skip_build: full GHCR image ref for lavalink; empty = IMAGE_LAVALINK_SHA for this commit"
+                required: false
+                type: string
 
 concurrency:
     group: deploy-${{ github.ref }}
@@ -150,6 +162,31 @@ jobs:
             - name: Checkout code
               uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
+            - name: Resolve image references for .env
+              id: image_tags
+              shell: bash
+              env:
+                  EVENT_NAME: ${{ github.event_name }}
+                  SKIP_BUILD: ${{ inputs.skip_build }}
+                  BOT_INPUT: ${{ inputs.bot_image_tag }}
+                  WEB_INPUT: ${{ inputs.web_image_tag }}
+                  LAVA_INPUT: ${{ inputs.lavalink_image_tag }}
+                  IMAGE_BOT_SHA: ${{ env.IMAGE_BOT_SHA }}
+                  IMAGE_WEB_SHA: ${{ env.IMAGE_WEB_SHA }}
+                  IMAGE_LAVALINK_SHA: ${{ env.IMAGE_LAVALINK_SHA }}
+              run: |
+                  BOT_REF="${IMAGE_BOT_SHA}"
+                  WEB_REF="${IMAGE_WEB_SHA}"
+                  LAVA_REF="${IMAGE_LAVALINK_SHA}"
+                  if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$SKIP_BUILD" = "true" ]; then
+                    if [ -n "${BOT_INPUT:-}" ]; then BOT_REF="$BOT_INPUT"; fi
+                    if [ -n "${WEB_INPUT:-}" ]; then WEB_REF="$WEB_INPUT"; fi
+                    if [ -n "${LAVA_INPUT:-}" ]; then LAVA_REF="$LAVA_INPUT"; fi
+                  fi
+                  echo "bot_ref=${BOT_REF}" >> "${GITHUB_OUTPUT}"
+                  echo "web_ref=${WEB_REF}" >> "${GITHUB_OUTPUT}"
+                  echo "lavalink_ref=${LAVA_REF}" >> "${GITHUB_OUTPUT}"
+
             # .env is written to the server and loaded by `docker compose` for variable substitution.
             #
             # Runtime stack (5 containers, 3 app images built in this workflow + postgres:15 + spotify-tokener digest):
@@ -203,11 +240,10 @@ jobs:
                   POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
                   POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
                   POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-                  # Always pin GHCR images to this commit's immutable :${{ github.sha }} tags (never mutable :latest).
-                  # Skip-build dispatch redeploys without rebuilding; images for this SHA must already exist from a prior CI push.
-                  BOT_IMAGE_SHA: ${{ env.IMAGE_BOT_SHA }}
-                  WEB_IMAGE_SHA: ${{ env.IMAGE_WEB_SHA }}
-                  LAVALINK_IMAGE_SHA: ${{ env.IMAGE_LAVALINK_SHA }}
+                  # GHCR refs written to server .env (immutable :sha tags from this workflow unless skip_build overrides).
+                  BOT_IMAGE_SHA: ${{ steps.image_tags.outputs.bot_ref }}
+                  WEB_IMAGE_SHA: ${{ steps.image_tags.outputs.web_ref }}
+                  LAVALINK_IMAGE_SHA: ${{ steps.image_tags.outputs.lavalink_ref }}
               run: |
                   WEB_PORT_VAL="${WEB_PORT:-3000}"
                   BOT_API_PORT_VAL="${BOT_API_PORT:-3001}"

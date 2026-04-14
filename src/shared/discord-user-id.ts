@@ -55,21 +55,46 @@ export async function resolveDiscordUserSnowflake(
     }
 
     try {
-        const accessResult = (await auth.api.getAccessToken({
+        const accessResult: unknown = await auth.api.getAccessToken({
             body: { providerId: "discord" },
             headers: sessionHeaders,
-        })) as {
-            accessToken: string
-            scopes?: string[]
-            accessTokenExpiresAt?: Date
-            idToken?: string
-        }
-        const accessToken = accessResult?.accessToken
-        if (!accessToken) {
+        })
+        if (!accessResult || typeof accessResult !== "object") {
             console.warn(
-                "[discord-user-id] No OAuth access token from Better Auth (getAccessToken returned empty token)"
+                "[discord-user-id] getAccessToken returned a non-object; cannot use Discord @me fallback"
             )
             return null
+        }
+        const tokenRecord = accessResult as Record<string, unknown>
+        const accessTokenRaw = tokenRecord.accessToken
+        if (typeof accessTokenRaw !== "string" || accessTokenRaw.trim().length === 0) {
+            console.warn(
+                "[discord-user-id] getAccessToken returned no usable accessToken (missing or empty string)"
+            )
+            return null
+        }
+        const accessToken = accessTokenRaw.trim()
+        if (
+            "scopes" in tokenRecord &&
+            tokenRecord.scopes !== undefined &&
+            !Array.isArray(tokenRecord.scopes)
+        ) {
+            console.warn(
+                "[discord-user-id] getAccessToken scopes field is present but not an array; ignoring"
+            )
+        }
+        if (
+            "accessTokenExpiresAt" in tokenRecord &&
+            tokenRecord.accessTokenExpiresAt !== undefined &&
+            tokenRecord.accessTokenExpiresAt !== null
+        ) {
+            const exp = tokenRecord.accessTokenExpiresAt
+            const expOk = exp instanceof Date || typeof exp === "string" || typeof exp === "number"
+            if (!expOk) {
+                console.warn(
+                    "[discord-user-id] getAccessToken accessTokenExpiresAt is not a date, string, or number; continuing with token only"
+                )
+            }
         }
         return await fetchDiscordCurrentUserId(accessToken)
     } catch (error: unknown) {

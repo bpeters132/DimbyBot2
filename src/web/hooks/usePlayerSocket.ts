@@ -182,7 +182,13 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
                         parsed.type === "queueUpdate" ||
                         parsed.type === "playerDestroy"
                     ) {
-                        if (parsed.state) setPlayerState(sanitizePlayerState(parsed.state))
+                        if (Object.prototype.hasOwnProperty.call(parsed, "state")) {
+                            setPlayerState(
+                                parsed.state === null
+                                    ? null
+                                    : sanitizePlayerState(parsed.state as PlayerStateResponse)
+                            )
+                        }
                         if (parsed.queue !== undefined) {
                             setQueue(
                                 Array.isArray(parsed.queue)
