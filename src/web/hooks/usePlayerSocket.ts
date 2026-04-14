@@ -168,6 +168,13 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
                         return
                     }
 
+                    if (parsed.type === "unsubscribed") {
+                        setIsConnected(false)
+                        reconnectAttemptsRef.current = 0
+                        setLiveUpdatesError(null)
+                        return
+                    }
+
                     if (
                         parsed.type === "trackStart" ||
                         parsed.type === "trackEnd" ||

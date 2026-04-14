@@ -193,6 +193,7 @@ async function run(): Promise<void> {
 
         client.on("voiceStateUpdate", (oldState, newState) => {
             const userId = newState.id
+            const botUserId = client.user?.id
             const guildIds = new Set<string>()
             if (newState.guild?.id) {
                 guildIds.add(newState.guild.id)
@@ -202,7 +203,11 @@ async function run(): Promise<void> {
                 guildIds.add(oldGuildId)
             }
             for (const guildId of guildIds) {
-                invalidatePermissionCache(guildId, userId)
+                if (botUserId && userId === botUserId) {
+                    invalidatePermissionCache(guildId)
+                } else {
+                    invalidatePermissionCache(guildId, userId)
+                }
                 playerBroadcaster.broadcastGuildVoiceState(guildId)
             }
         })

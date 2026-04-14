@@ -52,10 +52,14 @@ export async function saveDownloadMetadataStore(
     try {
         const result = await replaceDownloadMetadataStoreInDatabase(nextCache)
         try {
-            const persistedCache = await getDownloadMetadataStoreFromDatabase()
-            downloadMetadataCache =
-                result.skippedEntries.length === 0 ? nextCache : cloneStore(persistedCache)
-            initialized = true
+            if (result.skippedEntries.length === 0) {
+                downloadMetadataCache = nextCache
+                initialized = true
+            } else {
+                const persistedCache = await getDownloadMetadataStoreFromDatabase()
+                downloadMetadataCache = cloneStore(persistedCache)
+                initialized = true
+            }
         } catch (reloadErr: unknown) {
             logger.warn(
                 "[downloadMetadata] replaceDownloadMetadataStoreInDatabase succeeded but cache reload failed; keeping previous in-memory cache",
@@ -73,8 +77,8 @@ export async function saveDownloadMetadataStore(
         logger.debug(
             `[downloadMetadata] Saved metadata store to database (${result.rowsWritten} rows).`
         )
-        // Success when nothing was skipped (including empty saves: 0 rows written, 0 skipped).
-        return result.rowsWritten > 0 || result.skippedEntries.length === 0
+        // Success only when nothing was skipped (including empty saves: 0 rows written, 0 skipped).
+        return result.skippedEntries.length === 0
     } catch (error: unknown) {
         logger.error("[downloadMetadata] Failed saving metadata store to database:", error)
         return false

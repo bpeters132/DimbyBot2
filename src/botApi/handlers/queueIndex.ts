@@ -68,7 +68,7 @@ export async function queueIndexDELETE(
             status: 500,
             body: {
                 ok: false,
-                error: { error: "Internal server error", details: message },
+                error: { error: "Internal server error", details: "Internal server error" },
             },
         }
     }
@@ -151,7 +151,7 @@ export async function queueIndexPATCH(
             status: 500,
             body: {
                 ok: false,
-                error: { error: "Internal server error", details: message },
+                error: { error: "Internal server error", details: "Internal server error" },
             },
         }
     }

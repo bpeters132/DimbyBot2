@@ -193,9 +193,10 @@ jobs:
                   POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
                   POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
                   POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-                  BOT_IMAGE_SHA: ${{ env.IMAGE_BOT_SHA }}
-                  WEB_IMAGE_SHA: ${{ env.IMAGE_WEB_SHA }}
-                  LAVALINK_IMAGE_SHA: ${{ env.IMAGE_LAVALINK_SHA }}
+                  # When workflow_dispatch skips build, no :${{ github.sha }} images exist — use :latest.
+                  BOT_IMAGE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_build && env.IMAGE_BOT || env.IMAGE_BOT_SHA }}
+                  WEB_IMAGE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_build && env.IMAGE_WEB || env.IMAGE_WEB_SHA }}
+                  LAVALINK_IMAGE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_build && env.IMAGE_LAVALINK || env.IMAGE_LAVALINK_SHA }}
               run: |
                   WEB_PORT_VAL="${WEB_PORT:-3000}"
                   BOT_API_PORT_VAL="${BOT_API_PORT:-3001}"
@@ -267,7 +268,6 @@ jobs:
                   cd /home/bot
                   # Docker Compose loads .env automatically; do not `export $(grep ... xargs)` (breaks on #, spaces, quotes).
                   echo "$GH_TOKEN" | /usr/bin/docker login ghcr.io -u "$GH_ACTOR" --password-stdin
-                  /usr/bin/docker compose -f docker-compose.yml -f docker-compose.dashboard.yml down
                   /usr/bin/docker compose -f docker-compose.yml -f docker-compose.dashboard.yml pull
                   /usr/bin/docker compose -f docker-compose.yml -f docker-compose.dashboard.yml up -d
                   /usr/bin/docker image prune -f

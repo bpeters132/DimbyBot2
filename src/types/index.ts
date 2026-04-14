@@ -108,6 +108,13 @@ export interface DownloadMetadataRecord {
     metadata: DownloadFileMetadata
 }
 
+/** Row-level skips from {@link replaceDownloadMetadataStoreInDatabase} (e.g. unresolvable guild id). */
+export type DownloadMetadataStoreSkippedEntry = {
+    key: string
+    reason: "unresolvable-guild-id"
+    fileName: string
+}
+
 /** Result summary for one JSON-to-database migration source. */
 export interface JsonMigrationResult {
     source: "guildSettings" | "downloadMetadata"
@@ -120,17 +127,13 @@ export interface JsonMigrationResult {
     partial?: boolean
     /** Keys or descriptions of entries that failed validation (partial mode only). */
     failedEntries?: string[]
+    /** Rows skipped during DB write for download metadata migration (e.g. unresolvable guild id). */
+    downloadMetadataWriteSkipped?: DownloadMetadataStoreSkippedEntry[]
 }
 
 export type ReplaceGuildSettingsStoreFn = (
     store: GuildSettingsStore
 ) => Promise<{ rowsUpserted: number; rowsDeleted: number; rowsAffected: number }>
-/** Row-level skips from {@link replaceDownloadMetadataStoreInDatabase} (e.g. unresolvable guild id). */
-export type DownloadMetadataStoreSkippedEntry = {
-    key: string
-    reason: "unresolvable-guild-id"
-    fileName: string
-}
 
 export type ReplaceDownloadMetadataStoreResult = {
     rowsWritten: number

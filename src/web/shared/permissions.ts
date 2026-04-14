@@ -339,6 +339,10 @@ export function resolveOauthGuildPermissionFallback(
     return { permissions, inVoiceWithBot }
 }
 
+/**
+ * Clears cached permission rows. When the bot's own voice state changes, callers should drop the
+ * whole guild (see `server.ts` `voiceStateUpdate`) so voice-gated permissions refresh for everyone.
+ */
 export function invalidatePermissionCache(guildId?: string, userId?: string): void {
     if (!guildId && !userId) {
         permissionCache.clear()

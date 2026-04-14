@@ -9,6 +9,37 @@ import type {
 
 const LOG_LEVELS: ReadonlySet<DiscordLogLevelName> = new Set(["debug", "info", "warn", "error"])
 
+const DISCORD_SNOWFLAKE_ID_RE = /^\d+$/
+
+/** Trims and keeps only non-empty digit strings suitable for Discord snowflake columns. */
+function normalizeOptionalSnowflake(value: unknown): string | null {
+    if (typeof value !== "string") return null
+    const t = value.trim()
+    return DISCORD_SNOWFLAKE_ID_RE.test(t) ? t : null
+}
+
+/** Normalizes legacy `discordLog` for Prisma JSON writes (object or JSON string → object; else DbNull). */
+function normalizeDiscordLogForDatabase(
+    value: unknown
+): Prisma.InputJsonValue | typeof Prisma.DbNull {
+    if (value === null || value === undefined) return Prisma.DbNull
+    if (typeof value === "string") {
+        try {
+            const parsed: unknown = JSON.parse(value)
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                return parsed as Prisma.InputJsonValue
+            }
+        } catch {
+            /* invalid JSON */
+        }
+        return Prisma.DbNull
+    }
+    if (typeof value === "object" && !Array.isArray(value)) {
+        return value as Prisma.InputJsonValue
+    }
+    return Prisma.DbNull
+}
+
 function isDiscordLogLevelName(v: unknown): v is DiscordLogLevelName {
     return typeof v === "string" && LOG_LEVELS.has(v as DiscordLogLevelName)
 }
@@ -88,14 +119,11 @@ export async function replaceGuildSettingsStoreInDatabase(
         for (const guildId of guildIds) {
             const settings = store[guildId]
             const payload = {
-                controlChannelId: settings?.controlChannelId ?? null,
-                controlMessageId: settings?.controlMessageId ?? null,
+                controlChannelId: normalizeOptionalSnowflake(settings?.controlChannelId),
+                controlMessageId: normalizeOptionalSnowflake(settings?.controlMessageId),
                 downloadsMaxMb:
                     typeof settings?.downloadsMaxMb === "number" ? settings.downloadsMaxMb : null,
-                discordLog:
-                    settings?.discordLog != null
-                        ? (settings.discordLog as Prisma.InputJsonValue)
-                        : Prisma.DbNull,
+                discordLog: normalizeDiscordLogForDatabase(settings?.discordLog),
             }
             await tx.guildSettings.upsert({
                 where: { guildId },
