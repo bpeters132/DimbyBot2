@@ -1,10 +1,10 @@
-import { WebPermission } from "../../web/shared/permissions.js"
+import { WebPermission } from "../../shared/permissions.js"
 import type { ApiResponse } from "../../types/index.js"
 import type { PlayerStateResponse } from "../../types/web.js"
-import { requirePermissions } from "../../web/lib/api-auth.js"
+import { requirePermissions } from "../../shared/api-auth.js"
 import { getBotClient } from "../../lib/botClientRegistry.js"
-import { toPlayerStateResponse } from "../../web/lib/player-state.js"
-import { webPlayerDebug } from "../../web/lib/web-player-debug-log.js"
+import { toPlayerStateResponse } from "../../shared/player-state.js"
+import { webPlayerDebug } from "../../shared/web-player-debug-log.js"
 
 type PlayerAction = "pause" | "skip" | "stop" | "seek" | "loop" | "shuffle" | "autoplay"
 

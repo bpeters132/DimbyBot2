@@ -1,10 +1,10 @@
-import { WebPermission } from "../../web/shared/permissions.js"
+import { WebPermission } from "../../shared/permissions.js"
 import type { ApiResponse } from "../../types/index.js"
 import type { QueueResponse } from "../../types/web.js"
-import { requirePermissions } from "../../web/lib/api-auth.js"
+import { requirePermissions } from "../../shared/api-auth.js"
 import { getBotClient, tryGetBotClient } from "../../lib/botClientRegistry.js"
-import { toQueueResponse } from "../../web/lib/player-state.js"
-import { playerBroadcaster } from "../../web/websocket/PlayerBroadcaster.js"
+import { toQueueResponse } from "../../shared/player-state.js"
+import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 
 function parseIndex(value: string): number | null {
     const index = Number(value)

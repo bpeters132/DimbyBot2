@@ -4,7 +4,7 @@ import type BotClient from "../../lib/BotClient.js"
 import type { ApiErrorPayload } from "../../types/index.js"
 import { ensurePlayerConnected, startPlaybackIfNeeded } from "../../util/musicManager.js"
 import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
-import type { PermissionGuardSuccess } from "../../web/lib/api-auth.js"
+import type { PermissionGuardSuccess } from "../../shared/api-auth.js"
 import { resolveWebDashboardTextChannelId } from "../webDashboardTextChannel.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">

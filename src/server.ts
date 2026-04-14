@@ -132,9 +132,9 @@ async function run(): Promise<void> {
     try {
         client = await startBot(logger)
 
-        const { connectionManager } = await import("./web/websocket/ConnectionManager.js")
-        const { invalidatePermissionCache } = await import("./web/shared/permissions.js")
-        const { playerBroadcaster } = await import("./web/websocket/PlayerBroadcaster.js")
+        const { connectionManager } = await import("./shared/websocket/ConnectionManager.js")
+        const { invalidatePermissionCache } = await import("./shared/permissions.js")
+        const { playerBroadcaster } = await import("./shared/websocket/PlayerBroadcaster.js")
 
         const botApiApp = createBotApiApp()
         logger.info(

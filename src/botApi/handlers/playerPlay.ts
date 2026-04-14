@@ -1,10 +1,10 @@
 import { resolveWebRequesterDiscordId } from "../resolveWebRequesterId.js"
-import { WebPermission } from "../../web/shared/permissions.js"
+import { WebPermission } from "../../shared/permissions.js"
 import type { ApiResponse } from "../../types/index.js"
 import type { PlayerStateResponse } from "../../types/web.js"
-import { requirePermissions } from "../../web/lib/api-auth.js"
+import { requirePermissions } from "../../shared/api-auth.js"
 import { getBotClient } from "../../lib/botClientRegistry.js"
-import { toPlayerStateResponse } from "../../web/lib/player-state.js"
+import { toPlayerStateResponse } from "../../shared/player-state.js"
 import { searchAndEnqueue } from "./searchAndEnqueue.js"
 
 export async function playerPlayPOST(
