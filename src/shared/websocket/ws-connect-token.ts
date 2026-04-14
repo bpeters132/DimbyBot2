@@ -48,7 +48,9 @@ export function parseWsConnectToken(token: string, secret: string): string | nul
     } catch {
         return null
     }
-    if (typeof data.userId !== "string" || typeof data.exp !== "number") return null
-    if (data.exp < Math.floor(Date.now() / 1000)) return null
+    if (typeof data.userId !== "string") return null
+    if (typeof data.exp !== "number" || !Number.isFinite(data.exp) || !Number.isInteger(data.exp))
+        return null
+    if (data.exp <= Math.floor(Date.now() / 1000)) return null
     return data.userId
 }

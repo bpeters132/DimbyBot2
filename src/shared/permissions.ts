@@ -90,18 +90,12 @@ function readCached(guildId: string, userId: string): CachedPermissionResult | u
 }
 
 function writeCached(guildId: string, userId: string, entry: CachedPermissionResult): void {
-    const now = Date.now()
     let inner = permissionCache.get(guildId)
     if (!inner) {
         inner = new Map()
         permissionCache.set(guildId, inner)
     } else {
-        purgeExpiredFromInner(inner, now)
-        if (inner.size === 0) {
-            permissionCache.delete(guildId)
-            inner = new Map()
-            permissionCache.set(guildId, inner)
-        }
+        purgeExpiredFromInner(inner, Date.now())
     }
     inner.set(userId, entry)
 }

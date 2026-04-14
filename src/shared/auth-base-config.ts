@@ -1,4 +1,4 @@
-import { writeAuditLog } from "../lib/audit-log.js"
+import { writeAuditLog } from "./audit-log.js"
 
 /**
  * Better Auth options that do not touch the database client (env + OAuth + session cookie policy only).

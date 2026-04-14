@@ -9,13 +9,36 @@ import type {
 
 const LOG_LEVELS: ReadonlySet<DiscordLogLevelName> = new Set(["debug", "info", "warn", "error"])
 
-const DISCORD_SNOWFLAKE_ID_RE = /^\d+$/
+const DISCORD_SNOWFLAKE_ID_RE = /^\d{1,20}$/
+const MAX_SNOWFLAKE = (1n << 64n) - 1n
 
-/** Trims and keeps only non-empty digit strings suitable for Discord snowflake columns. */
+/** Trims and validates a Discord snowflake: must be a positive uint64 digit string. */
 function normalizeOptionalSnowflake(value: unknown): string | null {
     if (typeof value !== "string") return null
     const t = value.trim()
-    return DISCORD_SNOWFLAKE_ID_RE.test(t) ? t : null
+    if (!DISCORD_SNOWFLAKE_ID_RE.test(t)) return null
+    try {
+        const n = BigInt(t)
+        if (n < 1n || n > MAX_SNOWFLAKE) return null
+    } catch {
+        return null
+    }
+    return t
+}
+
+/** Verifies a value roundtrips through JSON and is a plain object. */
+function toSafeJsonObject(candidate: unknown): Prisma.InputJsonValue | null {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null
+    try {
+        const serialized = JSON.stringify(candidate)
+        const parsed: unknown = JSON.parse(serialized)
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            return parsed as Prisma.InputJsonValue
+        }
+    } catch {
+        /* non-serializable (circular refs, functions, etc.) */
+    }
+    return null
 }
 
 /** Normalizes legacy `discordLog` for Prisma JSON writes (object or JSON string → object; else DbNull). */
@@ -25,17 +48,13 @@ function normalizeDiscordLogForDatabase(
     if (value === null || value === undefined) return Prisma.DbNull
     if (typeof value === "string") {
         try {
-            const parsed: unknown = JSON.parse(value)
-            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-                return parsed as Prisma.InputJsonValue
-            }
+            return toSafeJsonObject(JSON.parse(value)) ?? Prisma.DbNull
         } catch {
-            /* invalid JSON */
+            return Prisma.DbNull
         }
-        return Prisma.DbNull
     }
     if (typeof value === "object" && !Array.isArray(value)) {
-        return value as Prisma.InputJsonValue
+        return toSafeJsonObject(value) ?? Prisma.DbNull
     }
     return Prisma.DbNull
 }

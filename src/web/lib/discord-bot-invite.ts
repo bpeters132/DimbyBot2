@@ -1,4 +1,4 @@
-import { DISCORD_BOT_INVITE_PERMISSIONS } from "../../util/discordBotPermissions.js"
+import { DISCORD_BOT_INVITE_PERMISSIONS } from "../../shared/discordBotPermissions.js"
 
 /**
  * Discord bot authorization URL for "Add to server", using the same app id as OAuth (`CLIENT_ID`).

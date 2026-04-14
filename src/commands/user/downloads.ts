@@ -235,10 +235,6 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             const daysOpt = interaction.options.getInteger("days")
             const days = daysOpt === null ? 7 : daysOpt
             if (days < 1) {
-                await interaction.followUp({
-                    content: "The **days** option must be at least 1.",
-                    ephemeral: true,
-                })
                 return interaction.editReply({
                     content:
                         "Cleanup cancelled: **days** must be a positive integer (or omit for 7 days).",
