@@ -112,8 +112,13 @@ services:
             - dimbybot-storage:/app/storage
             - dimbybot-logs:/app/logs
             - dimbybot-downloads:/app/downloads
-        # Bot API + player WebSocket listen on BOT_API_PORT inside the container only (not published).
-        # Dashboard reaches the bot via API_PROXY_TARGET on the internal network; browsers use same-origin /ws via reverse proxy.
+        # Bot API + WebSocket on BOT_API_PORT. Published only on loopback so a host reverse proxy (e.g. NPM on
+        # the same machine) can forward /ws to http://127.0.0.1:<BOT_API_PORT> without exposing the bot to the
+        # public internet. dimbybot-web still uses http://dimbybot:<port> on the Docker network (API_PROXY_TARGET).
+        # If NPM runs in Docker on the same `internal` network, you can use http://dimbybot:<port> there instead
+        # and this publish line is optional (but harmless).
+        ports:
+            - "127.0.0.1:${BOT_API_PORT:-3001}:${BOT_API_PORT:-3001}"
         networks:
             - internal
 
