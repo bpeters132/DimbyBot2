@@ -11,6 +11,9 @@ function wsConnectHmacKey(secret: string): Buffer {
 }
 
 export function createWsConnectToken(userId: string, secret: string, ttlSeconds = 120): string {
+    if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0) {
+        throw new Error("createWsConnectToken: ttlSeconds must be a finite positive integer")
+    }
     const key = wsConnectHmacKey(secret)
     if (!key.length) {
         throw new Error("empty secret for createWsConnectToken")
@@ -48,7 +51,7 @@ export function parseWsConnectToken(token: string, secret: string): string | nul
     } catch {
         return null
     }
-    if (typeof data.userId !== "string") return null
+    if (typeof data.userId !== "string" || data.userId.length === 0) return null
     if (typeof data.exp !== "number" || !Number.isFinite(data.exp) || !Number.isInteger(data.exp))
         return null
     if (data.exp <= Math.floor(Date.now() / 1000)) return null

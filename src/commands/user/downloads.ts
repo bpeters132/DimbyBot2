@@ -229,17 +229,18 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         }
 
         if (subcommand === "cleanup") {
-            // Visible reply: cleanup is a moderator-style server action; summary is not treated as private DM content.
-            await interaction.deferReply()
             const removeAll = interaction.options.getBoolean("all") || false
             const daysOpt = interaction.options.getInteger("days")
             const days = daysOpt === null ? 7 : daysOpt
             if (days < 1) {
-                return interaction.editReply({
+                return interaction.reply({
+                    ephemeral: true,
                     content:
                         "Cleanup cancelled: **days** must be a positive integer (or omit for 7 days).",
                 })
             }
+            // Visible reply: cleanup is a moderator-style server action; summary is not treated as private DM content.
+            await interaction.deferReply()
             const cutoffDate = new Date()
             cutoffDate.setDate(cutoffDate.getDate() - days)
 

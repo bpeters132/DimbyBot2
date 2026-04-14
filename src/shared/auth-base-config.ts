@@ -32,24 +32,12 @@ const SAFE_ERROR_SNIPPET_MAX = 200
 
 function redactTokenLikeString(s: string): string {
     let out = s
-    if (/bearer\s+\S+/i.test(out)) {
-        out = out.replace(/bearer\s+\S+/gi, "Bearer [redacted]")
-    }
-    if (/access_token\s*=\s*\S+/i.test(out)) {
-        out = out.replace(/access_token\s*=\s*\S+/gi, "access_token=[redacted]")
-    }
-    if (/refresh_token\s*=\s*\S+/i.test(out)) {
-        out = out.replace(/refresh_token\s*=\s*\S+/gi, "refresh_token=[redacted]")
-    }
-    if (/client_secret\s*=\s*\S+/i.test(out)) {
-        out = out.replace(/client_secret\s*=\s*\S+/gi, "client_secret=[redacted]")
-    }
-    if (/"access_token"\s*:\s*"[^"]*"/i.test(out)) {
-        out = out.replace(/"access_token"\s*:\s*"[^"]*"/gi, '"access_token":"[redacted]"')
-    }
-    if (/"refresh_token"\s*:\s*"[^"]*"/i.test(out)) {
-        out = out.replace(/"refresh_token"\s*:\s*"[^"]*"/gi, '"refresh_token":"[redacted]"')
-    }
+    out = out.replace(/bearer\s+\S+/gi, "Bearer [redacted]")
+    out = out.replace(/access_token\s*=\s*\S+/gi, "access_token=[redacted]")
+    out = out.replace(/refresh_token\s*=\s*\S+/gi, "refresh_token=[redacted]")
+    out = out.replace(/client_secret\s*=\s*\S+/gi, "client_secret=[redacted]")
+    out = out.replace(/"access_token"\s*:\s*"[^"]*"/gi, '"access_token":"[redacted]"')
+    out = out.replace(/"refresh_token"\s*:\s*"[^"]*"/gi, '"refresh_token":"[redacted]"')
     return out
 }
 

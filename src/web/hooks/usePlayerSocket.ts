@@ -171,7 +171,6 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
                     if (parsed.type === "unsubscribed") {
                         setIsConnected(false)
                         reconnectAttemptsRef.current = 0
-                        setLiveUpdatesError(null)
                         return
                     }
 
