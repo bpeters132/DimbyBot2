@@ -1,3 +1,6 @@
+# Production / CI deploy: compose project is usually the host directory name (e.g. `bot` under /home/bot).
+# Bot HTTP + WebSocket listen on BOT_API_PORT inside `dimbybot` only — do not publish that port.
+# `dimbybot-web` reaches the bot at http://dimbybot:${BOT_API_PORT} on the `internal` bridge network.
 services:
     lavalink:
         image: ${LAVALINK_IMAGE}
@@ -80,6 +83,8 @@ services:
             - OWNER_ID=${OWNER_ID}
             - DEV_MODE=${DEV_MODE}
             - LOG_LEVEL=${LOG_LEVEL}
+            - BOT_API_VERBOSE=${BOT_API_VERBOSE:-}
+            - WEB_BOT_API_VERBOSE=${WEB_BOT_API_VERBOSE:-}
             - BOT_API_PORT=${BOT_API_PORT:-3001}
             # Optional absolute player WebSocket URL (ws/wss) for the dashboard container; see docker-compose.dashboard.yml.
             - WEBSOCKET_CLIENT_URL=${WEBSOCKET_CLIENT_URL:-}
