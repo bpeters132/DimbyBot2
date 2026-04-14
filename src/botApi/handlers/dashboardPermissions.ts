@@ -3,7 +3,7 @@ import type { GuildDashboardSnapshotResult } from "../../types/web.js"
 import {
     finishGuildDashboardPermissionSnapshot,
     resolveAuthenticatedGuildAccess,
-} from "../../web/lib/api-auth.js"
+} from "../../shared/api-auth.js"
 
 /**
  * Resolves dashboard permission lists using the in-process Discord bot (same logic as the Next

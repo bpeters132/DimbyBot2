@@ -1,1 +1,1 @@
-export * from "../../lib/audit-log.js"
+export * from "../../shared/audit-log.js"

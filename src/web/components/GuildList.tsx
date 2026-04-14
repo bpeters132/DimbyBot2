@@ -19,7 +19,7 @@ function parseSafeGuildListItem(entry: unknown): GuildListItem | null {
     const iconRaw = g.iconUrl
     const iconUrl = typeof iconRaw === "string" ? iconRaw : null
     const mc = g.memberCount
-    const memberCount = typeof mc === "number" && Number.isFinite(mc) ? mc : null
+    const memberCount = typeof mc === "number" && Number.isInteger(mc) && mc >= 0 ? mc : null
     return { id: idStr, name: g.name, iconUrl, memberCount }
 }
 
@@ -46,19 +46,10 @@ export function GuildList({ result }: GuildListProps) {
     const { data } = result
     const guilds = data.guilds
     const rawList = Array.isArray(guilds) ? guilds : null
-    const guildsList = rawList
-        ? rawList.map(parseSafeGuildListItem).filter((g): g is GuildListItem => g !== null)
-        : null
+    const guildsList =
+        rawList?.map(parseSafeGuildListItem).filter((g): g is GuildListItem => g !== null) ?? []
 
-    if (!rawList || !guildsList) {
-        return (
-            <div className="rounded border bg-card p-4 text-card-foreground">
-                <p>Unable to display the guild list (invalid response).</p>
-            </div>
-        )
-    }
-
-    if (rawList.length > 0 && guildsList.length === 0) {
+    if (!rawList || (rawList.length > 0 && guildsList.length === 0)) {
         return (
             <div className="rounded border bg-card p-4 text-card-foreground">
                 <p>Unable to display the guild list (invalid response).</p>

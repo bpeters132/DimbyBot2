@@ -4,7 +4,7 @@ import type BotClient from "../../lib/BotClient.js"
 import type { ApiErrorPayload } from "../../types/index.js"
 import { ensurePlayerConnected, startPlaybackIfNeeded } from "../../util/musicManager.js"
 import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
-import type { PermissionGuardSuccess } from "../../web/lib/api-auth.js"
+import type { PermissionGuardSuccess } from "../../shared/api-auth.js"
 import { resolveWebDashboardTextChannelId } from "../webDashboardTextChannel.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
@@ -174,12 +174,24 @@ export async function searchAndEnqueue(
 
     const requesterName =
         member?.user.globalName ?? member?.user.username ?? guard.session.user?.name ?? "web-user"
-    const searchResult = await player.search(query, {
-        requester: {
-            id: requesterId,
-            username: requesterName,
-        },
-    })
+    let searchResult
+    try {
+        searchResult = await player.search(query, {
+            requester: {
+                id: requesterId,
+                username: requesterName,
+            },
+        })
+    } catch (err: unknown) {
+        await cleanupCreatedPlayer()
+        console.error("[searchAndEnqueue] player.search failed", { guildId, requesterId, err })
+        return {
+            ok: false,
+            status: 503,
+            error: { error: "Search failed.", details: "Internal server error." },
+        }
+    }
+
     if (!searchResult.tracks.length) {
         await cleanupCreatedPlayer()
         return {

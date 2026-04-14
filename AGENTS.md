@@ -9,6 +9,7 @@
     - `src/lib/` core libraries and services.
     - `src/util/` shared utilities.
     - `src/types/` shared type definitions (`src/types/index.ts`).
+    - `src/shared/` code used by **both** the bot (root `tsc` → `dist/shared/`) and the dashboard (via `@/shared/*` in `src/web/tsconfig.json` and thin re-exports under `src/web/`). Prefer adding cross-runtime logic here instead of importing `src/web/` from bot handlers.
     - `src/index.ts` app entry point.
 - `src/web/` is the **Next.js dashboard** (web UI and controls). It is a **separate application** from the bot: own `package.json`, install/build commands, and **its own container image** (`Dockerfile.web`). The root TypeScript project **does not compile** `src/web` (see `tsconfig.json` `exclude` and **Web dashboard vs. bot runtime** below). The main bot image builds with **`yarn build:bot`** only.
 - `Lavalink/` holds the Lavalink service files.

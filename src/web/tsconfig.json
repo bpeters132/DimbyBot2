@@ -7,7 +7,8 @@
         "moduleResolution": "Bundler",
         "baseUrl": ".",
         "paths": {
-            "@/*": ["./*"]
+            "@/*": ["./*"],
+            "@/shared/*": ["../shared/*"]
         },
         "allowJs": false,
         "noEmit": true,
@@ -25,6 +26,12 @@
         "esModuleInterop": true,
         "resolveJsonModule": true
     },
-    "include": ["**/*", "next-env.d.ts", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"],
-    "exclude": ["node_modules", ".next/cache", "websocket"]
+    "include": [
+        "**/*",
+        "../shared/**/*.ts",
+        "next-env.d.ts",
+        ".next/types/**/*.ts",
+        ".next/dev/types/**/*.ts"
+    ],
+    "exclude": ["node_modules", ".next/cache"]
 }

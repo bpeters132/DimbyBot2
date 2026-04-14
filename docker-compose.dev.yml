@@ -11,7 +11,7 @@ services:
         # `ports: !override` replaces the base `dimbybot` publish list (Compose v2.24.4+); see README prerequisites.
         # Do not publish WEB_PORT/3000 here — that is for the Next.js dashboard (`yarn dev:web` on the host, or `dimbybot-web` in production).
         ports: !override
-            - "${BOT_API_PORT:-3001}:${BOT_API_PORT:-3001}"
+            - "${BOT_API_HOST:-127.0.0.1}:${BOT_API_PORT:-3001}:${BOT_API_PORT:-3001}"
         volumes:
             # Mount the entire source code directory into the container
             # Note: Exclude node_modules to use the ones installed in the container
@@ -34,6 +34,8 @@ services:
             - CLIENT_ID=${CLIENT_ID:?CLIENT_ID is required for dev (Discord OAuth)}
             - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:?DISCORD_CLIENT_SECRET is required for dev}
             - BOT_API_PORT=${BOT_API_PORT:-3001}
+            # Host / tooling may call the API from non-RFC1918 addresses; default off in dev (override in .env if needed).
+            - BOT_API_REQUIRE_PRIVATE_CLIENT_IP=${BOT_API_REQUIRE_PRIVATE_CLIENT_IP:-0}
             # Force color output for libraries like 'colors' or 'chalk'
             - FORCE_COLOR=true
             # Docker Desktop bind mounts can miss fs events; force polling for hot reload.

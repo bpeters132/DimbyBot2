@@ -1,3 +1,7 @@
+# Production / CI deploy: compose project is usually the host directory name (e.g. `bot` under /home/bot).
+# Bot HTTP + WebSocket on BOT_API_PORT: host bind is BOT_API_HOST (default 127.0.0.1). Set BOT_API_HOST=0.0.0.0 or a
+# private NIC IP so an off-box LAN reverse proxy can reach <host>:<BOT_API_PORT>. `dimbybot-web` still uses http://dimbybot:${BOT_API_PORT} on `internal`.
+# With BOT_API_REQUIRE_PRIVATE_CLIENT_IP=1 (default), the bot rejects non–private-LAN TCP peers (RFC1918 + 127/8 + ::1).
 services:
     lavalink:
         image: ${LAVALINK_IMAGE}
@@ -80,7 +84,10 @@ services:
             - OWNER_ID=${OWNER_ID}
             - DEV_MODE=${DEV_MODE}
             - LOG_LEVEL=${LOG_LEVEL}
+            - BOT_API_VERBOSE=${BOT_API_VERBOSE:-}
+            - WEB_BOT_API_VERBOSE=${WEB_BOT_API_VERBOSE:-}
             - BOT_API_PORT=${BOT_API_PORT:-3001}
+            - BOT_API_REQUIRE_PRIVATE_CLIENT_IP=${BOT_API_REQUIRE_PRIVATE_CLIENT_IP:-1}
             # Optional absolute player WebSocket URL (ws/wss) for the dashboard container; see docker-compose.dashboard.yml.
             - WEBSOCKET_CLIENT_URL=${WEBSOCKET_CLIENT_URL:-}
             # Session verification for dashboard → bot API. The Next container (docker-compose.dashboard.yml) needs the same auth secrets.
@@ -107,8 +114,10 @@ services:
             - dimbybot-storage:/app/storage
             - dimbybot-logs:/app/logs
             - dimbybot-downloads:/app/downloads
-        # Bot API + player WebSocket listen on BOT_API_PORT inside the container only (not published).
-        # Dashboard reaches the bot via API_PROXY_TARGET on the internal network; browsers use same-origin /ws via reverse proxy.
+        # Bot API + WebSocket on BOT_API_PORT — host bind BOT_API_HOST (default 127.0.0.1); set BOT_API_HOST for LAN-only listeners.
+        # Pair with BOT_API_REQUIRE_PRIVATE_CLIENT_IP=1 (default) and host firewall rules so only RFC1918 sources reach the port.
+        ports:
+            - "${BOT_API_HOST:-127.0.0.1}:${BOT_API_PORT:-3001}:${BOT_API_PORT:-3001}"
         networks:
             - internal
 

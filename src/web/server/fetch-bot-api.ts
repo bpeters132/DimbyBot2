@@ -62,7 +62,7 @@ export async function serverFetchBot(
     const authorization = incoming.get("authorization")
     if (authorization) outHeaders.set("authorization", authorization)
 
-    const method = options?.method ?? "GET"
+    const method = (options?.method ?? "GET").toUpperCase()
     if (options?.body != null && method !== "GET" && method !== "HEAD") {
         outHeaders.set("content-type", options.contentType ?? "application/json")
     }

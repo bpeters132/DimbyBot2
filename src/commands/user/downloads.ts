@@ -77,6 +77,7 @@ const data = new SlashCommandBuilder()
                     .setName("days")
                     .setDescription("Remove files older than this many days (default: 7)")
                     .setRequired(false)
+                    .setMinValue(1)
             )
             .addBooleanOption((option) =>
                 option
@@ -145,7 +146,18 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                         }
                         if (info.originalUrl) row.originalUrl = info.originalUrl
                         return row
-                    } catch {
+                    } catch (err: unknown) {
+                        const code =
+                            err && typeof err === "object" && "code" in err
+                                ? (err as NodeJS.ErrnoException).code
+                                : ""
+                        if (code === "ENOENT") {
+                            return null
+                        }
+                        const msg = err instanceof Error ? err.message : String(err)
+                        client.warn(
+                            `[Downloads] list file access failed for key=${key} file=${file} (guildId=${guildId}): ${msg}`
+                        )
                         return null
                     }
                 })
@@ -217,10 +229,18 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         }
 
         if (subcommand === "cleanup") {
+            const removeAll = interaction.options.getBoolean("all") || false
+            const daysOpt = interaction.options.getInteger("days")
+            const days = daysOpt === null ? 7 : daysOpt
+            if (days < 1) {
+                return interaction.reply({
+                    ephemeral: true,
+                    content:
+                        "Cleanup cancelled: **days** must be a positive integer (or omit for 7 days).",
+                })
+            }
             // Visible reply: cleanup is a moderator-style server action; summary is not treated as private DM content.
             await interaction.deferReply()
-            const removeAll = interaction.options.getBoolean("all") || false
-            const days = interaction.options.getInteger("days") || 7
             const cutoffDate = new Date()
             cutoffDate.setDate(cutoffDate.getDate() - days)
 

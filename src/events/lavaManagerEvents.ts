@@ -34,7 +34,7 @@ import {
     trackDisconnectedUser,
     userHasQueuedTracks,
 } from "../util/rrqDisconnect.js"
-import { playerBroadcaster } from "../web/websocket/PlayerBroadcaster.js"
+import { playerBroadcaster } from "../shared/websocket/PlayerBroadcaster.js"
 
 /** Rate-limit `queueUpdate` websocket fan-out on Lavalink position ticks (pause/resume still immediate). */
 const lastQueueUpdateBroadcastAtMs = new Map<string, number>()

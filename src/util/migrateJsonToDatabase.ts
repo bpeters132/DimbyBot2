@@ -325,12 +325,15 @@ export async function migrateDownloadMetadata(
         const writeResult = await replaceDownloadMetadataStoreInDatabase(validEntries)
         result.migratedCount = writeResult.rowsWritten
 
-        if (writeResult.skippedEntries.length === 0) {
-            renameJsonAsMigrated(downloadMetadataJsonPath, logger)
-        } else {
+        if (writeResult.skippedEntries.length > 0) {
+            result.partial = true
+            result.failedCount += writeResult.skippedEntries.length
+            result.downloadMetadataWriteSkipped = writeResult.skippedEntries
             logger.warn(
                 `[JsonMigration] Not renaming JSON to .migrated (${writeResult.skippedEntries.length} row(s) skipped without resolvable guild id).`
             )
+        } else {
+            renameJsonAsMigrated(downloadMetadataJsonPath, logger)
         }
 
         logger.info(

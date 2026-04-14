@@ -1,8 +1,4 @@
-/**
- * OAuth2 `permissions` for the bot install URL. Must stay aligned with
- * `BOT_INVITE_PERMISSION_FLAGS` in `src/botApi/handlers/guildList.ts`.
- */
-const DISCORD_BOT_INVITE_PERMISSIONS = "3271680"
+import { DISCORD_BOT_INVITE_PERMISSIONS } from "../../shared/discordBotPermissions.js"
 
 /**
  * Discord bot authorization URL for "Add to server", using the same app id as OAuth (`CLIENT_ID`).

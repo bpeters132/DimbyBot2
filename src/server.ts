@@ -10,6 +10,10 @@ import { disconnectDatabase } from "./lib/database.js"
 import Logger from "./lib/Logger.js"
 import { setBotClient } from "./lib/botClientRegistry.js"
 import { resolvedBotApiPort } from "./lib/botApiPortEnv.js"
+import {
+    isPrivateLanOrLoopbackPeer,
+    shouldEnforceBotApiPrivateClientIp,
+} from "./util/botApiPrivatePeer.js"
 
 const logFilePath = path.join(import.meta.dirname, "..", "logs", "app.log")
 const botApiPort = resolvedBotApiPort()
@@ -132,11 +136,17 @@ async function run(): Promise<void> {
     try {
         client = await startBot(logger)
 
-        const { connectionManager } = await import("./web/websocket/ConnectionManager.js")
-        const { invalidatePermissionCache } = await import("./web/shared/permissions.js")
-        const { playerBroadcaster } = await import("./web/websocket/PlayerBroadcaster.js")
+        const { connectionManager } = await import("./shared/websocket/ConnectionManager.js")
+        const { invalidatePermissionCache } = await import("./shared/permissions.js")
+        const { playerBroadcaster } = await import("./shared/websocket/PlayerBroadcaster.js")
 
         const botApiApp = createBotApiApp()
+        const enforcePrivatePeers = shouldEnforceBotApiPrivateClientIp()
+        if (enforcePrivatePeers) {
+            logger.info(
+                "Bot API client IP policy: only RFC1918 private IPv4, IPv4 loopback, or IPv6 ::1 (BOT_API_REQUIRE_PRIVATE_CLIENT_IP)."
+            )
+        }
         logger.info(
             "Serving bot HTTP: /health, /api/guilds/* (Express), /ws (WebSocket). Next.js is not used here."
         )
@@ -146,6 +156,15 @@ async function run(): Promise<void> {
         stopHeartbeat = () => connectionManager.stopHeartbeat()
 
         server = http.createServer((req, res) => {
+            if (
+                enforcePrivatePeers &&
+                !isPrivateLanOrLoopbackPeer(req.socket.remoteAddress ?? undefined)
+            ) {
+                res.statusCode = 403
+                res.setHeader("Content-Type", "application/json; charset=utf-8")
+                res.end(JSON.stringify({ ok: false, error: "Forbidden" }))
+                return
+            }
             const pathOnly = pathnameOnly(req.url)
             if (pathOnly === "/health" || pathOnly === "/health/") {
                 if (isBotApiVerbose()) {
@@ -166,6 +185,13 @@ async function run(): Promise<void> {
         })
 
         server.on("upgrade", (req, socket, head) => {
+            if (
+                enforcePrivatePeers &&
+                !isPrivateLanOrLoopbackPeer(req.socket.remoteAddress ?? undefined)
+            ) {
+                socket.destroy()
+                return
+            }
             const pathOnly = pathnameOnly(req.url)
             if (pathOnly !== "/ws" && pathOnly !== "/ws/") {
                 socket.destroy()
@@ -193,6 +219,7 @@ async function run(): Promise<void> {
 
         client.on("voiceStateUpdate", (oldState, newState) => {
             const userId = newState.id
+            const botUserId = client.user?.id
             const guildIds = new Set<string>()
             if (newState.guild?.id) {
                 guildIds.add(newState.guild.id)
@@ -202,7 +229,11 @@ async function run(): Promise<void> {
                 guildIds.add(oldGuildId)
             }
             for (const guildId of guildIds) {
-                invalidatePermissionCache(guildId, userId)
+                if (botUserId && userId === botUserId) {
+                    invalidatePermissionCache(guildId)
+                } else {
+                    invalidatePermissionCache(guildId, userId)
+                }
                 playerBroadcaster.broadcastGuildVoiceState(guildId)
             }
         })
