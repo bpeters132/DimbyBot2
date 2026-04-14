@@ -142,6 +142,7 @@ export async function searchAndEnqueue(
                     requesterId,
                     error,
                 })
+                await cleanupCreatedPlayer()
                 return {
                     ok: false,
                     status: 503,
