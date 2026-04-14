@@ -34,6 +34,8 @@ services:
             - CLIENT_ID=${CLIENT_ID:?CLIENT_ID is required for dev (Discord OAuth)}
             - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:?DISCORD_CLIENT_SECRET is required for dev}
             - BOT_API_PORT=${BOT_API_PORT:-3001}
+            # Host / tooling may call the API from non-RFC1918 addresses; default off in dev (override in .env if needed).
+            - BOT_API_REQUIRE_PRIVATE_CLIENT_IP=${BOT_API_REQUIRE_PRIVATE_CLIENT_IP:-0}
             # Force color output for libraries like 'colors' or 'chalk'
             - FORCE_COLOR=true
             # Docker Desktop bind mounts can miss fs events; force polling for hot reload.

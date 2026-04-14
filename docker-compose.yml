@@ -1,6 +1,7 @@
 # Production / CI deploy: compose project is usually the host directory name (e.g. `bot` under /home/bot).
-# Bot HTTP + WebSocket listen on BOT_API_PORT inside `dimbybot` only — do not publish that port.
-# `dimbybot-web` reaches the bot at http://dimbybot:${BOT_API_PORT} on the `internal` bridge network.
+# Bot HTTP + WebSocket on BOT_API_PORT: published on all host interfaces so a reverse proxy on another LAN host
+# can reach <host>:<BOT_API_PORT>. `dimbybot-web` still uses http://dimbybot:${BOT_API_PORT} on `internal`.
+# With BOT_API_REQUIRE_PRIVATE_CLIENT_IP=1 (default), the bot rejects non–private-LAN TCP peers (RFC1918 + 127/8 + ::1).
 services:
     lavalink:
         image: ${LAVALINK_IMAGE}
@@ -86,6 +87,7 @@ services:
             - BOT_API_VERBOSE=${BOT_API_VERBOSE:-}
             - WEB_BOT_API_VERBOSE=${WEB_BOT_API_VERBOSE:-}
             - BOT_API_PORT=${BOT_API_PORT:-3001}
+            - BOT_API_REQUIRE_PRIVATE_CLIENT_IP=${BOT_API_REQUIRE_PRIVATE_CLIENT_IP:-1}
             # Optional absolute player WebSocket URL (ws/wss) for the dashboard container; see docker-compose.dashboard.yml.
             - WEBSOCKET_CLIENT_URL=${WEBSOCKET_CLIENT_URL:-}
             # Session verification for dashboard → bot API. The Next container (docker-compose.dashboard.yml) needs the same auth secrets.
@@ -112,13 +114,10 @@ services:
             - dimbybot-storage:/app/storage
             - dimbybot-logs:/app/logs
             - dimbybot-downloads:/app/downloads
-        # Bot API + WebSocket on BOT_API_PORT. Published only on loopback so a host reverse proxy (e.g. NPM on
-        # the same machine) can forward /ws to http://127.0.0.1:<BOT_API_PORT> without exposing the bot to the
-        # public internet. dimbybot-web still uses http://dimbybot:<port> on the Docker network (API_PROXY_TARGET).
-        # If NPM runs in Docker on the same `internal` network, you can use http://dimbybot:<port> there instead
-        # and this publish line is optional (but harmless).
+        # Bot API + WebSocket on BOT_API_PORT — published for off-box reverse proxies on the same LAN.
+        # Pair with BOT_API_REQUIRE_PRIVATE_CLIENT_IP=1 (default) and host firewall rules so only RFC1918 sources reach the port.
         ports:
-            - "127.0.0.1:${BOT_API_PORT:-3001}:${BOT_API_PORT:-3001}"
+            - "${BOT_API_PORT:-3001}:${BOT_API_PORT:-3001}"
         networks:
             - internal
 
