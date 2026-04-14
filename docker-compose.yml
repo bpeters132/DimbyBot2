@@ -106,8 +106,8 @@ services:
             - MUSICBRAINZ_CONTACT=${MUSICBRAINZ_CONTACT}
             - MUSICBRAINZ_CONTACT_URL=${MUSICBRAINZ_CONTACT_URL}
             - MUSICBRAINZ_SIMILAR=${MUSICBRAINZ_SIMILAR:-off}
-            # Database connection URL (uses service name 'postgres-db' as host)
-            - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-db:5432/${POSTGRES_DB}
+            # Prefer DATABASE_URL from project .env (password URL-encoded). Fallback builds from POSTGRES_*.
+            - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-db:5432/${POSTGRES_DB}}
         # Named volumes: persist across `compose up`/`down` (no -v). CI deploy uses this file only;
         # docker-compose.dev.yml binds ./storage for local dev and is not shipped to production.
         volumes:
