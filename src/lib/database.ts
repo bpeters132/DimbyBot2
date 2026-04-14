@@ -52,17 +52,41 @@ function classifyMigrateFailure(text: string): { tag: string; category: string }
     if (/\beacces\b/i.test(text) || lower.includes("permission denied")) {
         return { tag: "[permission]", category: "permission failure" }
     }
+    // Before generic "schema" matching — Prisma prints "Prisma schema loaded from …" on every run.
+    if (/\bp3009\b/i.test(text) || lower.includes("migrate found failed migrations")) {
+        return {
+            tag: "[p3009-failed-migration]",
+            category:
+                "a migration is marked failed in _prisma_migrations; Prisma will not apply newer migrations until it is resolved",
+        }
+    }
     if (
         /\bp2002\b/i.test(text) ||
         /\bp2003\b/i.test(text) ||
         /\bp3006\b/i.test(text) ||
         /\bp3018\b/i.test(text) ||
-        lower.includes("schema") ||
-        lower.includes("constraint")
+        lower.includes("constraint") ||
+        /\bduplicate key\b/i.test(text) ||
+        /\bunique constraint\b/i.test(text)
     ) {
         return { tag: "[schema-conflict]", category: "schema or constraint failure" }
     }
     return { tag: "[exit-code]", category: "migration command failure" }
+}
+
+/**
+ * Short operator hint when deploy fails with P3009 (must be appended after redaction; no secrets).
+ * @see https://www.prisma.io/docs/orm/prisma-migrate/workflows/troubleshooting-development
+ */
+function prismaP3009ResolutionHint(text: string): string {
+    const m = text.match(/The `([^`]+)` migration/m)
+    const name = m?.[1] ?? "<migration_name>"
+    return (
+        ` Prisma P3009 resolution: inspect _prisma_migrations and the DB for that migration, fix any partial state, then run ONE of: ` +
+        `yarn prisma migrate resolve --applied ${name} (if the migration SQL outcome is already correct), ` +
+        `or yarn prisma migrate resolve --rolled-back ${name} (if nothing from that migration should remain and you will re-run deploy). ` +
+        `Docs: https://pris.ly/d/migrate-resolve`
+    )
 }
 
 /** Returns the process-wide Prisma client singleton after {@link initializeDatabaseConnection}. */
@@ -183,9 +207,13 @@ export async function runPrismaMigrateDeploy(
             logger.warn(
                 `[Database][migrate] ${classified.tag} prisma migrate deploy exited with code ${code} (${classified.category})`
             )
+            const p3009Hint =
+                classified.tag === "[p3009-failed-migration]"
+                    ? prismaP3009ResolutionHint(redactedCombined)
+                    : ""
             reject(
                 new Error(
-                    `${classified.tag} prisma migrate deploy failed with exit code ${code} (${classified.category}). Output: ${redactedCombined || "(no output)"}`
+                    `${classified.tag} prisma migrate deploy failed with exit code ${code} (${classified.category}). Output: ${redactedCombined || "(no output)"}${p3009Hint}`
                 )
             )
         })
