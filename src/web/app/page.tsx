@@ -1,7 +1,20 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { LoginButton } from "@/components/LoginButton"
-import { readSessionSafe } from "@/server/auth-session"
+import { readSessionSafe, type SessionReadFailureKind } from "@/server/auth-session"
+
+function sessionFailureHint(kind: SessionReadFailureKind): string {
+    switch (kind) {
+        case "database_connectivity":
+            return "The app could not reach PostgreSQL (connection refused, timeout, or DNS). Confirm the dashboard container shares the Compose network with postgres-db and that DATABASE_URL points at postgres-db:5432 from inside Docker."
+        case "database_schema":
+            return "The database responded but expected tables are missing. Ensure Prisma migrations have been applied (the bot runs migrate deploy on startup when its database connection succeeds)."
+        case "auth_configuration":
+            return "Session or token handling failed (often BETTER_AUTH_SECRET differs between dimbybot and dimbybot-web, or cookies were issued by another environment). Align BETTER_AUTH_SECRET across both containers and clear site cookies for this domain."
+        default:
+            return "Check dimbybot-web logs for the correlation id below (search for [auth-session]). Open Service status to see whether the database probe succeeds independently of sign-in."
+    }
+}
 
 export default async function HomePage() {
     const sessionResult = await readSessionSafe()
@@ -24,6 +37,9 @@ export default async function HomePage() {
                     <p className="mt-2 text-muted-foreground">
                         The auth database may be offline or misconfigured. You can still try signing
                         in; if it fails, check services on the status page.
+                    </p>
+                    <p className="mt-3 text-muted-foreground">
+                        {sessionFailureHint(sessionReadError.failureKind)}
                     </p>
                     <p className="mt-2 font-mono text-xs text-muted-foreground">
                         Reference: {sessionReadError.correlationId}
