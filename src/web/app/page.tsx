@@ -3,6 +3,9 @@ import { redirect } from "next/navigation"
 import { LoginButton } from "@/components/LoginButton"
 import { readSessionSafe, type SessionReadFailureKind } from "@/server/auth-session"
 
+/** Session read uses `headers()`; avoid any static/CDN caching of personalized HTML. */
+export const dynamic = "force-dynamic"
+
 function sessionFailureHint(kind: SessionReadFailureKind): string {
     switch (kind) {
         case "database_connectivity":

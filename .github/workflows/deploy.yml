@@ -387,14 +387,14 @@ jobs:
                         ok_bot=0
                         ok_dashboard=0
                         if /usr/bin/docker exec dimbybot wget -q -O /dev/null "http://127.0.0.1:${BOT_API_PORT_VAL}/health" 2>/dev/null; then ok_bot=1; fi
-                        if curl --fail --silent "http://127.0.0.1:${WEB_PORT_VAL}/api/status" >/dev/null 2>&1; then
+                        if curl --fail --silent "http://127.0.0.1:${WEB_PORT_VAL}/api/health" >/dev/null 2>&1; then
                           ok_dashboard=1
                         fi
                         if [ "$ok_bot" -eq 1 ] && [ "$ok_dashboard" -eq 1 ]; then
                           echo "Health checks passed on attempt $attempt"
                           exit 0
                         fi
-                        echo "Health probe attempt $attempt/$max_attempts (bot:docker-exec/health=$ok_bot dashboard:${WEB_PORT_VAL}/api/status=$ok_dashboard) — sleeping ${sleep_seconds}s"
+                        echo "Health probe attempt $attempt/$max_attempts (bot:docker-exec/health=$ok_bot dashboard:${WEB_PORT_VAL}/api/health=$ok_dashboard) — sleeping ${sleep_seconds}s"
                         sleep "$sleep_seconds"
                         attempt=$((attempt + 1))
                       done

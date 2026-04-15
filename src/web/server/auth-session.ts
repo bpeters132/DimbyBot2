@@ -76,12 +76,11 @@ export async function readSessionSafe(): Promise<SessionReadResult> {
         const name = e instanceof Error ? e.name : "Error"
         const rawMessage = e instanceof Error ? e.message : String(e)
         const failureKind = classifyAuthSessionFailure(rawMessage)
-        console.error("[auth-session] failed to load session", {
-            correlationId,
-            name,
-            failureKind,
-            message: sanitizeErrorText(rawMessage, 800),
-        })
+        const safeMsg = sanitizeErrorText(rawMessage, 800)
+        // One line so `docker logs ... | grep correlationId` works across drivers.
+        console.error(
+            `[auth-session] failed correlationId=${correlationId} failureKind=${failureKind} name=${name} message=${safeMsg}`
+        )
         return { ok: false, message: "Failed to load session", correlationId, failureKind }
     }
 }

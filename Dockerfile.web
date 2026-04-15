@@ -41,7 +41,8 @@ ENV PORT=3000
 
 EXPOSE 3000
 
+# Liveness only: `/api/status` probes DB + bot and can exceed Docker's 5s probe timeout.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD wget --timeout=5 --tries=1 -qO- "http://127.0.0.1:${PORT:-3000}/api/status" >/dev/null 2>&1 || exit 1
+    CMD wget --timeout=5 --tries=1 -qO- "http://127.0.0.1:${PORT:-3000}/api/health" >/dev/null 2>&1 || exit 1
 
 ENTRYPOINT ["/app/web-entrypoint.sh"]

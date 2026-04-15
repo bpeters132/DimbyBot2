@@ -6,6 +6,9 @@ import { DashboardInviteLink } from "@/components/DashboardInviteLink"
 import { ServiceDegraded } from "@/components/ServiceDegraded"
 import { UserHeader } from "@/components/UserHeader"
 
+/** Session read uses `headers()`; avoid any static/CDN caching of personalized HTML. */
+export const dynamic = "force-dynamic"
+
 /** Dashboard layout wrapper: shared header, invite link, and session gate for dashboard routes. */
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
     const sessionResult = await readSessionSafe()
