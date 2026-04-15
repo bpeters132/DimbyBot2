@@ -3,6 +3,7 @@ import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
+import { webDashboardPromoAppend } from "../../util/webDashboardUrl.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -37,6 +38,7 @@ export default {
 
         // Use getPlayer first to potentially reuse existing player
         let player = client.lavalink.getPlayer(guild.id)
+        let createdNewPlayer = false
 
         if (!player) {
             player = await client.lavalink.createPlayer({
@@ -47,6 +49,7 @@ export default {
                 // selfMute: false, // Default is false
                 volume: 100, // Default volume
             })
+            createdNewPlayer = true
         }
 
         if (player.connected && player.voiceChannelId !== voiceChannel.id) {
@@ -77,7 +80,11 @@ export default {
             player
         )
 
-        // Edit the deferred reply with the result
-        await interaction.editReply(result.feedbackText || "Something went wrong.")
+        let replyText = result.feedbackText || "Something went wrong."
+        if (createdNewPlayer && result.success) {
+            replyText += webDashboardPromoAppend(guild.id)
+        }
+
+        await interaction.editReply(replyText)
     },
 }

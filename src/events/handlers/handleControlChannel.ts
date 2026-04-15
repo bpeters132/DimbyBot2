@@ -12,6 +12,7 @@ import { setTimeout as sleep } from "node:timers/promises"
 import type BotClient from "../../lib/BotClient.js"
 import { getDiscordErrorCode } from "../../util/discordErrorDetails.js"
 import { getGuildSettings, ensureStorageDir } from "../../util/saveControlChannel.js"
+import { guildWebPlayerPageUrl } from "../../util/webDashboardUrl.js"
 
 /**
  * Formats milliseconds into HH:MM:SS or MM:SS string.
@@ -33,12 +34,6 @@ function formatDuration(milliseconds: number | null | undefined) {
     return `${displayMinutes}:${displaySeconds}`
 }
 
-/**
- * Creates the embed for the player control message.
- * @param {import("../../lib/BotClient").default} client The bot client instance for logging.
- * @param {import("lavalink-client").Player | null | undefined} player The Lavalink player (if any).
- * @returns {EmbedBuilder} The created embed.
- */
 function requesterMention(req: unknown): string | null {
     if (req == null) return null
     if (typeof req === "string") return `<@${req}>`
@@ -48,7 +43,12 @@ function requesterMention(req: unknown): string | null {
     return null
 }
 
-export function createControlEmbed(client: BotClient, player: Player | null | undefined) {
+/** Persistent control-panel embed; optional `guildId` adds a web dashboard link when `BETTER_AUTH_URL` is set. */
+export function createControlEmbed(
+    client: BotClient,
+    player: Player | null | undefined,
+    guildId?: string
+) {
     client.debug(
         `[ControlHandler] Creating control embed. Player state: ${player ? `Playing: ${player.playing}, Current: ${!!player.queue?.current}, Queue Size: ${player.queue?.tracks?.length ?? 0}` : "null"}`
     )
@@ -109,6 +109,17 @@ export function createControlEmbed(client: BotClient, player: Player | null | un
                 inline: true,
             }
         )
+    }
+
+    if (guildId) {
+        const webUrl = guildWebPlayerPageUrl(guildId)
+        if (webUrl) {
+            embed.addFields({
+                name: "Web player",
+                value: `[Open this server's dashboard](${webUrl})`,
+                inline: false,
+            })
+        }
     }
 
     client.debug(
@@ -320,7 +331,7 @@ export async function updateControlMessage(
             `[ControlHandler] Fetched player state for guild ${guildId}: ${player ? "Exists" : "null"}`
         )
 
-        const updatedEmbed = createControlEmbed(client, player)
+        const updatedEmbed = createControlEmbed(client, player, guildId)
         const updatedButtons = createControlButtons(client, player)
 
         await controlMessage.edit({ embeds: [updatedEmbed], components: updatedButtons })

@@ -109,7 +109,7 @@ export default {
                 client.debug(
                     `[Control-Channel] Creating initial embed and buttons for guild ${guild.id}.`
                 )
-                const controlEmbed = createControlEmbed(client, player)
+                const controlEmbed = createControlEmbed(client, player, guild.id)
                 const controlButtons = createControlButtons(client, player)
 
                 client.debug(
