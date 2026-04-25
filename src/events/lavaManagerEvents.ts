@@ -465,7 +465,7 @@ export default async (client: BotClient) => {
                             error
                         )
                     }
-                }, 5000)
+                }, 60000)
             }
 
             if (isRRQActive(player) && userHasQueuedTracks(player, userId)) {
