@@ -339,6 +339,7 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
     const requestIdRef = useRef(0)
     const isSubmittingRef = useRef(false)
     const warnedQueueKeyFallbackRef = useRef(new Set<string>())
+    const addTrackInputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
         if (process.env.NODE_ENV !== "development") return
@@ -474,8 +475,9 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
 
     const playbackControlsDisabled =
         !canControlPlayback || !playerState?.inVoiceWithBot || submitting
-    const addTrackDisabled =
-        !canManageQueue || submitting || (playerState ? !playerState.canQueueTracks : true)
+    const addTrackInputDisabled =
+        !canManageQueue || (playerState ? !playerState.canQueueTracks : true)
+    const addTrackButtonDisabled = addTrackInputDisabled || submitting || !query.trim()
     const nowPlaying = playerState?.currentTrack ?? null
 
     useEffect(() => {
@@ -748,22 +750,26 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                             event.preventDefault()
                             if (!query.trim()) return
                             void runAction(() => actions.addTrack(query.trim())).then((ok) => {
-                                if (ok) setQuery("")
+                                if (ok) {
+                                    setQuery("")
+                                    queueMicrotask(() => addTrackInputRef.current?.focus())
+                                }
                             })
                         }}
                     >
                         <input
+                            ref={addTrackInputRef}
                             className="flex-1 rounded border bg-background px-3 py-2"
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
                             placeholder="Search or paste a URL"
                             aria-label="Search or paste a URL"
-                            disabled={addTrackDisabled}
+                            disabled={addTrackInputDisabled}
                         />
                         <button
                             type="submit"
                             className="rounded bg-primary px-4 py-2 text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                            disabled={addTrackDisabled || !query.trim()}
+                            disabled={addTrackButtonDisabled}
                         >
                             Add
                         </button>
