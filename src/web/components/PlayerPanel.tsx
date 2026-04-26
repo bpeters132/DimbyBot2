@@ -331,6 +331,8 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
     const [query, setQuery] = useState("")
     const [queuePage, setQueuePage] = useState(1)
     const [submitting, setSubmitting] = useState(false)
+    /** Add-track only; keeps the field non-editable without `disabled` (which drops focus). */
+    const [addTrackInFlight, setAddTrackInFlight] = useState(false)
 
     /** Must be Discord snowflake (not Better Auth internal id) for voice-state matching. */
     const socketUserId = discordUserId
@@ -749,22 +751,27 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                         onSubmit={(event) => {
                             event.preventDefault()
                             if (!query.trim()) return
-                            void runAction(() => actions.addTrack(query.trim())).then((ok) => {
-                                if (ok) {
-                                    setQuery("")
-                                    queueMicrotask(() => addTrackInputRef.current?.focus())
-                                }
-                            })
+                            setAddTrackInFlight(true)
+                            void runAction(() => actions.addTrack(query.trim()))
+                                .then((ok) => {
+                                    if (ok) {
+                                        setQuery("")
+                                        queueMicrotask(() => addTrackInputRef.current?.focus())
+                                    }
+                                })
+                                .finally(() => setAddTrackInFlight(false))
                         }}
                     >
                         <input
                             ref={addTrackInputRef}
-                            className="flex-1 rounded border bg-background px-3 py-2"
+                            className="flex-1 rounded border bg-background px-3 py-2 read-only:cursor-wait read-only:opacity-80"
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
                             placeholder="Search or paste a URL"
                             aria-label="Search or paste a URL"
+                            aria-busy={addTrackInFlight}
                             disabled={addTrackInputDisabled}
+                            readOnly={addTrackInFlight}
                         />
                         <button
                             type="submit"
