@@ -331,6 +331,8 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
     const [query, setQuery] = useState("")
     const [queuePage, setQueuePage] = useState(1)
     const [submitting, setSubmitting] = useState(false)
+    /** Add-track only; keeps the field non-editable without `disabled` (which drops focus). */
+    const [addTrackInFlight, setAddTrackInFlight] = useState(false)
 
     /** Must be Discord snowflake (not Better Auth internal id) for voice-state matching. */
     const socketUserId = discordUserId
@@ -339,6 +341,7 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
     const requestIdRef = useRef(0)
     const isSubmittingRef = useRef(false)
     const warnedQueueKeyFallbackRef = useRef(new Set<string>())
+    const addTrackInputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
         if (process.env.NODE_ENV !== "development") return
@@ -474,8 +477,9 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
 
     const playbackControlsDisabled =
         !canControlPlayback || !playerState?.inVoiceWithBot || submitting
-    const addTrackDisabled =
-        !canManageQueue || submitting || (playerState ? !playerState.canQueueTracks : true)
+    const addTrackInputDisabled =
+        !canManageQueue || (playerState ? !playerState.canQueueTracks : true)
+    const addTrackButtonDisabled = addTrackInputDisabled || submitting || !query.trim()
     const nowPlaying = playerState?.currentTrack ?? null
 
     useEffect(() => {
@@ -747,23 +751,32 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                         onSubmit={(event) => {
                             event.preventDefault()
                             if (!query.trim()) return
-                            void runAction(() => actions.addTrack(query.trim())).then((ok) => {
-                                if (ok) setQuery("")
-                            })
+                            setAddTrackInFlight(true)
+                            void runAction(() => actions.addTrack(query.trim()))
+                                .then((ok) => {
+                                    if (ok) {
+                                        setQuery("")
+                                        queueMicrotask(() => addTrackInputRef.current?.focus())
+                                    }
+                                })
+                                .finally(() => setAddTrackInFlight(false))
                         }}
                     >
                         <input
-                            className="flex-1 rounded border bg-background px-3 py-2"
+                            ref={addTrackInputRef}
+                            className="flex-1 rounded border bg-background px-3 py-2 read-only:cursor-wait read-only:opacity-80"
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
                             placeholder="Search or paste a URL"
                             aria-label="Search or paste a URL"
-                            disabled={addTrackDisabled}
+                            aria-busy={addTrackInFlight}
+                            disabled={addTrackInputDisabled}
+                            readOnly={addTrackInFlight}
                         />
                         <button
                             type="submit"
                             className="rounded bg-primary px-4 py-2 text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                            disabled={addTrackDisabled || !query.trim()}
+                            disabled={addTrackButtonDisabled}
                         >
                             Add
                         </button>
