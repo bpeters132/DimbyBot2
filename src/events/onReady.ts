@@ -40,13 +40,13 @@ export default async (client: BotClient) => {
                         await user.setActivity(`${guildCount} servers`, {
                             type: ActivityType.Watching,
                         })
-                        client.info(`Set status to ${guildCount} servers`)
+                        // client.info(`Set status to ${guildCount} servers`)
                     } else {
                         client.debug("Setting status to 'I hate that Pancake guy!'.") // Debug log
                         await user.setActivity("I hate that Pancake guy!", {
                             type: ActivityType.Custom,
                         })
-                        client.info("I hate that Pancake guy!")
+                        // client.info("I hate that Pancake guy!")
                     }
                     showGuildCount = !showGuildCount
                     client.debug(`showGuildCount toggled to: ${showGuildCount}`) // Debug log
