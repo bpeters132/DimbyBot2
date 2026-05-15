@@ -29,6 +29,8 @@ services:
             - BETTER_AUTH_URL=${BETTER_AUTH_URL}
             - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
             - CLIENT_ID=${CLIENT_ID}
+            # Admin gate: OWNER_ID is read by getCachedOwnerId() at module load to restrict /admin to the bot owner.
+            - OWNER_ID=${OWNER_ID}
             - EMAIL_USER=${EMAIL_USER}
             - EMAIL_PASS=${EMAIL_PASS}
             - FEEDBACK_EMAIL=${FEEDBACK_EMAIL}
