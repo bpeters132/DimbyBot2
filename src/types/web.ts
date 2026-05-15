@@ -155,3 +155,51 @@ export type WSMessage =
     | WsPingMessage
     | WsPongMessage
     | WsErrorMessage
+
+export interface AdminMetricsPlayerSummary {
+    guildId: string
+    guildName: string | null
+    status: "playing" | "paused" | "idle"
+    queueSize: number
+    currentTrack: { title: string; author?: string; uri?: string } | null
+}
+
+/** One Discord guild the bot is in (from guild cache). */
+export interface AdminGuildSummary {
+    guildId: string
+    guildName: string
+    memberCount: number | null
+}
+
+export interface AdminMetricsResponse {
+    /** Guilds the bot is currently in (Discord.js cache). */
+    guildCount: number
+    activePlayers: number
+    nodeCount: number
+    guilds: AdminGuildSummary[]
+    players: AdminMetricsPlayerSummary[]
+}
+
+export interface ErrorHistoryEntry {
+    timestamp: number
+    level: "error" | "warn"
+    message: string
+    guildId?: string
+    stack?: string
+}
+
+export interface AdminErrorsListResponse {
+    entries: ErrorHistoryEntry[]
+}
+
+export interface AdminDbStatsResponse {
+    sessions: { total: number; expired: number }
+    verifications: { total: number; expired: number }
+}
+
+export type AdminDbCleanupTarget = "sessions" | "verifications" | "all"
+
+export interface AdminDbCleanupResponse {
+    dryRun: boolean
+    deleted: { sessions?: number; verifications?: number }
+}

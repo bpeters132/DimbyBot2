@@ -1,6 +1,7 @@
 import winston from "winston"
 import colors from "colors"
 import type { DiscordLogForwarder, DiscordLogLevelName, LoggerInterface } from "../types/index.js"
+import { captureError } from "./errorHistory.js"
 
 /**
  * A simple logger class that logs to both the console with colors and a file.
@@ -193,6 +194,11 @@ export default class Logger implements LoggerInterface {
         this.logger.warn(fullMessage)
         console.log(colors.gray(this._getTimestamp()) + colors.yellow(` | WARN | ${fullMessage}`))
         this._notifyDiscord("warn", fullMessage)
+        try {
+            captureError("warn", fullMessage, Date.now())
+        } catch {
+            // Never break logging if the history buffer fails.
+        }
     }
 
     error(text: string, ...args: unknown[]) {
@@ -218,6 +224,16 @@ export default class Logger implements LoggerInterface {
             colors.gray(this._getTimestamp()) + colors.red(` | ERROR | ${consoleAndDiscordMessage}`)
         )
         this._notifyDiscord("error", consoleAndDiscordMessage)
+        try {
+            captureError(
+                "error",
+                consoleAndDiscordMessage,
+                Date.now(),
+                errorArg?.stack ?? undefined
+            )
+        } catch {
+            // Never break logging if the history buffer fails.
+        }
     }
 
     debug(text: string, ...args: unknown[]) {

@@ -181,6 +181,11 @@ function parseEnvBotOwnerId(): string | undefined {
 
 const CACHED_OWNER_ID = parseEnvBotOwnerId()
 
+/** Parsed `OWNER_ID` snowflake from env (undefined when unset or invalid). */
+export function getCachedOwnerId(): string | undefined {
+    return CACHED_OWNER_ID
+}
+
 export async function resolveUserPermissions(
     client: PermissionClient,
     guildId: string,
