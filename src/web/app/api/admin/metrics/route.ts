@@ -11,7 +11,13 @@ export async function GET(request: Request): Promise<Response> {
         const safeMessage = (error instanceof Error ? error.message : String(error)).slice(0, 500)
         console.error(`[api/admin/metrics] GET proxy failed: ${safeMessage}`)
         return NextResponse.json(
-            { ok: false, error: "Internal Server Error", details: { code: "INTERNAL_ERROR" } },
+            {
+                ok: false,
+                error: {
+                    error: safeMessage,
+                    details: "PROXY_ERROR",
+                },
+            },
             { status: 500 }
         )
     }

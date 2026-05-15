@@ -43,11 +43,15 @@ async function loadStats(): Promise<
 
         const typed = payload as unknown as ApiResponse<AdminDbStatsResponse>
         if (!res.ok || typed.ok === false) {
+            const errObj =
+                typed.ok === false && typed.error && typeof typed.error === "object"
+                    ? (typed.error as { error?: unknown; details?: unknown })
+                    : null
             const details =
-                typed.ok === false && typed.error?.details
-                    ? String(typed.error.details)
-                    : typed.ok === false
-                      ? typed.error.error
+                errObj?.details != null
+                    ? String(errObj.details)
+                    : errObj?.error != null
+                      ? String(errObj.error)
                       : `HTTP ${res.status}`
             return { ok: false, error: details }
         }

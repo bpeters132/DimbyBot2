@@ -685,7 +685,8 @@ export async function requireDeveloperAccess(
             ok: false,
             status: 403,
             error: "Discord account required",
-            details: `${msg} — Sign in with Discord, or sign out and sign in again.`,
+            details:
+                "Discord account required — please sign in with Discord or try again.",
         }
     }
     if (!discordUserId) {

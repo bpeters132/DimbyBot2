@@ -139,29 +139,34 @@ export default async function AdminOverviewPage() {
                     </div>
                 ) : (
                     <ul className="max-h-[min(24rem,50vh)] space-y-1 overflow-y-auto rounded-lg border bg-card p-2 text-sm">
-                        {guilds.map((g) => (
-                            <li
-                                key={g.guildId}
-                                className="flex flex-wrap items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50"
-                            >
-                                <div className="min-w-0">
-                                    <Link
-                                        href={`/dashboard/${g.guildId}`}
-                                        className="font-medium text-primary underline-offset-4 hover:underline"
-                                    >
-                                        {g.guildName}
-                                    </Link>
-                                    <p className="font-mono text-xs text-muted-foreground">
-                                        {g.guildId}
-                                    </p>
-                                </div>
-                                {g.memberCount != null ? (
-                                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                                        {g.memberCount.toLocaleString()} members
-                                    </span>
-                                ) : null}
-                            </li>
-                        ))}
+                        {guilds.map((g) => {
+                            const guildDisplayName = g.guildName ?? `Guild ${g.guildId}`
+                            return (
+                                <li
+                                    key={g.guildId}
+                                    className="flex flex-wrap items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50"
+                                >
+                                    <div className="min-w-0">
+                                        <Link
+                                            href={`/dashboard/${g.guildId}`}
+                                            className="font-medium text-primary underline-offset-4 hover:underline"
+                                            aria-label={`Open dashboard for ${guildDisplayName}`}
+                                            title={guildDisplayName}
+                                        >
+                                            {guildDisplayName}
+                                        </Link>
+                                        <p className="font-mono text-xs text-muted-foreground">
+                                            {g.guildId}
+                                        </p>
+                                    </div>
+                                    {g.memberCount != null ? (
+                                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                                            {g.memberCount.toLocaleString()} members
+                                        </span>
+                                    ) : null}
+                                </li>
+                            )
+                        })}
                     </ul>
                 )}
             </section>

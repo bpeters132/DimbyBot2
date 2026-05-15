@@ -43,7 +43,7 @@ export async function resolveAdminAccess(reqHeaders: Headers): Promise<AdminAcce
             ok: false,
             status: 403,
             error: "Discord account required",
-            details: `${msg} — Sign in with Discord, or sign out and sign in again.`,
+            details: "Sign in with Discord, or sign out and sign in again.",
         }
     }
     if (!discordUserId) {
