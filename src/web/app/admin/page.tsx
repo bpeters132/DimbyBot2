@@ -15,31 +15,80 @@ function statusPillClass(status: "playing" | "paused" | "idle"): string {
     return "bg-muted text-muted-foreground"
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null
+}
+
+function isAdminMetricsResponse(value: unknown): value is AdminMetricsResponse {
+    if (!isRecord(value)) return false
+    if (typeof value.guildCount !== "number") return false
+    if (typeof value.activePlayers !== "number") return false
+    if (typeof value.nodeCount !== "number") return false
+    if (!Array.isArray(value.guilds) || !Array.isArray(value.players)) return false
+    for (const g of value.guilds) {
+        if (!isRecord(g) || typeof g.guildId !== "string") return false
+        if (g.guildName !== null && typeof g.guildName !== "string") return false
+        if (g.memberCount !== null && typeof g.memberCount !== "number") return false
+    }
+    for (const p of value.players) {
+        if (!isRecord(p)) return false
+        if (typeof p.guildId !== "string") return false
+        if (p.guildName !== null && typeof p.guildName !== "string") return false
+        if (p.status !== "playing" && p.status !== "paused" && p.status !== "idle") return false
+        if (typeof p.queueSize !== "number") return false
+        const ct = p.currentTrack
+        if (ct != null) {
+            if (!isRecord(ct) || typeof ct.title !== "string") return false
+            if (ct.author !== undefined && typeof ct.author !== "string") return false
+            if (ct.uri !== undefined && typeof ct.uri !== "string") return false
+        }
+    }
+    return true
+}
+
 async function loadMetrics(): Promise<
     { ok: true; data: AdminMetricsResponse } | { ok: false; error: string }
 > {
-    const res = await serverFetchBot("/api/admin/metrics")
-    const text = await res.text()
-    if (!text.trim()) {
-        return { ok: false, error: "Empty response from bot API." }
-    }
-    let payload: unknown
     try {
-        payload = JSON.parse(text)
-    } catch {
-        return { ok: false, error: "Bot API returned invalid JSON." }
+        const res = await serverFetchBot("/api/admin/metrics")
+        const text = await res.text()
+        if (!text.trim()) {
+            return { ok: false, error: "Empty response from bot API." }
+        }
+        let payload: unknown
+        try {
+            payload = JSON.parse(text)
+        } catch {
+            return { ok: false, error: "Bot API returned invalid JSON." }
+        }
+
+        if (!isRecord(payload) || typeof payload.ok !== "boolean") {
+            return { ok: false, error: "Invalid response payload" }
+        }
+
+        const typed = payload as unknown as ApiResponse<AdminMetricsResponse>
+        if (!res.ok || typed.ok === false) {
+            const details =
+                typed.ok === false && typed.error?.details
+                    ? String(typed.error.details)
+                    : typed.ok === false
+                      ? typed.error.error
+                      : `HTTP ${res.status}`
+            return { ok: false, error: details }
+        }
+
+        if (typed.ok !== true || !("data" in typed)) {
+            return { ok: false, error: "Invalid response payload" }
+        }
+
+        if (!isAdminMetricsResponse(typed.data)) {
+            return { ok: false, error: "Invalid response payload" }
+        }
+
+        return { ok: true, data: typed.data }
+    } catch (err: unknown) {
+        return { ok: false, error: String(err) }
     }
-    const typed = payload as ApiResponse<AdminMetricsResponse>
-    if (!res.ok || typed.ok === false) {
-        const details =
-            typed.ok === false && typed.error?.details
-                ? String(typed.error.details)
-                : typed.ok === false
-                  ? typed.error.error
-                  : `HTTP ${res.status}`
-        return { ok: false, error: details }
-    }
-    return { ok: true, data: typed.data }
 }
 
 /** Admin overview: active Lavalink players and node count. */

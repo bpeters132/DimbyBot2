@@ -1,4 +1,4 @@
-import { ErrorsList } from "./ErrorsList"
+import { ErrorsList } from "./ErrorsList.js"
 
 /** Admin error history page. */
 export default function AdminErrorsPage() {

@@ -33,7 +33,19 @@ export async function resolveAdminAccess(reqHeaders: Headers): Promise<AdminAcce
         return { ok: false, status: 401, error: "Unauthorized" }
     }
 
-    const discordUserId = await resolveDiscordUserSnowflake(session.user.id, reqHeaders)
+    let discordUserId: string | null
+    try {
+        discordUserId = await resolveDiscordUserSnowflake(session.user.id, reqHeaders)
+    } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error("[admin-access] resolveDiscordUserSnowflake failed:", msg)
+        return {
+            ok: false,
+            status: 403,
+            error: "Discord account required",
+            details: `${msg} — Sign in with Discord, or sign out and sign in again.`,
+        }
+    }
     if (!discordUserId) {
         return {
             ok: false,

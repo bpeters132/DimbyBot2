@@ -6,11 +6,36 @@ import type {
     AdminDbCleanupResponse,
     AdminDbCleanupTarget,
     AdminDbStatsResponse,
-    ApiResponse,
 } from "@/types/web"
 
 type DatabaseToolsProps = {
     initialStats: AdminDbStatsResponse
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null
+}
+
+function isAdminDbCleanupResponse(value: unknown): value is AdminDbCleanupResponse {
+    if (!isRecord(value)) return false
+    if (typeof value.dryRun !== "boolean") return false
+    if (!isRecord(value.deleted)) return false
+    const { sessions, verifications } = value.deleted
+    const sessionsOk = sessions === undefined || typeof sessions === "number"
+    const verOk = verifications === undefined || typeof verifications === "number"
+    return sessionsOk && verOk
+}
+
+function isAdminDbStatsResponse(value: unknown): value is AdminDbStatsResponse {
+    if (!isRecord(value)) return false
+    const { sessions, verifications } = value
+    if (!isRecord(sessions) || !isRecord(verifications)) return false
+    return (
+        typeof sessions.total === "number" &&
+        typeof sessions.expired === "number" &&
+        typeof verifications.total === "number" &&
+        typeof verifications.expired === "number"
+    )
 }
 
 /** Expired session/verification cleanup with dry-run preview. */
@@ -37,32 +62,91 @@ export function DatabaseTools({ initialStats }: DatabaseToolsProps) {
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({ target }),
             })
-            const payload = (await res.json()) as ApiResponse<AdminDbCleanupResponse>
-            if (!res.ok || payload.ok === false) {
-                const msg =
-                    payload.ok === false
-                        ? (payload.error.details ?? payload.error.error)
-                        : `HTTP ${res.status}`
+            let payloadUnknown: unknown
+            try {
+                payloadUnknown = await res.json()
+            } catch {
+                setError(`HTTP ${res.status}: response was not valid JSON`)
+                return
+            }
+
+            if (!res.ok) {
+                let msg: string
+                if (
+                    isRecord(payloadUnknown) &&
+                    payloadUnknown.ok === false &&
+                    isRecord(payloadUnknown.error)
+                ) {
+                    const errObj = payloadUnknown.error
+                    const details = errObj.details
+                    const errStr = errObj.error
+                    msg =
+                        typeof details === "string"
+                            ? details
+                            : typeof errStr === "string"
+                              ? errStr
+                              : `HTTP ${res.status}`
+                } else {
+                    msg = `HTTP ${res.status}`
+                }
                 setError(String(msg))
                 return
             }
+
+            if (
+                !isRecord(payloadUnknown) ||
+                payloadUnknown.ok !== true ||
+                !("data" in payloadUnknown) ||
+                !isAdminDbCleanupResponse(payloadUnknown.data)
+            ) {
+                setError("Invalid cleanup response from server")
+                return
+            }
+
+            const data = payloadUnknown.data
+
             if (dryRun) {
-                setPreview(payload.data)
+                setPreview(data)
                 setConfirmRun(false)
             } else {
-                setResult(payload.data)
+                setResult(data)
                 setPreview(null)
                 setConfirmRun(false)
-                const statsRes = await fetch("/api/admin/database/stats", {
-                    credentials: "include",
-                })
-                const statsPayload = (await statsRes.json()) as ApiResponse<AdminDbStatsResponse>
-                if (statsRes.ok && statsPayload.ok === true) {
-                    setStats(statsPayload.data)
+                try {
+                    const statsRes = await fetch("/api/admin/database/stats", {
+                        credentials: "include",
+                    })
+                    if (!statsRes.ok) {
+                        console.warn(
+                            "[DatabaseTools] stats refresh failed:",
+                            `HTTP ${statsRes.status}`
+                        )
+                        return
+                    }
+                    let statsUnknown: unknown
+                    try {
+                        statsUnknown = await statsRes.json()
+                    } catch (parseErr: unknown) {
+                        console.warn("[DatabaseTools] stats refresh JSON parse failed:", parseErr)
+                        return
+                    }
+                    if (
+                        isRecord(statsUnknown) &&
+                        statsUnknown.ok === true &&
+                        "data" in statsUnknown &&
+                        isAdminDbStatsResponse(statsUnknown.data)
+                    ) {
+                        setStats(statsUnknown.data)
+                    } else {
+                        console.warn("[DatabaseTools] stats refresh returned unexpected payload")
+                    }
+                } catch (statsErr: unknown) {
+                    console.error("[DatabaseTools] stats refresh failed:", statsErr)
                 }
             }
         } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : "Cleanup request failed")
+            console.error("[DatabaseTools] cleanup request failed:", err)
+            setError("Cleanup request failed")
         } finally {
             setLoading(false)
         }
@@ -111,6 +195,7 @@ export function DatabaseTools({ initialStats }: DatabaseToolsProps) {
                 </div>
 
                 <fieldset className="flex flex-wrap gap-4 text-sm">
+                    <legend className="sr-only">Cleanup target</legend>
                     {(
                         [
                             ["sessions", "Sessions only"],

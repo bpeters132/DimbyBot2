@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
-import { guardAdminAccess } from "@/lib/admin-access"
-import { proxyBotApi } from "@/server/bot-api-proxy"
+import { guardAdminAccess } from "@/lib/admin-access.js"
+import { proxyBotApi } from "@/server/bot-api-proxy.js"
 
 export async function GET(request: Request): Promise<Response> {
     try {

@@ -672,10 +672,22 @@ export async function requireDeveloperAccess(
     }
 
     const resolvedHeaders = asHeaders(headers)
-    const discordUserId = await resolveDiscordUserSnowflake(
-        sessionResult.session.user.id,
-        resolvedHeaders
-    )
+    let discordUserId: string | null
+    try {
+        discordUserId = await resolveDiscordUserSnowflake(
+            sessionResult.session.user.id,
+            resolvedHeaders
+        )
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error)
+        console.error("[api-auth] requireDeveloperAccess resolveDiscordUserSnowflake failed:", msg)
+        return {
+            ok: false,
+            status: 403,
+            error: "Discord account required",
+            details: `${msg} — Sign in with Discord, or sign out and sign in again.`,
+        }
+    }
     if (!discordUserId) {
         return {
             ok: false,
