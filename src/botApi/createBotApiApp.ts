@@ -7,6 +7,9 @@ import { playerPlayPOST } from "./handlers/playerPlay.js"
 import { queueDELETE, queueGET, queuePOST } from "./handlers/queue.js"
 import { queueIndexDELETE, queueIndexPATCH } from "./handlers/queueIndex.js"
 import { dashboardPermissionsGET } from "./handlers/dashboardPermissions.js"
+import { adminMetricsGET } from "./handlers/admin/metrics.js"
+import { adminErrorsDELETE, adminErrorsGET } from "./handlers/admin/errors.js"
+import { adminDbCleanupPOST, adminDbStatsGET } from "./handlers/admin/database.js"
 import { BotClientNotInitializedError } from "../lib/botClientRegistry.js"
 
 /** Redacts credentials and long base64-like blobs from bot API error strings before JSON responses. */
@@ -166,6 +169,57 @@ export function createBotApiApp(): express.Express {
                 req.params.guildId,
                 req.params.index,
                 req.body
+            )
+            res.status(r.status).json(r.body)
+        } catch (error) {
+            next(error)
+        }
+    })
+
+    app.get("/api/admin/metrics", async (req, res, next) => {
+        try {
+            const r = await adminMetricsGET(incomingMessageToHeaders(req))
+            res.status(r.status).json(r.body)
+        } catch (error) {
+            next(error)
+        }
+    })
+
+    app.get("/api/admin/errors", async (req, res, next) => {
+        try {
+            const url = new URL(req.originalUrl || req.url || "/", "http://localhost")
+            const r = await adminErrorsGET(incomingMessageToHeaders(req), url.searchParams)
+            res.status(r.status).json(r.body)
+        } catch (error) {
+            next(error)
+        }
+    })
+
+    app.delete("/api/admin/errors", async (req, res, next) => {
+        try {
+            const r = await adminErrorsDELETE(incomingMessageToHeaders(req))
+            res.status(r.status).json(r.body)
+        } catch (error) {
+            next(error)
+        }
+    })
+
+    app.get("/api/admin/database/stats", async (req, res, next) => {
+        try {
+            const r = await adminDbStatsGET(incomingMessageToHeaders(req))
+            res.status(r.status).json(r.body)
+        } catch (error) {
+            next(error)
+        }
+    })
+
+    app.post("/api/admin/database/cleanup", async (req, res, next) => {
+        try {
+            const url = new URL(req.originalUrl || req.url || "/", "http://localhost")
+            const r = await adminDbCleanupPOST(
+                incomingMessageToHeaders(req),
+                req.body,
+                url.searchParams
             )
             res.status(r.status).json(r.body)
         } catch (error) {

@@ -148,7 +148,7 @@ async function run(): Promise<void> {
             )
         }
         logger.info(
-            "Serving bot HTTP: /health, /api/guilds/* (Express), /ws (WebSocket). Next.js is not used here."
+            "Serving bot HTTP: /health, /api/* (Express guild + admin routes), /ws (WebSocket). Next.js is not used here."
         )
 
         wss = new WebSocketServer({ noServer: true })
@@ -175,7 +175,7 @@ async function run(): Promise<void> {
                 res.end("ok")
                 return
             }
-            if (pathOnly.startsWith("/api/guilds")) {
+            if (pathOnly.startsWith("/api/")) {
                 botApiApp(req, res)
                 return
             }

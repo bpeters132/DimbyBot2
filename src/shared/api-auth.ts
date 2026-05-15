@@ -1,6 +1,7 @@
 import {
     WebPermission,
     type PermissionResolution,
+    getCachedOwnerId,
     hasRequiredPermissions,
     resolveGuildMemberForPermissions,
     resolveOauthGuildPermissionFallback,
@@ -51,6 +52,14 @@ export interface PermissionGuardSuccess {
 }
 
 export type PermissionGuardResult = GuardFailure | PermissionGuardSuccess
+
+export interface DeveloperGuardSuccess {
+    ok: true
+    session: AuthenticatedSession
+    discordUserId: string
+}
+
+export type DeveloperGuardResult = GuardFailure | DeveloperGuardSuccess
 
 export type GuildAccessResult =
     | { ok: true; memberResolved: boolean }
@@ -648,5 +657,61 @@ export async function requirePermissions(
         session: ctx.session,
         discordUserId: ctx.discordUserId,
         permissionResolution,
+    }
+}
+
+/**
+ * Authenticates the session and restricts access to the bot owner (`OWNER_ID`).
+ */
+export async function requireDeveloperAccess(
+    headers: Headers | Record<string, string>
+): Promise<DeveloperGuardResult> {
+    const sessionResult = await getAuthenticatedSession(headers)
+    if (sessionResult.ok === false) {
+        return sessionResult
+    }
+
+    const resolvedHeaders = asHeaders(headers)
+    let discordUserId: string | null
+    try {
+        discordUserId = await resolveDiscordUserSnowflake(
+            sessionResult.session.user.id,
+            resolvedHeaders
+        )
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error)
+        console.error("[api-auth] requireDeveloperAccess resolveDiscordUserSnowflake failed:", msg)
+        return {
+            ok: false,
+            status: 403,
+            error: "Discord account required",
+            details:
+                "Discord account required — please sign in with Discord or try again.",
+        }
+    }
+    if (!discordUserId) {
+        return {
+            ok: false,
+            status: 403,
+            error: "Discord account required",
+            details:
+                "We could not resolve your Discord user id (needed for roles and voice state). Sign in with Discord, or sign out and sign in again.",
+        }
+    }
+
+    const ownerId = getCachedOwnerId()
+    if (!ownerId || discordUserId !== ownerId) {
+        return {
+            ok: false,
+            status: 403,
+            error: "Forbidden",
+            details: "Developer access required.",
+        }
+    }
+
+    return {
+        ok: true,
+        session: sessionResult.session,
+        discordUserId,
     }
 }
