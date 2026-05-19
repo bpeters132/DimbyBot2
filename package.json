@@ -5,6 +5,7 @@
     "description": "A discord bot for friends!",
     "main": "./dist/server.js",
     "scripts": {
+        "postinstall": "prisma generate",
         "prebuild": "yarn db:generate",
         "predev": "yarn db:generate",
         "build": "yarn build:bot && yarn build:web",
@@ -48,7 +49,7 @@
         "express": "^5.2.1",
         "ffmpeg-static": "^5.3.0",
         "lavalink-client": "^2.9.9",
-        "nodemailer": "^8.0.3",
+        "nodemailer": "^8.0.5",
         "opusscript": "^0.1.1",
         "sodium": "^3.0.2",
         "winston": "^3.19.0",
@@ -71,6 +72,16 @@
         "prisma": "^7.6.0",
         "typescript": "^5.8.2",
         "typescript-eslint": "^8.26.1"
+    },
+    "resolutions": {
+        "undici": "^6.24.0",
+        "kysely": "^0.28.17",
+        "fast-uri": "^3.1.2",
+        "hono": "^4.12.18",
+        "@hono/node-server": "^1.19.13",
+        "lodash": "^4.18.0",
+        "**/chokidar/**/picomatch": "^2.3.2",
+        "**/tinyglobby/**/picomatch": "^4.0.4"
     },
     "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
     "nodemonConfig": {
