@@ -179,12 +179,14 @@ export async function addTrackToPlaylist(
     return rows[0]!
 }
 
-/** Appends multiple tracks in order with consecutive positions. */
-export async function addTracksToPlaylist(
+function isUniqueConstraintError(error: unknown): boolean {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002"
+}
+
+async function appendTracksInTransaction(
     playlistId: number,
     tracksData: PlaylistTrackInput[]
 ): Promise<PlaylistTrackData[]> {
-    if (tracksData.length === 0) return []
     const prisma = getPrismaClient()
     return prisma.$transaction(async (tx) => {
         const agg = await tx.playlistTrack.aggregate({
@@ -215,6 +217,26 @@ export async function addTracksToPlaylist(
         })
         return created
     })
+}
+
+/** Appends multiple tracks in order with consecutive positions. */
+export async function addTracksToPlaylist(
+    playlistId: number,
+    tracksData: PlaylistTrackInput[]
+): Promise<PlaylistTrackData[]> {
+    if (tracksData.length === 0) return []
+    const maxAttempts = 4
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+            return await appendTracksInTransaction(playlistId, tracksData)
+        } catch (error: unknown) {
+            if (!isUniqueConstraintError(error) || attempt === maxAttempts - 1) {
+                throw error
+            }
+            await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)))
+        }
+    }
+    return []
 }
 
 /** Moves a track from one 1-based position to another and renumbers the playlist. */

@@ -92,8 +92,6 @@ export async function enqueueResolvedPlaylistTracks(
         } catch (error: unknown) {
             playbackError = error instanceof Error ? error.message : String(error)
         }
-    } else {
-        playbackStarted = true
     }
     return {
         queued: toQueue.length,

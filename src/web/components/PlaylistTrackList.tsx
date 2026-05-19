@@ -81,6 +81,9 @@ export function PlaylistTrackList({
             const next = [...orderedTracks]
             next.splice(fromIndex, 1)
             next.splice(toIndex, 0, fromTrack)
+            next.forEach((track, index) => {
+                track.position = index + 1
+            })
             setOrderedTracks(next)
 
             void (async () => {

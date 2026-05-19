@@ -21,7 +21,8 @@ export async function GET(request: Request) {
     try {
         return await proxyBotApi(request)
     } catch (error: unknown) {
-        console.error("[api/guilds/voice-context] GET proxy failed", error)
+        const message = error instanceof Error ? error.message.slice(0, 200) : "unknown"
+        console.error("[api/guilds/voice-context] GET proxy failed:", message)
         return NextResponse.json({ error: "Bot API temporarily unavailable" }, { status: 503 })
     }
 }

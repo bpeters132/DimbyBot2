@@ -116,6 +116,7 @@ export default {
         const userId = interaction.user.id
         const subcommand = interaction.options.getSubcommand()
 
+        try {
         if (subcommand === "create") {
             const name = interaction.options.getString("name", true)
             const existing = await getPlaylist(userId, name)
@@ -240,10 +241,17 @@ export default {
                 })
             }
             const info = current.info
+            const uri = typeof info.uri === "string" ? info.uri.trim() : ""
+            if (!uri) {
+                return interaction.reply({
+                    content: "The current track has no URL and cannot be saved to a playlist.",
+                    ephemeral: true,
+                })
+            }
             await addTracksToPlaylist(playlist.id, [
                 {
                     title: info.title ?? "Unknown",
-                    uri: info.uri ?? "",
+                    uri,
                     author: info.author ?? "Unknown",
                     duration: info.duration ?? 0,
                     thumbnailUrl: thumbnailFromLavalinkTrack(current),
@@ -251,7 +259,7 @@ export default {
                 },
             ])
             return interaction.reply({
-                content: `Added **[${info.title}](${info.uri})** to **${name}**.`,
+                content: `Added **[${info.title}](${uri})** to **${name}**.`,
                 ephemeral: true,
             })
         }
@@ -352,6 +360,14 @@ export default {
         }
 
         return interaction.reply({ content: "Unknown subcommand.", ephemeral: true })
+        } catch (err: unknown) {
+            console.error("[Playlist command] execute failed", err)
+            const content = "An error occurred while processing your request."
+            if (interaction.deferred || interaction.replied) {
+                return interaction.editReply({ content })
+            }
+            return interaction.reply({ content, ephemeral: true })
+        }
     },
 }
 

@@ -47,8 +47,18 @@ async function parseApiResponse<T>(res: Response): Promise<Ok<T> | Err> {
         return { ok: false, error: `Request failed (${res.status}).` }
     }
     if (payload.ok === false) {
-        const msg = payload.error.details || payload.error.error || "Bot API returned an error."
-        return { ok: false, error: msg }
+        const err: unknown = payload.error
+        if (err != null && typeof err === "object") {
+            const errObj = err as { error?: string; details?: string }
+            const msg =
+                [errObj.details, errObj.error].filter(Boolean).join(" — ") ||
+                "Bot API returned an error."
+            return { ok: false, error: msg }
+        }
+        if (typeof err === "string" && err.trim()) {
+            return { ok: false, error: err.trim() }
+        }
+        return { ok: false, error: "Bot API returned an error." }
     }
     if (payload.data === undefined || payload.data === null) {
         return { ok: false, error: "Bot API returned success without data." }

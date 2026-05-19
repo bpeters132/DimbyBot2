@@ -256,9 +256,21 @@ export interface AddPlaylistTrackFromQueryBody {
     guildId?: string
 }
 
+/** Playlist track as returned in JSON API responses (`addedAt` is ISO string). */
+export interface SerializedPlaylistTrackData {
+    id: number
+    title: string
+    uri: string
+    author: string
+    duration: number
+    thumbnailUrl: string | null
+    addedAt: string
+    position: number
+}
+
 export interface AddTracksFromQueryResponse {
     added: number
-    tracks: PlaylistTrackData[]
+    tracks: SerializedPlaylistTrackData[]
 }
 
 export interface ReorderPlaylistTrackBody {

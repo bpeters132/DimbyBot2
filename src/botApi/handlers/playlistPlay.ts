@@ -1,7 +1,7 @@
 import { resolveWebRequesterDiscordId } from "../resolveWebRequesterId.js"
 import { WebPermission } from "../../shared/permissions.js"
 import type { ApiResponse } from "../../types/index.js"
-import type { PlayerStateResponse, PlaylistPlayResponse } from "../../types/web.js"
+import type { PlaylistPlayResponse } from "../../types/web.js"
 import { requirePermissions } from "../../shared/api-auth.js"
 import { getBotClient } from "../../lib/botClientRegistry.js"
 import { toPlayerStateResponse } from "../../shared/player-state.js"
@@ -10,7 +10,6 @@ import { searchAndEnqueue } from "./searchAndEnqueue.js"
 import {
     clearUpcomingQueue,
     enqueueResolvedPlaylistTracks,
-    pickPlayerForPlaylistSearch,
     resolveStoredPlaylistTracks,
 } from "../../util/playlistQueue.js"
 
@@ -46,8 +45,8 @@ export async function playerPlaylistPlayPOST(
         const playlistId =
             typeof body.playlistId === "number"
                 ? body.playlistId
-                : typeof body.playlistId === "string"
-                  ? Number.parseInt(body.playlistId, 10)
+                : typeof body.playlistId === "string" && /^[1-9]\d*$/.test(body.playlistId.trim())
+                  ? Number.parseInt(body.playlistId.trim(), 10)
                   : NaN
         if (!Number.isFinite(playlistId) || playlistId < 1) {
             return {
@@ -100,15 +99,15 @@ export async function playerPlaylistPlayPOST(
             client,
             guildId,
             requester.requesterId,
-            playlist.tracks[0]!.uri,
-            guard
+            "",
+            guard,
+            { connectOnly: true }
         )
         if (voiceSetup.ok === false) {
             return { status: voiceSetup.status, body: { ok: false, error: voiceSetup.error } }
         }
 
         const player = voiceSetup.player
-        await clearUpcomingQueue(player)
         const { resolved, failed } = await resolveStoredPlaylistTracks(
             player,
             playlist.tracks,

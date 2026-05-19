@@ -50,6 +50,7 @@ model PlaylistTrack {
   addedAt       DateTime
   position      Int
 
+  @@unique([playlistId, position])
   @@index([playlistId], name: "PlaylistTrack_playlistId_idx")
 }
 

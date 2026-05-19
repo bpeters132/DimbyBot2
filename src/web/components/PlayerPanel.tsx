@@ -163,6 +163,7 @@ function QueueTrackRow({ track, queueIndex }: QueueTrackRowProps) {
         durationMs: track.durationMs,
         thumbnailUrl: track.thumbnailUrl ?? null,
     }
+    const canSaveToPlaylist = Boolean(track.uri?.trim())
 
     return (
         <li
@@ -198,7 +199,7 @@ function QueueTrackRow({ track, queueIndex }: QueueTrackRowProps) {
                 rowLine
             )}
             </div>
-            <AddToPlaylistMenu track={playlistTrack} />
+            {canSaveToPlaylist ? <AddToPlaylistMenu track={playlistTrack} /> : null}
             {popoverLayout ? (
                 <div
                     className="fixed z-50 w-80 -translate-y-1/2 rounded border bg-popover p-3 text-popover-foreground shadow-lg"
@@ -683,16 +684,19 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                                 <div className="text-sm text-muted-foreground">
                                     Requested by: {requesterLabel(nowPlaying)}
                                 </div>
-                                <div className="pt-2">
-                                    <AddToPlaylistMenu
-                                        track={{
-                                            title: nowPlaying.title,
-                                            uri: nowPlaying.uri ?? "",
-                                            author: "Unknown",
-                                            durationMs: nowPlaying.durationMs,
-                                        }}
-                                    />
-                                </div>
+                                {nowPlaying.uri?.trim() ? (
+                                    <div className="pt-2">
+                                        <AddToPlaylistMenu
+                                            track={{
+                                                title: nowPlaying.title,
+                                                uri: nowPlaying.uri!.trim(),
+                                                author: "Unknown",
+                                                durationMs: nowPlaying.durationMs,
+                                                thumbnailUrl: nowPlaying.thumbnailUrl ?? null,
+                                            }}
+                                        />
+                                    </div>
+                                ) : null}
                             </div>
                         </div>
                         {playerState ? (

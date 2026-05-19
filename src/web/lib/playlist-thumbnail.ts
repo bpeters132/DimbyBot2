@@ -4,7 +4,7 @@ function thumbnailUrlFromUri(uri: string): string | null {
     const trimmed = uri.trim()
     if (!trimmed) return null
     const match = trimmed.match(
-        /(?:youtube\.com\/(?:watch\?.*v=|embed\/|v\/)|youtu\.be\/|music\.youtube\.com\/watch\?.*v=)([a-zA-Z0-9_-]{11})/
+        /(?:youtube\.com\/(?:watch\?.*v=|embed\/|v\/|shorts\/)|youtu\.be\/|music\.youtube\.com\/watch\?.*v=)([a-zA-Z0-9_-]{11})/
     )
     if (match?.[1]) {
         return `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg`
@@ -17,8 +17,7 @@ export function playlistTrackThumbnailUrl(track: {
     thumbnailUrl: string | null
     uri: string
 }): string | null {
-    if (track.thumbnailUrl) {
-        return sanitizeHttpUrl(track.thumbnailUrl)
-    }
+    const stored = track.thumbnailUrl ? sanitizeHttpUrl(track.thumbnailUrl) : null
+    if (stored) return stored
     return sanitizeHttpUrl(thumbnailUrlFromUri(track.uri))
 }

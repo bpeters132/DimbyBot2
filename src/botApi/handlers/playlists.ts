@@ -7,6 +7,7 @@ import type {
     PlaylistData,
     PlaylistListResponse,
     PlaylistTrackData,
+    SerializedPlaylistTrackData,
 } from "../../types/web.js"
 import {
     PlaylistDuplicateNameError,
@@ -63,16 +64,48 @@ async function resolvePlaylistUser(headers: Headers): Promise<AuthOk | AuthFail>
     return { ok: true, discordUserId }
 }
 
+const STRICT_POSITIVE_INT = /^[1-9]\d*$/
+
+function parseStrictPositiveInt(value: string): number | null {
+    const trimmed = value.trim()
+    if (!STRICT_POSITIVE_INT.test(trimmed)) return null
+    const n = Number.parseInt(trimmed, 10)
+    if (!Number.isFinite(n) || n < 1) return null
+    return n
+}
+
 function parsePlaylistId(playlistId: string): number | null {
-    const id = Number.parseInt(playlistId, 10)
-    if (!Number.isFinite(id) || id < 1) return null
-    return id
+    return parseStrictPositiveInt(playlistId)
 }
 
 function parsePosition(position: string): number | null {
-    const pos = Number.parseInt(position, 10)
-    if (!Number.isFinite(pos) || pos < 1) return null
-    return pos
+    return parseStrictPositiveInt(position)
+}
+
+function logPlaylistsHandlerError(handler: string, error: unknown): void {
+    console.error(`[playlists:${handler}]`, error)
+}
+
+function internalErrorBody(): ApiResponse<never> {
+    return {
+        ok: false,
+        error: { error: "internal_error", details: "Internal server error." },
+    }
+}
+
+function serializePlaylistTracksForApi(
+    tracks: PlaylistTrackData[]
+): SerializedPlaylistTrackData[] {
+    return tracks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        uri: t.uri,
+        author: t.author,
+        duration: t.duration,
+        thumbnailUrl: t.thumbnailUrl,
+        addedAt: t.addedAt.toISOString(),
+        position: t.position,
+    }))
 }
 
 async function requireOwnedPlaylist(
@@ -147,14 +180,8 @@ export async function playlistsGET(
             body: { ok: true, data: { playlists } },
         }
     } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error)
-        return {
-            status: 500,
-            body: {
-                ok: false,
-                error: { error: "internal_error", details: message },
-            },
-        }
+        logPlaylistsHandlerError("playlistsGET", error)
+        return { status: 500, body: internalErrorBody() }
     }
 }
 
@@ -200,14 +227,8 @@ export async function playlistsPOST(
                 },
             }
         }
-        const message = error instanceof Error ? error.message : String(error)
-        return {
-            status: 500,
-            body: {
-                ok: false,
-                error: { error: "internal_error", details: message },
-            },
-        }
+        logPlaylistsHandlerError("playlistsPOST", error)
+        return { status: 500, body: internalErrorBody() }
     }
 }
 
@@ -271,14 +292,8 @@ export async function playlistsDELETE(
             body: { ok: true, data: { deleted: true } },
         }
     } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error)
-        return {
-            status: 500,
-            body: {
-                ok: false,
-                error: { error: "internal_error", details: message },
-            },
-        }
+        logPlaylistsHandlerError("playlistsDELETE", error)
+        return { status: 500, body: internalErrorBody() }
     }
 }
 
@@ -333,14 +348,8 @@ export async function playlistTracksPOST(
         })
         return { status: 201, body: { ok: true, data: track } }
     } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error)
-        return {
-            status: 500,
-            body: {
-                ok: false,
-                error: { error: "internal_error", details: message },
-            },
-        }
+        logPlaylistsHandlerError("playlistTracksPOST", error)
+        return { status: 500, body: internalErrorBody() }
     }
 }
 
@@ -436,17 +445,14 @@ export async function playlistTracksFromQueryPOST(
         )
         return {
             status: 201,
-            body: { ok: true, data: { added: tracks.length, tracks } },
-        }
-    } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error)
-        return {
-            status: 500,
             body: {
-                ok: false,
-                error: { error: "internal_error", details: message },
+                ok: true,
+                data: { added: tracks.length, tracks: serializePlaylistTracksForApi(tracks) },
             },
         }
+    } catch (error: unknown) {
+        logPlaylistsHandlerError("playlistTracksFromQueryPOST", error)
+        return { status: 500, body: internalErrorBody() }
     }
 }
 
@@ -537,14 +543,8 @@ export async function playlistTrackMovePATCH(
                 },
             }
         }
-        const message = error instanceof Error ? error.message : String(error)
-        return {
-            status: 500,
-            body: {
-                ok: false,
-                error: { error: "internal_error", details: message },
-            },
-        }
+        logPlaylistsHandlerError("playlistTrackMovePATCH", error)
+        return { status: 500, body: internalErrorBody() }
     }
 }
 
@@ -609,13 +609,7 @@ export async function playlistTracksDELETE(
                 },
             }
         }
-        const message = error instanceof Error ? error.message : String(error)
-        return {
-            status: 500,
-            body: {
-                ok: false,
-                error: { error: "internal_error", details: message },
-            },
-        }
+        logPlaylistsHandlerError("playlistTracksDELETE", error)
+        return { status: 500, body: internalErrorBody() }
     }
 }

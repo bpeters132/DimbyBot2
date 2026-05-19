@@ -62,6 +62,9 @@ export default async function PlaylistDetailPage({ params, searchParams }: PageP
     const { guildId } = await searchParams
     const guildIdTrimmed =
         typeof guildId === "string" && /^\d+$/.test(guildId.trim()) ? guildId.trim() : undefined
+    if (!/^\d+$/.test(playlistIdParam)) {
+        notFound()
+    }
     const playlistId = Number.parseInt(playlistIdParam, 10)
     if (!Number.isFinite(playlistId) || playlistId < 1) {
         notFound()

@@ -163,15 +163,7 @@ export function PlaylistTrackRow({
                         {rowLine}
                     </a>
                 ) : (
-                    <span
-                        className={hoverSurfaceClass}
-                        tabIndex={0}
-                        role="button"
-                        onFocus={handleRowFocus}
-                        onBlur={handleRowBlur}
-                    >
-                        {rowLine}
-                    </span>
+                    <span className={hoverSurfaceClass}>{rowLine}</span>
                 )}
             </span>
             <Button

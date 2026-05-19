@@ -24,10 +24,12 @@ function parsePlayerSummary(raw: unknown): GuildListPlayerSummary | null {
         typeof p.currentTrackAuthor === "string" && p.currentTrackAuthor.trim()
             ? p.currentTrackAuthor.trim()
             : null
+    const botInVoiceChannel = p.botInVoiceChannel === true || p.botInVoiceChannel === "true"
+    const inVoiceWithBot = p.inVoiceWithBot === true || p.inVoiceWithBot === "true"
     return {
         status,
-        botInVoiceChannel: Boolean(p.botInVoiceChannel),
-        inVoiceWithBot: Boolean(p.inVoiceWithBot),
+        botInVoiceChannel,
+        inVoiceWithBot,
         currentTrackTitle: title,
         currentTrackAuthor: author,
         queueCount: Math.floor(queueCount),
