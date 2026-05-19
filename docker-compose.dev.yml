@@ -44,6 +44,9 @@ services:
             - CHOKIDAR_USEPOLLING=true
             - WATCHPACK_POLLING=true
             - WATCHPACK_POLLING_INTERVAL=1000
+            # `tsc -w` does not use Chokidar; polling avoids missed saves from the host (esp. Windows).
+            - TSC_WATCHFILE=PriorityPollingInterval
+            - TSC_WATCHDIRECTORY=DynamicPriorityPolling
 
     lavalink: # Add the lavalink service definition for development
         build:

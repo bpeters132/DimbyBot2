@@ -26,6 +26,33 @@ model DownloadMetadata {
   @@index([guildId], name: "DownloadMetadata_guildId_idx")
 }
 
+model Playlist {
+  id        Int             @id @default(autoincrement())
+  name      String
+  userId    String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  tracks    PlaylistTrack[]
+
+  @@unique([userId, name])
+  @@index([userId], name: "Playlist_userId_idx")
+}
+
+model PlaylistTrack {
+  id            Int      @id @default(autoincrement())
+  playlistId    Int
+  playlist      Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  title         String
+  uri           String
+  author        String
+  duration      Int
+  thumbnailUrl  String?
+  addedAt       DateTime
+  position      Int
+
+  @@index([playlistId], name: "PlaylistTrack_playlistId_idx")
+}
+
 model User {
   id            String    @id
   name          String

@@ -13,16 +13,41 @@ export interface StatusPayload {
     botApi: { ok: boolean; message?: string }
 }
 
+/** Active bot player snapshot for a guild on the dashboard server list. */
+export interface GuildListPlayerSummary {
+    status: "playing" | "paused" | "idle"
+    botInVoiceChannel: boolean
+    inVoiceWithBot: boolean
+    currentTrackTitle: string | null
+    currentTrackAuthor: string | null
+    queueCount: number
+}
+
 export interface GuildListItem {
     id: string
     name: string
     iconUrl: string | null
     memberCount: number | null
+    /** Present when the bot has a player session or is connected to voice in this guild. */
+    player: GuildListPlayerSummary | null
 }
 
 export interface GuildListResponse {
     guilds: GuildListItem[]
     botInviteUrl?: string
+}
+
+/** Guild where the signed-in user shares a VC with an active bot player session. */
+export interface ActivePlayerGuildContext {
+    guildId: string
+    guildName: string
+    guildIconUrl: string | null
+    status: "playing" | "paused" | "idle"
+    currentTrackTitle: string | null
+}
+
+export interface VoiceContextResponse {
+    activeGuild: ActivePlayerGuildContext | null
 }
 
 /**
@@ -202,4 +227,49 @@ export type AdminDbCleanupTarget = "sessions" | "verifications" | "all"
 export interface AdminDbCleanupResponse {
     dryRun: boolean
     deleted: { sessions?: number; verifications?: number }
+}
+
+export type {
+    PlaylistData,
+    PlaylistSummary,
+    PlaylistTrackData,
+} from "./index.js"
+
+import type { PlaylistSummary, PlaylistTrackData } from "./index.js"
+
+export interface PlaylistListResponse {
+    playlists: PlaylistSummary[]
+}
+
+export interface AddPlaylistTrackBody {
+    title: string
+    uri: string
+    author: string
+    duration: number
+    thumbnailUrl?: string | null
+    addedAt: string
+}
+
+export interface AddPlaylistTrackFromQueryBody {
+    query: string
+    /** Prefer Lavalink search via this guild's player when set. */
+    guildId?: string
+}
+
+export interface AddTracksFromQueryResponse {
+    added: number
+    tracks: PlaylistTrackData[]
+}
+
+export interface ReorderPlaylistTrackBody {
+    newPosition: number
+}
+
+export interface PlaylistPlayResponse {
+    state: PlayerStateResponse
+    playlistId: number
+    playlistName: string
+    queued: number
+    failed: number
+    shuffle: boolean
 }

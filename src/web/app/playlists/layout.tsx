@@ -7,11 +7,9 @@ import { ServiceDegraded } from "@/components/ServiceDegraded"
 import { GoToNowPlayingButton } from "@/components/GoToNowPlayingButton"
 import { UserHeader } from "@/components/UserHeader"
 
-/** Session read uses `headers()`; avoid any static/CDN caching of personalized HTML. */
 export const dynamic = "force-dynamic"
 
-/** Dashboard layout wrapper: shared header, invite link, and session gate for dashboard routes. */
-export default async function DashboardLayout({ children }: { children: ReactNode }) {
+export default async function PlaylistsLayout({ children }: { children: ReactNode }) {
     const sessionResult = await readSessionSafe()
 
     if (sessionResult.ok === false) {
@@ -32,7 +30,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
                 </header>
                 <main className="mx-auto w-full max-w-6xl p-4">
                     <ServiceDegraded
-                        title="Dashboard is temporarily unavailable"
+                        title="Playlists are temporarily unavailable"
                         description="We could not load your session. Please try again later."
                         detail="Please try again later or contact support if this persists."
                         supportReference={sessionResult.correlationId}

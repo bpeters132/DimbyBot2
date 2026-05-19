@@ -2,6 +2,8 @@ import { auth } from "../../shared/auth-node.js"
 import { fetchDiscordUserGuilds } from "../../util/discordUserGuilds.js"
 import { DISCORD_BOT_INVITE_PERMISSIONS } from "../../shared/discordBotPermissions.js"
 import { getAuthenticatedSession } from "../../shared/api-auth.js"
+import { resolveDiscordUserSnowflake } from "../../shared/discord-user-id.js"
+import { snapshotGuildListPlayer } from "../../shared/player-state.js"
 import { tryGetBotClient } from "../../lib/botClientRegistry.js"
 import type { ApiResponse } from "../../types/index.js"
 import type { GuildListResponse } from "../../types/web.js"
@@ -112,16 +114,31 @@ export async function guildListGET(
         }
     }
 
+    const discordUserId = await resolveDiscordUserSnowflake(
+        sessionResult.session.user.id,
+        headers
+    )
+
     const userGuilds = discordGuilds.guilds
     const botGuilds = botClient.guilds.cache
     const mutualGuilds = userGuilds
         .filter((guild) => botGuilds.has(guild.id))
-        .map((guild) => ({
-            id: guild.id,
-            name: guild.name,
-            iconUrl: discordGuildIconUrl(guild.id, guild.icon),
-            memberCount: botGuilds.get(guild.id)?.memberCount ?? null,
-        }))
+        .map((guild) => {
+            const lavalinkPlayer = botClient.lavalink.getPlayer(guild.id)
+            const player = snapshotGuildListPlayer(
+                guild.id,
+                discordUserId ?? undefined,
+                lavalinkPlayer,
+                botClient
+            )
+            return {
+                id: guild.id,
+                name: guild.name,
+                iconUrl: discordGuildIconUrl(guild.id, guild.icon),
+                memberCount: botGuilds.get(guild.id)?.memberCount ?? null,
+                player,
+            }
+        })
 
     const clientId = process.env.CLIENT_ID?.trim() || ""
     const botInviteUrl = clientId

@@ -23,9 +23,18 @@ export function UserHeader() {
 
     return (
         <div className="flex items-center justify-between">
-            <Link href="/dashboard" prefetch={false} className="font-semibold">
-                DimbyBot Dashboard
-            </Link>
+            <div className="flex items-center gap-4">
+                <Link href="/dashboard" prefetch={false} className="font-semibold">
+                    DimbyBot Dashboard
+                </Link>
+                <Link
+                    href="/playlists"
+                    prefetch={false}
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                    Playlists
+                </Link>
+            </div>
 
             <div className="flex items-center gap-3">
                 <div className="text-sm text-muted-foreground">

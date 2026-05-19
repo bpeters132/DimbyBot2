@@ -40,9 +40,10 @@ RUN yarn db:generate
 COPY --chmod=755 entrypoint.sh /usr/local/bin/dimbybot-entrypoint.sh
 COPY --chmod=755 entrypoint.dev.sh /usr/local/bin/dimbybot-dev-entrypoint.sh
 
+# Do not `chown -R` all of `/app` (node_modules has 100k+ files and rebuilds take minutes).
+# `entrypoint.dev.sh` fixes ownership of writable paths at container start.
 RUN addgroup -S devuser && adduser -S devuser -G devuser \
-    && mkdir -p /app/dist \
-    && chown -R devuser:devuser /app
+    && mkdir -p /app/dist
 
 # Runtime environment (see Dockerfile in repo root for the full list):
 # Autoplay: Spotify API on the bot (compose / .env):

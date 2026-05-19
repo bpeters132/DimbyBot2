@@ -16,6 +16,8 @@ import {
 import { WEB_PERMISSION } from "@/lib/web-permission-keys"
 import { getPlayerQueueAction, getPlayerStateAction } from "@/lib/actions/player.actions"
 import { sanitizeHttpUrl } from "@/lib/url-utils"
+import { AddToPlaylistMenu } from "@/components/AddToPlaylistMenu"
+import { PlayPlaylistMenu } from "@/components/PlayPlaylistMenu"
 import { ConnectionStatus } from "@/components/ConnectionStatus"
 import { usePlayerActions } from "@/hooks/usePlayerActions"
 import { usePlayerSocket } from "@/hooks/usePlayerSocket"
@@ -154,10 +156,18 @@ function QueueTrackRow({ track, queueIndex }: QueueTrackRowProps) {
         </>
     )
 
+    const playlistTrack = {
+        title: track.title,
+        uri: track.uri ?? "",
+        author: track.author ?? "Unknown",
+        durationMs: track.durationMs,
+        thumbnailUrl: track.thumbnailUrl ?? null,
+    }
+
     return (
         <li
             ref={liRef}
-            className="rounded border bg-background p-2"
+            className="flex items-start justify-between gap-2 rounded border bg-background p-2"
             tabIndex={safeQueueTrackUrl ? undefined : 0}
             onMouseMove={(event) => scheduleAnchorUpdate(event.clientX, event.clientY)}
             onMouseLeave={() => {
@@ -171,6 +181,7 @@ function QueueTrackRow({ track, queueIndex }: QueueTrackRowProps) {
             onFocus={safeQueueTrackUrl ? undefined : handleRowFocus}
             onBlur={safeQueueTrackUrl ? undefined : handleRowBlur}
         >
+            <div className="min-w-0 flex-1">
             {safeQueueTrackUrl ? (
                 <a
                     href={safeQueueTrackUrl}
@@ -186,6 +197,8 @@ function QueueTrackRow({ track, queueIndex }: QueueTrackRowProps) {
             ) : (
                 rowLine
             )}
+            </div>
+            <AddToPlaylistMenu track={playlistTrack} />
             {popoverLayout ? (
                 <div
                     className="fixed z-50 w-80 -translate-y-1/2 rounded border bg-popover p-3 text-popover-foreground shadow-lg"
@@ -670,6 +683,16 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
                                 <div className="text-sm text-muted-foreground">
                                     Requested by: {requesterLabel(nowPlaying)}
                                 </div>
+                                <div className="pt-2">
+                                    <AddToPlaylistMenu
+                                        track={{
+                                            title: nowPlaying.title,
+                                            uri: nowPlaying.uri ?? "",
+                                            author: "Unknown",
+                                            durationMs: nowPlaying.durationMs,
+                                        }}
+                                    />
+                                </div>
                             </div>
                         </div>
                         {playerState ? (
@@ -745,7 +768,31 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
 
             {canManageQueue ? (
                 <section className="rounded border bg-card p-4 text-card-foreground">
-                    <h2 className="mb-2 text-lg font-medium">Add Track</h2>
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <h2 className="text-lg font-medium">Add Track</h2>
+                        <PlayPlaylistMenu
+                            guildId={guildId}
+                            requesterDiscordUserId={discordUserId}
+                            disabled={addTrackInputDisabled}
+                            onQueued={() => {
+                                void (async () => {
+                                    const playerResult = await getPlayerStateAction(guildId)
+                                    if (playerResult.ok === true) {
+                                        setBaseState(playerResult.data)
+                                    }
+                                    setQueuePage(1)
+                                    const queueResult = await getPlayerQueueAction(
+                                        guildId,
+                                        1,
+                                        QUEUE_PAGE_SIZE
+                                    )
+                                    if (queueResult.ok === true) {
+                                        applyQueueResponse(queueResult.data)
+                                    }
+                                })()
+                            }}
+                        />
+                    </div>
                     <form
                         className="flex flex-col gap-2 md:flex-row"
                         onSubmit={(event) => {
