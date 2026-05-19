@@ -42,13 +42,33 @@ export async function playerPlaylistPlayPOST(
             playlistId?: unknown
             shuffle?: unknown
         }
-        const playlistId =
-            typeof body.playlistId === "number"
-                ? body.playlistId
-                : typeof body.playlistId === "string" && /^[1-9]\d*$/.test(body.playlistId.trim())
-                  ? Number.parseInt(body.playlistId.trim(), 10)
-                  : NaN
-        if (!Number.isFinite(playlistId) || playlistId < 1) {
+        let playlistId: number
+        if (typeof body.playlistId === "number") {
+            if (!Number.isFinite(body.playlistId) || !Number.isInteger(body.playlistId) || body.playlistId < 1) {
+                return {
+                    status: 400,
+                    body: {
+                        ok: false,
+                        error: { error: "Bad request", details: "playlistId is required." },
+                    },
+                }
+            }
+            playlistId = body.playlistId
+        } else if (
+            typeof body.playlistId === "string" &&
+            /^[1-9]\d*$/.test(body.playlistId.trim())
+        ) {
+            playlistId = Number.parseInt(body.playlistId.trim(), 10)
+        } else {
+            return {
+                status: 400,
+                body: {
+                    ok: false,
+                    error: { error: "Bad request", details: "playlistId is required." },
+                },
+            }
+        }
+        if (!Number.isInteger(playlistId) || playlistId < 1) {
             return {
                 status: 400,
                 body: {

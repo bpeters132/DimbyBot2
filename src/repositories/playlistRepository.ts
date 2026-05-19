@@ -269,13 +269,16 @@ export async function movePlaylistTrack(
         }
         reordered.splice(toPosition - 1, 0, moved)
         for (let i = 0; i < reordered.length; i++) {
-            const row = reordered[i]!
-            if (row.position !== i + 1) {
-                await tx.playlistTrack.update({
-                    where: { id: row.id },
-                    data: { position: i + 1 },
-                })
-            }
+            await tx.playlistTrack.update({
+                where: { id: reordered[i]!.id },
+                data: { position: -(i + 1) },
+            })
+        }
+        for (let i = 0; i < reordered.length; i++) {
+            await tx.playlistTrack.update({
+                where: { id: reordered[i]!.id },
+                data: { position: i + 1 },
+            })
         }
         await tx.playlist.update({
             where: { id: playlistId },

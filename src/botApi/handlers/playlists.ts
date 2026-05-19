@@ -31,37 +31,42 @@ type AuthOk = { ok: true; discordUserId: string }
 type AuthFail = { ok: false; status: number; body: ApiResponse<never> }
 
 async function resolvePlaylistUser(headers: Headers): Promise<AuthOk | AuthFail> {
-    const sessionResult = await getAuthenticatedSession(headers)
-    if (sessionResult.ok === false) {
-        return {
-            ok: false,
-            status: sessionResult.status,
-            body: {
+    try {
+        const sessionResult = await getAuthenticatedSession(headers)
+        if (sessionResult.ok === false) {
+            return {
                 ok: false,
-                error: { error: sessionResult.error, details: sessionResult.details },
-            },
-        }
-    }
-
-    const discordUserId = await resolveDiscordUserSnowflake(
-        sessionResult.session.user.id,
-        headers
-    )
-    if (!discordUserId) {
-        return {
-            ok: false,
-            status: 403,
-            body: {
-                ok: false,
-                error: {
-                    error: "Discord account required",
-                    details: "Could not resolve your Discord user id.",
+                status: sessionResult.status,
+                body: {
+                    ok: false,
+                    error: { error: sessionResult.error, details: sessionResult.details },
                 },
-            },
+            }
         }
-    }
 
-    return { ok: true, discordUserId }
+        const discordUserId = await resolveDiscordUserSnowflake(
+            sessionResult.session.user.id,
+            headers
+        )
+        if (!discordUserId) {
+            return {
+                ok: false,
+                status: 403,
+                body: {
+                    ok: false,
+                    error: {
+                        error: "Discord account required",
+                        details: "Could not resolve your Discord user id.",
+                    },
+                },
+            }
+        }
+
+        return { ok: true, discordUserId }
+    } catch (error: unknown) {
+        logPlaylistsHandlerError("resolvePlaylistUser", error)
+        return { ok: false, status: 500, body: internalErrorBody() }
+    }
 }
 
 const STRICT_POSITIVE_INT = /^[1-9]\d*$/
@@ -115,28 +120,33 @@ async function requireOwnedPlaylist(
     | { ok: true; playlist: PlaylistData }
     | { ok: false; status: number; body: ApiResponse<never> }
 > {
-    const playlist = await getPlaylistById(playlistId)
-    if (!playlist) {
-        return {
-            ok: false,
-            status: 404,
-            body: {
+    try {
+        const playlist = await getPlaylistById(playlistId)
+        if (!playlist) {
+            return {
                 ok: false,
-                error: { error: "Not found", details: "Playlist not found." },
-            },
+                status: 404,
+                body: {
+                    ok: false,
+                    error: { error: "Not found", details: "Playlist not found." },
+                },
+            }
         }
-    }
-    if (playlist.userId !== discordUserId) {
-        return {
-            ok: false,
-            status: 403,
-            body: {
+        if (playlist.userId !== discordUserId) {
+            return {
                 ok: false,
-                error: { error: "Forbidden", details: "You do not own this playlist." },
-            },
+                status: 403,
+                body: {
+                    ok: false,
+                    error: { error: "Forbidden", details: "You do not own this playlist." },
+                },
+            }
         }
+        return { ok: true, playlist }
+    } catch (error: unknown) {
+        logPlaylistsHandlerError("requireOwnedPlaylist", error)
+        return { ok: false, status: 500, body: internalErrorBody() }
     }
-    return { ok: true, playlist }
 }
 
 function parseTrackBody(raw: unknown): AddPlaylistTrackBody | null {
@@ -504,13 +514,37 @@ export async function playlistTrackMovePATCH(
         }
     }
     const newPositionRaw = (rawBody as { newPosition?: unknown }).newPosition
-    const newPosition =
-        typeof newPositionRaw === "number"
-            ? newPositionRaw
-            : typeof newPositionRaw === "string"
-              ? Number.parseInt(newPositionRaw, 10)
-              : NaN
-    if (!Number.isFinite(newPosition) || newPosition < 1) {
+    let newPosition: number
+    if (typeof newPositionRaw === "number") {
+        if (!Number.isInteger(newPositionRaw) || newPositionRaw < 1) {
+            return {
+                status: 400,
+                body: {
+                    ok: false,
+                    error: {
+                        error: "Bad request",
+                        details: "newPosition must be a positive integer.",
+                    },
+                },
+            }
+        }
+        newPosition = newPositionRaw
+    } else if (typeof newPositionRaw === "string") {
+        const parsed = parseStrictPositiveInt(newPositionRaw)
+        if (parsed === null) {
+            return {
+                status: 400,
+                body: {
+                    ok: false,
+                    error: {
+                        error: "Bad request",
+                        details: "newPosition must be a positive integer.",
+                    },
+                },
+            }
+        }
+        newPosition = parsed
+    } else {
         return {
             status: 400,
             body: {
@@ -521,7 +555,7 @@ export async function playlistTrackMovePATCH(
     }
 
     try {
-        await movePlaylistTrack(playlistId, fromPosition, Math.floor(newPosition))
+        await movePlaylistTrack(playlistId, fromPosition, newPosition)
         const updated = await getPlaylistById(playlistId)
         if (!updated) {
             return {

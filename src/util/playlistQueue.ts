@@ -28,28 +28,56 @@ function isResolvedTrack(track: unknown): track is Track {
     )
 }
 
-/** Resolves stored playlist URIs via Lavalink search (one result per row). */
+/** Parallel Lavalink lookups when loading saved playlists into the queue. */
+const PLAYLIST_RESOLVE_CONCURRENCY = 6
+
+async function resolveStoredTrackAtIndex(
+    player: Player,
+    uri: string,
+    requester: unknown
+): Promise<Track | null> {
+    try {
+        const res = await player.search(uri, requester)
+        const first = res?.tracks?.[0]
+        return isResolvedTrack(first) ? first : null
+    } catch {
+        return null
+    }
+}
+
+/** Resolves stored playlist URIs via Lavalink (parallel, preserves track order). */
 export async function resolveStoredPlaylistTracks(
     player: Player,
     storedTracks: Pick<PlaylistTrackData, "uri">[],
     requester: unknown
 ): Promise<{ resolved: Track[]; failed: number }> {
-    const resolved: Track[] = []
-    let failed = 0
-    for (const stored of storedTracks) {
-        try {
-            const res = await player.search(stored.uri, requester)
-            const first = res?.tracks?.[0]
-            if (isResolvedTrack(first)) {
-                resolved.push(first)
-            } else {
-                failed++
-            }
-        } catch {
-            failed++
+    if (storedTracks.length === 0) {
+        return { resolved: [], failed: 0 }
+    }
+
+    const slots: (Track | null)[] = new Array(storedTracks.length).fill(null)
+    let nextIndex = 0
+
+    async function worker(): Promise<void> {
+        while (true) {
+            const i = nextIndex++
+            if (i >= storedTracks.length) return
+            slots[i] = await resolveStoredTrackAtIndex(
+                player,
+                storedTracks[i]!.uri,
+                requester
+            )
         }
     }
-    return { resolved, failed }
+
+    const workerCount = Math.min(PLAYLIST_RESOLVE_CONCURRENCY, storedTracks.length)
+    await Promise.all(Array.from({ length: workerCount }, () => worker()))
+
+    const resolved: Track[] = []
+    for (const track of slots) {
+        if (track) resolved.push(track)
+    }
+    return { resolved, failed: storedTracks.length - resolved.length }
 }
 
 export type EnqueuePlaylistResult = {

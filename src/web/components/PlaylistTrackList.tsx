@@ -74,16 +74,19 @@ export function PlaylistTrackList({
 
             if (fromIndex === null || fromIndex === toIndex || busy) return
 
-            const previous = orderedTracks
+            const previous = orderedTracks.map((track) => ({ ...track }))
             const fromTrack = orderedTracks[fromIndex]
             if (!fromTrack) return
+            const originalFromPosition = fromTrack.position
 
-            const next = [...orderedTracks]
-            next.splice(fromIndex, 1)
-            next.splice(toIndex, 0, fromTrack)
-            next.forEach((track, index) => {
-                track.position = index + 1
-            })
+            const reordered = [...orderedTracks]
+            const [moved] = reordered.splice(fromIndex, 1)
+            if (!moved) return
+            reordered.splice(toIndex, 0, moved)
+            const next = reordered.map((track, index) => ({
+                ...track,
+                position: index + 1,
+            }))
             setOrderedTracks(next)
 
             void (async () => {
@@ -91,7 +94,7 @@ export function PlaylistTrackList({
                 setError(null)
                 const result = await movePlaylistTrackAction(
                     playlistId,
-                    fromTrack.position,
+                    originalFromPosition,
                     toIndex + 1
                 )
                 setBusy(false)

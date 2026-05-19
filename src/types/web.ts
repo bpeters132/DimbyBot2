@@ -235,7 +235,7 @@ export type {
     PlaylistTrackData,
 } from "./index.js"
 
-import type { PlaylistSummary, PlaylistTrackData } from "./index.js"
+import type { PlaylistSummary } from "./index.js"
 
 export interface PlaylistListResponse {
     playlists: PlaylistSummary[]

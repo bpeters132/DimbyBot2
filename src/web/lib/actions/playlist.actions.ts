@@ -10,6 +10,7 @@ import type {
     PlaylistPlayResponse,
     PlaylistTrackData,
 } from "@/types/web"
+import { playlistPlayTimeoutMs } from "@/lib/playlist-play-timeout"
 import { serverFetchBot } from "@/server/fetch-bot-api"
 
 type Ok<T> = { ok: true; data: T }
@@ -188,7 +189,8 @@ export async function playPlaylistInGuildAction(
     guildId: string,
     playlistId: number,
     requesterDiscordUserId: string,
-    shuffle = false
+    shuffle = false,
+    trackCount?: number
 ): Promise<Ok<PlaylistPlayResponse> | Err> {
     try {
         const res = await serverFetchBot(`/api/guilds/${guildId}/player/play-playlist`, {
@@ -199,8 +201,17 @@ export async function playPlaylistInGuildAction(
                 requesterDiscordUserId,
             }),
             contentType: "application/json",
+            timeoutMs: playlistPlayTimeoutMs(trackCount ?? 1),
         })
-        return parseApiResponse<PlaylistPlayResponse>(res)
+        const parsed = await parseApiResponse<PlaylistPlayResponse>(res)
+        if (parsed.ok === false && res.status === 504) {
+            return {
+                ok: false,
+                error:
+                    "The playlist is still loading on the bot but the dashboard timed out. Check the queue — tracks may appear shortly.",
+            }
+        }
+        return parsed
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to queue playlist."
         return { ok: false, error: message }

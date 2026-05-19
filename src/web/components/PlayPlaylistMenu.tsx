@@ -67,12 +67,17 @@ export function PlayPlaylistMenu({
             return
         }
         setBusy(true)
+        const loadingToastId = toast.loading(
+            `Loading "${playlist.name}" (${playlist.trackCount} track${playlist.trackCount === 1 ? "" : "s"})…`
+        )
         const result = await playPlaylistInGuildAction(
             guildId,
             playlist.id,
             requesterId,
-            shuffle
+            shuffle,
+            playlist.trackCount
         )
+        toast.dismiss(loadingToastId)
         setBusy(false)
         if (result.ok === false) {
             toast.error(result.error)

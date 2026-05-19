@@ -291,25 +291,26 @@ export default {
         if (subcommand === "play") {
             const name = interaction.options.getString("name", true)
             const shuffle = interaction.options.getBoolean("shuffle") ?? false
-            const playlist = await getPlaylist(userId, name)
-            if (!playlist) {
-                return interaction.reply({
-                    content: `No playlist named **${name}** found.`,
-                    ephemeral: true,
-                })
-            }
-            if (playlist.tracks.length === 0) {
-                return interaction.reply({
-                    content: `**${name}** has no tracks.`,
-                    ephemeral: true,
-                })
-            }
 
             const voiceChannel = member.voice.channel
             if (!voiceChannel) {
                 return interaction.reply({
                     content: "Join a voice channel first!",
                     ephemeral: true,
+                })
+            }
+
+            await interaction.deferReply({ ephemeral: true })
+
+            const playlist = await getPlaylist(userId, name)
+            if (!playlist) {
+                return interaction.editReply({
+                    content: `No playlist named **${name}** found.`,
+                })
+            }
+            if (playlist.tracks.length === 0) {
+                return interaction.editReply({
+                    content: `**${name}** has no tracks.`,
                 })
             }
 
@@ -325,13 +326,10 @@ export default {
             }
 
             if (player.connected && player.voiceChannelId !== voiceChannel.id) {
-                return interaction.reply({
+                return interaction.editReply({
                     content: "You need to be in the same voice channel as the bot!",
-                    ephemeral: true,
                 })
             }
-
-            await interaction.deferReply()
 
             const { resolved, failed } = await resolveStoredPlaylistTracks(
                 player,
