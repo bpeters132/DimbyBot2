@@ -3,6 +3,7 @@
     "private": true,
     "type": "module",
     "scripts": {
+        "postinstall": "yarn --cwd ../.. db:generate",
         "predev": "node scripts/predev.js",
         "dev": "next dev --webpack --hostname 0.0.0.0",
         "typecheck": "tsc --noEmit",
