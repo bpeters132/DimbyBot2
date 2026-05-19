@@ -10,10 +10,22 @@ if (!fs.existsSync(schemaPath)) {
     process.exit(0)
 }
 
-const prismaCli = path.join(repoRoot, "node_modules", "prisma", "build", "index.js")
-const result = spawnSync(process.execPath, [prismaCli, "generate"], {
+const prismaBin = path.join(
+    repoRoot,
+    "node_modules",
+    ".bin",
+    process.platform === "win32" ? "prisma.cmd" : "prisma"
+)
+if (!fs.existsSync(prismaBin)) {
+    console.error("[postinstall-prisma] Prisma CLI not found; install root dependencies first.")
+    process.exit(1)
+}
+
+const result = spawnSync(prismaBin, ["generate"], {
     cwd: repoRoot,
     stdio: "inherit",
+    env: process.env,
+    shell: process.platform === "win32",
 })
 
 process.exit(result.status ?? 1)
