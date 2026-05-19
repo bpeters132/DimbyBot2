@@ -53,7 +53,7 @@
         "opusscript": "^0.1.1",
         "sodium": "^3.0.2",
         "winston": "^3.19.0",
-        "ws": "^8.20.0"
+        "ws": "^8.20.1"
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
@@ -74,6 +74,7 @@
         "typescript-eslint": "^8.26.1"
     },
     "resolutions": {
+        "ws": "^8.20.1",
         "undici": "^6.24.0",
         "kysely": "^0.28.17",
         "fast-uri": "^3.1.2",
