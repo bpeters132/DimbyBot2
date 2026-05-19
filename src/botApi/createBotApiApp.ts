@@ -2,6 +2,7 @@ import express from "express"
 import { isBotApiVerbose } from "../util/botApiVerboseEnv.js"
 import { incomingMessageToHeaders } from "./httpUtil.js"
 import { guildListGET } from "./handlers/guildList.js"
+import { voiceContextGET } from "./handlers/voiceContext.js"
 import { playerGET, playerPOST } from "./handlers/player.js"
 import { playerPlayPOST } from "./handlers/playerPlay.js"
 import { queueDELETE, queueGET, queuePOST } from "./handlers/queue.js"
@@ -11,6 +12,17 @@ import { adminMetricsGET } from "./handlers/admin/metrics.js"
 import { adminErrorsDELETE, adminErrorsGET } from "./handlers/admin/errors.js"
 import { adminDbCleanupPOST, adminDbStatsGET } from "./handlers/admin/database.js"
 import { BotClientNotInitializedError } from "../lib/botClientRegistry.js"
+import {
+    playlistTrackMovePATCH,
+    playlistTracksDELETE,
+    playlistTracksFromQueryPOST,
+    playlistTracksPOST,
+    playlistsDELETE,
+    playlistsDetailGET,
+    playlistsGET,
+    playlistsPOST,
+} from "./handlers/playlists.js"
+import { playerPlaylistPlayPOST } from "./handlers/playlistPlay.js"
 
 /** Redacts credentials and long base64-like blobs from bot API error strings before JSON responses. */
 function redactBotApiErrorText(text: string): string {
@@ -74,6 +86,15 @@ export function createBotApiApp(): express.Express {
         }
     })
 
+    app.get("/api/guilds/voice-context", async (req, res, next) => {
+        try {
+            const r = await voiceContextGET(incomingMessageToHeaders(req))
+            res.status(r.status).json(r.body)
+        } catch (error) {
+            next(error)
+        }
+    })
+
     app.get("/api/guilds/:guildId/dashboard-permissions", async (req, res, next) => {
         try {
             const r = await dashboardPermissionsGET(
@@ -107,6 +128,19 @@ export function createBotApiApp(): express.Express {
     app.post("/api/guilds/:guildId/player/play", async (req, res, next) => {
         try {
             const r = await playerPlayPOST(
+                incomingMessageToHeaders(req),
+                req.params.guildId,
+                req.body
+            )
+            res.status(r.status).json(r.body)
+        } catch (error) {
+            next(error)
+        }
+    })
+
+    app.post("/api/guilds/:guildId/player/play-playlist", async (req, res, next) => {
+        try {
+            const r = await playerPlaylistPlayPOST(
                 incomingMessageToHeaders(req),
                 req.params.guildId,
                 req.body
@@ -169,6 +203,101 @@ export function createBotApiApp(): express.Express {
                 req.params.guildId,
                 req.params.index,
                 req.body
+            )
+            res.status(r.status).json(r.body)
+        } catch (error) {
+            next(error)
+        }
+    })
+
+    app.get("/api/playlists", async (req, res, next) => {
+        try {
+            const r = await playlistsGET(incomingMessageToHeaders(req))
+            res.status(r.status).json(r.body)
+        } catch (error) {
+            next(error)
+        }
+    })
+
+    app.post("/api/playlists", async (req, res, next) => {
+        try {
+            const r = await playlistsPOST(incomingMessageToHeaders(req), req.body)
+            res.status(r.status).json(r.body)
+        } catch (error) {
+            next(error)
+        }
+    })
+
+    app.get("/api/playlists/:playlistId", async (req, res, next) => {
+        try {
+            const r = await playlistsDetailGET(
+                incomingMessageToHeaders(req),
+                req.params.playlistId
+            )
+            res.status(r.status).json(r.body)
+        } catch (error) {
+            next(error)
+        }
+    })
+
+    app.delete("/api/playlists/:playlistId", async (req, res, next) => {
+        try {
+            const r = await playlistsDELETE(
+                incomingMessageToHeaders(req),
+                req.params.playlistId
+            )
+            res.status(r.status).json(r.body)
+        } catch (error) {
+            next(error)
+        }
+    })
+
+    app.post("/api/playlists/:playlistId/tracks", async (req, res, next) => {
+        try {
+            const r = await playlistTracksPOST(
+                incomingMessageToHeaders(req),
+                req.params.playlistId,
+                req.body
+            )
+            res.status(r.status).json(r.body)
+        } catch (error) {
+            next(error)
+        }
+    })
+
+    app.post("/api/playlists/:playlistId/tracks/from-query", async (req, res, next) => {
+        try {
+            const r = await playlistTracksFromQueryPOST(
+                incomingMessageToHeaders(req),
+                req.params.playlistId,
+                req.body
+            )
+            res.status(r.status).json(r.body)
+        } catch (error) {
+            next(error)
+        }
+    })
+
+    app.patch("/api/playlists/:playlistId/tracks/:position", async (req, res, next) => {
+        try {
+            const r = await playlistTrackMovePATCH(
+                incomingMessageToHeaders(req),
+                req.params.playlistId,
+                req.params.position,
+                req.body
+            )
+            res.status(r.status).json(r.body)
+        } catch (error) {
+            next(error)
+        }
+    })
+
+    app.delete("/api/playlists/:playlistId/tracks/:position", async (req, res, next) => {
+        try {
+            const r = await playlistTracksDELETE(
+                incomingMessageToHeaders(req),
+                req.params.playlistId,
+                req.params.position
             )
             res.status(r.status).json(r.body)
         } catch (error) {

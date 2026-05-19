@@ -3,6 +3,8 @@ import { WEB_PERMISSION } from "@/lib/web-permission-keys"
 import { getGuildDashboardSnapshotAction } from "@/server/dashboard-permissions.actions"
 import { PlayerPanel } from "@/components/PlayerPanel"
 
+export const maxDuration = 300
+
 interface GuildPageProps {
     params: Promise<{ guildId: string }>
 }

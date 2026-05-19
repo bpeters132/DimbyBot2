@@ -24,6 +24,11 @@ export type SearchAndEnqueueSuccess = {
 
 export type SearchAndEnqueueResult = SearchAndEnqueueSuccess | SearchAndEnqueueFailure
 
+export type SearchAndEnqueueOptions = {
+    /** Connect the player to the requester's VC without searching or enqueueing. */
+    connectOnly?: boolean
+}
+
 function isMemberFetchNotFound(error: unknown): boolean {
     if (!error || typeof error !== "object") return false
     const maybe = error as {
@@ -49,7 +54,8 @@ export async function searchAndEnqueue(
     guildId: string,
     requesterId: string,
     query: string,
-    guard: SearchAndEnqueueGuard
+    guard: SearchAndEnqueueGuard,
+    options?: SearchAndEnqueueOptions
 ): Promise<SearchAndEnqueueResult> {
     const guild = client.guilds.cache.get(guildId)
     if (!guild) {
@@ -213,6 +219,10 @@ export async function searchAndEnqueue(
                 details: message,
             },
         }
+    }
+
+    if (options?.connectOnly) {
+        return { ok: true, player, playbackStarted: false }
     }
 
     const requesterName =

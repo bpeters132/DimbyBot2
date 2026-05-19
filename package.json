@@ -95,6 +95,11 @@
         ],
         "ext": "js,json",
         "delay": 1000,
+        "legacyWatch": true,
+        "watchOptions": {
+            "usePolling": true,
+            "interval": 1000
+        },
         "exec": "node dist/server.js"
     }
 }

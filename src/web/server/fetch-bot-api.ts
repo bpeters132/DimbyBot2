@@ -2,17 +2,26 @@ import { headers } from "next/headers"
 import { getBotApiOrigin } from "@/server/bot-api-origin"
 import { isBotApiVerbose, logBotApiVerbose } from "@/server/bot-api-verbose"
 
-const UPSTREAM_FETCH_TIMEOUT_MS = 10_000
+const DEFAULT_UPSTREAM_FETCH_TIMEOUT_MS = 10_000
+const MAX_UPSTREAM_FETCH_TIMEOUT_MS = 300_000
 
 /**
  * Calls the bot REST API from the Next server using the current request cookies (session).
  */
+function resolveFetchTimeoutMs(timeoutMs?: number): number {
+    if (timeoutMs === undefined) return DEFAULT_UPSTREAM_FETCH_TIMEOUT_MS
+    if (!Number.isFinite(timeoutMs)) return DEFAULT_UPSTREAM_FETCH_TIMEOUT_MS
+    return Math.min(Math.max(Math.floor(timeoutMs), 1000), MAX_UPSTREAM_FETCH_TIMEOUT_MS)
+}
+
 export async function serverFetchBot(
     pathnameAndSearch: string,
     options?: {
         method?: string
         body?: string
         contentType?: string
+        /** Override default 10s timeout (e.g. large playlist queue loads). */
+        timeoutMs?: number
     }
 ): Promise<Response> {
     let origin: string | null
@@ -85,7 +94,10 @@ export async function serverFetchBot(
     const controller = new AbortController()
     let timeoutId: ReturnType<typeof setTimeout> | undefined
     try {
-        timeoutId = setTimeout(() => controller.abort(), UPSTREAM_FETCH_TIMEOUT_MS)
+        timeoutId = setTimeout(
+            () => controller.abort(),
+            resolveFetchTimeoutMs(options?.timeoutMs)
+        )
         const res = await fetch(url, {
             method,
             headers: outHeaders,

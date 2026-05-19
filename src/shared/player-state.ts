@@ -438,6 +438,54 @@ export function resolveInVoiceWithBot(guildId: string, userId: string, player?: 
     return summarizeVoiceForWeb(guildId, userId, player).inVoiceWithBot
 }
 
+/** Compact player row for `GET /api/guilds` (no requester name resolution). */
+export function snapshotGuildListPlayer(
+    guildId: string,
+    discordUserId: string | undefined,
+    lavalinkPlayer: unknown,
+    clientArg?: VoiceSummaryClient | null
+): {
+    status: "playing" | "paused" | "idle"
+    botInVoiceChannel: boolean
+    inVoiceWithBot: boolean
+    currentTrackTitle: string | null
+    currentTrackAuthor: string | null
+    queueCount: number
+} | null {
+    const p = isPlayer(lavalinkPlayer) ? lavalinkPlayer : null
+    const voice = summarizeVoiceForWeb(
+        guildId,
+        discordUserId ?? "",
+        p,
+        clientArg
+    )
+    if (!p && !voice.botInVoiceChannel) {
+        return null
+    }
+
+    const status: "playing" | "paused" | "idle" = p
+        ? p.playing
+            ? "playing"
+            : p.paused
+              ? "paused"
+              : "idle"
+        : "idle"
+    const current = p?.queue?.current ?? null
+    const currentTrackTitle =
+        current && typeof current.info?.title === "string" ? current.info.title : null
+    const currentTrackAuthor =
+        current && typeof current.info?.author === "string" ? current.info.author : null
+
+    return {
+        status,
+        botInVoiceChannel: voice.botInVoiceChannel,
+        inVoiceWithBot: discordUserId ? voice.inVoiceWithBot : false,
+        currentTrackTitle,
+        currentTrackAuthor,
+        queueCount: p?.queue?.tracks?.length ?? 0,
+    }
+}
+
 export async function toPlayerStateResponse(
     guildId: string,
     userId: string,

@@ -180,6 +180,47 @@ export interface ApiFailurePayload {
 
 export type ApiResponse<T> = ApiSuccessPayload<T> | ApiFailurePayload
 
+/** Single track row in a user playlist. */
+export interface PlaylistTrackData {
+    id: number
+    title: string
+    uri: string
+    author: string
+    duration: number
+    thumbnailUrl: string | null
+    addedAt: Date
+    position: number
+}
+
+/** Full user playlist with ordered tracks. */
+export interface PlaylistData {
+    id: number
+    name: string
+    userId: string
+    createdAt: Date
+    updatedAt: Date
+    tracks: PlaylistTrackData[]
+}
+
+/** Playlist list entry for list views. */
+export interface PlaylistSummary {
+    id: number
+    name: string
+    trackCount: number
+    totalDuration: number
+    createdAt: Date
+}
+
+/** Input for adding a track (no id/position yet). */
+export interface PlaylistTrackInput {
+    title: string
+    uri: string
+    author: string
+    duration: number
+    thumbnailUrl?: string | null
+    addedAt: Date
+}
+
 /** Tracks a user who left voice while RRQ is active and has queued tracks. */
 export interface DisconnectedRRQUser {
     userId: string

@@ -13,16 +13,41 @@ export interface StatusPayload {
     botApi: { ok: boolean; message?: string }
 }
 
+/** Active bot player snapshot for a guild on the dashboard server list. */
+export interface GuildListPlayerSummary {
+    status: "playing" | "paused" | "idle"
+    botInVoiceChannel: boolean
+    inVoiceWithBot: boolean
+    currentTrackTitle: string | null
+    currentTrackAuthor: string | null
+    queueCount: number
+}
+
 export interface GuildListItem {
     id: string
     name: string
     iconUrl: string | null
     memberCount: number | null
+    /** Present when the bot has a player session or is connected to voice in this guild. */
+    player: GuildListPlayerSummary | null
 }
 
 export interface GuildListResponse {
     guilds: GuildListItem[]
     botInviteUrl?: string
+}
+
+/** Guild where the signed-in user shares a VC with an active bot player session. */
+export interface ActivePlayerGuildContext {
+    guildId: string
+    guildName: string
+    guildIconUrl: string | null
+    status: "playing" | "paused" | "idle"
+    currentTrackTitle: string | null
+}
+
+export interface VoiceContextResponse {
+    activeGuild: ActivePlayerGuildContext | null
 }
 
 /**
@@ -202,4 +227,75 @@ export type AdminDbCleanupTarget = "sessions" | "verifications" | "all"
 export interface AdminDbCleanupResponse {
     dryRun: boolean
     deleted: { sessions?: number; verifications?: number }
+}
+
+/** Playlist track in JSON API responses (`addedAt` is ISO string). */
+export interface PlaylistTrackData {
+    id: number
+    title: string
+    uri: string
+    author: string
+    duration: number
+    thumbnailUrl: string | null
+    addedAt: string
+    position: number
+}
+
+/** Full playlist in JSON API responses. */
+export interface PlaylistData {
+    id: number
+    name: string
+    userId: string
+    createdAt: string
+    updatedAt: string
+    tracks: PlaylistTrackData[]
+}
+
+/** Playlist list entry in JSON API responses. */
+export interface PlaylistSummary {
+    id: number
+    name: string
+    trackCount: number
+    totalDuration: number
+    createdAt: string
+}
+
+export interface PlaylistListResponse {
+    playlists: PlaylistSummary[]
+}
+
+export interface AddPlaylistTrackBody {
+    title: string
+    uri: string
+    author: string
+    duration: number
+    thumbnailUrl?: string | null
+    addedAt: string
+}
+
+export interface AddPlaylistTrackFromQueryBody {
+    query: string
+    /** Prefer Lavalink search via this guild's player when set. */
+    guildId?: string
+}
+
+/** @deprecated Alias for {@link PlaylistTrackData} in add-from-query responses. */
+export type SerializedPlaylistTrackData = PlaylistTrackData
+
+export interface AddTracksFromQueryResponse {
+    added: number
+    tracks: PlaylistTrackData[]
+}
+
+export interface ReorderPlaylistTrackBody {
+    newPosition: number
+}
+
+export interface PlaylistPlayResponse {
+    state: PlayerStateResponse
+    playlistId: number
+    playlistName: string
+    queued: number
+    failed: number
+    shuffle: boolean
 }

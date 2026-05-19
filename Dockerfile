@@ -64,7 +64,9 @@ RUN apk add --no-cache dos2unix \
     && dos2unix entrypoint.sh healthcheck.sh \
     && chmod +x entrypoint.sh healthcheck.sh \
     && apk del dos2unix \
-    && chown -R node:node /app
+    && chown -R node:node /app/dist /app/prisma \
+    && chown node:node /app/package.json /app/yarn.lock /app/prisma.config.ts \
+        /app/entrypoint.sh /app/healthcheck.sh
 
 # Default non-root; entrypoint still supports `docker run --user 0` for one-time volume chown + su-exec.
 USER node
