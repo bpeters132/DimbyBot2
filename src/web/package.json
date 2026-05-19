@@ -3,7 +3,7 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "postinstall": "yarn --cwd ../.. db:generate",
+        "postinstall": "node ../../scripts/postinstall-prisma.mjs",
         "predev": "node scripts/predev.js",
         "dev": "next dev --webpack --hostname 0.0.0.0",
         "typecheck": "tsc --noEmit",
@@ -29,7 +29,7 @@
     },
     "devDependencies": {
         "@tailwindcss/postcss": "^4.2.2",
-        "@types/node": "^22.13.10",
+        "@types/node": "^24.0.0",
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
         "@types/ws": "^8.18.1",

@@ -17,7 +17,8 @@ Author is just a dude that can barely code but can figure things out.
 
 ## Prerequisites
 
-- Node.js - current LTS
+- **Local dev (optional):** Node.js 24+ if you run `yarn dev` / `yarn typecheck` on the host (`engines` in `package.json`; `.nvmrc` is only for tools like nvm—not required on the server)
+- **Docker / production:** Node comes from the image (`node:24-*` in `Dockerfile` / `Dockerfile.web`); the host does not need Node or nvm installed
 - [Yarn](https://yarnpkg.com/) (this repo uses Yarn 1.x; see `packageManager` in `package.json`)
 - **Docker Compose v2.24.4 or newer** if you use `./dev-env.sh` / `docker-compose.dev.yml` (the dev override uses `ports: !override`, which requires that Compose version). If you see `unknown tag !override`, upgrade the Compose V2 plugin: [Docker Compose install](https://docs.docker.com/compose/install/linux/) / update Docker Desktop.
 
@@ -44,26 +45,48 @@ Author is just a dude that can barely code but can figure things out.
 
 ## Local Development Setup
 
-If you want to run the bot locally for development or testing:
+Dev splits **backend in Docker** from the **dashboard on the host**:
 
-1.  **Prerequisites:** Ensure you have Docker installed and running on your machine.
-2.  **Environment Variables:** Create a `.env` file in the root directory. This file **is required** for local development. Add the necessary variables (referencing the list in the Configuration section or a potential `.env.example`) and fill in the values for your local setup.
-3.  **Lavalink Configuration:** Create a `lavaNodesConfig.js` file in the root directory. This file defines the connection details for your local Lavalink server. _(You may need to refer to existing examples or documentation for the required structure of this file)._
-4.  **Build & Run Docker Environment:** Execute the development environment script:
+| Piece | Where it runs | How |
+| ----- | ------------- | --- |
+| Bot, Lavalink, Postgres | Docker (`docker-compose.yml` + `docker-compose.dev.yml`) | `./dev-env.sh build` then `./dev-env.sh up` (or `yarn docker:dev:build` / `yarn docker:dev:up`) |
+| Next.js dashboard | **Host** (not in the dev compose stack) | `yarn web:install` then `yarn dev:web` |
+
+Production is different: the dashboard is the separate `dimbybot-web` container (`docker-compose.dashboard.yml` + `Dockerfile.web`). Do not expect `dimbybot-web` when using the dev compose files.
+
+1.  **Prerequisites:** Docker (Compose v2.24.4+ for dev overrides) and, for the portal, Node.js 24+ on the host if you run `yarn dev:web` outside Docker.
+2.  **Environment:** Copy `.env.example` to `.env` and fill values. The bot container reads this via compose; `yarn dev:web` uses the same root `.env` / `src/web/.env` patterns as documented in `.env.example`.
+3.  **Backend stack:**
 
     ```bash
     ./dev-env.sh build
+    ./dev-env.sh up
     ```
 
-    This script should build the necessary Docker images (including the bot and Lavalink) and start the containers.
+    Bot HTTP API defaults to `http://127.0.0.1:3001` (`BOT_API_PORT`). Postgres is published on `127.0.0.1:5432` in dev.
+
+4.  **Web portal (separate terminal, on the host):**
+
+    ```bash
+    yarn web:install
+    yarn dev:web
+    ```
+
+    Dashboard defaults to `http://localhost:3000` (`BETTER_AUTH_URL` in compose points here).
+
+5.  **Smoke-check before deploy:** Confirm containers are healthy (`docker compose … ps`, bot `GET /health` on `BOT_API_PORT`), then load the dashboard and sign in. Fix the Docker stack first; only then validate production images.
+
+`lavaNodesConfig.js` is optional in Docker dev—the entrypoint can generate it from compose env vars.
 
 ## Usage
 
-- **Run locally (using Docker setup):**
+- **Run backend locally (Docker):**
 
     ```bash
     ./dev-env.sh up
     ```
+
+- **Run dashboard locally (host):** `yarn dev:web` (with the Docker stack already up).
 
 - **Deploy Slash Commands (run locally; run `yarn build` first so `dist/deploy/` exists):**
     - Globally: `yarn deployGlobal`

@@ -1,5 +1,6 @@
 # Local development overrides merged with docker-compose.yml (e.g. dev-env.sh, Makefile, yarn docker:dev:*).
 # IMPORTANT: Requires Docker Compose v2.24.4+ (`ports: !override` below). Older Compose fails with an "unknown tag" error — upgrade Docker Desktop / the compose plugin (see README Prerequisites).
+# Dev stack: bot + Lavalink + Postgres only. Run the Next.js dashboard on the host (`yarn dev:web`), not in this compose file.
 # Production deploy copies `docker-compose.yml` + `docker-compose.dashboard.yml` (see `.github/workflows/deploy.yml`).
 # This file is never used on the server.
 services:

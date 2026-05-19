@@ -1,5 +1,5 @@
 # Next.js dashboard only — standalone output (separate from the bot image).
-FROM node:22-alpine3.22 AS builder
+FROM node:24-alpine3.22 AS builder
 
 WORKDIR /app
 
@@ -12,12 +12,13 @@ RUN apk add --no-cache \
     python3
 
 COPY package.json yarn.lock ./
+COPY scripts/postinstall-prisma.mjs scripts/postinstall-prisma.mjs
 RUN yarn install --frozen-lockfile
 
 COPY . .
 RUN yarn db:generate && yarn web:install && yarn --cwd src/web build
 
-FROM node:22-alpine3.22
+FROM node:24-alpine3.22
 
 WORKDIR /app
 

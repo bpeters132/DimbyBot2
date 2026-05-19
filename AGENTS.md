@@ -22,7 +22,8 @@ These rules keep the **Discord bot** and the **Next.js dashboard** separate at b
 - **Two applications**: Bot logic and the HTTP/WebSocket bot API live under `src/` (except `src/web/`). The dashboard and web player UI live in **`src/web/`** as its own Next.js app (`package.json`, lockfile, `next.config`, etc.).
 - **Bot TypeScript scope**: Root `tsc` uses **`rootDir`: `src`** but **`exclude`: `["src/web"]`**, so **`yarn build:bot`** does not compile or emit the Next.js tree into `dist/`. The **`yarn typecheck`** script runs root **`tsc --noEmit`** (same exclusion) and then typechecks **`src/web`** as its own project.
 - **Bot container**: The main **`Dockerfile`** runs **`yarn build:bot`** (not `yarn build`), so the bot image does not run the Next production build. Runtime is `node` + `dist/` + shared root deps as defined in that image.
-- **Web container**: **`Dockerfile.web`** builds the dashboard (`yarn --cwd src/web build`, standalone output) and runs it as a **separate image/service** from the bot.
+- **Web container**: **`Dockerfile.web`** builds the dashboard (`yarn --cwd src/web build`, standalone output) and runs it as a **separate image/service** from the bot (production: `docker-compose.dashboard.yml`).
+- **Local dev**: `docker-compose.dev.yml` runs the **bot stack only**; the dashboard is **`yarn dev:web` on the host**, not a dev compose service. `dimbybot-web` is production-only.
 - **When to build what**: Use **`yarn build:bot`** for bot-only or bot image work; use **`yarn build:web`** or dashboard Docker for the UI; use **`yarn build`** for a full local/CI verification of both halves.
 
 ### Optional: moving `src/web` out of `src/`
@@ -36,6 +37,7 @@ The current layout is intentional and supported: exclusion in `tsconfig.json` pl
 
 ## Build, Test, and Development Commands
 
+- **Node.js 24+** in Docker/CI images (`node:24-*` in Dockerfiles, `node-version: "24"` in deploy workflow). Production hosts that only run containers do not need Node or nvm. Root `engines` and `.nvmrc` apply when installing or running Yarn on the host (local dev).
 - `yarn install` installs dependencies.
 - `yarn build` runs **`build:bot` and `build:web`** (full stack). **`yarn build:bot`** runs root `tsc` and emits bot JavaScript to `dist/` (Next.js is not part of this emit).
 - **`yarn build:web`**, **`yarn dev:web`**, and **`yarn web:install`** operate on `src/web/` only.

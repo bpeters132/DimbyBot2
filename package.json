@@ -5,7 +5,7 @@
     "description": "A discord bot for friends!",
     "main": "./dist/server.js",
     "scripts": {
-        "postinstall": "prisma generate",
+        "postinstall": "node scripts/postinstall-prisma.mjs",
         "prebuild": "yarn db:generate",
         "predev": "yarn db:generate",
         "build": "yarn build:bot && yarn build:web",
@@ -33,7 +33,7 @@
     },
     "license": "MIT",
     "engines": {
-        "node": ">=20.11.0"
+        "node": ">=24.0.0"
     },
     "dependencies": {
         "@discordjs/voice": "0.19.2",
@@ -58,7 +58,7 @@
     "devDependencies": {
         "@eslint/js": "^10.0.1",
         "@types/express": "^5.0.6",
-        "@types/node": "^22.13.10",
+        "@types/node": "^24.0.0",
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
         "@types/ws": "^8.18.1",
