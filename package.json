@@ -5,7 +5,7 @@
     "description": "A discord bot for friends!",
     "main": "./dist/server.js",
     "scripts": {
-        "postinstall": "prisma generate",
+        "postinstall": "node scripts/postinstall-prisma.mjs",
         "prebuild": "yarn db:generate",
         "predev": "yarn db:generate",
         "build": "yarn build:bot && yarn build:web",
