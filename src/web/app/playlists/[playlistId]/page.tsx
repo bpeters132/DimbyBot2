@@ -38,11 +38,11 @@ function parseTracks(raw: unknown): PlaylistTrackData[] {
                 return null
             }
             const addedAt =
-                t.addedAt instanceof Date
+                typeof t.addedAt === "string"
                     ? t.addedAt
-                    : typeof t.addedAt === "string"
-                      ? new Date(t.addedAt)
-                      : new Date()
+                    : t.addedAt instanceof Date
+                      ? t.addedAt.toISOString()
+                      : new Date().toISOString()
             return {
                 id,
                 title,

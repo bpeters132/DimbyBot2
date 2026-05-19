@@ -152,6 +152,14 @@ function trackToSearchHit(track: Track, fallbackUri: string): PlaylistTrackSearc
     }
 }
 
+/** Lavalink/search threw; distinct from empty or unresolvable results. */
+export const PLAYLIST_SEARCH_TRANSIENT_ERROR = "Search failed."
+
+/** True when callers should retry (5xx), not treat as a missing track (404). */
+export function isPlaylistSearchTransientFailure(error: string): boolean {
+    return error === PLAYLIST_SEARCH_TRANSIENT_ERROR
+}
+
 /** Resolves a query or URL to one or more tracks for saving in a user playlist. */
 export async function searchTracksForPlaylist(
     player: Player,
@@ -166,7 +174,7 @@ export async function searchTracksForPlaylist(
     try {
         res = await player.search(trimmed, requester)
     } catch {
-        return { ok: false, error: "Search failed." }
+        return { ok: false, error: PLAYLIST_SEARCH_TRANSIENT_ERROR }
     }
     if (!res?.tracks?.length) {
         return { ok: false, error: "No tracks found." }

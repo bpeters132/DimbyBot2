@@ -1,13 +1,18 @@
 import { getAuthenticatedSession } from "../../shared/api-auth.js"
 import { resolveDiscordUserSnowflake } from "../../shared/discord-user-id.js"
-import type { ApiResponse } from "../../types/index.js"
+import type {
+    ApiResponse,
+    PlaylistData as DomainPlaylistData,
+    PlaylistTrackData as DomainPlaylistTrackData,
+    PlaylistSummary as DomainPlaylistSummary,
+} from "../../types/index.js"
 import type {
     AddPlaylistTrackBody,
     AddTracksFromQueryResponse,
     PlaylistData,
     PlaylistListResponse,
     PlaylistTrackData,
-    SerializedPlaylistTrackData,
+    PlaylistSummary,
 } from "../../types/web.js"
 import {
     PlaylistDuplicateNameError,
@@ -23,6 +28,7 @@ import {
 } from "../../repositories/playlistRepository.js"
 import { getBotClient } from "../../lib/botClientRegistry.js"
 import {
+    isPlaylistSearchTransientFailure,
     pickPlayerForPlaylistSearch,
     searchTracksForPlaylist,
 } from "../../util/playlistQueue.js"
@@ -98,26 +104,49 @@ function internalErrorBody(): ApiResponse<never> {
     }
 }
 
-function serializePlaylistTracksForApi(
-    tracks: PlaylistTrackData[]
-): SerializedPlaylistTrackData[] {
-    return tracks.map((t) => ({
-        id: t.id,
-        title: t.title,
-        uri: t.uri,
-        author: t.author,
-        duration: t.duration,
-        thumbnailUrl: t.thumbnailUrl,
-        addedAt: t.addedAt.toISOString(),
-        position: t.position,
-    }))
+function serializePlaylistTrackForApi(track: DomainPlaylistTrackData): PlaylistTrackData {
+    return {
+        id: track.id,
+        title: track.title,
+        uri: track.uri,
+        author: track.author,
+        duration: track.duration,
+        thumbnailUrl: track.thumbnailUrl,
+        addedAt: track.addedAt.toISOString(),
+        position: track.position,
+    }
+}
+
+function serializePlaylistTracksForApi(tracks: DomainPlaylistTrackData[]): PlaylistTrackData[] {
+    return tracks.map(serializePlaylistTrackForApi)
+}
+
+function serializePlaylistForApi(playlist: DomainPlaylistData): PlaylistData {
+    return {
+        id: playlist.id,
+        name: playlist.name,
+        userId: playlist.userId,
+        createdAt: playlist.createdAt.toISOString(),
+        updatedAt: playlist.updatedAt.toISOString(),
+        tracks: serializePlaylistTracksForApi(playlist.tracks),
+    }
+}
+
+function serializePlaylistSummaryForApi(summary: DomainPlaylistSummary): PlaylistSummary {
+    return {
+        id: summary.id,
+        name: summary.name,
+        trackCount: summary.trackCount,
+        totalDuration: summary.totalDuration,
+        createdAt: summary.createdAt.toISOString(),
+    }
 }
 
 async function requireOwnedPlaylist(
     discordUserId: string,
     playlistId: number
 ): Promise<
-    | { ok: true; playlist: PlaylistData }
+    | { ok: true; playlist: DomainPlaylistData }
     | { ok: false; status: number; body: ApiResponse<never> }
 > {
     try {
@@ -187,7 +216,10 @@ export async function playlistsGET(
         const playlists = await getUserPlaylists(auth.discordUserId)
         return {
             status: 200,
-            body: { ok: true, data: { playlists } },
+            body: {
+                ok: true,
+                data: { playlists: playlists.map(serializePlaylistSummaryForApi) },
+            },
         }
     } catch (error: unknown) {
         logPlaylistsHandlerError("playlistsGET", error)
@@ -226,7 +258,7 @@ export async function playlistsPOST(
 
     try {
         const playlist = await createPlaylist(auth.discordUserId, name.trim())
-        return { status: 201, body: { ok: true, data: playlist } }
+        return { status: 201, body: { ok: true, data: serializePlaylistForApi(playlist) } }
     } catch (error: unknown) {
         if (error instanceof PlaylistDuplicateNameError) {
             return {
@@ -267,7 +299,7 @@ export async function playlistsDetailGET(
         return { status: owned.status, body: owned.body }
     }
 
-    return { status: 200, body: { ok: true, data: owned.playlist } }
+    return { status: 200, body: { ok: true, data: serializePlaylistForApi(owned.playlist) } }
 }
 
 export async function playlistsDELETE(
@@ -356,7 +388,7 @@ export async function playlistTracksPOST(
             thumbnailUrl: body.thumbnailUrl,
             addedAt: new Date(body.addedAt),
         })
-        return { status: 201, body: { ok: true, data: track } }
+        return { status: 201, body: { ok: true, data: serializePlaylistTrackForApi(track) } }
     } catch (error: unknown) {
         logPlaylistsHandlerError("playlistTracksPOST", error)
         return { status: 500, body: internalErrorBody() }
@@ -431,6 +463,15 @@ export async function playlistTracksFromQueryPOST(
     const requester = { id: auth.discordUserId, username: "web-user" }
     const found = await searchTracksForPlaylist(player, query, requester)
     if (found.ok === false) {
+        if (isPlaylistSearchTransientFailure(found.error)) {
+            return {
+                status: 503,
+                body: {
+                    ok: false,
+                    error: { error: "Search failed", details: found.error },
+                },
+            }
+        }
         return {
             status: 404,
             body: {
@@ -566,7 +607,7 @@ export async function playlistTrackMovePATCH(
                 },
             }
         }
-        return { status: 200, body: { ok: true, data: updated } }
+        return { status: 200, body: { ok: true, data: serializePlaylistForApi(updated) } }
     } catch (error: unknown) {
         if (error instanceof PlaylistTrackNotFoundError) {
             return {

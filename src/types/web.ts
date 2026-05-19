@@ -229,13 +229,36 @@ export interface AdminDbCleanupResponse {
     deleted: { sessions?: number; verifications?: number }
 }
 
-export type {
-    PlaylistData,
-    PlaylistSummary,
-    PlaylistTrackData,
-} from "./index.js"
+/** Playlist track in JSON API responses (`addedAt` is ISO string). */
+export interface PlaylistTrackData {
+    id: number
+    title: string
+    uri: string
+    author: string
+    duration: number
+    thumbnailUrl: string | null
+    addedAt: string
+    position: number
+}
 
-import type { PlaylistSummary } from "./index.js"
+/** Full playlist in JSON API responses. */
+export interface PlaylistData {
+    id: number
+    name: string
+    userId: string
+    createdAt: string
+    updatedAt: string
+    tracks: PlaylistTrackData[]
+}
+
+/** Playlist list entry in JSON API responses. */
+export interface PlaylistSummary {
+    id: number
+    name: string
+    trackCount: number
+    totalDuration: number
+    createdAt: string
+}
 
 export interface PlaylistListResponse {
     playlists: PlaylistSummary[]
@@ -256,21 +279,12 @@ export interface AddPlaylistTrackFromQueryBody {
     guildId?: string
 }
 
-/** Playlist track as returned in JSON API responses (`addedAt` is ISO string). */
-export interface SerializedPlaylistTrackData {
-    id: number
-    title: string
-    uri: string
-    author: string
-    duration: number
-    thumbnailUrl: string | null
-    addedAt: string
-    position: number
-}
+/** @deprecated Alias for {@link PlaylistTrackData} in add-from-query responses. */
+export type SerializedPlaylistTrackData = PlaylistTrackData
 
 export interface AddTracksFromQueryResponse {
     added: number
-    tracks: SerializedPlaylistTrackData[]
+    tracks: PlaylistTrackData[]
 }
 
 export interface ReorderPlaylistTrackBody {

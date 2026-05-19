@@ -30,16 +30,28 @@ export function PlayPlaylistMenu({
         if (!open) return
         let cancelled = false
         setLoading(true)
-        void getPlaylistsAction().then((result) => {
-            if (cancelled) return
-            setLoading(false)
-            if (result.ok === true) {
-                setPlaylists(result.data.playlists)
-            } else {
-                toast.error(result.error)
+        void (async () => {
+            try {
+                const result = await getPlaylistsAction()
+                if (cancelled) return
+                if (result.ok === true) {
+                    setPlaylists(result.data.playlists)
+                } else {
+                    toast.error(result.error)
+                    setPlaylists([])
+                }
+            } catch (error: unknown) {
+                if (cancelled) return
+                const message =
+                    error instanceof Error ? error.message : "Failed to load playlists."
+                toast.error(message)
                 setPlaylists([])
+            } finally {
+                if (!cancelled) {
+                    setLoading(false)
+                }
             }
-        })
+        })()
         return () => {
             cancelled = true
         }
@@ -70,28 +82,34 @@ export function PlayPlaylistMenu({
         const loadingToastId = toast.loading(
             `Loading "${playlist.name}" (${playlist.trackCount} track${playlist.trackCount === 1 ? "" : "s"})…`
         )
-        const result = await playPlaylistInGuildAction(
-            guildId,
-            playlist.id,
-            requesterId,
-            shuffle,
-            playlist.trackCount
-        )
-        toast.dismiss(loadingToastId)
-        setBusy(false)
-        if (result.ok === false) {
-            toast.error(result.error)
-            return
+        try {
+            const result = await playPlaylistInGuildAction(
+                guildId,
+                playlist.id,
+                requesterId,
+                shuffle,
+                playlist.trackCount
+            )
+            if (result.ok === false) {
+                toast.error(result.error)
+                return
+            }
+            const failNote =
+                result.data.failed > 0
+                    ? ` (${result.data.failed} could not be resolved)`
+                    : ""
+            toast.success(
+                `Queued ${result.data.queued} from "${result.data.playlistName}"${failNote}`
+            )
+            setOpen(false)
+            onQueued?.()
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error)
+            toast.error(message || "Failed to queue playlist.")
+        } finally {
+            toast.dismiss(loadingToastId)
+            setBusy(false)
         }
-        const failNote =
-            result.data.failed > 0
-                ? ` (${result.data.failed} could not be resolved)`
-                : ""
-        toast.success(
-            `Queued ${result.data.queued} from "${result.data.playlistName}"${failNote}`
-        )
-        setOpen(false)
-        onQueued?.()
     }
 
     return (
