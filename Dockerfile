@@ -1,5 +1,5 @@
-# Pin Node + Alpine minor; apk packages are unpinned so repo updates within 3.22 do not break builds.
-FROM node:22-alpine3.22 AS builder
+# Pin Node 24 + Alpine; apk packages are unpinned so repo updates within the Alpine minor do not break builds.
+FROM node:24-alpine3.22 AS builder
 
 WORKDIR /app
 
@@ -20,6 +20,7 @@ RUN apk add --no-cache \
     && ln -sf /opt/venv/bin/yt-dlp /usr/bin/yt-dlp
 
 COPY package.json yarn.lock ./
+COPY scripts/postinstall-prisma.mjs scripts/postinstall-prisma.mjs
 RUN yarn install --frozen-lockfile
 
 COPY . .
@@ -28,7 +29,7 @@ RUN yarn db:generate && yarn build:bot \
     && test -f node_modules/.prisma/client/default.js
 
 # --- runtime image ---
-FROM node:22-alpine3.22
+FROM node:24-alpine3.22
 
 WORKDIR /app
 
