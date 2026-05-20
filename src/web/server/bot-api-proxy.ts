@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { randomUUID } from "node:crypto"
 import { getBotApiOrigin } from "@/server/bot-api-origin"
 import { isBotApiVerbose, logBotApiVerbose } from "@/server/bot-api-verbose"
+import { getOriginFallback } from "@/server/origin-fallback"
 
 function readBotApiProxyTimeoutMs(): number {
     const raw = process.env.BOT_API_PROXY_TIMEOUT_MS?.trim()
@@ -52,9 +53,13 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
     const targetUrl = `${origin}${incoming.pathname}${incoming.search}`
 
     const headers = new Headers()
-    for (const name of ["cookie", "authorization", "content-type"] as const) {
+    for (const name of ["cookie", "authorization", "content-type", "origin"] as const) {
         const value = request.headers.get(name)
         if (value) headers.set(name, value)
+    }
+    if (!headers.has("origin")) {
+        const fallbackOrigin = getOriginFallback()
+        if (fallbackOrigin) headers.set("origin", fallbackOrigin)
     }
     const incomingCorrelationId = request.headers.get("x-correlation-id")
     const incomingRequestId = request.headers.get("x-request-id")

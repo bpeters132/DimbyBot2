@@ -1,6 +1,7 @@
 import { headers } from "next/headers"
 import { getBotApiOrigin } from "@/server/bot-api-origin"
 import { isBotApiVerbose, logBotApiVerbose } from "@/server/bot-api-verbose"
+import { getOriginFallback } from "@/server/origin-fallback"
 
 const DEFAULT_UPSTREAM_FETCH_TIMEOUT_MS = 10_000
 const MAX_UPSTREAM_FETCH_TIMEOUT_MS = 300_000
@@ -70,6 +71,13 @@ export async function serverFetchBot(
     if (cookie) outHeaders.set("cookie", cookie)
     const authorization = incoming.get("authorization")
     if (authorization) outHeaders.set("authorization", authorization)
+    const requestOrigin = incoming.get("origin")
+    if (requestOrigin) {
+        outHeaders.set("origin", requestOrigin)
+    } else {
+        const fallbackOrigin = getOriginFallback()
+        if (fallbackOrigin) outHeaders.set("origin", fallbackOrigin)
+    }
 
     const method = (options?.method ?? "GET").toUpperCase()
     if (options?.body != null && method !== "GET" && method !== "HEAD") {
@@ -94,10 +102,7 @@ export async function serverFetchBot(
     const controller = new AbortController()
     let timeoutId: ReturnType<typeof setTimeout> | undefined
     try {
-        timeoutId = setTimeout(
-            () => controller.abort(),
-            resolveFetchTimeoutMs(options?.timeoutMs)
-        )
+        timeoutId = setTimeout(() => controller.abort(), resolveFetchTimeoutMs(options?.timeoutMs))
         const res = await fetch(url, {
             method,
             headers: outHeaders,

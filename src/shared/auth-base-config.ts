@@ -70,16 +70,17 @@ export function getBetterAuthBaseConfig() {
     const betterAuthUrl = getRequiredEnv("BETTER_AUTH_URL")
     const discordOAuthClientId = getRequiredEnv("CLIENT_ID")
     const discordOAuthClientSecret = getRequiredEnv("DISCORD_CLIENT_SECRET")
-    const isProduction = process.env.NODE_ENV === "production"
+    /** Match web and bot: derive from public dashboard URL, not NODE_ENV (bot container often omits it). */
+    const useSecureCookies = betterAuthUrl.startsWith("https://")
 
     return {
         secret: betterAuthSecret,
         baseURL: betterAuthUrl,
         trustedOrigins: [betterAuthUrl],
         advanced: {
-            useSecureCookies: isProduction,
+            useSecureCookies,
             defaultCookieAttributes: {
-                secure: isProduction,
+                secure: useSecureCookies,
                 httpOnly: true,
                 sameSite: "lax" as const,
             },

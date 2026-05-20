@@ -71,6 +71,7 @@ services:
             postgres-db:
                 condition: service_healthy
         environment:
+            - NODE_ENV=production
             # These will be picked up by entrypoint.sh for lavaNodesConfig.js
             - LAVALINK_HOST=lavalink # Service name in this compose file
             - LAVALINK_PORT=${LAVALINK_PORT}
