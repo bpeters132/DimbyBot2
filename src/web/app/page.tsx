@@ -44,7 +44,19 @@ function sessionFailureHint(kind: SessionReadFailureKind): string {
     }
 }
 
-export default async function HomePage() {
+export default async function HomePage({
+    searchParams,
+}: {
+    searchParams: Promise<{ error?: string; error_description?: string }>
+}) {
+    const params = await searchParams
+    if (params.error?.trim()) {
+        const qs = new URLSearchParams({ error: params.error.trim() })
+        const description = params.error_description?.trim()
+        if (description) qs.set("error_description", description)
+        redirect(`/auth/error?${qs.toString()}`)
+    }
+
     const sessionResult = await readSessionSafe()
     if (sessionResult.ok && sessionResult.session?.user?.id) {
         redirect("/dashboard")
