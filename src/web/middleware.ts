@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
+/** Lowercase and strip default HTTP(S) ports so `Host` and `BETTER_AUTH_URL` compare consistently. */
+function normalizeHost(host: string): string {
+    let normalized = host.trim().toLowerCase()
+    if (normalized.endsWith(":443")) {
+        normalized = normalized.slice(0, -4)
+    } else if (normalized.endsWith(":80")) {
+        normalized = normalized.slice(0, -3)
+    }
+    return normalized
+}
+
 /**
  * Logs when the incoming Host does not match `BETTER_AUTH_URL` (www/scheme drift breaks OAuth cookies).
  * Does not block requests — only surfaces misconfiguration in server logs.
@@ -19,9 +30,12 @@ export function middleware(request: NextRequest): NextResponse {
             request.headers.get("host")?.trim() ||
             request.nextUrl.host
 
-        if (host && host !== expected.host) {
+        const normalizedHost = host ? normalizeHost(host) : null
+        const normalizedExpectedHost = normalizeHost(expected.host)
+
+        if (normalizedHost && normalizedHost !== normalizedExpectedHost) {
             console.warn(
-                `[middleware] Host mismatch: requestHost=${host} BETTER_AUTH_URL host=${expected.host} path=${request.nextUrl.pathname}`
+                `[middleware] Host mismatch: normalizedHost=${normalizedHost} normalizedExpectedHost=${normalizedExpectedHost} path=${request.nextUrl.pathname}`
             )
         }
     } catch {
