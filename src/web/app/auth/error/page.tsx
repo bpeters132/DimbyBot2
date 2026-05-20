@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { authErrorMessage } from "@/lib/auth-error-message"
+import { normalizeSearchParam } from "@/lib/normalize-search-param"
 
 export const dynamic = "force-dynamic"
 
@@ -10,17 +11,18 @@ export const metadata: Metadata = {
 }
 
 type AuthErrorPageProps = {
-    searchParams: Promise<{ error?: string; error_description?: string }>
+    searchParams: Promise<{ error?: string | string[]; error_description?: string | string[] }>
 }
 
 /** Shown when Discord OAuth or Better Auth fails — intentionally not a login form. */
 export default async function AuthErrorPage({ searchParams }: AuthErrorPageProps) {
-    const { error, error_description } = await searchParams
+    const raw = await searchParams
+    const error = normalizeSearchParam(raw.error)?.trim()
+    const errorDescription = normalizeSearchParam(raw.error_description)?.trim()
     const message = authErrorMessage(error)
     const detail =
-        error_description?.trim() &&
-        error_description.trim().toLowerCase() !== error?.trim().toLowerCase()
-            ? error_description.trim()
+        errorDescription && errorDescription.toLowerCase() !== error?.toLowerCase()
+            ? errorDescription
             : null
 
     return (

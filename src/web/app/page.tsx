@@ -2,6 +2,7 @@ import Link from "next/link"
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { LoginButton } from "@/components/LoginButton"
+import { normalizeSearchParam } from "@/lib/normalize-search-param"
 import { readSessionSafe, type SessionReadFailureKind } from "@/server/auth-session"
 
 /** Session read uses `headers()`; avoid any static/CDN caching of personalized HTML. */
@@ -47,12 +48,13 @@ function sessionFailureHint(kind: SessionReadFailureKind): string {
 export default async function HomePage({
     searchParams,
 }: {
-    searchParams: Promise<{ error?: string; error_description?: string }>
+    searchParams: Promise<{ error?: string | string[]; error_description?: string | string[] }>
 }) {
     const params = await searchParams
-    if (params.error?.trim()) {
-        const qs = new URLSearchParams({ error: params.error.trim() })
-        const description = params.error_description?.trim()
+    const error = normalizeSearchParam(params.error)?.trim()
+    if (error) {
+        const qs = new URLSearchParams({ error })
+        const description = normalizeSearchParam(params.error_description)?.trim()
         if (description) qs.set("error_description", description)
         redirect(`/auth/error?${qs.toString()}`)
     }
