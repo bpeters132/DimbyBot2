@@ -1,6 +1,7 @@
 import { headers } from "next/headers"
 import { getBotApiOrigin } from "@/server/bot-api-origin"
 import { isBotApiVerbose, logBotApiVerbose } from "@/server/bot-api-verbose"
+import { getOriginFallback } from "@/server/origin-fallback"
 
 const DEFAULT_UPSTREAM_FETCH_TIMEOUT_MS = 10_000
 const MAX_UPSTREAM_FETCH_TIMEOUT_MS = 300_000
@@ -74,14 +75,8 @@ export async function serverFetchBot(
     if (requestOrigin) {
         outHeaders.set("origin", requestOrigin)
     } else {
-        const authUrl = process.env.BETTER_AUTH_URL?.trim()
-        if (authUrl) {
-            try {
-                outHeaders.set("origin", new URL(authUrl).origin)
-            } catch {
-                /* ignore invalid BETTER_AUTH_URL */
-            }
-        }
+        const fallbackOrigin = getOriginFallback()
+        if (fallbackOrigin) outHeaders.set("origin", fallbackOrigin)
     }
 
     const method = (options?.method ?? "GET").toUpperCase()
