@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-/** Lowercase and strip default HTTP(S) ports so `Host` and `BETTER_AUTH_URL` compare consistently. */
-function normalizeHost(host: string): string {
-    let normalized = host.trim().toLowerCase()
-    if (normalized.endsWith(":443")) {
+/** Lowercase and strip default ports only when they match the URL scheme (https→443, http→80). */
+function normalizeHost(host: string, protocol: string): string {
+    let hostPart = host.trim()
+    let scheme = protocol
+    const lowerInput = hostPart.toLowerCase()
+
+    if (lowerInput.startsWith("https://") || lowerInput.startsWith("http://")) {
+        const parsed = new URL(hostPart)
+        hostPart = parsed.host
+        scheme = parsed.protocol
+    }
+
+    let normalized = hostPart.toLowerCase()
+    if (scheme === "https:" && normalized.endsWith(":443")) {
         normalized = normalized.slice(0, -4)
-    } else if (normalized.endsWith(":80")) {
+    } else if (scheme === "http:" && normalized.endsWith(":80")) {
         normalized = normalized.slice(0, -3)
     }
     return normalized
@@ -30,8 +40,20 @@ export function middleware(request: NextRequest): NextResponse {
             request.headers.get("host")?.trim() ||
             request.nextUrl.host
 
-        const normalizedHost = host ? normalizeHost(host) : null
-        const normalizedExpectedHost = normalizeHost(expected.host)
+        const forwardedProto = request.headers
+            .get("x-forwarded-proto")
+            ?.split(",")[0]
+            ?.trim()
+            .toLowerCase()
+        const requestProtocol =
+            forwardedProto === "http"
+                ? "http:"
+                : forwardedProto === "https"
+                  ? "https:"
+                  : request.nextUrl.protocol
+
+        const normalizedHost = host ? normalizeHost(host, requestProtocol) : null
+        const normalizedExpectedHost = normalizeHost(expected.host, expected.protocol)
 
         if (normalizedHost && normalizedHost !== normalizedExpectedHost) {
             console.warn(
