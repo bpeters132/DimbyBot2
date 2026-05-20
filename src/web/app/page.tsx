@@ -1,10 +1,35 @@
 import Link from "next/link"
+import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { LoginButton } from "@/components/LoginButton"
 import { readSessionSafe, type SessionReadFailureKind } from "@/server/auth-session"
 
 /** Session read uses `headers()`; avoid any static/CDN caching of personalized HTML. */
 export const dynamic = "force-dynamic"
+
+function readPublicOrigin(): string | null {
+    const configured = process.env.BETTER_AUTH_URL?.trim()
+    if (configured) {
+        try {
+            return new URL(configured).origin
+        } catch {
+            // fall through to request headers
+        }
+    }
+    return null
+}
+
+function readRequestOrigin(h: Headers): string {
+    const configured = readPublicOrigin()
+    if (configured) return configured
+
+    const forwardedHost = h.get("x-forwarded-host")?.split(",")[0]?.trim()
+    const host = forwardedHost || h.get("host")?.trim()
+    if (!host) return "this site"
+
+    const proto = h.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https"
+    return `${proto}://${host}`
+}
 
 function sessionFailureHint(kind: SessionReadFailureKind): string {
     switch (kind) {
@@ -25,6 +50,8 @@ export default async function HomePage() {
         redirect("/dashboard")
     }
     const sessionReadError = sessionResult.ok === false ? sessionResult : null
+    const h = await headers()
+    const publicOrigin = readRequestOrigin(h)
 
     return (
         <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center px-6 text-center">
@@ -32,6 +59,12 @@ export default async function HomePage() {
             <p className="mt-2 text-muted-foreground">
                 Sign in with Discord to control music playback.
             </p>
+            <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                You&apos;ll be redirected to{" "}
+                <strong className="text-foreground">discord.com</strong> to authorize DimbyBot. This
+                app never sees your Discord password.
+            </p>
+            <p className="mt-1 font-mono text-xs text-muted-foreground">{publicOrigin}</p>
             {sessionReadError ? (
                 <div className="mt-6 w-full max-w-md rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-left text-sm">
                     <p className="font-medium text-foreground">
