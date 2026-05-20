@@ -70,11 +70,20 @@ export function getBetterAuthBaseConfig() {
     const betterAuthUrl = getRequiredEnv("BETTER_AUTH_URL")
     const discordOAuthClientId = getRequiredEnv("CLIENT_ID")
     const discordOAuthClientSecret = getRequiredEnv("DISCORD_CLIENT_SECRET")
+    const isProduction = process.env.NODE_ENV === "production"
 
     return {
         secret: betterAuthSecret,
         baseURL: betterAuthUrl,
         trustedOrigins: [betterAuthUrl],
+        advanced: {
+            useSecureCookies: isProduction,
+            defaultCookieAttributes: {
+                secure: isProduction,
+                httpOnly: true,
+                sameSite: "lax" as const,
+            },
+        },
         /** Encrypt OAuth tokens at rest; uses the same `secret` as signing (see Better Auth `account` plugin). */
         account: {
             encryptOAuthTokens: true,
