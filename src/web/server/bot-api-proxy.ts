@@ -52,9 +52,19 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
     const targetUrl = `${origin}${incoming.pathname}${incoming.search}`
 
     const headers = new Headers()
-    for (const name of ["cookie", "authorization", "content-type"] as const) {
+    for (const name of ["cookie", "authorization", "content-type", "origin"] as const) {
         const value = request.headers.get(name)
         if (value) headers.set(name, value)
+    }
+    if (!headers.has("origin")) {
+        const authUrl = process.env.BETTER_AUTH_URL?.trim()
+        if (authUrl) {
+            try {
+                headers.set("origin", new URL(authUrl).origin)
+            } catch {
+                /* ignore invalid BETTER_AUTH_URL */
+            }
+        }
     }
     const incomingCorrelationId = request.headers.get("x-correlation-id")
     const incomingRequestId = request.headers.get("x-request-id")

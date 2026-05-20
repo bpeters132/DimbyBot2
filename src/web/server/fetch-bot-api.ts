@@ -70,6 +70,19 @@ export async function serverFetchBot(
     if (cookie) outHeaders.set("cookie", cookie)
     const authorization = incoming.get("authorization")
     if (authorization) outHeaders.set("authorization", authorization)
+    const requestOrigin = incoming.get("origin")
+    if (requestOrigin) {
+        outHeaders.set("origin", requestOrigin)
+    } else {
+        const authUrl = process.env.BETTER_AUTH_URL?.trim()
+        if (authUrl) {
+            try {
+                outHeaders.set("origin", new URL(authUrl).origin)
+            } catch {
+                /* ignore invalid BETTER_AUTH_URL */
+            }
+        }
+    }
 
     const method = (options?.method ?? "GET").toUpperCase()
     if (options?.body != null && method !== "GET" && method !== "HEAD") {
@@ -94,10 +107,7 @@ export async function serverFetchBot(
     const controller = new AbortController()
     let timeoutId: ReturnType<typeof setTimeout> | undefined
     try {
-        timeoutId = setTimeout(
-            () => controller.abort(),
-            resolveFetchTimeoutMs(options?.timeoutMs)
-        )
+        timeoutId = setTimeout(() => controller.abort(), resolveFetchTimeoutMs(options?.timeoutMs))
         const res = await fetch(url, {
             method,
             headers: outHeaders,
