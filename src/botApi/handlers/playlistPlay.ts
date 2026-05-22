@@ -147,13 +147,30 @@ export async function playerPlaylistPlayPOST(
             }
         }
 
+        const previousUpcoming = [...player.queue.tracks]
         await clearUpcomingQueue(player)
-        const enqueue = await enqueueResolvedPlaylistTracks(
-            player,
-            resolved,
-            requester.requesterId,
-            shuffle
-        )
+        let enqueue
+        try {
+            enqueue = await enqueueResolvedPlaylistTracks(
+                player,
+                resolved,
+                requester.requesterId,
+                shuffle
+            )
+        } catch (enqueueError: unknown) {
+            if (previousUpcoming.length > 0) {
+                try {
+                    player.queue.add(previousUpcoming)
+                } catch (restoreError: unknown) {
+                    console.error("[playerPlaylistPlayPOST] failed to restore queue after enqueue error", {
+                        guildId,
+                        enqueueError,
+                        restoreError,
+                    })
+                }
+            }
+            throw enqueueError
+        }
 
         const state = await toPlayerStateResponse(guildId, requester.requesterId, player)
 
