@@ -17,7 +17,7 @@ import {
     deletePlaylist,
     getPlaylist,
     getUserPlaylists,
-    removeTrackFromPlaylist,
+    removeTrackFromPlaylistById,
 } from "../../repositories/playlistRepository.js"
 import {
     enqueueResolvedPlaylistTracks,
@@ -281,7 +281,7 @@ export default {
                 })
             }
             const track = playlist.tracks[index - 1]!
-            await removeTrackFromPlaylist(playlist.id, track.position)
+            await removeTrackFromPlaylistById(playlist.id, track.id)
             return interaction.reply({
                 content: `Removed **${track.title}** from **${name}**.`,
                 ephemeral: true,

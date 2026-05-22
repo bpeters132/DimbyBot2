@@ -310,3 +310,31 @@ export async function removeTrackFromPlaylist(
         })
     })
 }
+
+/** Removes a track by stable id and reorders remaining tracks (safe when positions shift). */
+export async function removeTrackFromPlaylistById(
+    playlistId: number,
+    trackId: number
+): Promise<void> {
+    const prisma = getPrismaClient()
+    await prisma.$transaction(async (tx) => {
+        const row = await tx.playlistTrack.findFirst({
+            where: { id: trackId, playlistId },
+            select: { position: true },
+        })
+        if (!row) {
+            throw new PlaylistTrackNotFoundError(trackId)
+        }
+        await tx.playlistTrack.deleteMany({
+            where: { id: trackId, playlistId },
+        })
+        await tx.playlistTrack.updateMany({
+            where: { playlistId, position: { gt: row.position } },
+            data: { position: { decrement: 1 } },
+        })
+        await tx.playlist.update({
+            where: { id: playlistId },
+            data: { updatedAt: new Date() },
+        })
+    })
+}

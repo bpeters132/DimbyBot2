@@ -24,7 +24,7 @@ import {
     getPlaylistById,
     getUserPlaylists,
     movePlaylistTrack,
-    removeTrackFromPlaylist,
+    removeTrackFromPlaylistById,
 } from "../../repositories/playlistRepository.js"
 import { getBotClient } from "../../lib/botClientRegistry.js"
 import {
@@ -626,7 +626,7 @@ export async function playlistTrackMovePATCH(
 export async function playlistTracksDELETE(
     headers: Headers,
     playlistIdParam: string,
-    positionParam: string
+    trackIdParam: string
 ): Promise<{ status: number; body: ApiResponse<{ removed: true }> }> {
     const auth = await resolvePlaylistUser(headers)
     if (auth.ok === false) {
@@ -644,13 +644,13 @@ export async function playlistTracksDELETE(
         }
     }
 
-    const position = parsePosition(positionParam)
-    if (position === null) {
+    const trackId = parseStrictPositiveInt(trackIdParam)
+    if (trackId === null) {
         return {
             status: 400,
             body: {
                 ok: false,
-                error: { error: "Bad request", details: "Invalid track position." },
+                error: { error: "Bad request", details: "Invalid track id." },
             },
         }
     }
@@ -660,19 +660,19 @@ export async function playlistTracksDELETE(
         return { status: owned.status, body: owned.body }
     }
 
-    const hasPosition = owned.playlist.tracks.some((t) => t.position === position)
-    if (!hasPosition) {
+    const hasTrack = owned.playlist.tracks.some((t) => t.id === trackId)
+    if (!hasTrack) {
         return {
             status: 404,
             body: {
                 ok: false,
-                error: { error: "Not found", details: `No track at position ${position}.` },
+                error: { error: "Not found", details: "Track not found in this playlist." },
             },
         }
     }
 
     try {
-        await removeTrackFromPlaylist(playlistId, position)
+        await removeTrackFromPlaylistById(playlistId, trackId)
         return { status: 200, body: { ok: true, data: { removed: true } } }
     } catch (error: unknown) {
         if (error instanceof PlaylistTrackNotFoundError) {
