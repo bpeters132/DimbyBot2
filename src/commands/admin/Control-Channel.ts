@@ -214,7 +214,9 @@ export default {
                 )
                 delete guildSettings[guild.id]
             }
-            const persisted = await saveGuildSettings(guildSettings, client)
+            const persisted = await saveGuildSettings(guildSettings, client, {
+                deleteGuildIds: [guild.id],
+            })
             client.debug(
                 `[Control-Channel] Persist settings after unset for guild ${guild.id}: ${persisted ? "ok" : "failed"}.`
             )

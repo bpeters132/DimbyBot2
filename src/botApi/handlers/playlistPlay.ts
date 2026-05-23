@@ -11,6 +11,8 @@ import {
     clearUpcomingQueue,
     enqueueResolvedPlaylistTracks,
     resolveStoredPlaylistTracks,
+    restoreUpcomingQueue,
+    snapshotUpcomingQueue,
 } from "../../util/playlistQueue.js"
 
 export async function playerPlaylistPlayPOST(
@@ -147,29 +149,44 @@ export async function playerPlaylistPlayPOST(
             }
         }
 
-        await clearUpcomingQueue(player)
-        const enqueue = await enqueueResolvedPlaylistTracks(
-            player,
-            resolved,
-            requester.requesterId,
-            shuffle
-        )
+        const savedUpcoming = snapshotUpcomingQueue(player)
+        try {
+            await clearUpcomingQueue(player)
+            const enqueue = await enqueueResolvedPlaylistTracks(
+                player,
+                resolved,
+                requester.requesterId,
+                shuffle
+            )
 
-        const state = await toPlayerStateResponse(guildId, requester.requesterId, player)
+            const state = await toPlayerStateResponse(guildId, requester.requesterId, player)
 
-        return {
-            status: 200,
-            body: {
-                ok: true,
-                data: {
-                    state,
-                    playlistId: playlist.id,
-                    playlistName: playlist.name,
-                    queued: enqueue.queued,
-                    failed,
-                    shuffle,
+            return {
+                status: 200,
+                body: {
+                    ok: true,
+                    data: {
+                        state,
+                        playlistId: playlist.id,
+                        playlistName: playlist.name,
+                        queued: enqueue.queued,
+                        failed,
+                        shuffle,
+                    },
                 },
-            },
+            }
+        } catch (enqueueErr: unknown) {
+            try {
+                await restoreUpcomingQueue(player, savedUpcoming)
+            } catch (restoreErr: unknown) {
+                const restoreMessage =
+                    restoreErr instanceof Error ? restoreErr.message : String(restoreErr)
+                console.error("[playerPlaylistPlayPOST] failed to restore queue after enqueue error", {
+                    guildId,
+                    restoreMessage,
+                })
+            }
+            throw enqueueErr
         }
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
