@@ -46,7 +46,11 @@ export async function playerPlaylistPlayPOST(
         }
         let playlistId: number
         if (typeof body.playlistId === "number") {
-            if (!Number.isFinite(body.playlistId) || !Number.isInteger(body.playlistId) || body.playlistId < 1) {
+            if (
+                !Number.isFinite(body.playlistId) ||
+                !Number.isInteger(body.playlistId) ||
+                body.playlistId < 1
+            ) {
                 return {
                     status: 400,
                     body: {
@@ -181,10 +185,13 @@ export async function playerPlaylistPlayPOST(
             } catch (restoreErr: unknown) {
                 const restoreMessage =
                     restoreErr instanceof Error ? restoreErr.message : String(restoreErr)
-                console.error("[playerPlaylistPlayPOST] failed to restore queue after enqueue error", {
-                    guildId,
-                    restoreMessage,
-                })
+                console.error(
+                    "[playerPlaylistPlayPOST] failed to restore queue after enqueue error",
+                    {
+                        guildId,
+                        restoreMessage,
+                    }
+                )
             }
             throw enqueueErr
         }

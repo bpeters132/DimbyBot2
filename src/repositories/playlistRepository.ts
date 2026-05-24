@@ -326,10 +326,7 @@ export async function removeTrackFromPlaylistById(
 }
 
 /** Removes the track at the given position and reorders remaining tracks. */
-export async function removeTrackFromPlaylist(
-    playlistId: number,
-    position: number
-): Promise<void> {
+export async function removeTrackFromPlaylist(playlistId: number, position: number): Promise<void> {
     const prisma = getPrismaClient()
     await prisma.$transaction(async (tx) => {
         const row = await tx.playlistTrack.findFirst({

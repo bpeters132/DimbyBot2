@@ -191,9 +191,7 @@ function parseTrackBody(raw: unknown): AddPlaylistTrackBody | null {
     const added = new Date(b.addedAt)
     if (Number.isNaN(added.getTime())) return null
     const thumbnailUrl =
-        typeof b.thumbnailUrl === "string" && b.thumbnailUrl.trim()
-            ? b.thumbnailUrl.trim()
-            : null
+        typeof b.thumbnailUrl === "string" && b.thumbnailUrl.trim() ? b.thumbnailUrl.trim() : null
     return {
         title: b.title.trim(),
         uri: b.uri.trim(),
@@ -644,7 +642,7 @@ export async function playlistTracksDELETE(
         }
     }
 
-    const trackId = parsePlaylistId(trackIdParam)
+    const trackId = parseStrictPositiveInt(trackIdParam)
     if (trackId === null) {
         return {
             status: 400,
@@ -660,8 +658,8 @@ export async function playlistTracksDELETE(
         return { status: owned.status, body: owned.body }
     }
 
-    const track = owned.playlist.tracks.find((t) => t.id === trackId)
-    if (!track) {
+    const hasTrack = owned.playlist.tracks.some((t) => t.id === trackId)
+    if (!hasTrack) {
         return {
             status: 404,
             body: {
