@@ -136,11 +136,11 @@ export async function addTrackToPlaylistAction(
 
 export async function removeTrackFromPlaylistAction(
     playlistId: number,
-    position: number
+    trackId: number
 ): Promise<Ok<{ removed: true }> | Err> {
     try {
         const res = await serverFetchBot(
-            `/api/playlists/${playlistId}/tracks/${position}`,
+            `/api/playlists/${playlistId}/tracks/${trackId}`,
             { method: "DELETE" }
         )
         return parseApiResponse<{ removed: true }>(res)

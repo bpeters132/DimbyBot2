@@ -292,12 +292,12 @@ export function createBotApiApp(): express.Express {
         }
     })
 
-    app.delete("/api/playlists/:playlistId/tracks/:position", async (req, res, next) => {
+    app.delete("/api/playlists/:playlistId/tracks/:trackId", async (req, res, next) => {
         try {
             const r = await playlistTracksDELETE(
                 incomingMessageToHeaders(req),
                 req.params.playlistId,
-                req.params.position
+                req.params.trackId
             )
             res.status(r.status).json(r.body)
         } catch (error) {

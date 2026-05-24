@@ -110,11 +110,11 @@ export function PlaylistTrackList({
     )
 
     const handleRemove = useCallback(
-        (position: number) => {
+        (trackId: number) => {
             void (async () => {
                 setBusy(true)
                 setError(null)
-                const result = await removeTrackFromPlaylistAction(playlistId, position)
+                const result = await removeTrackFromPlaylistAction(playlistId, trackId)
                 setBusy(false)
                 if (result.ok === false) {
                     setError(result.error)
@@ -218,7 +218,7 @@ export function PlaylistTrackList({
                                 busy={busy}
                                 isDragging={dragIndex === index}
                                 isDropTarget={overIndex === index && dragIndex !== index}
-                                onRemove={() => handleRemove(track.position)}
+                                onRemove={() => handleRemove(track.id)}
                                 onDragStart={(event) => handleDragStart(index, event)}
                                 onDragOver={(event) => handleDragOver(index, event)}
                                 onDragLeave={() => setOverIndex(null)}
