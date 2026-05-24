@@ -191,9 +191,7 @@ function parseTrackBody(raw: unknown): AddPlaylistTrackBody | null {
     const added = new Date(b.addedAt)
     if (Number.isNaN(added.getTime())) return null
     const thumbnailUrl =
-        typeof b.thumbnailUrl === "string" && b.thumbnailUrl.trim()
-            ? b.thumbnailUrl.trim()
-            : null
+        typeof b.thumbnailUrl === "string" && b.thumbnailUrl.trim() ? b.thumbnailUrl.trim() : null
     return {
         title: b.title.trim(),
         uri: b.uri.trim(),

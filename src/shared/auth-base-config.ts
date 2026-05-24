@@ -77,6 +77,10 @@ export function getBetterAuthBaseConfig() {
         secret: betterAuthSecret,
         baseURL: betterAuthUrl,
         trustedOrigins: [betterAuthUrl],
+        /** Failed OAuth/API auth redirects here instead of `/` (avoids login UI on callback error paths). */
+        onAPIError: {
+            errorURL: "/auth/error",
+        },
         advanced: {
             useSecureCookies,
             defaultCookieAttributes: {

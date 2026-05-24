@@ -1,4 +1,4 @@
-import type { Player, Track } from "lavalink-client"
+import type { Player, Track, UnresolvedTrack } from "lavalink-client"
 import type { PlaylistTrackData } from "../types/index.js"
 import { thumbnailFromLavalinkTrack } from "./trackThumbnail.js"
 import {
@@ -85,6 +85,21 @@ export type EnqueuePlaylistResult = {
     failed: number
     playbackStarted: boolean
     playbackError?: string
+}
+
+/** Snapshot of upcoming queue tracks (excludes the current track if playing). */
+export function snapshotUpcomingQueue(player: Player): Array<Track | UnresolvedTrack> {
+    return [...player.queue.tracks]
+}
+
+/** Restores a prior upcoming-queue snapshot after a failed replace (best-effort). */
+export async function restoreUpcomingQueue(
+    player: Player,
+    tracks: Array<Track | UnresolvedTrack>
+): Promise<void> {
+    if (tracks.length > 0) {
+        await player.queue.splice(0, 0, tracks)
+    }
 }
 
 /** Removes all upcoming tracks (keeps current if playing). */

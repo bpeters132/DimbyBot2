@@ -27,6 +27,7 @@ export function LoginButton() {
             await authClient.signIn.social({
                 provider: "discord",
                 callbackURL: "/dashboard",
+                errorCallbackURL: "/auth/error",
             })
         } catch (err: unknown) {
             const name = err instanceof Error ? err.name : "Error"

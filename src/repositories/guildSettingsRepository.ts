@@ -126,18 +126,23 @@ export async function isGuildSettingsTableEmpty(): Promise<boolean> {
     return count === 0
 }
 
-/**
- * Upserts guild settings rows from the legacy map shape.
- * Does not delete rows missing from the snapshot — callers often pass a stale partial map after
- * read-modify-write, and `deleteMany({ notIn })` would drop other guilds' settings.
- */
+export type ReplaceGuildSettingsOptions = {
+    /** Guild rows to remove explicitly (e.g. control-channel unset). Never inferred from snapshot keys. */
+    deleteGuildIds?: string[]
+}
+
+/** Upserts guild settings rows from the legacy map shape; optional explicit per-guild deletes only. */
 export async function replaceGuildSettingsStoreInDatabase(
-    store: GuildSettingsStore
+    store: GuildSettingsStore,
+    options?: ReplaceGuildSettingsOptions
 ): Promise<{ rowsUpserted: number; rowsDeleted: number; rowsAffected: number }> {
     const prisma = getPrismaClient()
     const guildIds = Object.keys(store)
+    const deleteGuildIds = (options?.deleteGuildIds ?? []).filter(
+        (id) => typeof id === "string" && id.length > 0
+    )
 
-    const { rowsUpserted, rowsAffected } = await prisma.$transaction(async (tx) => {
+    const { rowsUpserted, rowsDeleted, rowsAffected } = await prisma.$transaction(async (tx) => {
         let count = 0
         for (const guildId of guildIds) {
             const settings = store[guildId]
@@ -159,11 +164,18 @@ export async function replaceGuildSettingsStoreInDatabase(
             count += 1
         }
 
+        const deleted =
+            deleteGuildIds.length > 0
+                ? await tx.guildSettings.deleteMany({
+                      where: { guildId: { in: deleteGuildIds } },
+                  })
+                : { count: 0 }
         return {
             rowsUpserted: count,
-            rowsAffected: count,
+            rowsDeleted: deleted.count,
+            rowsAffected: count + deleted.count,
         }
     })
 
-    return { rowsUpserted, rowsDeleted: 0, rowsAffected }
+    return { rowsUpserted, rowsDeleted, rowsAffected }
 }
