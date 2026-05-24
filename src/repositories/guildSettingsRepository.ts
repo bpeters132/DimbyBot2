@@ -126,12 +126,21 @@ export async function isGuildSettingsTableEmpty(): Promise<boolean> {
     return count === 0
 }
 
-/** Replaces all guild settings rows with the provided legacy map shape. */
+export type ReplaceGuildSettingsOptions = {
+    /** Guild rows to remove explicitly (e.g. control-channel unset). Never inferred from snapshot keys. */
+    deleteGuildIds?: string[]
+}
+
+/** Upserts guild settings rows from the legacy map shape; optional explicit per-guild deletes only. */
 export async function replaceGuildSettingsStoreInDatabase(
-    store: GuildSettingsStore
+    store: GuildSettingsStore,
+    options?: ReplaceGuildSettingsOptions
 ): Promise<{ rowsUpserted: number; rowsDeleted: number; rowsAffected: number }> {
     const prisma = getPrismaClient()
     const guildIds = Object.keys(store)
+    const deleteGuildIds = (options?.deleteGuildIds ?? []).filter(
+        (id) => typeof id === "string" && id.length > 0
+    )
 
     const { rowsUpserted, rowsDeleted, rowsAffected } = await prisma.$transaction(async (tx) => {
         let count = 0
@@ -156,15 +165,11 @@ export async function replaceGuildSettingsStoreInDatabase(
         }
 
         const deleted =
-            guildIds.length === 0
-                ? await tx.guildSettings.deleteMany({})
-                : await tx.guildSettings.deleteMany({
-                      where: {
-                          guildId: {
-                              notIn: guildIds,
-                          },
-                      },
+            deleteGuildIds.length > 0
+                ? await tx.guildSettings.deleteMany({
+                      where: { guildId: { in: deleteGuildIds } },
                   })
+                : { count: 0 }
         return {
             rowsUpserted: count,
             rowsDeleted: deleted.count,

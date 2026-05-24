@@ -80,6 +80,14 @@ function storeWithGuildRow(
     return next
 }
 
+/** Guild keys removed from the store map (explicit DB deletes — not inferred from stale snapshots). */
+function guildIdsRemovedFromStore(
+    before: GuildSettingsStore,
+    after: GuildSettingsStore
+): string[] {
+    return Object.keys(before).filter((id) => !(id in after))
+}
+
 function formatConfig(cfg: GuildDiscordLogSettings): string {
     const min = cfg.minLevel ?? "debug"
     const lines: string[] = [
@@ -235,9 +243,10 @@ export default {
             }
             applyNormalizedDiscordLog(next, working)
             const nextStore = storeWithGuildRow(store, guild.id, working)
+            const deleteGuildIds = guildIdsRemovedFromStore(store, nextStore)
             try {
                 await interaction.deferReply({ flags: [MessageFlags.Ephemeral] })
-                const ok = await saveGuildSettings(nextStore, client)
+                const ok = await saveGuildSettings(nextStore, client, { deleteGuildIds })
                 if (!ok) {
                     return interaction.editReply({
                         content:
@@ -294,9 +303,10 @@ export default {
             }
 
             const nextStore = storeWithGuildRow(store, guild.id, working)
+            const deleteGuildIds = guildIdsRemovedFromStore(store, nextStore)
             try {
                 await interaction.deferReply({ flags: [MessageFlags.Ephemeral] })
-                const ok = await saveGuildSettings(nextStore, client)
+                const ok = await saveGuildSettings(nextStore, client, { deleteGuildIds })
                 if (!ok) {
                     return interaction.editReply({
                         content:
@@ -369,9 +379,10 @@ export default {
 
             applyNormalizedDiscordLog(next, working)
             const nextStore = storeWithGuildRow(latestStore, guild.id, working)
+            const deleteGuildIds = guildIdsRemovedFromStore(latestStore, nextStore)
             try {
                 await interaction.deferReply({ flags: [MessageFlags.Ephemeral] })
-                const ok = await saveGuildSettings(nextStore, client)
+                const ok = await saveGuildSettings(nextStore, client, { deleteGuildIds })
                 if (!ok) {
                     return interaction.editReply({
                         content:

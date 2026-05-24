@@ -99,20 +99,31 @@ async function withGuildSettingsSaveLock<T>(work: () => Promise<T>): Promise<T> 
     }
 }
 
+export type SaveGuildSettingsOptions = {
+    /** Guild IDs to delete from the database (must be intentional removals, not snapshot omissions). */
+    deleteGuildIds?: string[]
+}
+
 /**
  * Persists guild settings to database. On success, replaces the in-memory cache with `settings`.
  * @returns whether the database write succeeded
  */
 export async function saveGuildSettings(
     settings: GuildSettingsStore,
-    loggerInstance?: Partial<LoggerInterface>
+    loggerInstance?: Partial<LoggerInterface>,
+    options?: SaveGuildSettingsOptions
 ): Promise<boolean> {
     const settingsSnapshot = cloneGuildSettingsStore(settings)
+    const deleteGuildIds = (options?.deleteGuildIds ?? []).filter(
+        (id) => typeof id === "string" && id.length > 0
+    )
     return withGuildSettingsSaveLock(async () => {
         const logger = loggerFromPartial(loggerInstance)
         logger.debug("[guildSettings] Attempting to save settings to database.")
         try {
-            const result = await replaceGuildSettingsStoreInDatabase(settingsSnapshot)
+            const result = await replaceGuildSettingsStoreInDatabase(settingsSnapshot, {
+                deleteGuildIds,
+            })
             const reloaded = await readGuildSettingsFromDatabase(logger)
             guildSettingsCache = cloneGuildSettingsStore(reloaded)
             guildSettingsInitialized = true
