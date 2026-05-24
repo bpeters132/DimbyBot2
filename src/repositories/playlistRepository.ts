@@ -22,8 +22,12 @@ export class PlaylistNotFoundError extends Error {
 }
 
 export class PlaylistTrackNotFoundError extends Error {
-    constructor(position: number) {
-        super(`No track at position ${position}.`)
+    constructor(positionOrMessage: number | string) {
+        super(
+            typeof positionOrMessage === "number"
+                ? `No track at position ${positionOrMessage}.`
+                : positionOrMessage
+        )
         this.name = "PlaylistTrackNotFoundError"
     }
 }
@@ -287,6 +291,40 @@ export async function movePlaylistTrack(
     })
 }
 
+async function removePlaylistTrackRowAndRenumber(
+    tx: Prisma.TransactionClient,
+    playlistId: number,
+    deletedPosition: number,
+    trackId: number
+): Promise<void> {
+    await tx.playlistTrack.delete({ where: { id: trackId } })
+    await tx.playlistTrack.updateMany({
+        where: { playlistId, position: { gt: deletedPosition } },
+        data: { position: { decrement: 1 } },
+    })
+    await tx.playlist.update({
+        where: { id: playlistId },
+        data: { updatedAt: new Date() },
+    })
+}
+
+/** Removes a track by stable row id and reorders remaining tracks (safe when positions drift). */
+export async function removeTrackFromPlaylistById(
+    playlistId: number,
+    trackId: number
+): Promise<void> {
+    const prisma = getPrismaClient()
+    await prisma.$transaction(async (tx) => {
+        const row = await tx.playlistTrack.findFirst({
+            where: { id: trackId, playlistId },
+        })
+        if (!row) {
+            throw new PlaylistTrackNotFoundError("Track not found in this playlist.")
+        }
+        await removePlaylistTrackRowAndRenumber(tx, playlistId, row.position, trackId)
+    })
+}
+
 /** Removes the track at the given position and reorders remaining tracks. */
 export async function removeTrackFromPlaylist(
     playlistId: number,
@@ -294,19 +332,12 @@ export async function removeTrackFromPlaylist(
 ): Promise<void> {
     const prisma = getPrismaClient()
     await prisma.$transaction(async (tx) => {
-        const deleted = await tx.playlistTrack.deleteMany({
+        const row = await tx.playlistTrack.findFirst({
             where: { playlistId, position },
         })
-        if (deleted.count === 0) {
+        if (!row) {
             throw new PlaylistTrackNotFoundError(position)
         }
-        await tx.playlistTrack.updateMany({
-            where: { playlistId, position: { gt: position } },
-            data: { position: { decrement: 1 } },
-        })
-        await tx.playlist.update({
-            where: { id: playlistId },
-            data: { updatedAt: new Date() },
-        })
+        await removePlaylistTrackRowAndRenumber(tx, playlistId, position, row.id)
     })
 }
