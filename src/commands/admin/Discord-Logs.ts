@@ -246,7 +246,10 @@ export default {
             const deleteGuildIds = guildIdsRemovedFromStore(store, nextStore)
             try {
                 await interaction.deferReply({ flags: [MessageFlags.Ephemeral] })
-                const ok = await saveGuildSettings(nextStore, client, { deleteGuildIds })
+                const ok = await saveGuildSettings(nextStore, client, {
+                    deleteGuildIds,
+                    touchedGuildIds: [guild.id],
+                })
                 if (!ok) {
                     return interaction.editReply({
                         content:
@@ -306,7 +309,10 @@ export default {
             const deleteGuildIds = guildIdsRemovedFromStore(store, nextStore)
             try {
                 await interaction.deferReply({ flags: [MessageFlags.Ephemeral] })
-                const ok = await saveGuildSettings(nextStore, client, { deleteGuildIds })
+                const ok = await saveGuildSettings(nextStore, client, {
+                    deleteGuildIds,
+                    touchedGuildIds: [guild.id],
+                })
                 if (!ok) {
                     return interaction.editReply({
                         content:
@@ -382,7 +388,10 @@ export default {
             const deleteGuildIds = guildIdsRemovedFromStore(latestStore, nextStore)
             try {
                 await interaction.deferReply({ flags: [MessageFlags.Ephemeral] })
-                const ok = await saveGuildSettings(nextStore, client, { deleteGuildIds })
+                const ok = await saveGuildSettings(nextStore, client, {
+                    deleteGuildIds,
+                    touchedGuildIds: [guild.id],
+                })
                 if (!ok) {
                     return interaction.editReply({
                         content:
