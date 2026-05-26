@@ -125,10 +125,40 @@ export async function queueIndexPATCH(
         }
 
         const [track] = await player.queue.splice(sourceIndex, 1)
+        if (!track) {
+            return {
+                status: 404,
+                body: { ok: false, error: { error: "Queue index out of range." } },
+            }
+        }
         const insertIndexRaw = destinationIndex
         const lenAfterRemove = player.queue.tracks.length
         const insertIndex = Math.min(Math.max(insertIndexRaw, 0), lenAfterRemove)
-        await player.queue.splice(insertIndex, 0, track)
+        try {
+            await player.queue.splice(insertIndex, 0, track)
+        } catch (insertErr: unknown) {
+            try {
+                await player.queue.splice(sourceIndex, 0, track)
+            } catch (restoreErr: unknown) {
+                const restoreMessage =
+                    restoreErr instanceof Error ? restoreErr.message : String(restoreErr)
+                const client = tryGetBotClient()
+                if (client) {
+                    client.error("[queueIndexPATCH] failed to restore track after reorder error", {
+                        guildId,
+                        sourceIndex,
+                        restoreMessage,
+                        insertErr,
+                    })
+                } else {
+                    console.error(
+                        "[queueIndexPATCH] failed to restore track after reorder error",
+                        { guildId, sourceIndex, restoreMessage, insertErr }
+                    )
+                }
+            }
+            throw insertErr
+        }
         playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
 
         return {

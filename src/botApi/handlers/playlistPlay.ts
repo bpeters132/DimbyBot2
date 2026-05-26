@@ -10,6 +10,7 @@ import { searchAndEnqueue } from "./searchAndEnqueue.js"
 import {
     clearUpcomingQueue,
     enqueueResolvedPlaylistTracks,
+    type EnqueuePlaylistResult,
     resolveStoredPlaylistTracks,
     restoreUpcomingQueue,
     snapshotUpcomingQueue,
@@ -154,31 +155,15 @@ export async function playerPlaylistPlayPOST(
         }
 
         const savedUpcoming = snapshotUpcomingQueue(player)
+        let enqueue: EnqueuePlaylistResult
         try {
             await clearUpcomingQueue(player)
-            const enqueue = await enqueueResolvedPlaylistTracks(
+            enqueue = await enqueueResolvedPlaylistTracks(
                 player,
                 resolved,
                 requester.requesterId,
                 shuffle
             )
-
-            const state = await toPlayerStateResponse(guildId, requester.requesterId, player)
-
-            return {
-                status: 200,
-                body: {
-                    ok: true,
-                    data: {
-                        state,
-                        playlistId: playlist.id,
-                        playlistName: playlist.name,
-                        queued: enqueue.queued,
-                        failed,
-                        shuffle,
-                    },
-                },
-            }
         } catch (enqueueErr: unknown) {
             try {
                 await restoreUpcomingQueue(player, savedUpcoming)
@@ -194,6 +179,23 @@ export async function playerPlaylistPlayPOST(
                 )
             }
             throw enqueueErr
+        }
+
+        const state = await toPlayerStateResponse(guildId, requester.requesterId, player)
+
+        return {
+            status: 200,
+            body: {
+                ok: true,
+                data: {
+                    state,
+                    playlistId: playlist.id,
+                    playlistName: playlist.name,
+                    queued: enqueue.queued,
+                    failed,
+                    shuffle,
+                },
+            },
         }
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
