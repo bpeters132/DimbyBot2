@@ -137,11 +137,13 @@ export type ReplaceGuildSettingsStoreFn = (
 
 export type ReplaceDownloadMetadataStoreResult = {
     rowsWritten: number
+    rowsDeleted: number
     skippedEntries: DownloadMetadataStoreSkippedEntry[]
 }
 
 export type ReplaceDownloadMetadataStoreFn = (
-    store: DownloadsMetadataStore
+    store: DownloadsMetadataStore,
+    options?: { deleteStoreKeys?: string[] }
 ) => Promise<ReplaceDownloadMetadataStoreResult>
 
 /** Options for JSON → DB migration helpers. */
