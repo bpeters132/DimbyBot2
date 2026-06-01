@@ -126,7 +126,9 @@ export default {
                 client.debug(
                     `[Control-Channel] Saving new settings for guild ${guild.id}: Channel ${targetChannel.id}, Message ${controlMessage.id}.`
                 )
-                const persisted = await saveGuildSettings(guildSettings, client)
+                const persisted = await saveGuildSettings(guildSettings, client, {
+                    touchedGuildIds: [guild.id],
+                })
                 if (!persisted) {
                     await controlMessage.delete().catch((rollbackErr: unknown) => {
                         client.warn(
@@ -216,6 +218,7 @@ export default {
             }
             const persisted = await saveGuildSettings(guildSettings, client, {
                 deleteGuildIds: [guild.id],
+                touchedGuildIds: [guild.id],
             })
             client.debug(
                 `[Control-Channel] Persist settings after unset for guild ${guild.id}: ${persisted ? "ok" : "failed"}.`

@@ -112,7 +112,9 @@ export default {
         if (subcommand === "set") {
             const sizeMb = interaction.options.getNumber("size_mb", true)
             settings[targetGuildId].downloadsMaxMb = sizeMb
-            const ok = await saveGuildSettings(settings, client)
+            const ok = await saveGuildSettings(settings, client, {
+                touchedGuildIds: [targetGuildId],
+            })
             if (!ok) {
                 client.error("[DownloadLimit] Failed to persist guild settings after set.")
                 return interaction.reply({
@@ -134,7 +136,10 @@ export default {
                     delete settings[targetGuildId]
                     deleteGuildIds = [targetGuildId]
                 }
-                const ok = await saveGuildSettings(settings, client, { deleteGuildIds })
+                const ok = await saveGuildSettings(settings, client, {
+                    deleteGuildIds,
+                    touchedGuildIds: [targetGuildId],
+                })
                 if (!ok) {
                     client.error("[DownloadLimit] Failed to persist guild settings after clear.")
                     return interaction.reply({

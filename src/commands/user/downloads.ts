@@ -306,6 +306,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             let deletedCount = 0
             let totalSize = 0
             const errors = []
+            const deletedStoreKeys = new Set<string>()
 
             for (const file of files) {
                 const metadataKeys = downloadMetadataKeysForFile(metadata, file.name, guildId)
@@ -316,6 +317,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     deletedCount++
                     for (const metaKey of metadataKeys) {
                         delete metadata[metaKey]
+                        deletedStoreKeys.add(metaKey)
                     }
                 } catch (err: unknown) {
                     const code =
@@ -325,6 +327,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     if (code === "ENOENT") {
                         for (const metaKey of metadataKeys) {
                             delete metadata[metaKey]
+                            deletedStoreKeys.add(metaKey)
                         }
                     } else {
                         client.warn(
@@ -336,7 +339,9 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 }
             }
 
-            const metadataSaved = await saveDownloadMetadataStore(metadata, client)
+            const metadataSaved = await saveDownloadMetadataStore(metadata, client, {
+                deleteStoreKeys: [...deletedStoreKeys],
+            })
             if (!metadataSaved) {
                 client.error(
                     `[Downloads] Failed to persist metadata cleanup updates to database (guildId=${guildId}, subcommand=${subcommand}).`
