@@ -151,10 +151,13 @@ function deleteConditionsForStoreKeys(
                 : `|${parsed.fileName}`
         if (seen.has(dedupe)) continue
         seen.add(dedupe)
+        // Only delete by composite `(guildId, fileName)`. A filename-only key (parsed.guildId null/empty)
+        // would translate to `{ fileName }`, matching that fileName across EVERY guild and wiping
+        // unrelated guilds' rows. DB rows always carry a guildId (NULL legacy rows were migrated to the
+        // UNKNOWN sentinel), so callers' keys from downloadMetadataKeysForFile are composite — the
+        // filename-only branch targets no real row precisely and is intentionally skipped here.
         if (parsed.guildId !== null && parsed.guildId.length > 0) {
             conditions.push({ guildId: parsed.guildId, fileName: parsed.fileName })
-        } else {
-            conditions.push({ fileName: parsed.fileName })
         }
     }
     return conditions
