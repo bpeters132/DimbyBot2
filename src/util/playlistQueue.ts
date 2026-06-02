@@ -97,6 +97,10 @@ export async function restoreUpcomingQueue(
     player: Player,
     tracks: Array<Track | UnresolvedTrack>
 ): Promise<void> {
+    const size = player.queue.tracks.length
+    if (size > 0) {
+        await player.queue.splice(0, size)
+    }
     if (tracks.length > 0) {
         await player.queue.splice(0, 0, tracks)
     }
