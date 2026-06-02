@@ -65,6 +65,7 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
     let deletedCount = 0
     let totalSize = 0
     let metadataDirty = false
+    const deletedStoreKeys = new Set<string>()
 
     const metadata: DownloadsMetadataStore = getDownloadMetadataStore()
 
@@ -87,6 +88,7 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
                 if (err.code === "ENOENT") {
                     for (const metaKey of metadataKeysForFile) {
                         delete metadata[metaKey]
+                        deletedStoreKeys.add(metaKey)
                     }
                     metadataDirty = true
                     client.debug(
@@ -111,6 +113,7 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
                         if (err.code === "ENOENT") {
                             for (const metaKey of metadataKeysForFile) {
                                 delete metadata[metaKey]
+                                deletedStoreKeys.add(metaKey)
                             }
                             metadataDirty = true
                             client.debug(
@@ -128,6 +131,7 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
                 }
                 for (const metaKey of metadataKeysForFile) {
                     delete metadata[metaKey]
+                    deletedStoreKeys.add(metaKey)
                 }
                 metadataDirty = true
                 client.debug(
@@ -143,7 +147,9 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
     }
 
     if (metadataDirty) {
-        const ok = await saveDownloadMetadataStore(metadata, client)
+        const ok = await saveDownloadMetadataStore(metadata, client, {
+            deleteStoreKeys: [...deletedStoreKeys],
+        })
         if (ok) {
             client.debug("[Download Cleanup] Updated metadata store after deleting old entries.")
         } else {
@@ -225,6 +231,7 @@ async function enforceDirectoryLimit(
         let deletedCount = 0
         let deletedSize = 0
         let metadataDirty = false
+        const deletedStoreKeys = new Set<string>()
 
         for (const file of candidates) {
             if (totalSizeMB - deletedSize / (1024 * 1024) <= maxDirSizeMb) {
@@ -236,6 +243,7 @@ async function enforceDirectoryLimit(
                 deletedSize += file.size
                 for (const metaKey of downloadMetadataKeysForFile(metadata, file.name, guildId)) {
                     delete metadata[metaKey]
+                    deletedStoreKeys.add(metaKey)
                     metadataDirty = true
                 }
             } catch (error: unknown) {
@@ -244,7 +252,9 @@ async function enforceDirectoryLimit(
         }
 
         if (metadataDirty) {
-            const ok = await saveDownloadMetadataStore(metadata, client)
+            const ok = await saveDownloadMetadataStore(metadata, client, {
+                deleteStoreKeys: [...deletedStoreKeys],
+            })
             if (ok) {
                 client.debug("[Download Cleanup] Updated metadata after size cleanup.")
             } else {

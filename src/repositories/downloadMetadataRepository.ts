@@ -128,53 +128,70 @@ export async function isDownloadMetadataTableEmpty(): Promise<boolean> {
  */
 export type ReplaceDownloadMetadataStoreResult = {
     rowsWritten: number
+    rowsDeleted: number
     skippedEntries: SkippedDownloadMetadataEntry[]
 }
 
+export type ReplaceDownloadMetadataStoreOptions = {
+    /** Store keys removed intentionally (cleanup); never inferred from snapshot omissions. */
+    deleteStoreKeys?: string[]
+}
+
+function deleteConditionsForStoreKeys(
+    deleteStoreKeys: string[]
+): Prisma.DownloadMetadataWhereInput[] {
+    const conditions: Prisma.DownloadMetadataWhereInput[] = []
+    const seen = new Set<string>()
+    for (const storeKey of deleteStoreKeys) {
+        if (typeof storeKey !== "string" || !storeKey.trim()) continue
+        const parsed = parseDownloadMetadataStoreKey(storeKey)
+        const dedupe =
+            parsed.guildId !== null && parsed.guildId.length > 0
+                ? `${parsed.guildId}|${parsed.fileName}`
+                : `|${parsed.fileName}`
+        if (seen.has(dedupe)) continue
+        seen.add(dedupe)
+        // Only delete by composite `(guildId, fileName)`. A filename-only key (parsed.guildId null/empty)
+        // would translate to `{ fileName }`, matching that fileName across EVERY guild and wiping
+        // unrelated guilds' rows. DB rows always carry a guildId (NULL legacy rows were migrated to the
+        // UNKNOWN sentinel), so callers' keys from downloadMetadataKeysForFile are composite — the
+        // filename-only branch targets no real row precisely and is intentionally skipped here.
+        if (parsed.guildId !== null && parsed.guildId.length > 0) {
+            conditions.push({ guildId: parsed.guildId, fileName: parsed.fileName })
+        }
+    }
+    return conditions
+}
+
 export async function replaceDownloadMetadataStoreInDatabase(
-    store: DownloadsMetadataStore
+    store: DownloadsMetadataStore,
+    options?: ReplaceDownloadMetadataStoreOptions
 ): Promise<ReplaceDownloadMetadataStoreResult> {
     const prisma = getPrismaClient()
     const { rows, skippedEntries } = normalizedRowsFromStore(store)
 
-    if (rows.length === 0) {
+    const deleteStoreKeys = (options?.deleteStoreKeys ?? []).filter(
+        (key) => typeof key === "string" && key.length > 0
+    )
+
+    if (rows.length === 0 && deleteStoreKeys.length === 0) {
         if (skippedEntries.length > 0) {
-            return { rowsWritten: 0, skippedEntries }
+            return { rowsWritten: 0, rowsDeleted: 0, skippedEntries }
         }
         await prisma.downloadMetadata.deleteMany({})
-        return { rowsWritten: 0, skippedEntries }
+        return { rowsWritten: 0, rowsDeleted: 0, skippedEntries }
     }
 
     const UPSERT_BATCH = 32
-    const KEEP_INSERT_CHUNK = 500
+    let rowsDeleted = 0
 
     await prisma.$transaction(async (tx) => {
-        // PostgreSQL-specific temp table lifecycle (`ON COMMIT DROP`) is intentional; this project is
-        // configured for PostgreSQL via Prisma, and `_dimbybot_dm_keep` must be transaction-scoped.
-        await tx.$executeRaw`
-            CREATE TEMP TABLE _dimbybot_dm_keep (
-                "guildId" TEXT NOT NULL,
-                "fileName" TEXT NOT NULL
-            ) ON COMMIT DROP
-        `
-
-        for (let i = 0; i < rows.length; i += KEEP_INSERT_CHUNK) {
-            const batch = rows.slice(i, i + KEEP_INSERT_CHUNK)
-            const tuples = batch.map((r) => Prisma.sql`(${r.guildId}, ${r.fileName})`)
-            await tx.$executeRaw`
-                INSERT INTO _dimbybot_dm_keep ("guildId", "fileName")
-                VALUES ${Prisma.join(tuples, ", ")}
-            `
-        }
-
-        if (skippedEntries.length === 0) {
-            await tx.$executeRaw`
-                DELETE FROM "DownloadMetadata" AS d
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM _dimbybot_dm_keep k
-                    WHERE k."guildId" = d."guildId" AND k."fileName" = d."fileName"
-                )
-            `
+        const deleteConditions = deleteConditionsForStoreKeys(deleteStoreKeys)
+        if (deleteConditions.length > 0) {
+            const deleted = await tx.downloadMetadata.deleteMany({
+                where: { OR: deleteConditions },
+            })
+            rowsDeleted = deleted.count
         }
 
         for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
@@ -214,5 +231,5 @@ export async function replaceDownloadMetadataStoreInDatabase(
         }
     })
 
-    return { rowsWritten: rows.length, skippedEntries }
+    return { rowsWritten: rows.length, rowsDeleted, skippedEntries }
 }

@@ -102,6 +102,11 @@ async function withGuildSettingsSaveLock<T>(work: () => Promise<T>): Promise<T> 
 export type SaveGuildSettingsOptions = {
     /** Guild IDs to delete from the database (must be intentional removals, not snapshot omissions). */
     deleteGuildIds?: string[]
+    /**
+     * Guild rows to take from `settings` when persisting. When set, other guilds in `settings` are
+     * ignored and the latest database values are kept (prevents lost updates across concurrent saves).
+     */
+    touchedGuildIds?: string[]
 }
 
 /**
@@ -117,11 +122,27 @@ export async function saveGuildSettings(
     const deleteGuildIds = (options?.deleteGuildIds ?? []).filter(
         (id) => typeof id === "string" && id.length > 0
     )
+    const touchedGuildIds = (options?.touchedGuildIds ?? []).filter(
+        (id) => typeof id === "string" && id.length > 0
+    )
     return withGuildSettingsSaveLock(async () => {
         const logger = loggerFromPartial(loggerInstance)
         logger.debug("[guildSettings] Attempting to save settings to database.")
         try {
-            const result = await replaceGuildSettingsStoreInDatabase(settingsSnapshot, {
+            const dbStore = await readGuildSettingsFromDatabase(logger)
+            const merged = cloneGuildSettingsStore(dbStore)
+            const guildIdsToApply =
+                touchedGuildIds.length > 0 ? touchedGuildIds : Object.keys(settingsSnapshot)
+            for (const guildId of guildIdsToApply) {
+                const row = settingsSnapshot[guildId]
+                if (row !== undefined) {
+                    merged[guildId] = cloneGuildSettingsStore({ [guildId]: row })[guildId]!
+                }
+            }
+            for (const guildId of deleteGuildIds) {
+                delete merged[guildId]
+            }
+            const result = await replaceGuildSettingsStoreInDatabase(merged, {
                 deleteGuildIds,
             })
             const reloaded = await readGuildSettingsFromDatabase(logger)

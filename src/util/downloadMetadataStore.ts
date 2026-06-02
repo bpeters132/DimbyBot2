@@ -7,6 +7,7 @@ import { loggerFromPartial } from "./loggerFromPartial.js"
 
 let downloadMetadataCache: DownloadsMetadataStore = {}
 let initialized = false
+let saveDownloadMetadataChain: Promise<void> = Promise.resolve()
 
 function cloneStore(store: DownloadsMetadataStore): DownloadsMetadataStore {
     return typeof structuredClone === "function"
@@ -33,6 +34,25 @@ export async function initializeDownloadMetadataStore(
     }
 }
 
+async function withDownloadMetadataSaveLock<T>(work: () => Promise<T>): Promise<T> {
+    let release: () => void = () => {}
+    const previous = saveDownloadMetadataChain
+    saveDownloadMetadataChain = new Promise<void>((resolve) => {
+        release = resolve
+    })
+    await previous
+    try {
+        return await work()
+    } finally {
+        release()
+    }
+}
+
+export type SaveDownloadMetadataStoreOptions = {
+    /** Store keys removed from the in-memory map (cleanup); must be listed explicitly. */
+    deleteStoreKeys?: string[]
+}
+
 /** Returns a clone of the metadata cache so callers cannot mutate shared state. */
 export function getDownloadMetadataStore(): DownloadsMetadataStore {
     if (!initialized) {
@@ -44,45 +64,47 @@ export function getDownloadMetadataStore(): DownloadsMetadataStore {
 /** Persists the provided metadata map to the database and replaces the in-memory cache with a deep clone. */
 export async function saveDownloadMetadataStore(
     metadata: DownloadsMetadataStore,
-    loggerInstance?: Partial<LoggerInterface>
+    loggerInstance?: Partial<LoggerInterface>,
+    options?: SaveDownloadMetadataStoreOptions
 ): Promise<boolean> {
-    const logger = loggerFromPartial(loggerInstance)
-    const previousCache = cloneStore(downloadMetadataCache)
     const nextCache = cloneStore(metadata)
-    try {
-        const result = await replaceDownloadMetadataStoreInDatabase(nextCache)
+    const deleteStoreKeys = (options?.deleteStoreKeys ?? []).filter(
+        (key) => typeof key === "string" && key.length > 0
+    )
+    return withDownloadMetadataSaveLock(async () => {
+        const logger = loggerFromPartial(loggerInstance)
+        const previousCache = cloneStore(downloadMetadataCache)
         try {
-            if (result.skippedEntries.length === 0) {
-                downloadMetadataCache = nextCache
-                initialized = true
-            } else {
+            const result = await replaceDownloadMetadataStoreInDatabase(nextCache, {
+                deleteStoreKeys,
+            })
+            try {
                 const persistedCache = await getDownloadMetadataStoreFromDatabase()
                 downloadMetadataCache = cloneStore(persistedCache)
                 initialized = true
+            } catch (reloadErr: unknown) {
+                logger.warn(
+                    "[downloadMetadata] replaceDownloadMetadataStoreInDatabase succeeded but cache reload failed; keeping previous in-memory cache",
+                    reloadErr
+                )
+                downloadMetadataCache = previousCache
+                initialized = true
+                return false
             }
-        } catch (reloadErr: unknown) {
-            logger.warn(
-                "[downloadMetadata] replaceDownloadMetadataStoreInDatabase succeeded but cache reload failed; keeping previous in-memory cache",
-                reloadErr
+            if (result.skippedEntries.length > 0) {
+                logger.warn(
+                    `[downloadMetadata] Skipped ${result.skippedEntries.length} metadata row(s) (no resolvable guild id); cache reloaded from database.`
+                )
+            }
+            logger.debug(
+                `[downloadMetadata] Saved metadata store to database (upserted=${result.rowsWritten}, deleted=${result.rowsDeleted}).`
             )
-            downloadMetadataCache = previousCache
-            initialized = true
+            return result.skippedEntries.length === 0
+        } catch (error: unknown) {
+            logger.error("[downloadMetadata] Failed saving metadata store to database:", error)
             return false
         }
-        if (result.skippedEntries.length > 0) {
-            logger.warn(
-                `[downloadMetadata] Skipped ${result.skippedEntries.length} metadata row(s) (no resolvable guild id); cache reloaded from database.`
-            )
-        }
-        logger.debug(
-            `[downloadMetadata] Saved metadata store to database (${result.rowsWritten} rows).`
-        )
-        // Success only when nothing was skipped (including empty saves: 0 rows written, 0 skipped).
-        return result.skippedEntries.length === 0
-    } catch (error: unknown) {
-        logger.error("[downloadMetadata] Failed saving metadata store to database:", error)
-        return false
-    }
+    })
 }
 
 /** Indicates whether the metadata cache has been initialized from the database. */
