@@ -34,6 +34,9 @@ const REQUIRED_CHANNEL_PERMS = [
     PermissionFlagsBits.EmbedLinks,
 ]
 
+/** Discord's maximum embed description length. */
+const EMBED_DESCRIPTION_LIMIT = 4096
+
 export default {
     data: new SlashCommandBuilder()
         .setName("countdown")
@@ -287,7 +290,14 @@ async function handleCreate(
         throw err
     }
 
-    await placeholder.edit({ content: null, embeds: [buildCountdownEmbed(entry)] })
+    try {
+        await placeholder.edit({ content: null, embeds: [buildCountdownEmbed(entry)] })
+    } catch (editErr: unknown) {
+        client.warn(
+            `[Countdown] Failed to render initial embed for countdown #${entry.id} (message ${placeholder.id}); the periodic updater will correct the stale message:`,
+            editErr
+        )
+    }
 
     return interaction.editReply({
         content: `Created countdown **#${entry.id}** for **${eventName}** in ${targetChannel}.`,
@@ -310,19 +320,35 @@ async function handleList(
     }
 
     const now = Date.now()
+    const entries = countdowns.map((c) => {
+        const remaining = c.targetTime.getTime() - now
+        const remainingText = remaining <= 0 ? "Event started!" : formatCountdownDuration(remaining)
+        return `**#${c.id}** — ${c.eventName}\n<#${c.channelId}> • ${remainingText}`
+    })
+
+    const separator = "\n\n"
+    const safeLimit = EMBED_DESCRIPTION_LIMIT - 100
+    const included: string[] = []
+    let length = 0
+    for (const entry of entries) {
+        const added = included.length === 0 ? entry.length : separator.length + entry.length
+        if (length + added > safeLimit) {
+            break
+        }
+        included.push(entry)
+        length += added
+    }
+
+    let description = included.join(separator)
+    const omitted = entries.length - included.length
+    if (omitted > 0) {
+        description += `${separator}…and ${omitted} more countdown${omitted === 1 ? "" : "s"}`
+    }
+
     const embed = new EmbedBuilder()
         .setColor(0x5865f2)
         .setTitle("Active Countdowns")
-        .setDescription(
-            countdowns
-                .map((c) => {
-                    const remaining = c.targetTime.getTime() - now
-                    const remainingText =
-                        remaining <= 0 ? "Event started!" : formatCountdownDuration(remaining)
-                    return `**#${c.id}** — ${c.eventName}\n<#${c.channelId}> • ${remainingText}`
-                })
-                .join("\n\n")
-        )
+        .setDescription(description)
         .setTimestamp()
 
     return interaction.editReply({ embeds: [embed] })
