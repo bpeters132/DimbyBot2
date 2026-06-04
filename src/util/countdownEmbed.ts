@@ -38,3 +38,15 @@ export function buildCountdownEmbed(entry: CountdownEntry, now: number = Date.no
 
     return embed
 }
+
+/**
+ * Builds the embed attached to the finish announcement (event name + image), or null when the
+ * countdown has no image to re-post.
+ */
+export function buildCountdownFinishEmbed(entry: CountdownEntry): EmbedBuilder | null {
+    if (!entry.imageUrl) return null
+    return new EmbedBuilder()
+        .setColor(entry.color ?? DEFAULT_COUNTDOWN_COLOR)
+        .setTitle(entry.eventName)
+        .setImage(entry.imageUrl)
+}

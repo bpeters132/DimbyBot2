@@ -236,6 +236,10 @@ export interface CountdownEntry {
     color: number | null
     /** Custom embed footer text, or null to show the countdown id reference. */
     footer: string | null
+    /** Message posted to the channel when the countdown finishes, or null for none. */
+    finishMessage: string | null
+    /** Role id to mention in the finish message, or null for no mention. */
+    mentionRoleId: string | null
     targetTime: Date
     createdBy: string
     createdAt: Date
@@ -251,6 +255,8 @@ export interface CountdownInput {
     imageUrl: string | null
     color: number | null
     footer: string | null
+    finishMessage: string | null
+    mentionRoleId: string | null
     targetTime: Date
     createdBy: string
 }

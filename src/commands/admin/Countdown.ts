@@ -140,6 +140,19 @@ export default {
                         .setRequired(false)
                         .setMaxLength(256)
                 )
+                .addStringOption((opt) =>
+                    opt
+                        .setName("finish_message")
+                        .setDescription("Message posted in the channel when the countdown finishes")
+                        .setRequired(false)
+                        .setMaxLength(2000)
+                )
+                .addRoleOption((opt) =>
+                    opt
+                        .setName("mention_role")
+                        .setDescription("Role to ping in the finish message")
+                        .setRequired(false)
+                )
         )
         .addSubcommand((sub) =>
             sub.setName("list").setDescription("List active countdowns in this server.")
@@ -203,6 +216,8 @@ async function handleCreate(
     const imageUrl = interaction.options.getString("image_url")
     const color = interaction.options.getInteger("color")
     const footer = interaction.options.getString("footer")
+    const finishMessage = interaction.options.getString("finish_message")
+    const mentionRole = interaction.options.getRole("mention_role")
 
     let targetMs: number
     if (date || time) {
@@ -277,6 +292,8 @@ async function handleCreate(
             imageUrl: imageUrl ?? null,
             color: color ?? null,
             footer: footer ?? null,
+            finishMessage: finishMessage ?? null,
+            mentionRoleId: mentionRole?.id ?? null,
             targetTime: new Date(targetMs),
             createdBy: interaction.user.id,
         })

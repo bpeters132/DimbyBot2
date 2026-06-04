@@ -29,6 +29,8 @@ function toCountdownEntry(row: {
     imageUrl: string | null
     color: number | null
     footer: string | null
+    finishMessage: string | null
+    mentionRoleId: string | null
     targetTime: Date
     createdBy: string
     createdAt: Date
@@ -43,6 +45,8 @@ function toCountdownEntry(row: {
         imageUrl: row.imageUrl,
         color: row.color,
         footer: row.footer,
+        finishMessage: row.finishMessage,
+        mentionRoleId: row.mentionRoleId,
         targetTime: row.targetTime,
         createdBy: row.createdBy,
         createdAt: row.createdAt,
@@ -79,6 +83,8 @@ export async function createCountdown(input: CountdownInput): Promise<CountdownE
             imageUrl: input.imageUrl,
             color: input.color,
             footer: input.footer,
+            finishMessage: input.finishMessage,
+            mentionRoleId: input.mentionRoleId ? normalizeSnowflake(input.mentionRoleId) : null,
             targetTime: input.targetTime,
             createdBy,
         },

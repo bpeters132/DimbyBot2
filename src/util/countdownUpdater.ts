@@ -1,5 +1,7 @@
+import type { SendableChannels } from "discord.js"
 import type BotClient from "../lib/BotClient.js"
-import { buildCountdownEmbed } from "./countdownEmbed.js"
+import type { CountdownEntry } from "../types/index.js"
+import { buildCountdownEmbed, buildCountdownFinishEmbed } from "./countdownEmbed.js"
 import { getAllCountdowns, removeCountdown } from "./countdownStore.js"
 
 /** Discord API error codes treated as permanently unrecoverable for a countdown message. */
@@ -16,6 +18,32 @@ function isUnrecoverableError(error: unknown): boolean {
         return typeof code === "number" && UNRECOVERABLE_CODES.has(code)
     }
     return false
+}
+
+/**
+ * Posts the finish announcement (optional text + role ping + re-posted image) into the
+ * countdown's own channel. No-op when nothing was configured to announce. Errors are swallowed
+ * so they never block cleanup of the expired countdown.
+ */
+async function postFinishMessage(
+    client: BotClient,
+    channel: SendableChannels,
+    entry: CountdownEntry
+): Promise<void> {
+    const mention = entry.mentionRoleId ? `<@&${entry.mentionRoleId}>` : ""
+    const content = [mention, entry.finishMessage ?? ""].filter(Boolean).join(" ").trim()
+    const finishEmbed = buildCountdownFinishEmbed(entry)
+    if (!content && !finishEmbed) return
+
+    try {
+        await channel.send({
+            content: content || undefined,
+            embeds: finishEmbed ? [finishEmbed] : [],
+            allowedMentions: { roles: entry.mentionRoleId ? [entry.mentionRoleId] : [] },
+        })
+    } catch (error: unknown) {
+        client.warn(`[countdown] Failed to post finish message for countdown #${entry.id}:`, error)
+    }
 }
 
 /**
@@ -46,6 +74,9 @@ export async function updateAllCountdowns(client: BotClient): Promise<void> {
             await message.edit({ content: null, embeds: [buildCountdownEmbed(entry, now)] })
 
             if (entry.targetTime.getTime() <= now) {
+                if (channel.isSendable()) {
+                    await postFinishMessage(client, channel, entry)
+                }
                 await removeCountdown(entry.id)
             }
         } catch (error: unknown) {
