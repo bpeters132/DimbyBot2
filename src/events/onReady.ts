@@ -2,6 +2,7 @@ import { ActivityType } from "discord.js"
 import type BotClient from "../lib/BotClient.js"
 import { attachDiscordLogForwarding } from "../util/discordLogForward.js"
 import { refreshAllControlMessages } from "./handlers/handleControlChannel.js"
+import { updateAllCountdowns } from "../util/countdownUpdater.js"
 
 export default async (client: BotClient) => {
     client.on("clientReady", () => {
@@ -26,6 +27,16 @@ export default async (client: BotClient) => {
         )
 
         user.setActivity("I hate that Pancake guy!", { type: ActivityType.Custom })
+
+        // Refresh countdown messages immediately, then every minute.
+        updateAllCountdowns(client).catch((err: unknown) =>
+            client.error("[onReady] initial updateAllCountdowns failed:", err)
+        )
+        setInterval(() => {
+            updateAllCountdowns(client).catch((err: unknown) =>
+                client.error("[onReady] updateAllCountdowns interval failed:", err)
+            )
+        }, 60 * 1000)
 
         // Create a toggle for status rotation
         let showGuildCount = true

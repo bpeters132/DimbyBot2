@@ -54,6 +54,23 @@ model PlaylistTrack {
   @@index([playlistId], name: "PlaylistTrack_playlistId_idx")
 }
 
+model Countdown {
+  id          Int      @id @default(autoincrement())
+  guildId     String
+  channelId   String
+  messageId   String
+  eventName   String
+  description String?
+  imageUrl    String?
+  color       Int?
+  footer      String?
+  targetTime  DateTime
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  @@index([guildId], name: "Countdown_guildId_idx")
+}
+
 model User {
   id            String    @id
   name          String

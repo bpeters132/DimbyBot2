@@ -223,6 +223,41 @@ export interface PlaylistTrackInput {
     addedAt: Date
 }
 
+/** A persisted countdown that renders an auto-updating embed in a guild channel. */
+export interface CountdownEntry {
+    id: number
+    guildId: string
+    channelId: string
+    messageId: string
+    eventName: string
+    description: string | null
+    imageUrl: string | null
+    /** Embed accent color as a 0xRRGGBB integer, or null for the default. */
+    color: number | null
+    /** Custom embed footer text, or null to show the countdown id reference. */
+    footer: string | null
+    targetTime: Date
+    createdBy: string
+    createdAt: Date
+}
+
+/** Input for creating a countdown (id/createdAt assigned by the database). */
+export interface CountdownInput {
+    guildId: string
+    channelId: string
+    messageId: string
+    eventName: string
+    description: string | null
+    imageUrl: string | null
+    color: number | null
+    footer: string | null
+    targetTime: Date
+    createdBy: string
+}
+
+/** Map of countdown id → countdown entry. */
+export type CountdownStore = Record<number, CountdownEntry>
+
 /** Tracks a user who left voice while RRQ is active and has queued tracks. */
 export interface DisconnectedRRQUser {
     userId: string

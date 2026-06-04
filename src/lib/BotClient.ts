@@ -9,6 +9,7 @@ import { initializeDatabaseConnection, runPrismaMigrateDeploy } from "./database
 import { migrateDownloadMetadata, migrateGuildSettings } from "../util/migrateJsonToDatabase.js"
 import { initializeGuildSettingsStore } from "../util/saveControlChannel.js"
 import { initializeDownloadMetadataStore } from "../util/downloadMetadataStore.js"
+import { initializeCountdownStore } from "../util/countdownStore.js"
 
 export default class BotClient extends Client {
     logger: Logger
@@ -102,6 +103,7 @@ export default class BotClient extends Client {
         try {
             await initializeGuildSettingsStore(this)
             await initializeDownloadMetadataStore(this)
+            await initializeCountdownStore(this)
             this.info(
                 "BotClient start: Runtime settings/metadata caches initialized from database."
             )
