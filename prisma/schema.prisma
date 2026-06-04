@@ -1,5 +1,5 @@
 generator client {
-  provider        = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -39,34 +39,36 @@ model Playlist {
 }
 
 model PlaylistTrack {
-  id            Int      @id @default(autoincrement())
-  playlistId    Int
-  playlist      Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-  title         String
-  uri           String
-  author        String
-  duration      Int
-  thumbnailUrl  String?
-  addedAt       DateTime
-  position      Int
+  id           Int      @id @default(autoincrement())
+  playlistId   Int
+  playlist     Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  title        String
+  uri          String
+  author       String
+  duration     Int
+  thumbnailUrl String?
+  addedAt      DateTime
+  position     Int
 
   @@unique([playlistId, position])
   @@index([playlistId], name: "PlaylistTrack_playlistId_idx")
 }
 
 model Countdown {
-  id          Int      @id @default(autoincrement())
-  guildId     String
-  channelId   String
-  messageId   String
-  eventName   String
-  description String?
-  imageUrl    String?
-  color       Int?
-  footer      String?
-  targetTime  DateTime
-  createdBy   String
-  createdAt   DateTime @default(now())
+  id            Int      @id @default(autoincrement())
+  guildId       String
+  channelId     String
+  messageId     String
+  eventName     String
+  description   String?
+  imageUrl      String?
+  color         Int?
+  footer        String?
+  finishMessage String?
+  mentionRoleId String?
+  targetTime    DateTime
+  createdBy     String
+  createdAt     DateTime @default(now())
 
   @@index([guildId], name: "Countdown_guildId_idx")
 }
@@ -120,8 +122,8 @@ model Account {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  @@index([userId])
   @@unique([providerId, accountId])
+  @@index([userId])
   @@map("account")
 }
 
