@@ -175,10 +175,6 @@ export async function replaceDownloadMetadataStoreInDatabase(
     )
 
     if (rows.length === 0 && deleteStoreKeys.length === 0) {
-        if (skippedEntries.length > 0) {
-            return { rowsWritten: 0, rowsDeleted: 0, skippedEntries }
-        }
-        await prisma.downloadMetadata.deleteMany({})
         return { rowsWritten: 0, rowsDeleted: 0, skippedEntries }
     }
 
