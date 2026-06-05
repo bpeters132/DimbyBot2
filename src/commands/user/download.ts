@@ -533,14 +533,17 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
                 const metadata: DownloadsMetadataStore = getDownloadMetadataStore()
 
-                metadata[downloadMetadataStoreKey(guildId, downloadedFile)] = {
+                const metadataKey = downloadMetadataStoreKey(guildId, downloadedFile)
+                metadata[metadataKey] = {
                     downloadDate: new Date().toISOString(),
                     originalUrl: url,
                     filePath: filePath,
                     guildId: guildId,
                 }
 
-                const metadataSaved = await saveDownloadMetadataStore(metadata, client)
+                const metadataSaved = await saveDownloadMetadataStore(metadata, client, {
+                    touchedStoreKeys: [metadataKey],
+                })
                 if (metadataSaved) {
                     client.debug(`[Download] Updated metadata for ${downloadedFile}`)
                 } else {
