@@ -18,7 +18,6 @@ import { getPlayerQueueAction, getPlayerStateAction } from "@/lib/actions/player
 import { sanitizeHttpUrl } from "@/lib/url-utils"
 import { AddToPlaylistMenu } from "@/components/AddToPlaylistMenu"
 import { PlayPlaylistMenu } from "@/components/PlayPlaylistMenu"
-import { ConnectionStatus } from "@/components/ConnectionStatus"
 import { usePlayerActions } from "@/hooks/usePlayerActions"
 import { usePlayerSocket } from "@/hooks/usePlayerSocket"
 
@@ -183,21 +182,21 @@ function QueueTrackRow({ track, queueIndex }: QueueTrackRowProps) {
             onBlur={safeQueueTrackUrl ? undefined : handleRowBlur}
         >
             <div className="min-w-0 flex-1">
-            {safeQueueTrackUrl ? (
-                <a
-                    href={safeQueueTrackUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="-m-2 block cursor-pointer rounded-sm p-2 text-inherit no-underline decoration-transparent outline-none ring-offset-background transition-colors hover:bg-accent/50 hover:no-underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    aria-label={`Open track source: ${track.title}`}
-                    onFocus={handleRowFocus}
-                    onBlur={handleRowBlur}
-                >
-                    {rowLine}
-                </a>
-            ) : (
-                rowLine
-            )}
+                {safeQueueTrackUrl ? (
+                    <a
+                        href={safeQueueTrackUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="-m-2 block cursor-pointer rounded-sm p-2 text-inherit no-underline decoration-transparent outline-none ring-offset-background transition-colors hover:bg-accent/50 hover:no-underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        aria-label={`Open track source: ${track.title}`}
+                        onFocus={handleRowFocus}
+                        onBlur={handleRowBlur}
+                    >
+                        {rowLine}
+                    </a>
+                ) : (
+                    rowLine
+                )}
             </div>
             {canSaveToPlaylist ? <AddToPlaylistMenu track={playlistTrack} /> : null}
             {popoverLayout ? (
@@ -559,10 +558,7 @@ export function PlayerPanel({ guildId, discordUserId, permissionSnapshot }: Play
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-semibold">Guild Player</h1>
-                <ConnectionStatus connected={socket.isConnected} />
-            </div>
+            <h1 className="text-2xl font-semibold">Guild Player</h1>
 
             {error ? (
                 <div

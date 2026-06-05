@@ -29,7 +29,6 @@ function sanitizeQueueTrackSummaries(queue: QueueTrackSummary[]): QueueTrackSumm
 }
 
 interface UsePlayerSocketResult {
-    isConnected: boolean
     playerState: PlayerStateResponse | null
     queue: QueueTrackSummary[] | undefined
     /** Set when the server rejects subscribe or sends an error frame (permission/membership), not voice/player state. */
@@ -37,7 +36,6 @@ interface UsePlayerSocketResult {
 }
 
 export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSocketResult {
-    const [isConnected, setIsConnected] = useState(false)
     const [playerState, setPlayerState] = useState<PlayerStateResponse | null>(null)
     const [queue, setQueue] = useState<QueueTrackSummary[] | undefined>(undefined)
     const [liveUpdatesError, setLiveUpdatesError] = useState<string | null>(null)
@@ -48,7 +46,6 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
     useEffect(() => {
         let cancelled = false
         let reconnectTimer: ReturnType<typeof setTimeout> | null = null
-        setIsConnected(false)
         setPlayerState(null)
         setQueue(undefined)
         setLiveUpdatesError(null)
@@ -162,14 +159,12 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
                     }
 
                     if (parsed.type === "subscribed") {
-                        setIsConnected(true)
                         reconnectAttemptsRef.current = 0
                         setLiveUpdatesError(null)
                         return
                     }
 
                     if (parsed.type === "unsubscribed") {
-                        setIsConnected(false)
                         reconnectAttemptsRef.current = 0
                         return
                     }
@@ -224,7 +219,6 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
             }
 
             socket.onclose = () => {
-                setIsConnected(false)
                 socketRef.current = null
                 if (cancelled) return
                 const nextAttempt = reconnectAttemptsRef.current + 1
@@ -258,7 +252,6 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
 
         return () => {
             cancelled = true
-            setIsConnected(false)
             if (reconnectTimer) {
                 clearTimeout(reconnectTimer)
             }
@@ -266,5 +259,5 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
         }
     }, [guildId, userId])
 
-    return { isConnected, playerState, queue, liveUpdatesError }
+    return { playerState, queue, liveUpdatesError }
 }

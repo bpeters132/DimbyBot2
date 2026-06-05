@@ -26,7 +26,7 @@ function normalizeHost(host: string, protocol: string): string {
  * Logs when the incoming Host does not match `BETTER_AUTH_URL` (www/scheme drift breaks OAuth cookies).
  * Does not block requests — only surfaces misconfiguration in server logs.
  */
-export function middleware(request: NextRequest): NextResponse {
+export function proxy(request: NextRequest): NextResponse {
     const configuredUrl = process.env.BETTER_AUTH_URL?.trim()
     if (!configuredUrl) {
         return NextResponse.next()
@@ -57,13 +57,11 @@ export function middleware(request: NextRequest): NextResponse {
 
         if (normalizedHost && normalizedHost !== normalizedExpectedHost) {
             console.warn(
-                `[middleware] Host mismatch: normalizedHost=${normalizedHost} normalizedExpectedHost=${normalizedExpectedHost} path=${request.nextUrl.pathname}`
+                `[proxy] Host mismatch: normalizedHost=${normalizedHost} normalizedExpectedHost=${normalizedExpectedHost} path=${request.nextUrl.pathname}`
             )
         }
     } catch {
-        console.warn(
-            "[middleware] BETTER_AUTH_URL is not a valid URL; host alignment check skipped"
-        )
+        console.warn("[proxy] BETTER_AUTH_URL is not a valid URL; host alignment check skipped")
     }
 
     return NextResponse.next()
