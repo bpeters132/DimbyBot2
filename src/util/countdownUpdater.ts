@@ -62,6 +62,10 @@ export async function updateAllCountdowns(client: BotClient): Promise<void> {
             let channel: TextBasedChannel
             try {
                 const fetched = await client.channels.fetch(entry.channelId)
+                if (fetched == null) {
+                    await removeCountdown(entry.id)
+                    continue
+                }
                 if (!("messages" in fetched)) {
                     await removeCountdown(entry.id)
                     continue

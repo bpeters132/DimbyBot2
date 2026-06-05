@@ -86,16 +86,16 @@ export async function saveDownloadMetadataStore(
     const deleteStoreKeys = (options?.deleteStoreKeys ?? []).filter(
         (key) => typeof key === "string" && key.length > 0
     )
+    const hasTouchedOption = options?.touchedStoreKeys !== undefined
     const touchedStoreKeys = (options?.touchedStoreKeys ?? []).filter(
         (key) => typeof key === "string" && key.length > 0
     )
     return withDownloadMetadataSaveLock(async () => {
         const logger = loggerFromPartial(loggerInstance)
-        const previousCache = cloneStore(downloadMetadataCache)
         try {
             const dbStore = await getDownloadMetadataStoreFromDatabase()
             const merged = cloneStore(dbStore)
-            if (touchedStoreKeys.length > 0) {
+            if (hasTouchedOption) {
                 for (const key of touchedStoreKeys) {
                     const row = nextCache[key]
                     if (row !== undefined) {
@@ -118,10 +118,14 @@ export async function saveDownloadMetadataStore(
                 initialized = true
             } catch (reloadErr: unknown) {
                 logger.warn(
-                    "[downloadMetadata] replaceDownloadMetadataStoreInDatabase succeeded but cache reload failed; keeping previous in-memory cache",
+                    "[downloadMetadata] replaceDownloadMetadataStoreInDatabase succeeded but cache reload failed; using persisted snapshot",
                     reloadErr
                 )
-                downloadMetadataCache = previousCache
+                const fallback = cloneStore(merged)
+                for (const key of deleteStoreKeys) {
+                    delete fallback[key]
+                }
+                downloadMetadataCache = fallback
                 initialized = true
                 return false
             }
