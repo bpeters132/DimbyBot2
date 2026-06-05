@@ -1,4 +1,4 @@
-import type { SendableChannels } from "discord.js"
+import type { Message, SendableChannels, TextBasedChannel } from "discord.js"
 import type BotClient from "../lib/BotClient.js"
 import type { CountdownEntry } from "../types/index.js"
 import { buildCountdownEmbed, buildCountdownFinishEmbed } from "./countdownEmbed.js"
@@ -59,15 +59,38 @@ export async function updateAllCountdowns(client: BotClient): Promise<void> {
 
     for (const entry of countdowns) {
         try {
-            const channel = await client.channels.fetch(entry.channelId).catch((): null => null)
-            if (!channel || !("messages" in channel)) {
-                await removeCountdown(entry.id)
+            let channel: TextBasedChannel
+            try {
+                const fetched = await client.channels.fetch(entry.channelId)
+                if (!("messages" in fetched)) {
+                    await removeCountdown(entry.id)
+                    continue
+                }
+                channel = fetched
+            } catch (error: unknown) {
+                if (isUnrecoverableError(error)) {
+                    await removeCountdown(entry.id)
+                } else {
+                    client.warn(
+                        `[countdown] Transient channel fetch failure for countdown #${entry.id}; will retry:`,
+                        error
+                    )
+                }
                 continue
             }
 
-            const message = await channel.messages.fetch(entry.messageId).catch((): null => null)
-            if (!message) {
-                await removeCountdown(entry.id)
+            let message: Message
+            try {
+                message = await channel.messages.fetch(entry.messageId)
+            } catch (error: unknown) {
+                if (isUnrecoverableError(error)) {
+                    await removeCountdown(entry.id)
+                } else {
+                    client.warn(
+                        `[countdown] Transient message fetch failure for countdown #${entry.id}; will retry:`,
+                        error
+                    )
+                }
                 continue
             }
 
