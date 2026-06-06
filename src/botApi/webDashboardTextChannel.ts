@@ -1,4 +1,9 @@
-import { PermissionFlagsBits, type Guild, type GuildBasedChannel } from "discord.js"
+import {
+    PermissionFlagsBits,
+    type Guild,
+    type GuildBasedChannel,
+    type VoiceBasedChannel,
+} from "discord.js"
 import { getGuildSettings } from "../util/saveControlChannel.js"
 
 function botCanUseWebDashboardTextChannel(guild: Guild, ch: GuildBasedChannel): boolean {
@@ -32,10 +37,20 @@ async function resolveValidTextChannelId(
 }
 
 /**
- * Lavalink `textChannelId` when the web dashboard creates a player: guild control channel if set and
- * usable, otherwise the guild system channel (same idea as `guild.systemChannelId` fallback).
+ * Lavalink `textChannelId` when the web dashboard creates or drives a player: prefer the requester's
+ * voice channel text chat, then guild control channel if set, otherwise the guild system channel.
  */
-export async function resolveWebDashboardTextChannelId(guild: Guild): Promise<string | undefined> {
+export async function resolveWebDashboardTextChannelId(
+    guild: Guild,
+    voiceChannel?: VoiceBasedChannel | null
+): Promise<string | undefined> {
+    if (voiceChannel?.isTextBased() && !voiceChannel.isDMBased()) {
+        const voiceTextId = await resolveValidTextChannelId(guild, voiceChannel.id)
+        if (voiceTextId) {
+            return voiceTextId
+        }
+    }
+
     let controlId: string | undefined
     try {
         const settings = getGuildSettings()
