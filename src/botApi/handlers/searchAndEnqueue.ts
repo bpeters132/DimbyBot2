@@ -92,7 +92,7 @@ export async function searchAndEnqueue(
         }
     }
 
-    const textChannelId = await resolveWebDashboardTextChannelId(guild)
+    const textChannelId = await resolveWebDashboardTextChannelId(guild, voiceChannel)
 
     const botUser = client.user
     if (!botUser) {
@@ -139,6 +139,10 @@ export async function searchAndEnqueue(
                 error: { error: "Could not create the player.", details: message },
             }
         }
+    }
+
+    if (textChannelId) {
+        player.textChannelId = textChannelId
     }
 
     const cleanupCreatedPlayer = async (): Promise<void> => {
