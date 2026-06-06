@@ -1,6 +1,6 @@
 import fs from "fs"
 import path from "path"
-import type { GuildSettingsStore } from "../types/index.js"
+import type { GuildSettings, GuildSettingsStore } from "../types/index.js"
 import type { LoggerInterface } from "../types/index.js"
 import {
     getGuildSettingsStoreFromDatabase,
@@ -99,6 +99,42 @@ async function withGuildSettingsSaveLock<T>(work: () => Promise<T>): Promise<T> 
     }
 }
 
+const GUILD_SETTING_FIELD_KEYS: (keyof GuildSettings)[] = [
+    "controlChannelId",
+    "controlMessageId",
+    "downloadsMaxMb",
+    "discordLog",
+]
+
+function cloneGuildSettingsRow(row: GuildSettings): GuildSettings {
+    return typeof structuredClone === "function"
+        ? structuredClone(row)
+        : (JSON.parse(JSON.stringify(row)) as GuildSettings)
+}
+
+/**
+ * Merges only fields present in `snapshotRow` onto `dbRow`, then removes `clearedFields`.
+ * Omitted snapshot fields keep their latest database values (prevents cross-field clobber races).
+ */
+function mergeGuildSettingsRow(
+    dbRow: GuildSettings | undefined,
+    snapshotRow: GuildSettings | undefined,
+    clearedFields: (keyof GuildSettings)[] = []
+): GuildSettings {
+    const merged: GuildSettings = dbRow ? cloneGuildSettingsRow(dbRow) : {}
+    if (snapshotRow) {
+        for (const key of GUILD_SETTING_FIELD_KEYS) {
+            if (key in snapshotRow) {
+                merged[key] = snapshotRow[key]
+            }
+        }
+    }
+    for (const key of clearedFields) {
+        delete merged[key]
+    }
+    return merged
+}
+
 export type SaveGuildSettingsOptions = {
     /** Guild IDs to delete from the database (must be intentional removals, not snapshot omissions). */
     deleteGuildIds?: string[]
@@ -107,6 +143,8 @@ export type SaveGuildSettingsOptions = {
      * ignored and the latest database values are kept (prevents lost updates across concurrent saves).
      */
     touchedGuildIds?: string[]
+    /** Per-guild setting fields to clear explicitly (e.g. control-channel unset). */
+    clearedGuildFields?: Partial<Record<string, (keyof GuildSettings)[]>>
 }
 
 /**
@@ -122,21 +160,32 @@ export async function saveGuildSettings(
     const deleteGuildIds = (options?.deleteGuildIds ?? []).filter(
         (id) => typeof id === "string" && id.length > 0
     )
+    const hasTouchedOption = options?.touchedGuildIds !== undefined
     const touchedGuildIds = (options?.touchedGuildIds ?? []).filter(
         (id) => typeof id === "string" && id.length > 0
     )
+    const clearedGuildFields = options?.clearedGuildFields ?? {}
     return withGuildSettingsSaveLock(async () => {
         const logger = loggerFromPartial(loggerInstance)
         logger.debug("[guildSettings] Attempting to save settings to database.")
         try {
             const dbStore = await readGuildSettingsFromDatabase(logger)
             const merged = cloneGuildSettingsStore(dbStore)
-            const guildIdsToApply =
-                touchedGuildIds.length > 0 ? touchedGuildIds : Object.keys(settingsSnapshot)
+            const guildIdsToApply = hasTouchedOption
+                ? touchedGuildIds
+                : Object.keys(settingsSnapshot)
             for (const guildId of guildIdsToApply) {
+                const cleared = (clearedGuildFields[guildId] ?? []).filter(
+                    (key): key is keyof GuildSettings =>
+                        typeof key === "string" &&
+                        (GUILD_SETTING_FIELD_KEYS as string[]).includes(key)
+                )
                 const row = settingsSnapshot[guildId]
-                if (row !== undefined) {
-                    merged[guildId] = cloneGuildSettingsStore({ [guildId]: row })[guildId]!
+                const nextRow = mergeGuildSettingsRow(merged[guildId], row, cleared)
+                if (Object.keys(nextRow).length === 0) {
+                    delete merged[guildId]
+                } else {
+                    merged[guildId] = nextRow
                 }
             }
             for (const guildId of deleteGuildIds) {

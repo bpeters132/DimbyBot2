@@ -210,15 +210,19 @@ export default {
                 `[Control-Channel] Removed control channel settings for guild ${guild.id}.`
             )
 
-            if (Object.keys(settings).length === 0) {
+            const rowEmpty = Object.keys(settings).length === 0
+            if (rowEmpty) {
                 client.debug(
                     `[Control-Channel] Removing empty settings entry for guild ${guild.id}.`
                 )
                 delete guildSettings[guild.id]
             }
             const persisted = await saveGuildSettings(guildSettings, client, {
-                deleteGuildIds: [guild.id],
+                ...(rowEmpty ? { deleteGuildIds: [guild.id] } : {}),
                 touchedGuildIds: [guild.id],
+                clearedGuildFields: rowEmpty
+                    ? undefined
+                    : { [guild.id]: ["controlChannelId", "controlMessageId"] },
             })
             client.debug(
                 `[Control-Channel] Persist settings after unset for guild ${guild.id}: ${persisted ? "ok" : "failed"}.`
