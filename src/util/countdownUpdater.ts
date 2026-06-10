@@ -4,12 +4,14 @@ import type { CountdownEntry } from "../types/index.js"
 import { buildCountdownEmbed, buildCountdownFinishEmbed } from "./countdownEmbed.js"
 import { getAllCountdowns, removeCountdown } from "./countdownStore.js"
 
-/** Discord API error codes treated as permanently unrecoverable for a countdown message. */
+/**
+ * Discord API error codes that mean the countdown target no longer exists.
+ * Permission errors (50001/50013) are retried — they are often temporary and must not
+ * delete persisted countdown configuration (see handleControlChannel for the same pattern).
+ */
 const UNRECOVERABLE_CODES = new Set([
     10003, // Unknown Channel
     10008, // Unknown Message
-    50001, // Missing Access
-    50013, // Missing Permissions
 ])
 
 function isUnrecoverableError(error: unknown): boolean {
@@ -48,7 +50,7 @@ async function postFinishMessage(
 
 /**
  * Refreshes every countdown message once. Edits each embed with the latest remaining time,
- * removes countdowns whose channel/message is gone or whose permissions were lost, and removes
+ * removes countdowns whose channel/message is gone, and removes
  * expired countdowns after writing their final "Event started!" state.
  */
 export async function updateAllCountdowns(client: BotClient): Promise<void> {
