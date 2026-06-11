@@ -2,7 +2,7 @@ import type { Message, SendableChannels, TextBasedChannel } from "discord.js"
 import type BotClient from "../lib/BotClient.js"
 import type { CountdownEntry } from "../types/index.js"
 import { buildCountdownEmbed, buildCountdownFinishEmbed } from "./countdownEmbed.js"
-import { getAllCountdowns, removeCountdown } from "./countdownStore.js"
+import { getAllCountdowns, getCountdown, removeCountdown } from "./countdownStore.js"
 
 /** Discord API error codes treated as permanently unrecoverable for a countdown message. */
 const UNRECOVERABLE_CODES = new Set([
@@ -101,10 +101,15 @@ export async function updateAllCountdowns(client: BotClient): Promise<void> {
             await message.edit({ content: null, embeds: [buildCountdownEmbed(entry, now)] })
 
             if (entry.targetTime.getTime() <= now) {
+                // Another interval pass may have already cleared this countdown (stale snapshot).
+                if (!getCountdown(entry.id)) {
+                    continue
+                }
+                // Remove before posting so a failed DB delete cannot re-ping every interval.
+                await removeCountdown(entry.id)
                 if (channel.isSendable()) {
                     await postFinishMessage(client, channel, entry)
                 }
-                await removeCountdown(entry.id)
             }
         } catch (error: unknown) {
             if (isUnrecoverableError(error)) {
