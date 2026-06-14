@@ -71,9 +71,15 @@ export async function resolveAdminAccess(reqHeaders: Headers): Promise<AdminAcce
 
 /** True when the current session is the bot owner (`OWNER_ID`). */
 export async function canAccessAdmin(): Promise<boolean> {
-    const h = await headers()
-    const result = await resolveAdminAccess(new Headers(h))
-    return result.ok
+    try {
+        const h = await headers()
+        const result = await resolveAdminAccess(new Headers(h))
+        return result.ok
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        console.error("[admin-access] canAccessAdmin failed:", message)
+        return false
+    }
 }
 
 /** Returns a JSON error response when access is denied; `null` when the caller may proceed. */
