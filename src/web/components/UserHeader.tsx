@@ -15,7 +15,7 @@ async function signOutAndGoHome(): Promise<void> {
     window.location.assign("/")
 }
 
-export function UserHeader() {
+export function UserHeader({ showAdminLink = false }: { showAdminLink?: boolean }) {
     const { data: session } = authClient.useSession()
     const [signOutError, setSignOutError] = useState<string | null>(null)
     const [signOutLoading, setSignOutLoading] = useState(false)
@@ -34,6 +34,15 @@ export function UserHeader() {
                 >
                     Playlists
                 </Link>
+                {showAdminLink ? (
+                    <Link
+                        href="/admin"
+                        prefetch={false}
+                        className="text-sm text-muted-foreground hover:text-foreground"
+                    >
+                        Admin
+                    </Link>
+                ) : null}
             </div>
 
             <div className="flex items-center gap-3">

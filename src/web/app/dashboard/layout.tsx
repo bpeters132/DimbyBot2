@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { readSessionSafe } from "@/server/auth-session"
+import { canAccessAdmin } from "@/lib/admin-access"
 import { DashboardInviteLink } from "@/components/DashboardInviteLink"
 import { ServiceDegraded } from "@/components/ServiceDegraded"
 import { GoToNowPlayingButton } from "@/components/GoToNowPlayingButton"
@@ -46,12 +47,14 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         redirect("/")
     }
 
+    const showAdminLink = await canAccessAdmin()
+
     return (
         <div className="min-h-screen bg-background text-foreground">
             <header className="border-b p-4">
                 <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0 flex-1">
-                        <UserHeader />
+                        <UserHeader showAdminLink={showAdminLink} />
                     </div>
                     <DashboardInviteLink />
                 </div>
