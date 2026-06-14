@@ -12,6 +12,7 @@ import {
     getGuildSettings,
     isGuildSettingsInitialized,
     saveGuildSettings,
+    type SaveGuildSettingsOptions,
 } from "../../util/saveControlChannel.js"
 
 const LEVEL_CHOICES: DiscordLogLevelName[] = ["debug", "info", "warn", "error"]
@@ -86,6 +87,23 @@ function guildIdsRemovedFromStore(
     after: GuildSettingsStore
 ): string[] {
     return Object.keys(before).filter((id) => !(id in after))
+}
+
+/** Save options for a single-guild edit; clears `discordLog` when it was removed from the working row. */
+function guildSettingsSaveOptions(
+    guildId: string,
+    before: GuildSettingsStore,
+    afterStore: GuildSettingsStore,
+    workingRow: GuildSettings
+): SaveGuildSettingsOptions {
+    const options: SaveGuildSettingsOptions = {
+        deleteGuildIds: guildIdsRemovedFromStore(before, afterStore),
+        touchedGuildIds: [guildId],
+    }
+    if (before[guildId]?.discordLog && !workingRow.discordLog) {
+        options.clearedGuildFields = { [guildId]: ["discordLog"] }
+    }
+    return options
 }
 
 function formatConfig(cfg: GuildDiscordLogSettings): string {
@@ -243,13 +261,13 @@ export default {
             }
             applyNormalizedDiscordLog(next, working)
             const nextStore = storeWithGuildRow(store, guild.id, working)
-            const deleteGuildIds = guildIdsRemovedFromStore(store, nextStore)
             try {
                 await interaction.deferReply({ flags: [MessageFlags.Ephemeral] })
-                const ok = await saveGuildSettings(nextStore, client, {
-                    deleteGuildIds,
-                    touchedGuildIds: [guild.id],
-                })
+                const ok = await saveGuildSettings(
+                    nextStore,
+                    client,
+                    guildSettingsSaveOptions(guild.id, store, nextStore, working)
+                )
                 if (!ok) {
                     return interaction.editReply({
                         content:
@@ -306,13 +324,13 @@ export default {
             }
 
             const nextStore = storeWithGuildRow(store, guild.id, working)
-            const deleteGuildIds = guildIdsRemovedFromStore(store, nextStore)
             try {
                 await interaction.deferReply({ flags: [MessageFlags.Ephemeral] })
-                const ok = await saveGuildSettings(nextStore, client, {
-                    deleteGuildIds,
-                    touchedGuildIds: [guild.id],
-                })
+                const ok = await saveGuildSettings(
+                    nextStore,
+                    client,
+                    guildSettingsSaveOptions(guild.id, store, nextStore, working)
+                )
                 if (!ok) {
                     return interaction.editReply({
                         content:
@@ -385,13 +403,13 @@ export default {
 
             applyNormalizedDiscordLog(next, working)
             const nextStore = storeWithGuildRow(latestStore, guild.id, working)
-            const deleteGuildIds = guildIdsRemovedFromStore(latestStore, nextStore)
             try {
                 await interaction.deferReply({ flags: [MessageFlags.Ephemeral] })
-                const ok = await saveGuildSettings(nextStore, client, {
-                    deleteGuildIds,
-                    touchedGuildIds: [guild.id],
-                })
+                const ok = await saveGuildSettings(
+                    nextStore,
+                    client,
+                    guildSettingsSaveOptions(guild.id, latestStore, nextStore, working)
+                )
                 if (!ok) {
                     return interaction.editReply({
                         content:
