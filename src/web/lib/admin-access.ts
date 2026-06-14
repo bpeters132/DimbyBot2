@@ -69,6 +69,13 @@ export async function resolveAdminAccess(reqHeaders: Headers): Promise<AdminAcce
     return { ok: true, session, discordUserId }
 }
 
+/** True when the current session is the bot owner (`OWNER_ID`). */
+export async function canAccessAdmin(): Promise<boolean> {
+    const h = await headers()
+    const result = await resolveAdminAccess(new Headers(h))
+    return result.ok
+}
+
 /** Returns a JSON error response when access is denied; `null` when the caller may proceed. */
 export async function guardAdminAccess(): Promise<NextResponse | null> {
     try {
