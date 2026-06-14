@@ -1,24 +1,25 @@
 # Node 24 — keep in sync with production Dockerfiles and package.json engines.
-FROM node:24-alpine
+FROM node:24-alpine3.22
 
 WORKDIR /app
 
-# Install yt-dlp (pinned — bump version after testing; keep in sync with docker/ytdlp-requirements.txt).
+# Install yt-dlp (pinned via docker/ytdlp-requirements.txt; bump after testing).
 # Also install build tools needed for native Node.js modules.
 # Install yt-dlp into a shared venv so non-root users can execute it.
+COPY docker/ytdlp-requirements.txt /tmp/ytdlp-requirements.txt
 RUN apk add --no-cache \
-        python3=3.12.13-r0 \
-        py3-pip=25.1.1-r1 \
-        ffmpeg=8.0.1-r1 \
-        build-base=0.5-r3 \
-        autoconf=2.72-r1 \
-        automake=1.18.1-r0 \
-        libtool=2.5.4-r2 \
-        g++=15.2.0-r2 \
-        su-exec=0.3-r0 \
-        wget=1.25.0-r2 \
+        python3 \
+        py3-pip \
+        ffmpeg \
+        build-base \
+        autoconf \
+        automake \
+        libtool \
+        g++ \
+        su-exec \
+        wget \
     && python3 -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir "yt-dlp==2026.2.21" \
+    && /opt/venv/bin/pip install --no-cache-dir -r /tmp/ytdlp-requirements.txt \
     && YTDLP_BIN="/opt/venv/bin/yt-dlp" \
     && test -n "$YTDLP_BIN" && test -x "$YTDLP_BIN" \
     && ln -sf "$YTDLP_BIN" /usr/local/bin/yt-dlp \
