@@ -34,7 +34,7 @@ EXPOSE 2333
 
 # Health check to see if Lavalink is ready
 # Requires LAVALINK_PORT and LAVALINK_PASSWORD env vars to be set
-HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=5 \
+HEALTHCHECK --interval=10s --timeout=5s --start-period=60s --retries=10 \
   CMD /bin/sh /app/healthcheck.sh || exit 1
 
 # Run the entrypoint script which generates application.yml and starts Lavalink
