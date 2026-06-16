@@ -675,6 +675,7 @@ export async function handleQueryAndPlay(
                 if (originalFeedback.startsWith("Added")) {
                     feedbackText = `${originalFeedback}\nHowever, ${feedbackText.substring(feedbackText.indexOf(",") + 1).trim()}`
                 }
+                schedulePlayerSessionSave(player)
                 success = false
                 errorResult = playError instanceof Error ? playError : new Error(String(playError))
             }
