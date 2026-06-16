@@ -21,12 +21,13 @@ services:
             - LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT=${LAVALINK_SPOTIFY_ALBUM_LOAD_LIMIT}
         ports:
             - "${LAVALINK_PORT}:${LAVALINK_PORT}" # Map host port to container port
+        # JVM + Maven plugin load can exceed 15s on container recreate; allow ~160s before unhealthy.
         healthcheck:
             test: ["CMD", "/bin/sh", "/app/healthcheck.sh"]
             interval: 10s
             timeout: 5s
-            retries: 5
-            start_period: 15s
+            retries: 10
+            start_period: 60s
         volumes:
             - lavalink-plugins:/app/plugins
             - dimbybot-downloads:/app/downloads
@@ -119,6 +120,13 @@ services:
         # Pair with BOT_API_REQUIRE_PRIVATE_CLIENT_IP=1 (default) and host firewall rules so only RFC1918 sources reach the port.
         ports:
             - "${BOT_API_HOST:-127.0.0.1}:${BOT_API_PORT:-3001}:${BOT_API_PORT:-3001}"
+        # Explicit healthcheck so dimbybot-web `depends_on: service_healthy` waits for the bot API (matches Dockerfile).
+        healthcheck:
+            test: ["CMD", "/bin/sh", "/app/healthcheck.sh"]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 120s
         networks:
             - internal
 
