@@ -47,7 +47,7 @@ function parseSnapshot(value: Prisma.JsonValue): PlayerSessionSnapshotV1 | null 
     if (!value || typeof value !== "object" || Array.isArray(value)) return null
     const raw = value as Record<string, unknown>
     if (raw.version !== 1) return null
-    if (typeof raw.volume !== "number") return null
+    if (typeof raw.volume !== "number" || !Number.isFinite(raw.volume)) return null
     if (raw.repeatMode !== "off" && raw.repeatMode !== "track" && raw.repeatMode !== "queue") {
         return null
     }
