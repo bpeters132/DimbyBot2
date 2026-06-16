@@ -10,7 +10,7 @@ function parsePersistedQueueTrack(value: unknown): PersistedQueueTrack | null {
     if (!value || typeof value !== "object" || Array.isArray(value)) return null
     const raw = value as Record<string, unknown>
     if (typeof raw.title !== "string" || !raw.title.trim()) return null
-    if (typeof raw.author !== "string") return null
+    if (typeof raw.author !== "string" || !raw.author.trim()) return null
     if (typeof raw.uri !== "string" || !raw.uri.trim()) return null
     if (typeof raw.duration !== "number" || !Number.isFinite(raw.duration)) return null
     if (typeof raw.isStream !== "boolean") return null

@@ -85,6 +85,7 @@ async function run(): Promise<void> {
                     await import("./util/playerSessionPersistence.js")
                 await flushAllPlayerSessionSaves()
             } catch (flushErr: unknown) {
+                shouldExitWithFailure = true
                 logger.error("Error flushing player session saves:", flushErr)
             }
             stopHeartbeat?.()
