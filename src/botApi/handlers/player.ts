@@ -6,6 +6,7 @@ import { getBotClient } from "../../lib/botClientRegistry.js"
 import { toPlayerStateResponse } from "../../shared/player-state.js"
 import { webPlayerDebug } from "../../shared/web-player-debug-log.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
+import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 
 type PlayerAction = "pause" | "skip" | "stop" | "seek" | "loop" | "shuffle" | "autoplay"
 
@@ -134,13 +135,14 @@ export async function playerPOST(
                 await player.queue.shuffle()
                 break
             case "autoplay":
-                // Autoplay is Lavalink player session state (same as `/autoplay`); it is not persisted
-                // to guild DB — toggling only affects this player until it is destroyed.
                 player.set("autoplay", !player.get("autoplay"))
                 break
         }
 
         const refreshedPlayer = action === "stop" ? null : client.lavalink.getPlayer(guildId)
+        if (refreshedPlayer) {
+            schedulePlayerSessionSave(refreshedPlayer)
+        }
         if (action === "stop") {
             playerBroadcaster.broadcastPlayerEvent(guildId, null, "playerDestroy")
         } else {

@@ -21,6 +21,7 @@ import {
 } from "./rrqDisconnect.js"
 import { downloadMetadataFileBelongsToGuild } from "./downloadMetadataKeys.js"
 import { getDownloadMetadataStore } from "./downloadMetadataStore.js"
+import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
 
 type SearchAttempt =
     | { source: string; success: true; loadType?: string }
@@ -647,6 +648,7 @@ export async function handleQueryAndPlay(
                     `[MusicManager] Before play check: player.playing=${player.playing}, player.queue.tracks.length=${player.queue.tracks.length}`
                 )
                 await startPlaybackIfNeeded(player)
+                schedulePlayerSessionSave(player)
                 client.debug(
                     `[MusicManager] Lavalink player started playing [${player.queue.current?.info?.title || "track from queue"}].`
                 )

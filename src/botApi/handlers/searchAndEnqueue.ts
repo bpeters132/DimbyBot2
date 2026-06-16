@@ -6,6 +6,7 @@ import { ensurePlayerConnected, startPlaybackIfNeeded } from "../../util/musicMa
 import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
 import type { PermissionGuardSuccess } from "../../shared/api-auth.js"
 import { resolveWebDashboardTextChannelId } from "../webDashboardTextChannel.js"
+import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
 
@@ -268,9 +269,11 @@ export async function searchAndEnqueue(
 
     try {
         await startPlaybackIfNeeded(player)
+        schedulePlayerSessionSave(player)
         return { ok: true, player, playbackStarted: true }
     } catch (error: unknown) {
         const playbackError = error instanceof Error ? error.message : String(error)
+        schedulePlayerSessionSave(player)
         return {
             ok: true,
             player,

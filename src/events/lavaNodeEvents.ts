@@ -7,6 +7,7 @@
 
 import type { LavalinkNode } from "lavalink-client"
 import type BotClient from "../lib/BotClient.js"
+import { tryRestorePlayerSessionsOnLavalinkConnect } from "../util/restorePlayerSessions.js"
 
 export default async (client: BotClient) => {
     client.lavalink.nodeManager
@@ -31,6 +32,10 @@ export default async (client: BotClient) => {
         // Emitted when a Lavalink node successfully connects to the Lavalink server.
         .on("connect", (node: LavalinkNode) => {
             client.info(`Lavalink Node ${node.id} CONNECTED`)
+            void tryRestorePlayerSessionsOnLavalinkConnect(client).catch((err: unknown) => {
+                const msg = err instanceof Error ? err.message : String(err)
+                client.error(`[lavaNodeEvents] player session restore failed: ${msg}`)
+            })
         })
         // Emitted when a Lavalink node disconnects from the Lavalink server.
         // Includes the disconnection code and reason.

@@ -7,6 +7,7 @@ import { getBotClient } from "../../lib/botClientRegistry.js"
 import { toQueueResponse } from "../../shared/player-state.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { searchAndEnqueue } from "./searchAndEnqueue.js"
+import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 
 const MAX_QUEUE_PAGE_LIMIT = 100
 
@@ -124,6 +125,7 @@ export async function queueDELETE(
     try {
         if (player) {
             await player.queue.splice(0, player.queue.tracks.length)
+            schedulePlayerSessionSave(player)
             playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
         }
         return {

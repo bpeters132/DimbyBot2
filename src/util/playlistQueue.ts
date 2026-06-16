@@ -7,6 +7,7 @@ import {
     stampRequesterUserIdOnTracks,
 } from "./rrqDisconnect.js"
 import { startPlaybackIfNeeded } from "./musicManager.js"
+import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
 
 export function shuffleArray<T>(items: T[]): T[] {
     const arr = [...items]
@@ -62,11 +63,7 @@ export async function resolveStoredPlaylistTracks(
         while (true) {
             const i = nextIndex++
             if (i >= storedTracks.length) return
-            slots[i] = await resolveStoredTrackAtIndex(
-                player,
-                storedTracks[i]!.uri,
-                requester
-            )
+            slots[i] = await resolveStoredTrackAtIndex(player, storedTracks[i]!.uri, requester)
         }
     }
 
@@ -137,6 +134,7 @@ export async function enqueueResolvedPlaylistTracks(
             playbackError = error instanceof Error ? error.message : String(error)
         }
     }
+    schedulePlayerSessionSave(player)
     return {
         queued: toQueue.length,
         failed: 0,

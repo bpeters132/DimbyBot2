@@ -14,6 +14,15 @@ model GuildSettings {
   discordLog       Json?
 }
 
+/// Persisted Lavalink player snapshot for crash/restart recovery (one row per active guild).
+model PlayerSession {
+  guildId        String   @id
+  voiceChannelId String
+  textChannelId  String?
+  snapshot       Json
+  updatedAt      DateTime @updatedAt
+}
+
 model DownloadMetadata {
   fileName     String
   /// Discord guild id, or `UNKNOWN` for legacy rows migrated from NULL (see migration `20260410140000_downloadmetadata_composite_pk`).
