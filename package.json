@@ -17,7 +17,7 @@
         "db:generate": "prisma generate",
         "db:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
         "start": "node dist/server.js",
-        "dev": "concurrently -k \"tsc -w --preserveWatchOutput\" \"nodemon\"",
+        "dev": "tsc && concurrently -k \"tsc -w --preserveWatchOutput\" \"nodemon\"",
         "dev:web": "yarn web:install && yarn --cwd src/web dev",
         "web:install": "yarn --cwd src/web install",
         "docker:dev:build": "docker compose -f docker-compose.yml -f docker-compose.dev.yml build",
