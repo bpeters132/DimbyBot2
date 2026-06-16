@@ -5,6 +5,7 @@ import { requirePermissions } from "../../shared/api-auth.js"
 import { getBotClient, tryGetBotClient } from "../../lib/botClientRegistry.js"
 import { toQueueResponse } from "../../shared/player-state.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
+import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 
 function parseIndex(value: string): number | null {
     const index = Number(value)
@@ -48,6 +49,7 @@ export async function queueIndexDELETE(
         }
 
         await player.queue.splice(queueIndex, 1)
+        schedulePlayerSessionSave(player)
         playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
         return {
             status: 200,
@@ -151,15 +153,18 @@ export async function queueIndexPATCH(
                         insertErr,
                     })
                 } else {
-                    console.error(
-                        "[queueIndexPATCH] failed to restore track after reorder error",
-                        { guildId, sourceIndex, restoreMessage, insertErr }
-                    )
+                    console.error("[queueIndexPATCH] failed to restore track after reorder error", {
+                        guildId,
+                        sourceIndex,
+                        restoreMessage,
+                        insertErr,
+                    })
                 }
             }
             throw insertErr
         }
         playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
+        schedulePlayerSessionSave(player)
 
         return {
             status: 200,

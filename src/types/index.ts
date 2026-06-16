@@ -264,6 +264,40 @@ export interface CountdownInput {
 /** Map of countdown id → countdown entry. */
 export type CountdownStore = Record<number, CountdownEntry>
 
+/** Serialized queue track for player session persistence across bot restarts. */
+export interface PersistedQueueTrack {
+    title: string
+    author: string
+    uri: string
+    duration: number
+    encoded: string | null
+    requesterId: string | null
+    thumbnailUrl: string | null
+    isStream: boolean
+}
+
+/** Versioned Lavalink player snapshot stored in `PlayerSession.snapshot`. */
+export interface PlayerSessionSnapshotV1 {
+    version: 1
+    volume: number
+    repeatMode: "off" | "track" | "queue"
+    paused: boolean
+    playing: boolean
+    autoplay: boolean
+    rrqEnabled: boolean
+    current: PersistedQueueTrack | null
+    queue: PersistedQueueTrack[]
+}
+
+/** Row shape for a persisted player session. */
+export interface PlayerSessionData {
+    guildId: string
+    voiceChannelId: string
+    textChannelId: string | null
+    snapshot: PlayerSessionSnapshotV1
+    updatedAt: Date
+}
+
 /** Tracks a user who left voice while RRQ is active and has queued tracks. */
 export interface DisconnectedRRQUser {
     userId: string

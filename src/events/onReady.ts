@@ -3,6 +3,7 @@ import type BotClient from "../lib/BotClient.js"
 import { attachDiscordLogForwarding } from "../util/discordLogForward.js"
 import { refreshAllControlMessages } from "./handlers/handleControlChannel.js"
 import { updateAllCountdowns } from "../util/countdownUpdater.js"
+import { markDiscordReadyForPlayerRestore } from "../util/restorePlayerSessions.js"
 
 export default async (client: BotClient) => {
     client.on("clientReady", () => {
@@ -12,6 +13,7 @@ export default async (client: BotClient) => {
             return
         }
         client.debug("Ready event triggered.") // Debug log
+        markDiscordReadyForPlayerRestore()
         client.lavalink.init({ id: user.id, username: user.username })
 
         client.info(`Logged in as ${user.tag}! (${user.id})`)

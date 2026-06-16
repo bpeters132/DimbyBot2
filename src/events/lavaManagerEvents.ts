@@ -35,6 +35,8 @@ import {
     userHasQueuedTracks,
 } from "../util/rrqDisconnect.js"
 import { playerBroadcaster } from "../shared/websocket/PlayerBroadcaster.js"
+import { clearPlayerSession, schedulePlayerSessionSave } from "../util/playerSessionPersistence.js"
+import { countHumanMembers } from "../util/voiceChannelMembers.js"
 
 /** Rate-limit `queueUpdate` websocket fan-out on Lavalink position ticks (pause/resume still immediate). */
 const lastQueueUpdateBroadcastAtMs = new Map<string, number>()
@@ -114,6 +116,12 @@ export default async (client: BotClient) => {
             )
             lastQueueUpdateBroadcastAtMs.delete(player.guildId)
             player.set(DASHBOARD_REQUESTER_KEY, undefined)
+            void clearPlayerSession(player.guildId).catch((err: unknown) => {
+                const msg = err instanceof Error ? err.message : String(err)
+                client.error(
+                    `[LavaMgrEvents] clearPlayerSession failed (guildId=${player.guildId}): ${msg}`
+                )
+            })
             scheduleControlMessageUpdate(client, player.guildId, "playerDestroy")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, null, "playerDestroy")
         })
@@ -129,7 +137,7 @@ export default async (client: BotClient) => {
                 client.debug(
                     `[LavaMgrEvents] Player moved in Guild: ${player.guildId}, Old: ${oldChannelId}, New: ${newChannelId}`
                 )
-                // updateControlMessage(client, player.guildId) // Optional update
+                schedulePlayerSessionSave(player)
             }
         )
 
@@ -175,6 +183,7 @@ export default async (client: BotClient) => {
             if (track?.info) {
                 rememberAutoplayPlayed(player, track.info)
             }
+            schedulePlayerSessionSave(player)
 
             const textId = player.textChannelId
             const channel = textId ? client.channels.cache.get(textId) : undefined
@@ -224,6 +233,7 @@ export default async (client: BotClient) => {
             )
             scheduleControlMessageUpdate(client, player.guildId, "trackEnd")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "trackEnd")
+            schedulePlayerSessionSave(player)
         })
         .on("trackStuck", async (player: Player, track: Track | null, payload: TrackStuckEvent) => {
             client.warn(
@@ -356,6 +366,7 @@ export default async (client: BotClient) => {
             client.debug(`[LavaMgrEvents] Queue ended for Guild: ${player.guildId}`)
             scheduleControlMessageUpdate(client, player.guildId, "queueEnd")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "queueUpdate")
+            schedulePlayerSessionSave(player)
 
             // Send message to non-control channel
             const textIdQ = player.textChannelId
@@ -431,13 +442,11 @@ export default async (client: BotClient) => {
                             .fetch(vcId)
                             .catch(() => null)
                         if (updatedVoiceChannel && updatedVoiceChannel.isVoiceBased()) {
-                            const humanMembers = updatedVoiceChannel.members.filter(
-                                (m) => !m.user.bot
-                            )
+                            const humanCount = countHumanMembers(updatedVoiceChannel)
                             client.debug(
-                                `[LavaMgrEvents] Current human member count in VC ${player.voiceChannelId}: ${humanMembers.size}`
+                                `[LavaMgrEvents] Current human member count in VC ${player.voiceChannelId}: ${humanCount}`
                             ) // Log count
-                            if (humanMembers.size === 0) {
+                            if (humanCount === 0) {
                                 client.info(
                                     `[LavaMgrEvents] Destroying player in Guild ${player.guildId} as bot is alone.`
                                 )
@@ -560,6 +569,7 @@ export default async (client: BotClient) => {
         .on("playerUpdate", (oldPlayerJson: PlayerJson, newPlayer: Player) => {
             const oldPaused = Boolean(oldPlayerJson.paused)
             if (oldPaused !== newPlayer.paused) {
+                schedulePlayerSessionSave(newPlayer)
                 playerBroadcaster.broadcastPlayerEvent(
                     newPlayer.guildId,
                     newPlayer,

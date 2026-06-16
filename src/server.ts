@@ -80,6 +80,14 @@ async function run(): Promise<void> {
         logger.info(`Received ${signal}, shutting down...`)
         let shouldExitWithFailure = false
         try {
+            try {
+                const { flushAllPlayerSessionSaves } =
+                    await import("./util/playerSessionPersistence.js")
+                await flushAllPlayerSessionSaves()
+            } catch (flushErr: unknown) {
+                shouldExitWithFailure = true
+                logger.error("Error flushing player session saves:", flushErr)
+            }
             stopHeartbeat?.()
             if (wss) {
                 for (const ws of wss.clients) {
