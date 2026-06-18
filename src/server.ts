@@ -81,8 +81,9 @@ async function run(): Promise<void> {
         let shouldExitWithFailure = false
         try {
             try {
-                const { flushAllPlayerSessionSaves } =
+                const { flushAllPlayerSessionSaves, markPlayerSessionPersistenceShuttingDown } =
                     await import("./util/playerSessionPersistence.js")
+                markPlayerSessionPersistenceShuttingDown()
                 await flushAllPlayerSessionSaves()
             } catch (flushErr: unknown) {
                 shouldExitWithFailure = true
