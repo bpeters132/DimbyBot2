@@ -13,6 +13,12 @@ const SAVE_DEBOUNCE_MS = 2000
 const pendingSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const pendingPlayers = new Map<string, Player>()
 const restoreInProgressGuilds = new Set<string>()
+let playerSessionPersistenceShuttingDown = false
+
+/** Set before graceful shutdown flush so playerDestroy does not delete freshly persisted rows. */
+export function markPlayerSessionPersistenceShuttingDown(): void {
+    playerSessionPersistenceShuttingDown = true
+}
 
 function repeatModeToLabel(mode: unknown): "off" | "track" | "queue" {
     if (mode === "track" || mode === "queue") return mode
@@ -148,5 +154,6 @@ export async function clearPlayerSession(guildId: string): Promise<void> {
         pendingSaveTimers.delete(guildId)
     }
     pendingPlayers.delete(guildId)
+    if (playerSessionPersistenceShuttingDown) return
     await deletePlayerSession(guildId)
 }
