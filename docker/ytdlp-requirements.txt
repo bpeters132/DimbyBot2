@@ -1,2 +1,2 @@
 # Pinned for reproducible Docker builds (see Dockerfile).
-yt-dlp==2026.2.21
+yt-dlp==2026.6.9
