@@ -47,10 +47,10 @@ Author is just a dude that can barely code but can figure things out.
 
 Dev splits **backend in Docker** from the **dashboard on the host**:
 
-| Piece | Where it runs | How |
-| ----- | ------------- | --- |
+| Piece                   | Where it runs                                            | How                                                                                             |
+| ----------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | Bot, Lavalink, Postgres | Docker (`docker-compose.yml` + `docker-compose.dev.yml`) | `./dev-env.sh build` then `./dev-env.sh up` (or `yarn docker:dev:build` / `yarn docker:dev:up`) |
-| Next.js dashboard | **Host** (not in the dev compose stack) | `yarn web:install` then `yarn dev:web` |
+| Next.js dashboard       | **Host** (not in the dev compose stack)                  | `yarn web:install` then `yarn dev:web`                                                          |
 
 Production is different: the dashboard is the separate `dimbybot-web` container (`docker-compose.dashboard.yml` + `Dockerfile.web`). Do not expect `dimbybot-web` when using the dev compose files.
 
@@ -112,7 +112,7 @@ src/
 
 - [discord.js](https://discord.js.org/): The primary library for interacting with the Discord API.
 - [lavalink-client](https://github.com/freyacodes/lavalink-client): Client for interacting with a Lavalink server.
-- [nodemailer](https://nodemailer.com/): For sending emails.
+- [nodemailer](https://nodemailer.com/): Optional; only required if you re-enable the disabled `/suggest` command.
 
 ## License
 
