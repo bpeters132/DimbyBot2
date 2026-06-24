@@ -136,11 +136,8 @@ export default {
                     delete settings[targetGuildId]
                 }
                 const ok = await saveGuildSettings(settings, client, {
-                    ...(rowEmpty ? { deleteGuildIds: [targetGuildId] } : {}),
                     touchedGuildIds: [targetGuildId],
-                    clearedGuildFields: rowEmpty
-                        ? undefined
-                        : { [targetGuildId]: ["downloadsMaxMb"] },
+                    clearedGuildFields: { [targetGuildId]: ["downloadsMaxMb"] },
                 })
                 if (!ok) {
                     client.error("[DownloadLimit] Failed to persist guild settings after clear.")

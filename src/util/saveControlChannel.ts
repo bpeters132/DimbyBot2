@@ -202,11 +202,17 @@ export async function saveGuildSettings(
                     merged[guildId] = nextRow
                 }
             }
-            for (const guildId of deleteGuildIds) {
+            // Only delete rows that are empty after merge — stale callers may pass deleteGuildIds
+            // based on a local snapshot that omitted fields another concurrent save just wrote.
+            const effectiveDeleteGuildIds = deleteGuildIds.filter((guildId) => {
+                const row = merged[guildId]
+                return row === undefined || Object.keys(row).length === 0
+            })
+            for (const guildId of effectiveDeleteGuildIds) {
                 delete merged[guildId]
             }
             const result = await replaceGuildSettingsStoreInDatabase(merged, {
-                deleteGuildIds,
+                deleteGuildIds: effectiveDeleteGuildIds,
             })
             const reloaded = await readGuildSettingsFromDatabase(logger)
             guildSettingsCache = cloneGuildSettingsStore(reloaded)
