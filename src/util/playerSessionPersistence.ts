@@ -69,7 +69,9 @@ async function writePlayerSession(player: Player): Promise<void> {
     if (!voiceChannelId) return
 
     if (!snapshot) {
-        await deletePlayerSession(player.guildId)
+        // Between tracks (autoplay search, queue handoff) the live queue is briefly empty.
+        // Deleting here would wipe restorable rows during debounced saves or shutdown flush.
+        // Session removal is intentional only via clearPlayerSession (player destroy / stale cleanup).
         return
     }
 
