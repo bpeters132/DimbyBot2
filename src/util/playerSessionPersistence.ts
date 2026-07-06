@@ -68,10 +68,9 @@ async function writePlayerSession(player: Player): Promise<void> {
     const voiceChannelId = player.voiceChannelId
     if (!voiceChannelId) return
 
-    if (!snapshot) {
-        await deletePlayerSession(player.guildId)
-        return
-    }
+    // Transient empty queue (autoplay handoff, between tracks) must not delete the last
+    // good snapshot — only clearPlayerSession removes rows on intentional playerDestroy.
+    if (!snapshot) return
 
     await upsertPlayerSession(
         player.guildId,
