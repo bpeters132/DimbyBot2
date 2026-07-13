@@ -25,8 +25,8 @@ export function markDiscordReadyForPlayerRestore(): void {
 /** Attempts one-shot restore after Lavalink node connect (no-op if Discord is not ready yet). */
 export async function tryRestorePlayerSessionsOnLavalinkConnect(client: BotClient): Promise<void> {
     if (!discordReady || restoreAttempted) return
-    restoreAttempted = true
-    await restorePlayerSessions(client)
+    const listed = await restorePlayerSessions(client)
+    if (listed) restoreAttempted = true
 }
 
 async function fetchVoiceChannel(
@@ -136,7 +136,11 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         client.error(`[playerSession] restore failed for guild ${guildId}: ${msg}`)
-        await deletePlayerSession(guildId).catch(() => undefined)
+        const orphan = client.lavalink.getPlayer(guildId)
+        if (orphan) {
+            await orphan.destroy().catch(() => undefined)
+        }
+        // Transient failures (Lavalink/Discord blips) must not wipe the persisted snapshot.
     } finally {
         clearPlayerSessionRestoreInProgress(guildId)
     }
@@ -150,23 +154,24 @@ function scheduleControlMessageUpdate(client: BotClient, guildId: string): void 
 }
 
 /** Loads all persisted sessions and restores players when humans remain in the saved VC. */
-export async function restorePlayerSessions(client: BotClient): Promise<void> {
+export async function restorePlayerSessions(client: BotClient): Promise<boolean> {
     let sessions: PlayerSessionData[]
     try {
         sessions = await listPlayerSessions()
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         client.error(`[playerSession] failed to list sessions: ${msg}`)
-        return
+        return false
     }
 
     if (sessions.length === 0) {
         client.debug("[playerSession] no persisted sessions to restore")
-        return
+        return true
     }
 
     client.info(`[playerSession] attempting restore for ${sessions.length} persisted session(s)`)
     for (const session of sessions) {
         await restoreSingleSession(client, session)
     }
+    return true
 }
