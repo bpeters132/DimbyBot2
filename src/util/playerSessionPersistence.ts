@@ -153,6 +153,7 @@ export async function clearPlayerSession(guildId: string): Promise<void> {
         pendingSaveTimers.delete(guildId)
     }
     pendingPlayers.delete(guildId)
-    if (persistenceShuttingDown) return
+    // Shutdown flush and mid-restore cleanup own row lifetime; playerDestroy must not race them.
+    if (persistenceShuttingDown || isRestoreInProgress(guildId)) return
     await deletePlayerSession(guildId)
 }

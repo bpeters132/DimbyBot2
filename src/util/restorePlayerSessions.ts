@@ -136,6 +136,11 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         client.error(`[playerSession] restore failed for guild ${guildId}: ${msg}`)
+        // Destroy any half-created player; clearPlayerSession skips delete while restore is in progress.
+        const orphan = client.lavalink.getPlayer(guildId)
+        if (orphan) {
+            await orphan.destroy().catch(() => undefined)
+        }
         await deletePlayerSession(guildId).catch(() => undefined)
     } finally {
         clearPlayerSessionRestoreInProgress(guildId)
