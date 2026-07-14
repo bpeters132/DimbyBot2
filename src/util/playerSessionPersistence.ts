@@ -13,7 +13,19 @@ const SAVE_DEBOUNCE_MS = 2000
 const pendingSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const pendingPlayers = new Map<string, Player>()
 const restoreInProgressGuilds = new Set<string>()
+/** Bumped on intentional clear so in-flight debounced writes cannot resurrect deleted rows. */
+const sessionClearEpochByGuild = new Map<string, number>()
 let persistenceShuttingDown = false
+
+function getSessionClearEpoch(guildId: string): number {
+    return sessionClearEpochByGuild.get(guildId) ?? 0
+}
+
+function bumpSessionClearEpoch(guildId: string): number {
+    const next = getSessionClearEpoch(guildId) + 1
+    sessionClearEpochByGuild.set(guildId, next)
+    return next
+}
 
 /** Set during SIGINT/SIGTERM so playerDestroy does not wipe flushed session rows. */
 export function markPlayerSessionPersistenceShuttingDown(): void {
@@ -63,7 +75,9 @@ function isRestoreInProgress(guildId: string): boolean {
     return restoreInProgressGuilds.has(guildId)
 }
 
-async function writePlayerSession(player: Player): Promise<void> {
+async function writePlayerSession(player: Player, saveEpoch: number): Promise<void> {
+    if (getSessionClearEpoch(player.guildId) !== saveEpoch) return
+
     const snapshot = snapshotFromPlayer(player)
     const voiceChannelId = player.voiceChannelId
     if (!voiceChannelId) return
@@ -78,6 +92,11 @@ async function writePlayerSession(player: Player): Promise<void> {
         player.textChannelId ?? null,
         snapshot
     )
+
+    // clearPlayerSession may run while the upsert is in flight — undo a stale resurrection.
+    if (getSessionClearEpoch(player.guildId) !== saveEpoch) {
+        await deletePlayerSession(player.guildId).catch(() => undefined)
+    }
 }
 
 /** Debounced upsert of the player session snapshot (~2s per guild). */
@@ -85,6 +104,7 @@ export function schedulePlayerSessionSave(player: Player): void {
     if (persistenceShuttingDown || isRestoreInProgress(player.guildId)) return
 
     const guildId = player.guildId
+    const saveEpoch = getSessionClearEpoch(guildId)
     pendingPlayers.set(guildId, player)
     const existing = pendingSaveTimers.get(guildId)
     if (existing) clearTimeout(existing)
@@ -93,8 +113,8 @@ export function schedulePlayerSessionSave(player: Player): void {
         pendingSaveTimers.delete(guildId)
         const latest = pendingPlayers.get(guildId)
         pendingPlayers.delete(guildId)
-        if (!latest) return
-        void writePlayerSession(latest).catch((err: unknown) => {
+        if (!latest || getSessionClearEpoch(guildId) !== saveEpoch) return
+        void writePlayerSession(latest, saveEpoch).catch((err: unknown) => {
             const client = tryGetBotClient()
             const msg = err instanceof Error ? err.message : String(err)
             if (client) {
@@ -119,7 +139,7 @@ export async function flushPlayerSessionSave(guildId: string): Promise<void> {
     const player = pendingPlayers.get(guildId)
     pendingPlayers.delete(guildId)
     if (player) {
-        await writePlayerSession(player)
+        await writePlayerSession(player, getSessionClearEpoch(guildId))
     }
 }
 
@@ -135,7 +155,7 @@ export async function flushAllPlayerSessionSaves(): Promise<void> {
     for (const player of client.lavalink.players.values()) {
         if (isRestoreInProgress(player.guildId)) continue
         try {
-            await writePlayerSession(player)
+            await writePlayerSession(player, getSessionClearEpoch(player.guildId))
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err)
             client.error(
@@ -147,6 +167,7 @@ export async function flushAllPlayerSessionSaves(): Promise<void> {
 
 /** Removes a persisted session row (intentional destroy or stale cleanup). */
 export async function clearPlayerSession(guildId: string): Promise<void> {
+    bumpSessionClearEpoch(guildId)
     const timer = pendingSaveTimers.get(guildId)
     if (timer) {
         clearTimeout(timer)
