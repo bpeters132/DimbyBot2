@@ -4,6 +4,7 @@ import type { PlayerSessionData } from "../types/index.js"
 import { deletePlayerSession, listPlayerSessions } from "../repositories/playerSessionRepository.js"
 import { updateControlMessage } from "../events/handlers/handleControlChannel.js"
 import { playerBroadcaster } from "../shared/websocket/PlayerBroadcaster.js"
+import { getDiscordErrorCode } from "./discordErrorDetails.js"
 import { getGuildSettings } from "./saveControlChannel.js"
 import { ensurePlayerConnected, startPlaybackIfNeeded } from "./musicManager.js"
 import {
@@ -15,35 +16,67 @@ import { resolvePersistedTracks } from "./playerSessionTracks.js"
 import { countHumanMembers } from "./voiceChannelMembers.js"
 
 let discordReady = false
-let restoreAttempted = false
+let restoreInFlight = false
+
+/** Discord API codes meaning the guild or voice channel no longer exists. */
+const STALE_SESSION_DISCORD_CODES = new Set([
+    10003, // Unknown Channel
+    10004, // Unknown Guild
+])
+
+function isStaleSessionDiscordError(error: unknown): boolean {
+    const code = getDiscordErrorCode(error)
+    return code !== undefined && STALE_SESSION_DISCORD_CODES.has(code)
+}
+
+type VoiceChannelFetchResult =
+    | { status: "found"; channel: VoiceBasedChannel }
+    | { status: "missing" }
+    | { status: "transient_error" }
 
 /** Called from `clientReady` so restore waits for Discord before touching guild channels. */
 export function markDiscordReadyForPlayerRestore(): void {
     discordReady = true
 }
 
-/** Attempts one-shot restore after Lavalink node connect (no-op if Discord is not ready yet). */
+/** Attempts restore after Lavalink node connect; re-runs on reconnect for guilds without live players. */
 export async function tryRestorePlayerSessionsOnLavalinkConnect(client: BotClient): Promise<void> {
-    if (!discordReady || restoreAttempted) return
-    const listed = await restorePlayerSessions(client)
-    if (listed) restoreAttempted = true
+    if (!discordReady || restoreInFlight) return
+    restoreInFlight = true
+    try {
+        await restorePlayerSessions(client)
+    } finally {
+        restoreInFlight = false
+    }
 }
 
 async function fetchVoiceChannel(
     client: BotClient,
     guildId: string,
     voiceChannelId: string
-): Promise<VoiceBasedChannel | null> {
-    const guild =
-        client.guilds.cache.get(guildId) ?? (await client.guilds.fetch(guildId).catch(() => null))
-    if (!guild) return null
+): Promise<VoiceChannelFetchResult> {
+    let guild = client.guilds.cache.get(guildId)
+    if (!guild) {
+        try {
+            guild = await client.guilds.fetch(guildId)
+        } catch (err: unknown) {
+            if (isStaleSessionDiscordError(err)) return { status: "missing" }
+            return { status: "transient_error" }
+        }
+    }
+    if (!guild) return { status: "missing" }
 
     const cached = guild.channels.cache.get(voiceChannelId)
-    if (cached?.isVoiceBased()) return cached
+    if (cached?.isVoiceBased()) return { status: "found", channel: cached }
 
-    const fetched = await guild.channels.fetch(voiceChannelId).catch(() => null)
-    if (fetched?.isVoiceBased()) return fetched
-    return null
+    try {
+        const fetched = await guild.channels.fetch(voiceChannelId)
+        if (fetched?.isVoiceBased()) return { status: "found", channel: fetched }
+        return { status: "missing" }
+    } catch (err: unknown) {
+        if (isStaleSessionDiscordError(err)) return { status: "missing" }
+        return { status: "transient_error" }
+    }
 }
 
 function resolveTextChannelId(session: PlayerSessionData): string | null {
@@ -60,14 +93,21 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
         return
     }
 
-    const voiceChannel = await fetchVoiceChannel(client, guildId, voiceChannelId)
-    if (!voiceChannel) {
+    const voiceResult = await fetchVoiceChannel(client, guildId, voiceChannelId)
+    if (voiceResult.status === "transient_error") {
+        client.warn(
+            `[playerSession] restore deferred for ${guildId}: transient Discord error fetching voice channel ${voiceChannelId}`
+        )
+        return
+    }
+    if (voiceResult.status === "missing") {
         client.info(
             `[playerSession] stale session removed for ${guildId}: voice channel ${voiceChannelId} not found`
         )
         await deletePlayerSession(guildId)
         return
     }
+    const voiceChannel = voiceResult.channel
 
     const humans = countHumanMembers(voiceChannel)
     if (humans === 0) {
