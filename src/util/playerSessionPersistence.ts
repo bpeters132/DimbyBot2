@@ -63,6 +63,25 @@ function isRestoreInProgress(guildId: string): boolean {
     return restoreInProgressGuilds.has(guildId)
 }
 
+/**
+ * Pure guard used by clearPlayerSession: shutdown flush and mid-restore own row lifetime.
+ * Exported for regression tests.
+ */
+export function shouldSkipPlayerSessionClearForState(
+    shuttingDown: boolean,
+    restoreInProgress: boolean
+): boolean {
+    return shuttingDown || restoreInProgress
+}
+
+/** True when clearPlayerSession must not delete the DB row for this guild. */
+export function shouldSkipPlayerSessionClear(guildId: string): boolean {
+    return shouldSkipPlayerSessionClearForState(
+        persistenceShuttingDown,
+        isRestoreInProgress(guildId)
+    )
+}
+
 async function writePlayerSession(player: Player): Promise<void> {
     const snapshot = snapshotFromPlayer(player)
     const voiceChannelId = player.voiceChannelId
@@ -154,6 +173,6 @@ export async function clearPlayerSession(guildId: string): Promise<void> {
     }
     pendingPlayers.delete(guildId)
     // Shutdown flush and mid-restore cleanup own row lifetime; playerDestroy must not race them.
-    if (persistenceShuttingDown || isRestoreInProgress(guildId)) return
+    if (shouldSkipPlayerSessionClear(guildId)) return
     await deletePlayerSession(guildId)
 }

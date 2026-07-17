@@ -6,6 +6,7 @@ import {
     getGuildSettingsStoreFromDatabase,
     replaceGuildSettingsStoreInDatabase,
 } from "../repositories/guildSettingsRepository.js"
+import { guildIdsEligibleForSettingsDelete } from "./guildSettingsDeleteFilter.js"
 import { loggerFromPartial } from "./loggerFromPartial.js"
 
 const __dirname = import.meta.dirname
@@ -204,10 +205,10 @@ export async function saveGuildSettings(
             }
             // Only delete rows that are empty after merge — stale callers may pass deleteGuildIds
             // based on a local snapshot that omitted fields another concurrent save just wrote.
-            const effectiveDeleteGuildIds = deleteGuildIds.filter((guildId) => {
-                const row = merged[guildId]
-                return row === undefined || Object.keys(row).length === 0
-            })
+            const effectiveDeleteGuildIds = guildIdsEligibleForSettingsDelete(
+                deleteGuildIds,
+                merged
+            )
             for (const guildId of effectiveDeleteGuildIds) {
                 delete merged[guildId]
             }
