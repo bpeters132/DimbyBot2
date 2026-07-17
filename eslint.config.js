@@ -13,6 +13,7 @@ export default tseslint.config(
             "dist/**",
             ".next/**",
             "src/web/.next/**",
+            "src/**/*.test.ts",
         ],
     },
     js.configs.recommended,
