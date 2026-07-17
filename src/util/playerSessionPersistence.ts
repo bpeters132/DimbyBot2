@@ -82,6 +82,27 @@ function isRestoreInProgress(guildId: string): boolean {
     return restoreInProgressGuilds.has(guildId)
 }
 
+/**
+ * Pure guard used by clearPlayerSession: shutdown flush, mid-restore, and one-shot suppress.
+ * Exported for regression tests.
+ */
+export function shouldSkipPlayerSessionClearForState(
+    shuttingDown: boolean,
+    restoreInProgress: boolean,
+    suppressNextClear = false
+): boolean {
+    return shuttingDown || restoreInProgress || suppressNextClear
+}
+
+/** True when clearPlayerSession must not delete the DB row for this guild. */
+export function shouldSkipPlayerSessionClear(guildId: string): boolean {
+    return shouldSkipPlayerSessionClearForState(
+        persistenceShuttingDown,
+        isRestoreInProgress(guildId),
+        suppressSessionClearGuilds.has(guildId)
+    )
+}
+
 async function writePlayerSession(player: Player, saveEpoch: number): Promise<void> {
     if (getSessionClearEpoch(player.guildId) !== saveEpoch) return
 
@@ -182,10 +203,13 @@ export async function clearPlayerSession(guildId: string): Promise<void> {
     }
     pendingPlayers.delete(guildId)
     // Shutdown flush, mid-restore cleanup, and ephemeral web teardown own row lifetime.
+    const suppressNextClear = suppressSessionClearGuilds.delete(guildId)
     if (
-        persistenceShuttingDown ||
-        isRestoreInProgress(guildId) ||
-        suppressSessionClearGuilds.delete(guildId)
+        shouldSkipPlayerSessionClearForState(
+            persistenceShuttingDown,
+            isRestoreInProgress(guildId),
+            suppressNextClear
+        )
     ) {
         return
     }
