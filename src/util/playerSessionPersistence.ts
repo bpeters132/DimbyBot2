@@ -13,7 +13,14 @@ const SAVE_DEBOUNCE_MS = 2000
 const pendingSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const pendingPlayers = new Map<string, Player>()
 const restoreInProgressGuilds = new Set<string>()
+/** Skips the next clearPlayerSession DB delete (failed ephemeral web player teardown). */
+const suppressSessionClearGuilds = new Set<string>()
 let persistenceShuttingDown = false
+
+/** Prevents playerDestroy from deleting a persisted snapshot after ephemeral player cleanup. */
+export function suppressNextPlayerSessionClear(guildId: string): void {
+    suppressSessionClearGuilds.add(guildId)
+}
 
 /** Set during SIGINT/SIGTERM so playerDestroy does not wipe flushed session rows. */
 export function markPlayerSessionPersistenceShuttingDown(): void {
@@ -153,7 +160,13 @@ export async function clearPlayerSession(guildId: string): Promise<void> {
         pendingSaveTimers.delete(guildId)
     }
     pendingPlayers.delete(guildId)
-    // Shutdown flush and mid-restore cleanup own row lifetime; playerDestroy must not race them.
-    if (persistenceShuttingDown || isRestoreInProgress(guildId)) return
+    // Shutdown flush, mid-restore cleanup, and ephemeral web teardown own row lifetime.
+    if (
+        persistenceShuttingDown ||
+        isRestoreInProgress(guildId) ||
+        suppressSessionClearGuilds.delete(guildId)
+    ) {
+        return
+    }
     await deletePlayerSession(guildId)
 }

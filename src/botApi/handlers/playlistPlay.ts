@@ -15,6 +15,7 @@ import {
     restoreUpcomingQueue,
     snapshotUpcomingQueue,
 } from "../../util/playlistQueue.js"
+import { suppressNextPlayerSessionClear } from "../../util/playerSessionPersistence.js"
 
 export async function playerPlaylistPlayPOST(
     headers: Headers,
@@ -142,6 +143,12 @@ export async function playerPlaylistPlayPOST(
         )
 
         if (resolved.length === 0) {
+            const hasQueueContent =
+                Boolean(player.queue.current) || player.queue.tracks.length > 0
+            if (!hasQueueContent) {
+                suppressNextPlayerSessionClear(guildId)
+                await client.lavalink.destroyPlayer(guildId).catch(() => undefined)
+            }
             return {
                 status: 404,
                 body: {

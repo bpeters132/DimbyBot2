@@ -6,7 +6,10 @@ import { ensurePlayerConnected, startPlaybackIfNeeded } from "../../util/musicMa
 import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
 import type { PermissionGuardSuccess } from "../../shared/api-auth.js"
 import { resolveWebDashboardTextChannelId } from "../webDashboardTextChannel.js"
-import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
+import {
+    schedulePlayerSessionSave,
+    suppressNextPlayerSessionClear,
+} from "../../util/playerSessionPersistence.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
 
@@ -148,6 +151,7 @@ export async function searchAndEnqueue(
 
     const cleanupCreatedPlayer = async (): Promise<void> => {
         if (!createdHere) return
+        suppressNextPlayerSessionClear(guildId)
         await client.lavalink.destroyPlayer(guildId).catch(() => undefined)
     }
 
