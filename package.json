@@ -13,6 +13,7 @@
         "build:web": "yarn web:install && yarn --cwd src/web build",
         "typecheck": "tsc --noEmit && yarn web:install && yarn --cwd src/web typecheck",
         "lint": "eslint .",
+        "test": "tsx --test \"src/**/*.test.ts\"",
         "prisma": "prisma",
         "db:generate": "prisma generate",
         "db:migrate:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
@@ -69,6 +70,7 @@
         "nodemon": "^3.1.14",
         "prettier": "3.8.1",
         "prisma": "^7.6.0",
+        "tsx": "^4.20.5",
         "typescript": "^5.8.2",
         "typescript-eslint": "^8.26.1"
     },
