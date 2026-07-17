@@ -15,6 +15,8 @@ const pendingPlayers = new Map<string, Player>()
 const restoreInProgressGuilds = new Set<string>()
 /** Bumped on intentional clear so in-flight debounced writes cannot resurrect deleted rows. */
 const sessionClearEpochByGuild = new Map<string, number>()
+/** Skips the next clearPlayerSession DB delete (failed ephemeral web player teardown). */
+const suppressSessionClearGuilds = new Set<string>()
 let persistenceShuttingDown = false
 
 function getSessionClearEpoch(guildId: string): number {
@@ -25,6 +27,11 @@ function bumpSessionClearEpoch(guildId: string): number {
     const next = getSessionClearEpoch(guildId) + 1
     sessionClearEpochByGuild.set(guildId, next)
     return next
+}
+
+/** Prevents playerDestroy from deleting a persisted snapshot after ephemeral player cleanup. */
+export function suppressNextPlayerSessionClear(guildId: string): void {
+    suppressSessionClearGuilds.add(guildId)
 }
 
 /** Set during SIGINT/SIGTERM so playerDestroy does not wipe flushed session rows. */
@@ -174,7 +181,13 @@ export async function clearPlayerSession(guildId: string): Promise<void> {
         pendingSaveTimers.delete(guildId)
     }
     pendingPlayers.delete(guildId)
-    // Shutdown flush and mid-restore cleanup own row lifetime; playerDestroy must not race them.
-    if (persistenceShuttingDown || isRestoreInProgress(guildId)) return
+    // Shutdown flush, mid-restore cleanup, and ephemeral web teardown own row lifetime.
+    if (
+        persistenceShuttingDown ||
+        isRestoreInProgress(guildId) ||
+        suppressSessionClearGuilds.delete(guildId)
+    ) {
+        return
+    }
     await deletePlayerSession(guildId)
 }
