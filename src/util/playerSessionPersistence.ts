@@ -7,6 +7,7 @@ import {
 import { isRRQActive } from "./rrqDisconnect.js"
 import { persistedTrackFromLavalink } from "./playerSessionTracks.js"
 import { tryGetBotClient } from "../lib/botClientRegistry.js"
+import { createGuildAsyncChain } from "./guildAsyncChain.js"
 
 const SAVE_DEBOUNCE_MS = 2000
 
@@ -29,20 +30,7 @@ let nextSuppressLeaseId = 1
 let persistenceShuttingDown = false
 
 /** Per-guild FIFO so DB upsert/delete completion order matches generation claim order. */
-const persistenceChainByGuild = new Map<string, Promise<unknown>>()
-
-async function withGuildPersistenceLock<T>(guildId: string, work: () => Promise<T>): Promise<T> {
-    const prior = persistenceChainByGuild.get(guildId) ?? Promise.resolve()
-    const result = prior.then(() => work())
-    persistenceChainByGuild.set(
-        guildId,
-        result.then(
-            () => undefined,
-            () => undefined
-        )
-    )
-    return result
-}
+const withGuildPersistenceLock = createGuildAsyncChain()
 
 /** Injectable DB ops so regression tests can defer upsert/delete completion. */
 type PlayerSessionPersistenceDb = {
@@ -357,6 +345,11 @@ export async function clearPlayerSession(guildId: string): Promise<void> {
         return
     }
 
+    // Bump before awaiting the persistence lock so immediately following saves capture the new epoch.
+    bumpSessionClearEpoch(guildId)
+    // Invalidate in-flight write undos so they cannot delete a row rewritten after this clear.
+    bumpSessionPersistGeneration(guildId)
+
     const timer = pendingSaveTimers.get(guildId)
     if (timer) {
         clearTimeout(timer)
@@ -365,9 +358,6 @@ export async function clearPlayerSession(guildId: string): Promise<void> {
     pendingPlayers.delete(guildId)
 
     await withGuildPersistenceLock(guildId, async () => {
-        bumpSessionClearEpoch(guildId)
-        // Invalidate in-flight write undos so they cannot delete a row rewritten after this clear.
-        bumpSessionPersistGeneration(guildId)
         await persistenceDb.deletePlayerSession(guildId)
     })
 }

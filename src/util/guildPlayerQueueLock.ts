@@ -1,16 +1,8 @@
-/** Per-guild FIFO chain for player queue mutations (enqueue vs orphan teardown). */
-const guildPlayerQueueChain = new Map<string, Promise<unknown>>()
+import { createGuildAsyncChain } from "./guildAsyncChain.js"
+
+const withGuildPlayerQueueChain = createGuildAsyncChain()
 
 /** Runs `work` after prior guild queue mutations finish (completion order matches request order). */
 export function withGuildPlayerQueueLock<T>(guildId: string, work: () => Promise<T>): Promise<T> {
-    const prior = guildPlayerQueueChain.get(guildId) ?? Promise.resolve()
-    const result = prior.then(() => work())
-    guildPlayerQueueChain.set(
-        guildId,
-        result.then(
-            () => undefined,
-            () => undefined
-        )
-    )
-    return result
+    return withGuildPlayerQueueChain(guildId, work)
 }

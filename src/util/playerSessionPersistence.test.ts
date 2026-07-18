@@ -244,10 +244,8 @@ describe("guild persistence serialization", () => {
 
         const player = mockPlayer({})
         player.guildId = guildId
+        // Epoch bumps synchronously after the skip check (before the delete lock await).
         const clearP = clearPlayerSession(guildId)
-        await Promise.resolve()
-        assert.deepEqual(events, ["delete-start"])
-        // Epoch is bumped before the deferred delete awaits; new writes use the post-clear epoch.
         const writeP = writePlayerSessionForTests(player, getSessionClearEpochForTests(guildId))
         await Promise.resolve()
         assert.deepEqual(events, ["delete-start"])

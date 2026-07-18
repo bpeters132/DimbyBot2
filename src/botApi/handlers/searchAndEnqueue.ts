@@ -11,6 +11,7 @@ import {
     schedulePlayerSessionSave,
 } from "../../util/playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
+import { playerHasQueueContent } from "../../util/playlistQueue.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
 
@@ -152,10 +153,14 @@ export async function searchAndEnqueue(
 
     const cleanupCreatedPlayer = async (): Promise<void> => {
         if (!createdHere) return
-        const suppressLease = acquirePlayerSessionClearSuppressLease(guildId)
-        await client.lavalink.destroyPlayer(guildId).catch(() => {
-            // Release only this attempt's lease; clearPlayerSession consumes on success.
-            suppressLease.release()
+        // Serialize with enqueue; re-check emptiness so we never tear down active playback.
+        await withGuildPlayerQueueLock(guildId, async () => {
+            if (playerHasQueueContent(player)) return
+            const suppressLease = acquirePlayerSessionClearSuppressLease(guildId)
+            await client.lavalink.destroyPlayer(guildId).catch(() => {
+                // Release only this attempt's lease; clearPlayerSession consumes on success.
+                suppressLease.release()
+            })
         })
     }
 
