@@ -6,6 +6,7 @@ import {
     getGuildSettingsStoreFromDatabase,
     replaceGuildSettingsStoreInDatabase,
 } from "../repositories/guildSettingsRepository.js"
+import { resolveGuildSettingsDeleteIds } from "./guildSettingsDeleteIds.js"
 import { loggerFromPartial } from "./loggerFromPartial.js"
 
 const __dirname = import.meta.dirname
@@ -188,6 +189,8 @@ export async function saveGuildSettings(
             const guildIdsToApply = hasTouchedOption
                 ? touchedGuildIds
                 : Object.keys(settingsSnapshot)
+            /** Touched guilds whose merge cleared every field — must be deleted from the DB. */
+            const emptyAfterMergeGuildIds: string[] = []
             for (const guildId of guildIdsToApply) {
                 const cleared = (clearedGuildFields[guildId] ?? []).filter(
                     (key): key is keyof GuildSettings =>
@@ -198,16 +201,19 @@ export async function saveGuildSettings(
                 const nextRow = mergeGuildSettingsRow(merged[guildId], row, cleared)
                 if (Object.keys(nextRow).length === 0) {
                     delete merged[guildId]
+                    emptyAfterMergeGuildIds.push(guildId)
                 } else {
                     merged[guildId] = nextRow
                 }
             }
-            // Only delete rows that are empty after merge — stale callers may pass deleteGuildIds
-            // based on a local snapshot that omitted fields another concurrent save just wrote.
-            const effectiveDeleteGuildIds = deleteGuildIds.filter((guildId) => {
-                const row = merged[guildId]
-                return row === undefined || Object.keys(row).length === 0
-            })
+            // Stale explicit deleteGuildIds must not wipe rows that still have fields after merge.
+            // Touched guilds emptied by clearedGuildFields must still be deleted even when callers
+            // omit deleteGuildIds (control-channel unset / download-limit clear after PR #109).
+            const effectiveDeleteGuildIds = resolveGuildSettingsDeleteIds(
+                deleteGuildIds,
+                emptyAfterMergeGuildIds,
+                merged
+            )
             for (const guildId of effectiveDeleteGuildIds) {
                 delete merged[guildId]
             }

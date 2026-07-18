@@ -19,5 +19,5 @@
         "noEmitOnError": true
     },
     "include": ["src/**/*", "lavaNodesConfig.d.ts"],
-    "exclude": ["src/web"]
+    "exclude": ["src/web", "src/**/*.test.ts"]
 }
