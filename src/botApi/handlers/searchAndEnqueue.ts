@@ -6,7 +6,16 @@ import { ensurePlayerConnected, startPlaybackIfNeeded } from "../../util/musicMa
 import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
 import type { PermissionGuardSuccess } from "../../shared/api-auth.js"
 import { resolveWebDashboardTextChannelId } from "../webDashboardTextChannel.js"
-import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
+import {
+    acquirePlayerSessionClearSuppressLease,
+    schedulePlayerSessionSave,
+} from "../../util/playerSessionPersistence.js"
+import {
+    acquireGuildPlayerLifecycleReservation,
+    tryDestroyOrphanGuildPlayer,
+    withGuildPlayerQueueLock,
+} from "../../util/guildPlayerQueueLock.js"
+import { playerHasQueueContent } from "../../util/playlistQueue.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
 
@@ -142,60 +151,45 @@ export async function searchAndEnqueue(
         }
     }
 
-    if (textChannelId) {
-        player.textChannelId = textChannelId
-    }
-
-    const cleanupCreatedPlayer = async (): Promise<void> => {
-        if (!createdHere) return
-        await client.lavalink.destroyPlayer(guildId).catch(() => undefined)
-    }
-
-    if (!createdHere) {
-        let refreshedMemberEarly = null
-        try {
-            refreshedMemberEarly = await guild.members.fetch(requesterId)
-        } catch (error: unknown) {
-            if (!isMemberFetchNotFound(error)) {
-                console.error(
-                    "[searchAndEnqueue] requester member refresh failed (existing player)",
-                    {
-                        guildId,
-                        requesterId,
-                        error,
-                    }
-                )
-                return {
-                    ok: false,
-                    status: 503,
-                    error: { error: "Unable to verify voice state, please try again." },
-                }
-            }
-        }
-        const refreshedVoiceEarly = refreshedMemberEarly?.voice?.channel
-        if (!refreshedVoiceEarly || refreshedVoiceEarly.id !== voiceChannel.id) {
-            return {
-                ok: false,
-                status: 400,
-                error: { error: "Join a voice channel first." },
-            }
-        }
-    }
-
+    // Cover acquisition → search/enqueue so concurrent orphan cleanup cannot destroy mid-use.
+    const lifecycleReservation = await acquireGuildPlayerLifecycleReservation(guildId)
     try {
-        await ensurePlayerConnected(client, player, voiceChannel)
-        if (createdHere) {
-            let refreshedMember = null
+        if (textChannelId) {
+            player.textChannelId = textChannelId
+        }
+
+        const cleanupCreatedPlayer = async (): Promise<void> => {
+            if (!createdHere) return
+            // Destroy now if idle; if other requests still reserve the player, defer until count is 0.
+            await tryDestroyOrphanGuildPlayer(guildId, {
+                hasQueueContent: () => {
+                    const live = client.lavalink.getPlayer(guildId) ?? player
+                    return playerHasQueueContent(live)
+                },
+                destroyPlayer: async () => {
+                    const suppressLease = acquirePlayerSessionClearSuppressLease(guildId)
+                    await client.lavalink.destroyPlayer(guildId).catch(() => {
+                        // Release only this attempt's lease; clearPlayerSession consumes on success.
+                        suppressLease.release()
+                    })
+                },
+            })
+        }
+
+        if (!createdHere) {
+            let refreshedMemberEarly = null
             try {
-                refreshedMember = await guild.members.fetch(requesterId)
+                refreshedMemberEarly = await guild.members.fetch(requesterId)
             } catch (error: unknown) {
                 if (!isMemberFetchNotFound(error)) {
-                    console.error("[searchAndEnqueue] requester member refresh failed", {
-                        guildId,
-                        requesterId,
-                        error,
-                    })
-                    await cleanupCreatedPlayer()
+                    console.error(
+                        "[searchAndEnqueue] requester member refresh failed (existing player)",
+                        {
+                            guildId,
+                            requesterId,
+                            error,
+                        }
+                    )
                     return {
                         ok: false,
                         status: 503,
@@ -203,9 +197,8 @@ export async function searchAndEnqueue(
                     }
                 }
             }
-            const refreshedVoiceChannel = refreshedMember?.voice?.channel
-            if (!refreshedVoiceChannel || refreshedVoiceChannel.id !== voiceChannel.id) {
-                await cleanupCreatedPlayer()
+            const refreshedVoiceEarly = refreshedMemberEarly?.voice?.channel
+            if (!refreshedVoiceEarly || refreshedVoiceEarly.id !== voiceChannel.id) {
                 return {
                     ok: false,
                     status: 400,
@@ -213,72 +206,112 @@ export async function searchAndEnqueue(
                 }
             }
         }
-    } catch (err: unknown) {
-        await cleanupCreatedPlayer()
-        const message = err instanceof Error ? err.message : "Voice connection failed."
-        return {
-            ok: false,
-            status: 503,
-            error: {
-                error: "Could not connect the player to your voice channel.",
-                details: message,
-            },
+
+        try {
+            await ensurePlayerConnected(client, player, voiceChannel)
+            if (createdHere) {
+                let refreshedMember = null
+                try {
+                    refreshedMember = await guild.members.fetch(requesterId)
+                } catch (error: unknown) {
+                    if (!isMemberFetchNotFound(error)) {
+                        console.error("[searchAndEnqueue] requester member refresh failed", {
+                            guildId,
+                            requesterId,
+                            error,
+                        })
+                        await cleanupCreatedPlayer()
+                        return {
+                            ok: false,
+                            status: 503,
+                            error: { error: "Unable to verify voice state, please try again." },
+                        }
+                    }
+                }
+                const refreshedVoiceChannel = refreshedMember?.voice?.channel
+                if (!refreshedVoiceChannel || refreshedVoiceChannel.id !== voiceChannel.id) {
+                    await cleanupCreatedPlayer()
+                    return {
+                        ok: false,
+                        status: 400,
+                        error: { error: "Join a voice channel first." },
+                    }
+                }
+            }
+        } catch (err: unknown) {
+            await cleanupCreatedPlayer()
+            const message = err instanceof Error ? err.message : "Voice connection failed."
+            return {
+                ok: false,
+                status: 503,
+                error: {
+                    error: "Could not connect the player to your voice channel.",
+                    details: message,
+                },
+            }
         }
-    }
 
-    if (options?.connectOnly) {
-        return { ok: true, player, playbackStarted: false }
-    }
+        if (options?.connectOnly) {
+            return { ok: true, player, playbackStarted: false }
+        }
 
-    const requesterName =
-        member?.user.globalName ?? member?.user.username ?? guard.session.user?.name ?? "web-user"
-    let searchResult
-    try {
-        searchResult = await player.search(query, {
-            requester: {
-                id: requesterId,
-                username: requesterName,
-            },
+        const requesterName =
+            member?.user.globalName ??
+            member?.user.username ??
+            guard.session.user?.name ??
+            "web-user"
+        let searchResult
+        try {
+            searchResult = await player.search(query, {
+                requester: {
+                    id: requesterId,
+                    username: requesterName,
+                },
+            })
+        } catch (err: unknown) {
+            await cleanupCreatedPlayer()
+            console.error("[searchAndEnqueue] player.search failed", { guildId, requesterId, err })
+            return {
+                ok: false,
+                status: 503,
+                error: { error: "Search failed.", details: "Internal server error." },
+            }
+        }
+
+        if (!searchResult.tracks.length) {
+            await cleanupCreatedPlayer()
+            return {
+                ok: false,
+                status: 404,
+                error: { error: "No matches found." },
+            }
+        }
+
+        return await withGuildPlayerQueueLock(guildId, async () => {
+            if (searchResult.loadType === "playlist") {
+                stampRequesterUserIdOnTracks(searchResult.tracks, requesterId)
+                player.queue.add(searchResult.tracks)
+            } else {
+                stampRequesterUserIdOnTracks([searchResult.tracks[0]], requesterId)
+                player.queue.add(searchResult.tracks[0])
+            }
+
+            try {
+                await startPlaybackIfNeeded(player)
+                schedulePlayerSessionSave(player)
+                return { ok: true, player, playbackStarted: true }
+            } catch (error: unknown) {
+                const playbackError = error instanceof Error ? error.message : String(error)
+                schedulePlayerSessionSave(player)
+                return {
+                    ok: true,
+                    player,
+                    playbackStarted: false,
+                    playbackError,
+                }
+            }
         })
-    } catch (err: unknown) {
-        await cleanupCreatedPlayer()
-        console.error("[searchAndEnqueue] player.search failed", { guildId, requesterId, err })
-        return {
-            ok: false,
-            status: 503,
-            error: { error: "Search failed.", details: "Internal server error." },
-        }
-    }
-
-    if (!searchResult.tracks.length) {
-        await cleanupCreatedPlayer()
-        return {
-            ok: false,
-            status: 404,
-            error: { error: "No matches found." },
-        }
-    }
-
-    if (searchResult.loadType === "playlist") {
-        stampRequesterUserIdOnTracks(searchResult.tracks, requesterId)
-        player.queue.add(searchResult.tracks)
-    } else {
-        stampRequesterUserIdOnTracks([searchResult.tracks[0]], requesterId)
-        player.queue.add(searchResult.tracks[0])
-    }
-
-    try {
-        await startPlaybackIfNeeded(player)
-        schedulePlayerSessionSave(player)
-        return { ok: true, player, playbackStarted: true }
-    } catch (error: unknown) {
-        const playbackError = error instanceof Error ? error.message : String(error)
-        schedulePlayerSessionSave(player)
-        return {
-            ok: true,
-            player,
-            playbackStarted: false,
-            playbackError,
-        }
+    } finally {
+        lifecycleReservation.release()
     }
 }

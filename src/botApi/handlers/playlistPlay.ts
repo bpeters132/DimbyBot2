@@ -11,10 +11,13 @@ import {
     clearUpcomingQueue,
     enqueueResolvedPlaylistTracks,
     type EnqueuePlaylistResult,
+    playerHasQueueContent,
     resolveStoredPlaylistTracks,
     restoreUpcomingQueue,
     snapshotUpcomingQueue,
 } from "../../util/playlistQueue.js"
+import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
+import { acquirePlayerSessionClearSuppressLease } from "../../util/playerSessionPersistence.js"
 
 export async function playerPlaylistPlayPOST(
     headers: Headers,
@@ -142,6 +145,16 @@ export async function playerPlaylistPlayPOST(
         )
 
         if (resolved.length === 0) {
+            // Serialize emptiness check + destroy with enqueue so a concurrent queue add cannot
+            // land between the check and teardown.
+            await withGuildPlayerQueueLock(guildId, async () => {
+                if (playerHasQueueContent(player)) return
+                const suppressLease = acquirePlayerSessionClearSuppressLease(guildId)
+                await client.lavalink.destroyPlayer(guildId).catch(() => {
+                    // Release only this attempt's lease; clearPlayerSession consumes on success.
+                    suppressLease.release()
+                })
+            })
             return {
                 status: 404,
                 body: {

@@ -8,6 +8,12 @@ import {
 } from "./rrqDisconnect.js"
 import { startPlaybackIfNeeded } from "./musicManager.js"
 import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
+import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
+
+/** True when the player has a current track or upcoming queue entries. */
+export function playerHasQueueContent(player: Player): boolean {
+    return Boolean(player.queue.current) || player.queue.tracks.length > 0
+}
 
 export function shuffleArray<T>(items: T[]): T[] {
     const arr = [...items]
@@ -118,29 +124,31 @@ export async function enqueueResolvedPlaylistTracks(
     if (tracks.length === 0) {
         return { queued: 0, failed: 0, playbackStarted: false }
     }
-    const toQueue = shuffle ? shuffleArray(tracks) : tracks
-    stampRequesterUserIdOnTracks(toQueue, requesterId)
-    player.queue.add(toQueue)
-    if (isRRQActive(player)) {
-        await rebalancePlayerQueueRoundRobin(player)
-    }
-    let playbackStarted = false
-    let playbackError: string | undefined
-    if (!player.playing) {
-        try {
-            await startPlaybackIfNeeded(player)
-            playbackStarted = true
-        } catch (error: unknown) {
-            playbackError = error instanceof Error ? error.message : String(error)
+    return withGuildPlayerQueueLock(player.guildId, async () => {
+        const toQueue = shuffle ? shuffleArray(tracks) : tracks
+        stampRequesterUserIdOnTracks(toQueue, requesterId)
+        player.queue.add(toQueue)
+        if (isRRQActive(player)) {
+            await rebalancePlayerQueueRoundRobin(player)
         }
-    }
-    schedulePlayerSessionSave(player)
-    return {
-        queued: toQueue.length,
-        failed: 0,
-        playbackStarted,
-        playbackError,
-    }
+        let playbackStarted = false
+        let playbackError: string | undefined
+        if (!player.playing) {
+            try {
+                await startPlaybackIfNeeded(player)
+                playbackStarted = true
+            } catch (error: unknown) {
+                playbackError = error instanceof Error ? error.message : String(error)
+            }
+        }
+        schedulePlayerSessionSave(player)
+        return {
+            queued: toQueue.length,
+            failed: 0,
+            playbackStarted,
+            playbackError,
+        }
+    })
 }
 
 export type PlaylistTrackSearchHit = {

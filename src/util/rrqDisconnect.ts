@@ -1,5 +1,6 @@
 import type { Player, Track, UnresolvedTrack } from "lavalink-client"
 import type { RRQDisconnectedUsersMap } from "../types/index.js"
+import { createGuildAsyncChain } from "./guildAsyncChain.js"
 
 const RRQ_DISCONNECTED_USERS_KEY = "rrqDisconnectedUsers"
 const RRQ_ENABLED_KEY = "rrqEnabled"
@@ -215,20 +216,7 @@ export async function removeUserTracksFromQueue(player: Player, userId: string):
     return removed
 }
 
-const rrqMutationChainByGuild = new Map<string, Promise<unknown>>()
-
-function enqueueRrqMutation<T>(guildId: string, work: () => Promise<T>): Promise<T> {
-    const prior = rrqMutationChainByGuild.get(guildId) ?? Promise.resolve()
-    const result = prior.then(() => work())
-    rrqMutationChainByGuild.set(
-        guildId,
-        result.then(
-            () => undefined,
-            () => undefined
-        )
-    )
-    return result
-}
+const enqueueRrqMutation = createGuildAsyncChain()
 
 export type RemoveAndRebalanceRrqHooks = {
     onRemoveError?: (err: unknown) => void
