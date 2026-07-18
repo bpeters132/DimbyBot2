@@ -34,6 +34,11 @@ export function suppressNextPlayerSessionClear(guildId: string): void {
     suppressSessionClearGuilds.add(guildId)
 }
 
+/** Clears a pending suppress marker when destroyPlayer fails before playerDestroy runs. */
+export function clearSuppressNextPlayerSessionClear(guildId: string): void {
+    suppressSessionClearGuilds.delete(guildId)
+}
+
 /** Set during SIGINT/SIGTERM so playerDestroy does not wipe flushed session rows. */
 export function markPlayerSessionPersistenceShuttingDown(): void {
     persistenceShuttingDown = true
@@ -195,15 +200,10 @@ export async function flushAllPlayerSessionSaves(): Promise<void> {
 
 /** Removes a persisted session row (intentional destroy or stale cleanup). */
 export async function clearPlayerSession(guildId: string): Promise<void> {
-    bumpSessionClearEpoch(guildId)
-    const timer = pendingSaveTimers.get(guildId)
-    if (timer) {
-        clearTimeout(timer)
-        pendingSaveTimers.delete(guildId)
-    }
-    pendingPlayers.delete(guildId)
-    // Shutdown flush, mid-restore cleanup, and ephemeral web teardown own row lifetime.
-    const suppressNextClear = suppressSessionClearGuilds.delete(guildId)
+    // Evaluate preserve/skip before bumping the clear epoch or cancelling pending saves.
+    // Skipped clears (shutdown, restore, ephemeral suppress) must not invalidate in-flight
+    // writes — the stale-resurrection undo in writePlayerSession would delete protected rows.
+    const suppressNextClear = suppressSessionClearGuilds.has(guildId)
     if (
         shouldSkipPlayerSessionClearForState(
             persistenceShuttingDown,
@@ -211,7 +211,16 @@ export async function clearPlayerSession(guildId: string): Promise<void> {
             suppressNextClear
         )
     ) {
+        suppressSessionClearGuilds.delete(guildId)
         return
     }
+
+    bumpSessionClearEpoch(guildId)
+    const timer = pendingSaveTimers.get(guildId)
+    if (timer) {
+        clearTimeout(timer)
+        pendingSaveTimers.delete(guildId)
+    }
+    pendingPlayers.delete(guildId)
     await deletePlayerSession(guildId)
 }

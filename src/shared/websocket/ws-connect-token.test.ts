@@ -13,8 +13,12 @@ describe("ws-connect-token", () => {
 
     it("rejects tampered signatures, wrong secrets, and malformed tokens", () => {
         const token = createWsConnectToken("user-1", secret, 60)
+        const sep = token.lastIndexOf(".")
+        const sig = token.slice(sep + 1)
+        // Flip the first sig char — last-char edits can be no-ops under base64url decode.
+        const tamperedSig = (sig[0] === "a" ? "b" : "a") + sig.slice(1)
         assert.equal(parseWsConnectToken(token, "other-secret"), null)
-        assert.equal(parseWsConnectToken(token.slice(0, -1) + "x", secret), null)
+        assert.equal(parseWsConnectToken(`${token.slice(0, sep + 1)}${tamperedSig}`, secret), null)
         assert.equal(parseWsConnectToken("not-a-token", secret), null)
         assert.equal(parseWsConnectToken("", secret), null)
     })

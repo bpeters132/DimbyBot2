@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test"
 import type { Player, Track } from "lavalink-client"
 import {
     clearPlayerSessionRestoreInProgress,
+    clearSuppressNextPlayerSessionClear,
     markPlayerSessionRestoreInProgress,
     shouldSkipPlayerSessionClear,
     shouldSkipPlayerSessionClearForState,
@@ -30,7 +31,7 @@ function mockTrack(overrides: Partial<Track["info"]> & { encoded?: string } = {}
             ...infoOverrides,
         },
         requester: "user-1",
-    } as Track
+    } as unknown as Track
 }
 
 function mockPlayer(opts: {
@@ -139,5 +140,7 @@ describe("shouldSkipPlayerSessionClear", () => {
         assert.equal(shouldSkipPlayerSessionClear("guild-ephemeral"), false)
         suppressNextPlayerSessionClear("guild-ephemeral")
         assert.equal(shouldSkipPlayerSessionClear("guild-ephemeral"), true)
+        clearSuppressNextPlayerSessionClear("guild-ephemeral")
+        assert.equal(shouldSkipPlayerSessionClear("guild-ephemeral"), false)
     })
 })

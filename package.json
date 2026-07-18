@@ -11,7 +11,7 @@
         "build": "yarn build:bot && yarn build:web",
         "build:bot": "tsc",
         "build:web": "yarn web:install && yarn --cwd src/web build",
-        "typecheck": "tsc --noEmit && yarn web:install && yarn --cwd src/web typecheck",
+        "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json && yarn web:install && yarn --cwd src/web typecheck",
         "lint": "eslint .",
         "test": "tsx --test \"src/**/*.test.ts\"",
         "prisma": "prisma",

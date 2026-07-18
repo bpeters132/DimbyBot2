@@ -104,7 +104,12 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
         client.info(
             `[playerSession] stale session removed for ${guildId}: voice channel ${voiceChannelId} not found`
         )
-        await deletePlayerSession(guildId)
+        try {
+            await deletePlayerSession(guildId)
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err)
+            client.info(`[playerSession] stale session delete failed for ${guildId}: ${msg}`)
+        }
         return
     }
     const voiceChannel = voiceResult.channel
