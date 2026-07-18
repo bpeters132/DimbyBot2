@@ -102,13 +102,13 @@ describe("parsePlayerSessionSnapshot", () => {
         assert.equal(parsePlayerSessionSnapshot(validSnapshot({ paused: "no" })), null)
         assert.equal(parsePlayerSessionSnapshot(validSnapshot({ queue: null })), null)
         assert.equal(
-            parsePlayerSessionSnapshot(
-                validSnapshot({ queue: [{ ...validTrack, author: "" }] })
-            ),
+            parsePlayerSessionSnapshot(validSnapshot({ queue: [{ ...validTrack, author: "" }] })),
             null
         )
         assert.equal(
-            parsePlayerSessionSnapshot(validSnapshot({ current: { ...validTrack, duration: NaN } })),
+            parsePlayerSessionSnapshot(
+                validSnapshot({ current: { ...validTrack, duration: NaN } })
+            ),
             null
         )
     })

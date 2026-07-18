@@ -143,8 +143,7 @@ export async function playerPlaylistPlayPOST(
         )
 
         if (resolved.length === 0) {
-            const hasQueueContent =
-                Boolean(player.queue.current) || player.queue.tracks.length > 0
+            const hasQueueContent = Boolean(player.queue.current) || player.queue.tracks.length > 0
             if (!hasQueueContent) {
                 suppressNextPlayerSessionClear(guildId)
                 await client.lavalink.destroyPlayer(guildId).catch(() => undefined)

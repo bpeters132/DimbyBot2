@@ -23,7 +23,7 @@ describe("resolveGuildSettingsDeleteIds", () => {
 
     it("unions explicit empty deletes with inferred empty-after-merge deletes", () => {
         assert.deepEqual(
-            resolveGuildSettingsDeleteIds(["a", "b"], ["b", "c"], { a: {}, /* b absent */ }),
+            resolveGuildSettingsDeleteIds(["a", "b"], ["b", "c"], { a: {} /* b absent */ }),
             ["a", "b", "c"]
         )
     })

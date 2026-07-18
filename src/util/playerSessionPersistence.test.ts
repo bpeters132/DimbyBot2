@@ -7,6 +7,7 @@ import {
     shouldSkipPlayerSessionClear,
     shouldSkipPlayerSessionClearForState,
     snapshotFromPlayer,
+    suppressNextPlayerSessionClear,
 } from "./playerSessionPersistence.js"
 import { persistedTrackFromLavalink } from "./playerSessionTracks.js"
 import { getRequesterUserId } from "./rrqDisconnect.js"
@@ -126,10 +127,17 @@ describe("shouldSkipPlayerSessionClear", () => {
         assert.equal(shouldSkipPlayerSessionClear("guild-restore"), false)
     })
 
-    it("skips clear for shutdown or restore state combinations", () => {
+    it("skips clear for shutdown, restore, or suppress combinations", () => {
         assert.equal(shouldSkipPlayerSessionClearForState(false, false), false)
         assert.equal(shouldSkipPlayerSessionClearForState(true, false), true)
         assert.equal(shouldSkipPlayerSessionClearForState(false, true), true)
         assert.equal(shouldSkipPlayerSessionClearForState(true, true), true)
+        assert.equal(shouldSkipPlayerSessionClearForState(false, false, true), true)
+    })
+
+    it("skips clear after suppressNextPlayerSessionClear (ephemeral web teardown)", () => {
+        assert.equal(shouldSkipPlayerSessionClear("guild-ephemeral"), false)
+        suppressNextPlayerSessionClear("guild-ephemeral")
+        assert.equal(shouldSkipPlayerSessionClear("guild-ephemeral"), true)
     })
 })
