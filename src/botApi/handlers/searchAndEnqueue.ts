@@ -12,7 +12,7 @@ import {
 } from "../../util/playerSessionPersistence.js"
 import {
     acquireGuildPlayerLifecycleReservation,
-    getGuildPlayerLifecycleReservationCount,
+    tryDestroyOrphanGuildPlayer,
     withGuildPlayerQueueLock,
 } from "../../util/guildPlayerQueueLock.js"
 import { playerHasQueueContent } from "../../util/playlistQueue.js"
@@ -160,16 +160,19 @@ export async function searchAndEnqueue(
 
         const cleanupCreatedPlayer = async (): Promise<void> => {
             if (!createdHere) return
-            // Serialize with enqueue; skip destroy while other requests still reserve this player.
-            await withGuildPlayerQueueLock(guildId, async () => {
-                if (playerHasQueueContent(player)) return
-                // Count includes this request; >1 means another in-flight search/enqueue still needs it.
-                if (getGuildPlayerLifecycleReservationCount(guildId) > 1) return
-                const suppressLease = acquirePlayerSessionClearSuppressLease(guildId)
-                await client.lavalink.destroyPlayer(guildId).catch(() => {
-                    // Release only this attempt's lease; clearPlayerSession consumes on success.
-                    suppressLease.release()
-                })
+            // Destroy now if idle; if other requests still reserve the player, defer until count is 0.
+            await tryDestroyOrphanGuildPlayer(guildId, {
+                hasQueueContent: () => {
+                    const live = client.lavalink.getPlayer(guildId) ?? player
+                    return playerHasQueueContent(live)
+                },
+                destroyPlayer: async () => {
+                    const suppressLease = acquirePlayerSessionClearSuppressLease(guildId)
+                    await client.lavalink.destroyPlayer(guildId).catch(() => {
+                        // Release only this attempt's lease; clearPlayerSession consumes on success.
+                        suppressLease.release()
+                    })
+                },
             })
         }
 
