@@ -3,13 +3,18 @@ import { afterEach, describe, it } from "node:test"
 import type { Player, Track } from "lavalink-client"
 import {
     acquirePlayerSessionClearSuppressLease,
+    clearPlayerSession,
     clearPlayerSessionRestoreInProgress,
+    getSessionClearEpochForTests,
     markPlayerSessionRestoreInProgress,
+    setPlayerSessionPersistenceDbForTests,
     shouldSkipPlayerSessionClear,
     shouldSkipPlayerSessionClearForState,
     shouldUndoStaleSessionUpsert,
     snapshotFromPlayer,
+    writePlayerSessionForTests,
 } from "./playerSessionPersistence.js"
+import type { PlayerSessionSnapshotV1 } from "../types/index.js"
 import { persistedTrackFromLavalink } from "./playerSessionTracks.js"
 import { getRequesterUserId } from "./rrqDisconnect.js"
 
@@ -168,5 +173,86 @@ describe("shouldUndoStaleSessionUpsert", () => {
 
     it("does not undo when clear epoch still matches the save epoch", () => {
         assert.equal(shouldUndoStaleSessionUpsert(1, 1, 3, 3), false)
+    })
+})
+
+describe("guild persistence serialization", () => {
+    afterEach(() => {
+        setPlayerSessionPersistenceDbForTests(null)
+    })
+
+    it("waits for a slow older upsert to finish before a newer upsert starts", async () => {
+        const guildId = "guild-persist-upsert-order"
+        const events: string[] = []
+        let releaseOld!: () => void
+        const oldUpsertGate = new Promise<void>((resolve) => {
+            releaseOld = resolve
+        })
+        let upsertCalls = 0
+
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                upsertCalls += 1
+                if (upsertCalls === 1) {
+                    events.push("old-upsert-start")
+                    await oldUpsertGate
+                    events.push("old-upsert-end")
+                    return
+                }
+                events.push("new-upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        const player = mockPlayer({})
+        player.guildId = guildId
+        const epoch = getSessionClearEpochForTests(guildId)
+        const older = writePlayerSessionForTests(player, epoch)
+        const newer = writePlayerSessionForTests(player, epoch)
+        await Promise.resolve()
+        assert.deepEqual(events, ["old-upsert-start"])
+        releaseOld()
+        await Promise.all([older, newer])
+        assert.deepEqual(events, ["old-upsert-start", "old-upsert-end", "new-upsert"])
+    })
+
+    it("finishes clear delete before a subsequent upsert (clear-then-write order)", async () => {
+        const guildId = "guild-persist-clear-order"
+        const events: string[] = []
+        let releaseDelete!: () => void
+        const deleteGate = new Promise<void>((resolve) => {
+            releaseDelete = resolve
+        })
+
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async (
+                _guildId: string,
+                _voiceChannelId: string,
+                _textChannelId: string | null,
+                _snapshot: PlayerSessionSnapshotV1
+            ) => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete-start")
+                await deleteGate
+                events.push("delete-end")
+            },
+        })
+
+        const player = mockPlayer({})
+        player.guildId = guildId
+        const clearP = clearPlayerSession(guildId)
+        await Promise.resolve()
+        assert.deepEqual(events, ["delete-start"])
+        // Epoch is bumped before the deferred delete awaits; new writes use the post-clear epoch.
+        const writeP = writePlayerSessionForTests(player, getSessionClearEpochForTests(guildId))
+        await Promise.resolve()
+        assert.deepEqual(events, ["delete-start"])
+        releaseDelete()
+        await Promise.all([clearP, writeP])
+        assert.deepEqual(events, ["delete-start", "delete-end", "upsert"])
     })
 })

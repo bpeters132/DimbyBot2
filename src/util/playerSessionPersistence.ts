@@ -28,6 +28,53 @@ const suppressLeaseCountByGuild = new Map<string, number>()
 let nextSuppressLeaseId = 1
 let persistenceShuttingDown = false
 
+/** Per-guild FIFO so DB upsert/delete completion order matches generation claim order. */
+const persistenceChainByGuild = new Map<string, Promise<unknown>>()
+
+async function withGuildPersistenceLock<T>(guildId: string, work: () => Promise<T>): Promise<T> {
+    const prior = persistenceChainByGuild.get(guildId) ?? Promise.resolve()
+    const result = prior.then(() => work())
+    persistenceChainByGuild.set(
+        guildId,
+        result.then(
+            () => undefined,
+            () => undefined
+        )
+    )
+    return result
+}
+
+/** Injectable DB ops so regression tests can defer upsert/delete completion. */
+type PlayerSessionPersistenceDb = {
+    upsertPlayerSession: typeof upsertPlayerSession
+    deletePlayerSession: typeof deletePlayerSession
+}
+
+let persistenceDb: PlayerSessionPersistenceDb = {
+    upsertPlayerSession,
+    deletePlayerSession,
+}
+
+/** Test-only: replace upsert/delete (pass `null` to restore defaults). */
+export function setPlayerSessionPersistenceDbForTests(
+    next: Partial<PlayerSessionPersistenceDb> | null
+): void {
+    persistenceDb = next
+        ? {
+              upsertPlayerSession: next.upsertPlayerSession ?? persistenceDb.upsertPlayerSession,
+              deletePlayerSession: next.deletePlayerSession ?? persistenceDb.deletePlayerSession,
+          }
+        : { upsertPlayerSession, deletePlayerSession }
+}
+
+/** Test-only: enqueue work on the same per-guild persistence chain as writes/clears. */
+export function enqueueGuildPersistenceTaskForTests<T>(
+    guildId: string,
+    work: () => Promise<T>
+): Promise<T> {
+    return withGuildPersistenceLock(guildId, work)
+}
+
 function getSessionClearEpoch(guildId: string): number {
     return sessionClearEpochByGuild.get(guildId) ?? 0
 }
@@ -187,28 +234,43 @@ async function writePlayerSession(player: Player, saveEpoch: number): Promise<vo
     // good snapshot — only clearPlayerSession removes rows on intentional playerDestroy.
     if (!snapshot) return
 
-    // Claim a persist generation before awaiting so a newer write/clear can outrank this undo.
-    const writeGeneration = bumpSessionPersistGeneration(player.guildId)
+    const guildId = player.guildId
+    await withGuildPersistenceLock(guildId, async () => {
+        // Re-check under the lock: a clear may have landed while we waited for the chain.
+        if (getSessionClearEpoch(guildId) !== saveEpoch) return
 
-    await upsertPlayerSession(
-        player.guildId,
-        voiceChannelId,
-        player.textChannelId ?? null,
-        snapshot
-    )
+        // Claim a persist generation before awaiting so a newer write/clear can outrank this undo.
+        const writeGeneration = bumpSessionPersistGeneration(guildId)
 
-    // clearPlayerSession may run while the upsert is in flight — undo only if this write is
-    // still the latest persist generation (a newer save must not be deleted).
-    if (
-        shouldUndoStaleSessionUpsert(
-            getSessionClearEpoch(player.guildId),
-            saveEpoch,
-            getSessionPersistGeneration(player.guildId),
-            writeGeneration
+        await persistenceDb.upsertPlayerSession(
+            guildId,
+            voiceChannelId,
+            player.textChannelId ?? null,
+            snapshot
         )
-    ) {
-        await deletePlayerSession(player.guildId).catch(() => undefined)
-    }
+
+        // clearPlayerSession may invalidate this write — undo only if still the latest generation.
+        if (
+            shouldUndoStaleSessionUpsert(
+                getSessionClearEpoch(guildId),
+                saveEpoch,
+                getSessionPersistGeneration(guildId),
+                writeGeneration
+            )
+        ) {
+            await persistenceDb.deletePlayerSession(guildId).catch(() => undefined)
+        }
+    })
+}
+
+/** Test-only: run a write through the serialized persist path. */
+export async function writePlayerSessionForTests(player: Player, saveEpoch: number): Promise<void> {
+    await writePlayerSession(player, saveEpoch)
+}
+
+/** Test-only: current clear epoch for a guild (for scheduling writes in race tests). */
+export function getSessionClearEpochForTests(guildId: string): number {
+    return getSessionClearEpoch(guildId)
 }
 
 /** Debounced upsert of the player session snapshot (~2s per guild). */
@@ -295,14 +357,17 @@ export async function clearPlayerSession(guildId: string): Promise<void> {
         return
     }
 
-    bumpSessionClearEpoch(guildId)
-    // Invalidate in-flight write undos so they cannot delete a row rewritten after this clear.
-    bumpSessionPersistGeneration(guildId)
     const timer = pendingSaveTimers.get(guildId)
     if (timer) {
         clearTimeout(timer)
         pendingSaveTimers.delete(guildId)
     }
     pendingPlayers.delete(guildId)
-    await deletePlayerSession(guildId)
+
+    await withGuildPersistenceLock(guildId, async () => {
+        bumpSessionClearEpoch(guildId)
+        // Invalidate in-flight write undos so they cannot delete a row rewritten after this clear.
+        bumpSessionPersistGeneration(guildId)
+        await persistenceDb.deletePlayerSession(guildId)
+    })
 }

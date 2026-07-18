@@ -10,6 +10,7 @@ import {
     acquirePlayerSessionClearSuppressLease,
     schedulePlayerSessionSave,
 } from "../../util/playerSessionPersistence.js"
+import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
 
@@ -266,26 +267,28 @@ export async function searchAndEnqueue(
         }
     }
 
-    if (searchResult.loadType === "playlist") {
-        stampRequesterUserIdOnTracks(searchResult.tracks, requesterId)
-        player.queue.add(searchResult.tracks)
-    } else {
-        stampRequesterUserIdOnTracks([searchResult.tracks[0]], requesterId)
-        player.queue.add(searchResult.tracks[0])
-    }
-
-    try {
-        await startPlaybackIfNeeded(player)
-        schedulePlayerSessionSave(player)
-        return { ok: true, player, playbackStarted: true }
-    } catch (error: unknown) {
-        const playbackError = error instanceof Error ? error.message : String(error)
-        schedulePlayerSessionSave(player)
-        return {
-            ok: true,
-            player,
-            playbackStarted: false,
-            playbackError,
+    return withGuildPlayerQueueLock(guildId, async () => {
+        if (searchResult.loadType === "playlist") {
+            stampRequesterUserIdOnTracks(searchResult.tracks, requesterId)
+            player.queue.add(searchResult.tracks)
+        } else {
+            stampRequesterUserIdOnTracks([searchResult.tracks[0]], requesterId)
+            player.queue.add(searchResult.tracks[0])
         }
-    }
+
+        try {
+            await startPlaybackIfNeeded(player)
+            schedulePlayerSessionSave(player)
+            return { ok: true, player, playbackStarted: true }
+        } catch (error: unknown) {
+            const playbackError = error instanceof Error ? error.message : String(error)
+            schedulePlayerSessionSave(player)
+            return {
+                ok: true,
+                player,
+                playbackStarted: false,
+                playbackError,
+            }
+        }
+    })
 }
