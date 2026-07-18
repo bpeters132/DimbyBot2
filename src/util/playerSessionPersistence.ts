@@ -122,8 +122,8 @@ export type PlayerSessionClearSuppressLease = {
 
 /**
  * Acquires an operation-scoped suppress lease for ephemeral player teardown.
- * Call `lease.release()` only when destroyPlayer rejects — a successful destroy is consumed
- * inside clearPlayerSession (playerDestroy is not awaited by destroyPlayer).
+ * A successful session clear (via playerDestroy → clearPlayerSession) consumes the lease;
+ * callers should invoke `release()` only when the associated destroyPlayer call fails.
  */
 export function acquirePlayerSessionClearSuppressLease(
     guildId: string

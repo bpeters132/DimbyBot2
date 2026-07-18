@@ -2,13 +2,16 @@
  * Per-key FIFO async chain. Removes the registry entry when the tail settles,
  * but only if the map still points at that same tail (newer work may have replaced it).
  */
-export function createGuildAsyncChain(): <T>(
-    guildId: string,
-    work: () => Promise<T>
-) => Promise<T> {
+export type GuildAsyncChain = {
+    <T>(guildId: string, work: () => Promise<T>): Promise<T>
+    /** Test-only: how many guilds currently have a live chain tail registered. */
+    pendingGuildCountForTests(): number
+}
+
+export function createGuildAsyncChain(): GuildAsyncChain {
     const chainByGuild = new Map<string, Promise<unknown>>()
 
-    return function withGuildAsyncChain<T>(guildId: string, work: () => Promise<T>): Promise<T> {
+    function withGuildAsyncChain<T>(guildId: string, work: () => Promise<T>): Promise<T> {
         const prior = chainByGuild.get(guildId) ?? Promise.resolve()
         const result = prior.then(() => work())
         const tail = result.then(
@@ -23,4 +26,8 @@ export function createGuildAsyncChain(): <T>(
         })
         return result
     }
+
+    return Object.assign(withGuildAsyncChain, {
+        pendingGuildCountForTests: () => chainByGuild.size,
+    })
 }

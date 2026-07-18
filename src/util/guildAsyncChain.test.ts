@@ -3,41 +3,71 @@ import { describe, it } from "node:test"
 import { createGuildAsyncChain } from "./guildAsyncChain.js"
 
 describe("createGuildAsyncChain", () => {
-    it("removes the guild entry after the tail settles", async () => {
+    it("evicts the guild map entry after the sole tail promise settles", async () => {
         const withLock = createGuildAsyncChain()
-        // Access map indirectly: after settle, a new call should not wait on a retained resolved tail
-        // beyond a fresh Promise.resolve() — verified by ordering a second guild-independent burst.
-        const events: string[] = []
-        await withLock("g1", async () => {
-            events.push("a")
+        assert.equal(withLock.pendingGuildCountForTests(), 0)
+
+        let release!: () => void
+        const gate = new Promise<void>((resolve) => {
+            release = resolve
         })
-        await withLock("g1", async () => {
-            events.push("b")
+        const running = withLock("g1", async () => {
+            await gate
         })
-        assert.deepEqual(events, ["a", "b"])
+        assert.equal(withLock.pendingGuildCountForTests(), 1)
+        release()
+        await running
+        // Eviction runs in tail.finally after the result promise settles.
+        await Promise.resolve()
+        assert.equal(withLock.pendingGuildCountForTests(), 0)
     })
 
-    it("does not drop a newer tail when an older tail settles later", async () => {
+    it("keeps a newer tail registered when an older tail settles (identity-guarded eviction)", async () => {
         const withLock = createGuildAsyncChain()
         const events: string[] = []
-        let releaseOld!: () => void
-        const oldGate = new Promise<void>((resolve) => {
-            releaseOld = resolve
+        let releaseFirst!: () => void
+        let releaseSecond!: () => void
+        const firstGate = new Promise<void>((resolve) => {
+            releaseFirst = resolve
+        })
+        const secondGate = new Promise<void>((resolve) => {
+            releaseSecond = resolve
         })
 
-        const older = withLock("g1", async () => {
-            events.push("old-start")
-            await oldGate
-            events.push("old-end")
+        const first = withLock("g1", async () => {
+            events.push("1-start")
+            await firstGate
+            events.push("1-end")
         })
-        const newer = withLock("g1", async () => {
-            events.push("new")
+        const second = withLock("g1", async () => {
+            events.push("2-start")
+            await secondGate
+            events.push("2-end")
         })
 
         await Promise.resolve()
-        assert.deepEqual(events, ["old-start"])
-        releaseOld()
-        await Promise.all([older, newer])
-        assert.deepEqual(events, ["old-start", "old-end", "new"])
+        assert.deepEqual(events, ["1-start"])
+        assert.equal(withLock.pendingGuildCountForTests(), 1)
+
+        // First settles; second is still the live tail and must remain registered.
+        releaseFirst()
+        await first
+        await Promise.resolve()
+        assert.deepEqual(events, ["1-start", "1-end", "2-start"])
+        assert.equal(withLock.pendingGuildCountForTests(), 1)
+
+        // Enqueue a third while second is still blocked — it must wait for second.
+        const third = withLock("g1", async () => {
+            events.push("3")
+        })
+        await Promise.resolve()
+        assert.deepEqual(events, ["1-start", "1-end", "2-start"])
+        assert.equal(withLock.pendingGuildCountForTests(), 1)
+
+        releaseSecond()
+        await Promise.all([second, third])
+        assert.deepEqual(events, ["1-start", "1-end", "2-start", "2-end", "3"])
+        await Promise.resolve()
+        assert.equal(withLock.pendingGuildCountForTests(), 0)
     })
 })
