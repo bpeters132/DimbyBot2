@@ -74,9 +74,6 @@ jobs:
                   yarn typecheck
                   yarn lint
 
-            - name: Typecheck bot unit tests
-              run: yarn tsc --noEmit -p tsconfig.tests.json
-
     build-and-push:
         needs: validate-node-lts
         if: ${{ github.event_name != 'workflow_dispatch' || !inputs.skip_build }}

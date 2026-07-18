@@ -7,9 +7,8 @@ import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
 import type { PermissionGuardSuccess } from "../../shared/api-auth.js"
 import { resolveWebDashboardTextChannelId } from "../webDashboardTextChannel.js"
 import {
-    clearSuppressNextPlayerSessionClear,
+    acquirePlayerSessionClearSuppressLease,
     schedulePlayerSessionSave,
-    suppressNextPlayerSessionClear,
 } from "../../util/playerSessionPersistence.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
@@ -152,9 +151,10 @@ export async function searchAndEnqueue(
 
     const cleanupCreatedPlayer = async (): Promise<void> => {
         if (!createdHere) return
-        suppressNextPlayerSessionClear(guildId)
+        const suppressLease = acquirePlayerSessionClearSuppressLease(guildId)
         await client.lavalink.destroyPlayer(guildId).catch(() => {
-            clearSuppressNextPlayerSessionClear(guildId)
+            // Release only this attempt's lease; clearPlayerSession consumes on success.
+            suppressLease.release()
         })
     }
 

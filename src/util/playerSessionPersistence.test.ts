@@ -2,13 +2,13 @@ import assert from "node:assert/strict"
 import { afterEach, describe, it } from "node:test"
 import type { Player, Track } from "lavalink-client"
 import {
+    acquirePlayerSessionClearSuppressLease,
     clearPlayerSessionRestoreInProgress,
-    clearSuppressNextPlayerSessionClear,
     markPlayerSessionRestoreInProgress,
     shouldSkipPlayerSessionClear,
     shouldSkipPlayerSessionClearForState,
+    shouldUndoStaleSessionUpsert,
     snapshotFromPlayer,
-    suppressNextPlayerSessionClear,
 } from "./playerSessionPersistence.js"
 import { persistedTrackFromLavalink } from "./playerSessionTracks.js"
 import { getRequesterUserId } from "./rrqDisconnect.js"
@@ -136,11 +136,37 @@ describe("shouldSkipPlayerSessionClear", () => {
         assert.equal(shouldSkipPlayerSessionClearForState(false, false, true), true)
     })
 
-    it("skips clear after suppressNextPlayerSessionClear (ephemeral web teardown)", () => {
+    it("skips clear while a suppress lease is held (ephemeral web teardown)", () => {
         assert.equal(shouldSkipPlayerSessionClear("guild-ephemeral"), false)
-        suppressNextPlayerSessionClear("guild-ephemeral")
+        const lease = acquirePlayerSessionClearSuppressLease("guild-ephemeral")
         assert.equal(shouldSkipPlayerSessionClear("guild-ephemeral"), true)
-        clearSuppressNextPlayerSessionClear("guild-ephemeral")
+        lease.release()
         assert.equal(shouldSkipPlayerSessionClear("guild-ephemeral"), false)
+    })
+
+    it("releasing one suppress lease does not clear a concurrent lease", () => {
+        const leaseA = acquirePlayerSessionClearSuppressLease("guild-lease")
+        const leaseB = acquirePlayerSessionClearSuppressLease("guild-lease")
+        assert.equal(shouldSkipPlayerSessionClear("guild-lease"), true)
+        leaseA.release()
+        assert.equal(shouldSkipPlayerSessionClear("guild-lease"), true)
+        leaseB.release()
+        assert.equal(shouldSkipPlayerSessionClear("guild-lease"), false)
+    })
+})
+
+describe("shouldUndoStaleSessionUpsert", () => {
+    it("undoes when clear invalidated the write and no newer persist claimed generation", () => {
+        // saveEpoch 1, clear bumped to 2, write still owns generation 5
+        assert.equal(shouldUndoStaleSessionUpsert(2, 1, 5, 5), true)
+    })
+
+    it("keeps a newer persist when stale cleanup races after a later write claim", () => {
+        // Stale write claimed gen 5; clear bumped gen; newer write claimed gen 7
+        assert.equal(shouldUndoStaleSessionUpsert(2, 1, 7, 5), false)
+    })
+
+    it("does not undo when clear epoch still matches the save epoch", () => {
+        assert.equal(shouldUndoStaleSessionUpsert(1, 1, 3, 3), false)
     })
 })

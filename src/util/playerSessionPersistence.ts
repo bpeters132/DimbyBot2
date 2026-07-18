@@ -15,8 +15,17 @@ const pendingPlayers = new Map<string, Player>()
 const restoreInProgressGuilds = new Set<string>()
 /** Bumped on intentional clear so in-flight debounced writes cannot resurrect deleted rows. */
 const sessionClearEpochByGuild = new Map<string, number>()
-/** Skips the next clearPlayerSession DB delete (failed ephemeral web player teardown). */
-const suppressSessionClearGuilds = new Set<string>()
+/**
+ * Bumped on intentional clear and each write claim. Stale post-upsert undo deletes only when
+ * this still matches the write's claimed generation — so a newer persist survives.
+ */
+const sessionPersistGenerationByGuild = new Map<string, number>()
+/**
+ * Operation-scoped suppress leases (refcounted per guild).
+ * Successful destroy: clearPlayerSession consumes one; failed destroy: that lease.release().
+ */
+const suppressLeaseCountByGuild = new Map<string, number>()
+let nextSuppressLeaseId = 1
 let persistenceShuttingDown = false
 
 function getSessionClearEpoch(guildId: string): number {
@@ -29,14 +38,73 @@ function bumpSessionClearEpoch(guildId: string): number {
     return next
 }
 
-/** Prevents playerDestroy from deleting a persisted snapshot after ephemeral player cleanup. */
-export function suppressNextPlayerSessionClear(guildId: string): void {
-    suppressSessionClearGuilds.add(guildId)
+function getSessionPersistGeneration(guildId: string): number {
+    return sessionPersistGenerationByGuild.get(guildId) ?? 0
 }
 
-/** Clears a pending suppress marker when destroyPlayer fails before playerDestroy runs. */
-export function clearSuppressNextPlayerSessionClear(guildId: string): void {
-    suppressSessionClearGuilds.delete(guildId)
+function bumpSessionPersistGeneration(guildId: string): number {
+    const next = getSessionPersistGeneration(guildId) + 1
+    sessionPersistGenerationByGuild.set(guildId, next)
+    return next
+}
+
+/**
+ * True when an in-flight upsert should delete its row after a clear invalidated it.
+ * False when a newer persist already claimed a higher generation (newer snapshot must survive).
+ */
+export function shouldUndoStaleSessionUpsert(
+    currentClearEpoch: number,
+    saveEpoch: number,
+    currentPersistGeneration: number,
+    writeGeneration: number
+): boolean {
+    return currentClearEpoch !== saveEpoch && currentPersistGeneration === writeGeneration
+}
+
+function getSuppressLeaseCount(guildId: string): number {
+    return suppressLeaseCountByGuild.get(guildId) ?? 0
+}
+
+function hasActiveSuppressLease(guildId: string): boolean {
+    return getSuppressLeaseCount(guildId) > 0
+}
+
+/** Decrements one suppress lease for this guild (no-op when none remain). */
+function releaseOneSuppressLease(guildId: string): void {
+    const count = getSuppressLeaseCount(guildId)
+    if (count <= 0) return
+    if (count === 1) suppressLeaseCountByGuild.delete(guildId)
+    else suppressLeaseCountByGuild.set(guildId, count - 1)
+}
+
+/** Lease that skips clearPlayerSession DB delete for one ephemeral destroy attempt. */
+export type PlayerSessionClearSuppressLease = {
+    readonly guildId: string
+    readonly id: number
+    /** Releases only this lease; safe to call more than once. */
+    release(): void
+}
+
+/**
+ * Acquires an operation-scoped suppress lease for ephemeral player teardown.
+ * Call `lease.release()` only when destroyPlayer rejects — a successful destroy is consumed
+ * inside clearPlayerSession (playerDestroy is not awaited by destroyPlayer).
+ */
+export function acquirePlayerSessionClearSuppressLease(
+    guildId: string
+): PlayerSessionClearSuppressLease {
+    const id = nextSuppressLeaseId++
+    suppressLeaseCountByGuild.set(guildId, getSuppressLeaseCount(guildId) + 1)
+    let released = false
+    return {
+        guildId,
+        id,
+        release() {
+            if (released) return
+            released = true
+            releaseOneSuppressLease(guildId)
+        },
+    }
 }
 
 /** Set during SIGINT/SIGTERM so playerDestroy does not wipe flushed session rows. */
@@ -88,7 +156,7 @@ function isRestoreInProgress(guildId: string): boolean {
 }
 
 /**
- * Pure guard used by clearPlayerSession: shutdown flush, mid-restore, and one-shot suppress.
+ * Pure guard used by clearPlayerSession: shutdown flush, mid-restore, and suppress leases.
  * Exported for regression tests.
  */
 export function shouldSkipPlayerSessionClearForState(
@@ -104,7 +172,7 @@ export function shouldSkipPlayerSessionClear(guildId: string): boolean {
     return shouldSkipPlayerSessionClearForState(
         persistenceShuttingDown,
         isRestoreInProgress(guildId),
-        suppressSessionClearGuilds.has(guildId)
+        hasActiveSuppressLease(guildId)
     )
 }
 
@@ -119,6 +187,9 @@ async function writePlayerSession(player: Player, saveEpoch: number): Promise<vo
     // good snapshot — only clearPlayerSession removes rows on intentional playerDestroy.
     if (!snapshot) return
 
+    // Claim a persist generation before awaiting so a newer write/clear can outrank this undo.
+    const writeGeneration = bumpSessionPersistGeneration(player.guildId)
+
     await upsertPlayerSession(
         player.guildId,
         voiceChannelId,
@@ -126,8 +197,16 @@ async function writePlayerSession(player: Player, saveEpoch: number): Promise<vo
         snapshot
     )
 
-    // clearPlayerSession may run while the upsert is in flight — undo a stale resurrection.
-    if (getSessionClearEpoch(player.guildId) !== saveEpoch) {
+    // clearPlayerSession may run while the upsert is in flight — undo only if this write is
+    // still the latest persist generation (a newer save must not be deleted).
+    if (
+        shouldUndoStaleSessionUpsert(
+            getSessionClearEpoch(player.guildId),
+            saveEpoch,
+            getSessionPersistGeneration(player.guildId),
+            writeGeneration
+        )
+    ) {
         await deletePlayerSession(player.guildId).catch(() => undefined)
     }
 }
@@ -203,19 +282,22 @@ export async function clearPlayerSession(guildId: string): Promise<void> {
     // Evaluate preserve/skip before bumping the clear epoch or cancelling pending saves.
     // Skipped clears (shutdown, restore, ephemeral suppress) must not invalidate in-flight
     // writes — the stale-resurrection undo in writePlayerSession would delete protected rows.
-    const suppressNextClear = suppressSessionClearGuilds.has(guildId)
+    const hasSuppressLease = hasActiveSuppressLease(guildId)
     if (
         shouldSkipPlayerSessionClearForState(
             persistenceShuttingDown,
             isRestoreInProgress(guildId),
-            suppressNextClear
+            hasSuppressLease
         )
     ) {
-        suppressSessionClearGuilds.delete(guildId)
+        // Successful ephemeral destroy: consume one lease (handlers release only on reject).
+        if (hasSuppressLease) releaseOneSuppressLease(guildId)
         return
     }
 
     bumpSessionClearEpoch(guildId)
+    // Invalidate in-flight write undos so they cannot delete a row rewritten after this clear.
+    bumpSessionPersistGeneration(guildId)
     const timer = pendingSaveTimers.get(guildId)
     if (timer) {
         clearTimeout(timer)

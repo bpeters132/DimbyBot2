@@ -15,10 +15,7 @@ import {
     restoreUpcomingQueue,
     snapshotUpcomingQueue,
 } from "../../util/playlistQueue.js"
-import {
-    clearSuppressNextPlayerSessionClear,
-    suppressNextPlayerSessionClear,
-} from "../../util/playerSessionPersistence.js"
+import { acquirePlayerSessionClearSuppressLease } from "../../util/playerSessionPersistence.js"
 
 export async function playerPlaylistPlayPOST(
     headers: Headers,
@@ -148,9 +145,10 @@ export async function playerPlaylistPlayPOST(
         if (resolved.length === 0) {
             const hasQueueContent = Boolean(player.queue.current) || player.queue.tracks.length > 0
             if (!hasQueueContent) {
-                suppressNextPlayerSessionClear(guildId)
+                const suppressLease = acquirePlayerSessionClearSuppressLease(guildId)
                 await client.lavalink.destroyPlayer(guildId).catch(() => {
-                    clearSuppressNextPlayerSessionClear(guildId)
+                    // Release only this attempt's lease; clearPlayerSession consumes on success.
+                    suppressLease.release()
                 })
             }
             return {
