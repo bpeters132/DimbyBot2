@@ -152,7 +152,7 @@ export async function searchAndEnqueue(
     }
 
     // Cover acquisition → search/enqueue so concurrent orphan cleanup cannot destroy mid-use.
-    const lifecycleReservation = acquireGuildPlayerLifecycleReservation(guildId)
+    const lifecycleReservation = await acquireGuildPlayerLifecycleReservation(guildId)
     try {
         if (textChannelId) {
             player.textChannelId = textChannelId

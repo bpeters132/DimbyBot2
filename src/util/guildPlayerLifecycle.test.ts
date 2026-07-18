@@ -9,9 +9,9 @@ import {
 } from "./guildPlayerQueueLock.js"
 
 describe("guild player lifecycle reservation", () => {
-    it("tracks concurrent reservations and releases independently", () => {
-        const a = acquireGuildPlayerLifecycleReservation("guild-life")
-        const b = acquireGuildPlayerLifecycleReservation("guild-life")
+    it("tracks concurrent reservations and releases independently", async () => {
+        const a = await acquireGuildPlayerLifecycleReservation("guild-life")
+        const b = await acquireGuildPlayerLifecycleReservation("guild-life")
         assert.equal(getGuildPlayerLifecycleReservationCount("guild-life"), 2)
         a.release()
         assert.equal(getGuildPlayerLifecycleReservationCount("guild-life"), 1)
@@ -27,8 +27,8 @@ describe("deferred orphan player cleanup", () => {
         let destroyed = false
         let hasContent = false
 
-        const creator = acquireGuildPlayerLifecycleReservation(guildId)
-        const other = acquireGuildPlayerLifecycleReservation(guildId)
+        const creator = await acquireGuildPlayerLifecycleReservation(guildId)
+        const other = await acquireGuildPlayerLifecycleReservation(guildId)
 
         // Creator fails while the other request still holds a reservation → defer, do not destroy yet.
         await tryDestroyOrphanGuildPlayer(guildId, {
@@ -56,8 +56,8 @@ describe("deferred orphan player cleanup", () => {
         let destroyed = false
         let hasContent = false
 
-        const creator = acquireGuildPlayerLifecycleReservation(guildId)
-        const other = acquireGuildPlayerLifecycleReservation(guildId)
+        const creator = await acquireGuildPlayerLifecycleReservation(guildId)
+        const other = await acquireGuildPlayerLifecycleReservation(guildId)
 
         await tryDestroyOrphanGuildPlayer(guildId, {
             hasQueueContent: () => hasContent,
@@ -73,5 +73,49 @@ describe("deferred orphan player cleanup", () => {
         await waitForPendingOrphanDestroyForTests(guildId)
         assert.equal(destroyed, false)
         assert.equal(hasPendingOrphanDestroyForTests(guildId), false)
+    })
+
+    it("blocks new reservations while destroyPlayer is in progress", async () => {
+        const guildId = "guild-orphan-serialize"
+        let releaseDestroy!: () => void
+        const destroyGate = new Promise<void>((resolve) => {
+            releaseDestroy = resolve
+        })
+        let destroyEntered = false
+        let reservedDuringDestroy = false
+
+        const holder = await acquireGuildPlayerLifecycleReservation(guildId)
+
+        const destroyP = tryDestroyOrphanGuildPlayer(guildId, {
+            hasQueueContent: () => false,
+            destroyPlayer: async () => {
+                destroyEntered = true
+                await destroyGate
+            },
+        })
+
+        while (!destroyEntered) {
+            await Promise.resolve()
+        }
+
+        const acquireP = acquireGuildPlayerLifecycleReservation(guildId).then((lease) => {
+            reservedDuringDestroy = true
+            return lease
+        })
+
+        await Promise.resolve()
+        await Promise.resolve()
+        assert.equal(reservedDuringDestroy, false)
+        // Holder still counts; acquire must not have granted yet while destroy holds the lock.
+        assert.equal(getGuildPlayerLifecycleReservationCount(guildId), 1)
+
+        releaseDestroy()
+        await destroyP
+        const next = await acquireP
+        assert.equal(reservedDuringDestroy, true)
+        assert.equal(getGuildPlayerLifecycleReservationCount(guildId), 2)
+        next.release()
+        holder.release()
+        await waitForPendingOrphanDestroyForTests(guildId)
     })
 })

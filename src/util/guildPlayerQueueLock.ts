@@ -19,31 +19,44 @@ export function withGuildPlayerQueueLock<T>(guildId: string, work: () => Promise
     return withGuildPlayerQueueChain(guildId, work)
 }
 
+function trackOrphanDestroyRun(guildId: string, run: Promise<void>): void {
+    pendingOrphanDestroyRunsByGuild.set(guildId, run)
+    void run.finally(() => {
+        if (pendingOrphanDestroyRunsByGuild.get(guildId) === run) {
+            pendingOrphanDestroyRunsByGuild.delete(guildId)
+        }
+    })
+}
+
 /**
  * Reserves the guild player for one request from acquisition through search/enqueue.
- * Orphan cleanup should skip destroy while more than one reservation is held.
+ * Serialized with orphan destroy under the guild queue lock so grants cannot race destruction.
  */
-export function acquireGuildPlayerLifecycleReservation(guildId: string): { release(): void } {
-    guildPlayerLifecycleReservations.set(
-        guildId,
-        (guildPlayerLifecycleReservations.get(guildId) ?? 0) + 1
-    )
-    let released = false
-    return {
-        release() {
-            if (released) return
-            released = true
-            const next = (guildPlayerLifecycleReservations.get(guildId) ?? 1) - 1
-            if (next <= 0) {
-                guildPlayerLifecycleReservations.delete(guildId)
-                // Creator cleanup may have deferred while we (or others) were still reserved.
-                const run = runPendingOrphanDestroy(guildId).catch(() => undefined)
-                pendingOrphanDestroyRunsByGuild.set(guildId, run)
-            } else {
-                guildPlayerLifecycleReservations.set(guildId, next)
-            }
-        },
-    }
+export async function acquireGuildPlayerLifecycleReservation(
+    guildId: string
+): Promise<{ release(): void }> {
+    return withGuildPlayerQueueLock(guildId, async () => {
+        guildPlayerLifecycleReservations.set(
+            guildId,
+            (guildPlayerLifecycleReservations.get(guildId) ?? 0) + 1
+        )
+        let released = false
+        return {
+            release() {
+                if (released) return
+                released = true
+                const next = (guildPlayerLifecycleReservations.get(guildId) ?? 1) - 1
+                if (next <= 0) {
+                    guildPlayerLifecycleReservations.delete(guildId)
+                    // Creator cleanup may have deferred while we (or others) were still reserved.
+                    const run = runPendingOrphanDestroy(guildId).catch(() => undefined)
+                    trackOrphanDestroyRun(guildId, run)
+                } else {
+                    guildPlayerLifecycleReservations.set(guildId, next)
+                }
+            },
+        }
+    })
 }
 
 /** Active lifecycle reservations for a guild (includes the calling request while it holds one). */
@@ -54,6 +67,7 @@ export function getGuildPlayerLifecycleReservationCount(guildId: string): number
 /**
  * Destroys an empty orphan player when safe. If other lifecycle reservations are held,
  * records a pending cleanup and retries under the queue lock when the count reaches zero.
+ * Destroy runs under the same lock as reservation grants, so acquire waits until it finishes.
  */
 export async function tryDestroyOrphanGuildPlayer(
     guildId: string,
