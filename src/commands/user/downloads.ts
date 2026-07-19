@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from "discord.js"
+import { PermissionFlagsBits, SlashCommandBuilder } from "discord.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import fs from "fs"
 import { promises as fsp } from "fs"
@@ -71,7 +71,7 @@ const data = new SlashCommandBuilder()
     .addSubcommand((subcommand) =>
         subcommand
             .setName("cleanup")
-            .setDescription("Remove old downloaded files")
+            .setDescription("Remove old downloaded files (requires Manage Server)")
             .addIntegerOption((option) =>
                 option
                     .setName("days")
@@ -229,6 +229,15 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         }
 
         if (subcommand === "cleanup") {
+            // Runtime check: DefaultMemberPermissions cannot be set per-subcommand, and list stays
+            // available to members. Cleanup deletes guild download files and must require Manage Guild.
+            if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+                return interaction.reply({
+                    ephemeral: true,
+                    content:
+                        "You need the **Manage Server** permission to clean up downloaded files.",
+                })
+            }
             const removeAll = interaction.options.getBoolean("all") || false
             const daysOpt = interaction.options.getInteger("days")
             const days = daysOpt === null ? 7 : daysOpt
