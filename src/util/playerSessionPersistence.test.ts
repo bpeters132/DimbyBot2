@@ -160,6 +160,37 @@ describe("shouldSkipPlayerSessionClear", () => {
     })
 })
 
+describe("clearPlayerSession suppress lease consumption", () => {
+    afterEach(() => {
+        setPlayerSessionPersistenceDbForTests(null)
+    })
+
+    it("consumes one suppress lease without deleting or bumping the clear epoch", async () => {
+        const guildId = "guild-suppress-consume"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        const epochBefore = getSessionClearEpochForTests(guildId)
+        acquirePlayerSessionClearSuppressLease(guildId)
+        await clearPlayerSession(guildId)
+
+        assert.deepEqual(events, [])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore)
+        assert.equal(shouldSkipPlayerSessionClear(guildId), false)
+
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, ["delete"])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
+    })
+})
+
 describe("shouldUndoStaleSessionUpsert", () => {
     it("undoes when clear invalidated the write and no newer persist claimed generation", () => {
         // saveEpoch 1, clear bumped to 2, write still owns generation 5

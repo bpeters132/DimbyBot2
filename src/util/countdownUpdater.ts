@@ -14,7 +14,11 @@ const UNRECOVERABLE_CODES = new Set([
     10008, // Unknown Message
 ])
 
-function isUnrecoverableError(error: unknown): boolean {
+/**
+ * True when a Discord fetch/edit failure should delete the countdown row.
+ * Permission and transient errors must return false so the next interval can retry.
+ */
+export function isUnrecoverableCountdownDiscordError(error: unknown): boolean {
     if (typeof error === "object" && error !== null && "code" in error) {
         const code = (error as { code: unknown }).code
         return typeof code === "number" && UNRECOVERABLE_CODES.has(code)
@@ -74,7 +78,7 @@ export async function updateAllCountdowns(client: BotClient): Promise<void> {
                 }
                 channel = fetched
             } catch (error: unknown) {
-                if (isUnrecoverableError(error)) {
+                if (isUnrecoverableCountdownDiscordError(error)) {
                     await removeCountdown(entry.id)
                 } else {
                     client.warn(
@@ -89,7 +93,7 @@ export async function updateAllCountdowns(client: BotClient): Promise<void> {
             try {
                 message = await channel.messages.fetch(entry.messageId)
             } catch (error: unknown) {
-                if (isUnrecoverableError(error)) {
+                if (isUnrecoverableCountdownDiscordError(error)) {
                     await removeCountdown(entry.id)
                 } else {
                     client.warn(
@@ -114,7 +118,7 @@ export async function updateAllCountdowns(client: BotClient): Promise<void> {
                 }
             }
         } catch (error: unknown) {
-            if (isUnrecoverableError(error)) {
+            if (isUnrecoverableCountdownDiscordError(error)) {
                 await removeCountdown(entry.id).catch((removeErr: unknown) =>
                     client.warn(
                         `[countdown] Failed to remove unrecoverable countdown #${entry.id}:`,
