@@ -36,7 +36,9 @@ import {
 } from "../util/rrqDisconnect.js"
 import { playerBroadcaster } from "../shared/websocket/PlayerBroadcaster.js"
 import { clearPlayerSession, schedulePlayerSessionSave } from "../util/playerSessionPersistence.js"
+import { tryDestroyOrphanGuildPlayer } from "../util/guildPlayerQueueLock.js"
 import { countHumanMembers } from "../util/voiceChannelMembers.js"
+import { playerHasQueueContent } from "../util/playlistQueue.js"
 
 /** Rate-limit `queueUpdate` websocket fan-out on Lavalink position ticks (pause/resume still immediate). */
 const lastQueueUpdateBroadcastAtMs = new Map<string, number>()
@@ -383,25 +385,42 @@ export default async (client: BotClient) => {
                     )
             }
 
-            // Standard player destroy timeout
+            // Standard player destroy timeout — reservation-aware so in-flight search/enqueue
+            // (web dashboard) is not torn down mid-request when the queue just ended.
             client.debug(
                 `[LavaMgrEvents] Setting standard timeout to destroy player ${player.guildId} after queue end.`
             )
+            const queueEndGuildId = player.guildId
             setTimeout(() => {
                 void (async () => {
                     client.debug(
-                        `[LavaMgrEvents] Executing standard queue end timeout check for player ${player.guildId}.`
+                        `[LavaMgrEvents] Executing standard queue end timeout check for player ${queueEndGuildId}.`
                     )
-                    if (player && player.queue.tracks.length === 0 && !player.queue.current) {
-                        client.debug(
-                            `[LavaMgrEvents] Player ${player.guildId} is idle, destroying after queue end timeout.`
-                        )
-                        await player.destroy()
-                    } else {
-                        client.debug(
-                            `[LavaMgrEvents] Player ${player.guildId} has new tracks or state changed, not destroying after standard timeout. Player: ${!!player}, Queue Size: ${player?.queue.tracks.length}, Current: ${!!player?.queue.current}`
-                        )
-                    }
+                    await tryDestroyOrphanGuildPlayer(
+                        queueEndGuildId,
+                        {
+                            hasQueueContent: () => {
+                                const live = client.lavalink.getPlayer(queueEndGuildId)
+                                // Already gone — treat as "has content" so we do not re-destroy.
+                                if (!live) return true
+                                return playerHasQueueContent(live)
+                            },
+                            destroyPlayer: async () => {
+                                const live = client.lavalink.getPlayer(queueEndGuildId)
+                                if (!live || playerHasQueueContent(live)) {
+                                    client.debug(
+                                        `[LavaMgrEvents] Player ${queueEndGuildId} has new tracks or state changed, not destroying after standard timeout.`
+                                    )
+                                    return
+                                }
+                                client.debug(
+                                    `[LavaMgrEvents] Player ${queueEndGuildId} is idle, destroying after queue end timeout.`
+                                )
+                                await live.destroy()
+                            },
+                        },
+                        0
+                    )
                 })()
             }, 5000)
         })
