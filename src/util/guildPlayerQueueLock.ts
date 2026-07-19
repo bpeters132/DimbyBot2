@@ -65,21 +65,26 @@ export function getGuildPlayerLifecycleReservationCount(guildId: string): number
 }
 
 /**
- * Destroys an empty orphan player when safe. If other lifecycle reservations are held,
+ * Destroys an empty orphan player when safe. If conflicting lifecycle reservations are held,
  * records a pending cleanup and retries under the queue lock when the count reaches zero.
  * Destroy runs under the same lock as reservation grants, so acquire waits until it finishes.
+ *
+ * @param reservedByCaller How many of the current reservation count belong to this caller
+ *   (1 for search/enqueue cleanup that still holds a lease; 0 for idle timers / non-reserved paths).
  */
 export async function tryDestroyOrphanGuildPlayer(
     guildId: string,
-    hooks: PendingOrphanDestroy
+    hooks: PendingOrphanDestroy,
+    reservedByCaller = 1
 ): Promise<void> {
+    const selfReservations = reservedByCaller > 0 ? reservedByCaller : 0
     await withGuildPlayerQueueLock(guildId, async () => {
         if (hooks.hasQueueContent()) {
             pendingOrphanDestroyByGuild.delete(guildId)
             return
         }
-        // Count includes the caller; >1 means another in-flight request still needs the player.
-        if (getGuildPlayerLifecycleReservationCount(guildId) > 1) {
+        // Defer while other in-flight requests still need this player.
+        if (getGuildPlayerLifecycleReservationCount(guildId) > selfReservations) {
             pendingOrphanDestroyByGuild.set(guildId, hooks)
             return
         }

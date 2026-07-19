@@ -143,17 +143,29 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
 
         await ensurePlayerConnected(client, player, voiceChannel)
 
-        const { resolved, failed } = await resolvePersistedTracks(player, tracksToRestore)
+        const { resolved, failed, transientFailures } = await resolvePersistedTracks(
+            player,
+            tracksToRestore
+        )
         if (failed > 0) {
             client.warn(
-                `[playerSession] restore for ${guildId}: ${failed}/${tracksToRestore.length} tracks failed to resolve`
+                `[playerSession] restore for ${guildId}: ${failed}/${tracksToRestore.length} tracks failed to resolve` +
+                    (transientFailures > 0 ? ` (${transientFailures} transient)` : "")
             )
         }
         if (resolved.length === 0) {
+            await player.destroy()
+            // Lavalink/source blips that throw during decode/search must not wipe the snapshot.
+            // Deterministic no-match (search returned nothing usable) still deletes.
+            if (transientFailures > 0) {
+                client.warn(
+                    `[playerSession] restore for ${guildId}: no tracks resolved due to transient failures; preserving session`
+                )
+                return
+            }
             client.warn(
                 `[playerSession] restore for ${guildId}: no tracks resolved; destroying player`
             )
-            await player.destroy()
             await deletePlayerSession(guildId)
             return
         }
