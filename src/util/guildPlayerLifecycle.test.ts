@@ -118,4 +118,30 @@ describe("deferred orphan player cleanup", () => {
         holder.release()
         await waitForPendingOrphanDestroyForTests(guildId)
     })
+
+    it("defers idle destroy when reservedByCaller is 0 and a reservation is held", async () => {
+        const guildId = "guild-orphan-idle-timer"
+        let destroyed = false
+
+        const inFlight = await acquireGuildPlayerLifecycleReservation(guildId)
+
+        // queueEnd-style idle teardown does not itself hold a reservation.
+        await tryDestroyOrphanGuildPlayer(
+            guildId,
+            {
+                hasQueueContent: () => false,
+                destroyPlayer: async () => {
+                    destroyed = true
+                },
+            },
+            0
+        )
+        assert.equal(destroyed, false)
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), true)
+
+        inFlight.release()
+        await waitForPendingOrphanDestroyForTests(guildId)
+        assert.equal(destroyed, true)
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), false)
+    })
 })

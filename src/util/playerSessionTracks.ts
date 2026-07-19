@@ -57,8 +57,9 @@ function trackMatchesStored(track: Track, stored: PersistedQueueTrack): boolean 
 async function resolvePersistedTrackAtIndex(
     player: Player,
     stored: PersistedQueueTrack
-): Promise<Track | null> {
+): Promise<{ track: Track | null; transientFailure: boolean }> {
     const requester = stored.requesterId ?? "session-restore"
+    let sawTransientFailure = false
 
     if (stored.encoded) {
         try {
@@ -67,9 +68,10 @@ async function resolvePersistedTrackAtIndex(
                 if (stored.requesterId) {
                     stampRequesterUserIdOnTracks([decoded], stored.requesterId)
                 }
-                return decoded
+                return { track: decoded, transientFailure: false }
             }
         } catch {
+            sawTransientFailure = true
             /* fall through to URI search */
         }
     }
@@ -82,32 +84,41 @@ async function resolvePersistedTrackAtIndex(
                 if (stored.requesterId) {
                     stampRequesterUserIdOnTracks([first], stored.requesterId)
                 }
-                return first
+                return { track: first, transientFailure: false }
             }
+            // Search completed but no usable match — permanent for this snapshot.
+            return { track: null, transientFailure: false }
         } catch {
-            /* unresolved */
+            return { track: null, transientFailure: true }
         }
     }
-    return null
+
+    // Encoded-only track whose decode threw, with no URI fallback.
+    return { track: null, transientFailure: sawTransientFailure }
 }
 
 /** Resolves persisted tracks via Lavalink (parallel, preserves order). */
 export async function resolvePersistedTracks(
     player: Player,
     storedTracks: PersistedQueueTrack[]
-): Promise<{ resolved: Track[]; failed: number }> {
+): Promise<{ resolved: Track[]; failed: number; transientFailures: number }> {
     if (storedTracks.length === 0) {
-        return { resolved: [], failed: 0 }
+        return { resolved: [], failed: 0, transientFailures: 0 }
     }
 
     const slots: (Track | null)[] = new Array(storedTracks.length).fill(null)
     let nextIndex = 0
+    let transientFailures = 0
 
     async function worker(): Promise<void> {
         while (true) {
             const i = nextIndex++
             if (i >= storedTracks.length) return
-            slots[i] = await resolvePersistedTrackAtIndex(player, storedTracks[i]!)
+            const outcome = await resolvePersistedTrackAtIndex(player, storedTracks[i]!)
+            slots[i] = outcome.track
+            if (!outcome.track && outcome.transientFailure) {
+                transientFailures += 1
+            }
         }
     }
 
@@ -118,5 +129,5 @@ export async function resolvePersistedTracks(
     for (const track of slots) {
         if (track) resolved.push(track)
     }
-    return { resolved, failed: storedTracks.length - resolved.length }
+    return { resolved, failed: storedTracks.length - resolved.length, transientFailures }
 }
