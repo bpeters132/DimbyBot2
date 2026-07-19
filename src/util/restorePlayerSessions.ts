@@ -24,7 +24,12 @@ const STALE_SESSION_DISCORD_CODES = new Set([
     10004, // Unknown Guild
 ])
 
-function isStaleSessionDiscordError(error: unknown): boolean {
+/**
+ * True when a Discord API failure means the persisted voice channel/guild is gone
+ * (safe to delete the session). Transient/network errors must return false so restore
+ * can retry later without wiping the queue snapshot.
+ */
+export function isStaleSessionDiscordError(error: unknown): boolean {
     const code = getDiscordErrorCode(error)
     return code !== undefined && STALE_SESSION_DISCORD_CODES.has(code)
 }
