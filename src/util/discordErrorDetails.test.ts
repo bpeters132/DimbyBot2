@@ -19,7 +19,7 @@ describe("getDiscordErrorCode", () => {
         assert.equal(getDiscordErrorCode({}), undefined)
         assert.equal(getDiscordErrorCode({ code: "EAI_AGAIN" }), undefined)
         assert.equal(getDiscordErrorCode({ code: Number.NaN }), undefined)
-        assert.equal(getDiscordErrorCode({ code: 12.5 }), undefined)
+        assert.equal(getDiscordErrorCode({ code: Number.POSITIVE_INFINITY }), undefined)
     })
 })
 

@@ -96,6 +96,9 @@ describe("downloadMetadataFileBelongsToGuild / entryMatchesGuild / keysForFile",
             composite,
             fileName,
         ])
-        assert.deepEqual(downloadMetadataKeysForFile({ [fileName]: { guildId: "x" } }, fileName, guildId), [])
+        assert.deepEqual(
+            downloadMetadataKeysForFile({ [fileName]: { guildId: "x" } }, fileName, guildId),
+            []
+        )
     })
 })
