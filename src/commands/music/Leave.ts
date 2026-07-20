@@ -2,6 +2,7 @@ import { SlashCommandBuilder, type Message } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
+import { memberMayControlPlayerVoice } from "../../util/sameVoiceChannel.js"
 
 const DELETE_REPLY_DELAY_MS = 1000 * 10
 const DELETE_REPLY_RETRY_MS = 2000
@@ -43,13 +44,13 @@ export default {
         const voiceChannel = member.voice.channel
         if (!voiceChannel) {
             client.debug("Leave command failed: User not in a voice channel")
-            return interaction.reply({ content: "Join a voice channel first!" })
+            return interaction.reply({
+                content: "Join a voice channel first!",
+                ephemeral: true,
+            })
         }
 
         client.debug(`User ${interaction.user.tag} is in voice channel ${voiceChannel.id}`)
-
-        await interaction.deferReply()
-        client.debug("Leave command deferred reply")
 
         const player = client.lavalink.players.get(guild.id)
 
@@ -61,6 +62,13 @@ export default {
             // Optional: Check if the bot *thinks* it's in a channel anyway (e.g., after a crash)
             const botVoiceState = guild.members.me?.voice
             if (botVoiceState?.channel) {
+                if (!memberMayControlPlayerVoice(botVoiceState.channel.id, voiceChannel.id)) {
+                    return interaction.reply({
+                        content: "You need to be in the same voice channel as the bot!",
+                        ephemeral: true,
+                    })
+                }
+                await interaction.deferReply()
                 client.debug(
                     `Bot is in voice channel ${botVoiceState.channel.id}. Attempting to leave.`
                 )
@@ -81,10 +89,23 @@ export default {
                 }
             } else {
                 client.debug("Bot is not in a voice channel. Replying 'nothing to leave'.")
-                await interaction.editReply("I'm not in a voice channel!")
+                await interaction.reply({
+                    content: "I'm not in a voice channel!",
+                    ephemeral: true,
+                })
             }
             return
         }
+
+        if (!memberMayControlPlayerVoice(player.voiceChannelId, voiceChannel.id)) {
+            return interaction.reply({
+                content: "You need to be in the same voice channel as the bot!",
+                ephemeral: true,
+            })
+        }
+
+        await interaction.deferReply()
+        client.debug("Leave command deferred reply")
 
         client.debug(
             `Found player for guild ${guild.id}. Connected: ${player.connected}, Playing: ${player.playing}`
