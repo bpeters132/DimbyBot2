@@ -25,6 +25,15 @@ const MAX_FILE_AGE_DAYS = 7
 // Maximum total size of downloads directory in MB (default fallback)
 const DEFAULT_MAX_DIR_SIZE_MB = 1000
 
+/** Wall-clock limit for a single yt-dlp run (live / very long media). */
+const DOWNLOAD_PROCESS_TIMEOUT_MS = 10 * 60 * 1000
+
+/**
+ * Rough upper bound on WAV output (~10 MiB/min for 16-bit 44.1kHz stereo).
+ * Used only for yt-dlp duration filtering before download starts.
+ */
+const APPROX_WAV_MIB_PER_MINUTE = 10
+
 /**
  * Resolves the configured downloads size limit for a guild.
  * @param {import('../../lib/BotClient.js').default} client The bot client instance.
@@ -38,6 +47,23 @@ function getMaxDirSizeMb(client: BotClient, guildId: string) {
     const parsed = Number.parseFloat(String(configured ?? ""))
     if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_MAX_DIR_SIZE_MB
     return parsed
+}
+
+/** Max accepted on-disk size for one download (guild quota, in bytes). */
+function getMaxDownloadBytes(maxDirSizeMb: number): number {
+    return Math.max(1, maxDirSizeMb) * 1024 * 1024
+}
+
+/**
+ * yt-dlp match-filter: reject live streams and media whose estimated WAV size
+ * would exceed the guild downloads quota.
+ */
+function buildYtDlpMatchFilter(maxDirSizeMb: number): string {
+    const maxDurationSec = Math.max(
+        60,
+        Math.floor((maxDirSizeMb / APPROX_WAV_MIB_PER_MINUTE) * 60)
+    )
+    return `!is_live & duration <= ${maxDurationSec}`
 }
 
 /**
@@ -368,6 +394,8 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
         // Download the video
         await updateReply("Downloading audio... This can take a moment.", true)
+        const maxDownloadBytes = getMaxDownloadBytes(maxDirSizeMb)
+        const matchFilter = buildYtDlpMatchFilter(maxDirSizeMb)
         let downloadProcess: ReturnType<typeof spawn>
         try {
             downloadProcess = spawn("yt-dlp", [
@@ -382,6 +410,11 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 "--newline",
                 "--print",
                 "after_move:filepath",
+                // Source media size cap (WAV output can still be larger; post-check below).
+                "--max-filesize",
+                `${maxDirSizeMb}M`,
+                "--match-filter",
+                matchFilter,
                 "-o",
                 `${downloadsDir}/${downloadFilePrefix}%(title)s.%(ext)s`,
             ])
@@ -400,6 +433,21 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             )
             return
         }
+
+        let timedOut = false
+        const killTimer = setTimeout(() => {
+            timedOut = true
+            client.error(
+                `[Download] yt-dlp exceeded ${DOWNLOAD_PROCESS_TIMEOUT_MS}ms; killing process`
+            )
+            try {
+                downloadProcess.kill("SIGKILL")
+            } catch (killErr: unknown) {
+                client.error("[Download] Failed to kill timed-out yt-dlp:", killErr)
+            }
+        }, DOWNLOAD_PROCESS_TIMEOUT_MS)
+        downloadProcess.on("close", () => clearTimeout(killTimer))
+        downloadProcess.on("error", () => clearTimeout(killTimer))
 
         downloadProcess.on("error", (err: Error) => {
             client.error("[Download] Failed to start yt-dlp", err)
@@ -461,10 +509,24 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
         downloadProcess.on("close", async (code: number | null) => {
             try {
+                if (timedOut) {
+                    await interaction
+                        .editReply({
+                            content:
+                                "Download timed out. Try a shorter video, or contact an admin if this keeps happening.",
+                        })
+                        .catch((e: unknown) =>
+                            client.error("Failed to edit reply on download timeout", e)
+                        )
+                    return
+                }
                 if (code !== 0) {
                     client.error(`[Download] yt-dlp process exited with code ${code}`)
                     await interaction
-                        .editReply({ content: "Error downloading video. Please try again later." })
+                        .editReply({
+                            content:
+                                "Error downloading video. It may be too long, live, or otherwise rejected by size limits. Try a shorter YouTube URL.",
+                        })
                         .catch((e: unknown) =>
                             client.error("Failed to edit reply on download error", e)
                         )
@@ -522,6 +584,43 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                         )
                         .catch((e: unknown) =>
                             client.error("Failed to edit reply on file not found", e)
+                        )
+                    return
+                }
+
+                // Refuse to retain a single file larger than the guild quota. Previously the new
+                // file was "protected" during size cleanup, so an oversized WAV wiped other guild
+                // downloads while remaining on disk above the configured limit.
+                let downloadedStats: fs.Stats
+                try {
+                    downloadedStats = fs.statSync(filePath)
+                } catch (statErr: unknown) {
+                    client.error("[Download] Failed to stat downloaded file:", statErr)
+                    await interaction
+                        .editReply({
+                            content:
+                                "Download finished but the file could not be verified. Please try again.",
+                        })
+                        .catch((e: unknown) =>
+                            client.error("Failed to edit reply on download stat failure", e)
+                        )
+                    return
+                }
+                if (downloadedStats.size > maxDownloadBytes) {
+                    client.error(
+                        `[Download] Rejecting oversized file ${downloadedFile} (${downloadedStats.size} bytes > ${maxDownloadBytes} byte guild limit)`
+                    )
+                    try {
+                        fs.unlinkSync(filePath)
+                    } catch (unlinkErr: unknown) {
+                        client.error("[Download] Failed to unlink oversized download:", unlinkErr)
+                    }
+                    await interaction
+                        .editReply({
+                            content: `Download rejected: the resulting file exceeds this server's download limit (${maxDirSizeMb}MB). Try a shorter video.`,
+                        })
+                        .catch((e: unknown) =>
+                            client.error("Failed to edit reply on oversized download", e)
                         )
                     return
                 }
