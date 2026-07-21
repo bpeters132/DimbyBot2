@@ -43,6 +43,13 @@ export default {
             return interaction.reply({ content: "Nothing is playing.", ephemeral: true })
         }
 
+        if (player.voiceChannelId && player.voiceChannelId !== voiceChannel.id) {
+            return interaction.reply({
+                content: "You need to be in the same voice channel as the bot!",
+                ephemeral: true,
+            })
+        }
+
         const current = player.queue.current
 
         const durationMs = current.info.duration ?? 0
