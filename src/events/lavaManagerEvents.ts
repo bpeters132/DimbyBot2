@@ -35,7 +35,11 @@ import {
     userHasQueuedTracks,
 } from "../util/rrqDisconnect.js"
 import { playerBroadcaster } from "../shared/websocket/PlayerBroadcaster.js"
-import { clearPlayerSession, schedulePlayerSessionSave } from "../util/playerSessionPersistence.js"
+import {
+    clearPlayerSession,
+    schedulePlayerSessionSave,
+    shouldClearPlayerSessionOnDestroy,
+} from "../util/playerSessionPersistence.js"
 import { countHumanMembers } from "../util/voiceChannelMembers.js"
 
 /** Rate-limit `queueUpdate` websocket fan-out on Lavalink position ticks (pause/resume still immediate). */
@@ -116,12 +120,18 @@ export default async (client: BotClient) => {
             )
             lastQueueUpdateBroadcastAtMs.delete(player.guildId)
             player.set(DASHBOARD_REQUESTER_KEY, undefined)
-            void clearPlayerSession(player.guildId).catch((err: unknown) => {
-                const msg = err instanceof Error ? err.message : String(err)
-                client.error(
-                    `[LavaMgrEvents] clearPlayerSession failed (guildId=${player.guildId}): ${msg}`
+            if (shouldClearPlayerSessionOnDestroy(reason)) {
+                void clearPlayerSession(player.guildId).catch((err: unknown) => {
+                    const msg = err instanceof Error ? err.message : String(err)
+                    client.error(
+                        `[LavaMgrEvents] clearPlayerSession failed (guildId=${player.guildId}): ${msg}`
+                    )
+                })
+            } else {
+                client.debug(
+                    `[LavaMgrEvents] Preserving player session for guild ${player.guildId} after destroy reason: ${String(reason)}`
                 )
-            })
+            }
             scheduleControlMessageUpdate(client, player.guildId, "playerDestroy")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, null, "playerDestroy")
         })
