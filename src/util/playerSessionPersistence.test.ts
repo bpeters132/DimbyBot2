@@ -10,6 +10,7 @@ import {
     setPlayerSessionPersistenceDbForTests,
     shouldSkipPlayerSessionClear,
     shouldSkipPlayerSessionClearForState,
+    shouldClearPlayerSessionOnDestroy,
     shouldUndoStaleSessionUpsert,
     snapshotFromPlayer,
     writePlayerSessionForTests,
