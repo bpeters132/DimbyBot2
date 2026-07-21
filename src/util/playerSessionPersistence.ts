@@ -327,6 +327,35 @@ export async function flushAllPlayerSessionSaves(): Promise<void> {
     }
 }
 
+/**
+ * Library / infrastructure destroy reasons that must not wipe persisted sessions.
+ * Intentional app destroys (`player.destroy()` with no reason, alone-in-VC, /stop, etc.)
+ * still clear so queues do not resurrect after an explicit teardown.
+ */
+const PRESERVE_SESSION_DESTROY_REASONS = new Set([
+    "Disconnected",
+    "PlayerReconnectFail",
+    "LavalinkNoVoice",
+    "NodeDestroy",
+    "NodeDeleted",
+    "NodeReconnectFail",
+    "DisconnectAllNodes",
+    "ReconnectAllNodes",
+    "PlayerChangeNodeFail",
+    "PlayerChangeNodeFailNoEligibleNode",
+    "TrackErrorMaxTracksErroredPerTime",
+    "TrackStuckMaxTracksErroredPerTime",
+])
+
+/**
+ * Whether `playerDestroy` should delete the DB session for this destroy reason.
+ * Non-string reasons (typical app `player.destroy()`) clear; known infra reasons preserve.
+ */
+export function shouldClearPlayerSessionOnDestroy(reason: unknown): boolean {
+    if (typeof reason !== "string" || reason.length === 0) return true
+    return !PRESERVE_SESSION_DESTROY_REASONS.has(reason)
+}
+
 /** Removes a persisted session row (intentional destroy or stale cleanup). */
 export async function clearPlayerSession(guildId: string): Promise<void> {
     // Evaluate preserve/skip before bumping the clear epoch or cancelling pending saves.

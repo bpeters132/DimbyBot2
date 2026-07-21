@@ -408,6 +408,19 @@ export default function createLavalinkManager(client: BotClient): LavalinkManage
             fallbackSearchEngine: "youtube",
         },
         playerOptions: {
+            // Default destroyPlayer:true wipes persisted sessions on Discord voice drops
+            // (admin Disconnect, voice-server blips). Reconnect instead; failed reconnect
+            // still destroys with PlayerReconnectFail, which we preserve in playerDestroy.
+            onDisconnect: {
+                destroyPlayer: false,
+                autoReconnect: true,
+            },
+            // Default (3 errors / 35s) destroys the whole player before our trackError
+            // handler can skip — clearing the queue and session. threshold 0 disables.
+            maxErrorsPerTime: {
+                threshold: 0,
+                maxAmount: 0,
+            },
             onEmptyQueue: {
                 autoPlayFunction: async (player: Player, endedTrack: Track | undefined) => {
                     try {
