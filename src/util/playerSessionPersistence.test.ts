@@ -121,6 +121,44 @@ describe("snapshotFromPlayer", () => {
     })
 })
 
+describe("shouldClearPlayerSessionOnDestroy", () => {
+    it("clears for intentional app destroys (undefined / empty reason)", () => {
+        assert.equal(shouldClearPlayerSessionOnDestroy(undefined), true)
+        assert.equal(shouldClearPlayerSessionOnDestroy(null), true)
+        assert.equal(shouldClearPlayerSessionOnDestroy(""), true)
+        assert.equal(shouldClearPlayerSessionOnDestroy("custom leave"), true)
+    })
+
+    it("preserves sessions for Discord disconnect and reconnect failure", () => {
+        assert.equal(shouldClearPlayerSessionOnDestroy("Disconnected"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("PlayerReconnectFail"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("LavalinkNoVoice"), false)
+    })
+
+    it("preserves sessions for node / infra teardown reasons", () => {
+        assert.equal(shouldClearPlayerSessionOnDestroy("NodeDestroy"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("NodeDeleted"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("NodeReconnectFail"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("DisconnectAllNodes"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("ReconnectAllNodes"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("PlayerChangeNodeFail"), false)
+        assert.equal(
+            shouldClearPlayerSessionOnDestroy("PlayerChangeNodeFailNoEligibleNode"),
+            false
+        )
+    })
+
+    it("preserves sessions for library max-errors auto-destroy", () => {
+        assert.equal(shouldClearPlayerSessionOnDestroy("TrackErrorMaxTracksErroredPerTime"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("TrackStuckMaxTracksErroredPerTime"), false)
+    })
+
+    it("still clears when the voice channel itself is deleted", () => {
+        assert.equal(shouldClearPlayerSessionOnDestroy("ChannelDeleted"), true)
+        assert.equal(shouldClearPlayerSessionOnDestroy("QueueEmpty"), true)
+    })
+})
+
 describe("shouldSkipPlayerSessionClear", () => {
     afterEach(() => {
         clearPlayerSessionRestoreInProgress("guild-restore")
