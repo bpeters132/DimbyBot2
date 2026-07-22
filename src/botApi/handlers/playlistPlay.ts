@@ -8,13 +8,10 @@ import { toPlayerStateResponse } from "../../shared/player-state.js"
 import { getPlaylistById } from "../../repositories/playlistRepository.js"
 import { searchAndEnqueue } from "./searchAndEnqueue.js"
 import {
-    clearUpcomingQueue,
-    enqueueResolvedPlaylistTracks,
     type EnqueuePlaylistResult,
     playerHasQueueContent,
+    replaceUpcomingWithResolvedPlaylistTracks,
     resolveStoredPlaylistTracks,
-    restoreUpcomingQueue,
-    snapshotUpcomingQueue,
 } from "../../util/playlistQueue.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { acquirePlayerSessionClearSuppressLease } from "../../util/playerSessionPersistence.js"
@@ -167,32 +164,14 @@ export async function playerPlaylistPlayPOST(
             }
         }
 
-        const savedUpcoming = snapshotUpcomingQueue(player)
-        let enqueue: EnqueuePlaylistResult
-        try {
-            await clearUpcomingQueue(player)
-            enqueue = await enqueueResolvedPlaylistTracks(
-                player,
-                resolved,
-                requester.requesterId,
-                shuffle
-            )
-        } catch (enqueueErr: unknown) {
-            try {
-                await restoreUpcomingQueue(player, savedUpcoming)
-            } catch (restoreErr: unknown) {
-                const restoreMessage =
-                    restoreErr instanceof Error ? restoreErr.message : String(restoreErr)
-                console.error(
-                    "[playerPlaylistPlayPOST] failed to restore queue after enqueue error",
-                    {
-                        guildId,
-                        restoreMessage,
-                    }
-                )
-            }
-            throw enqueueErr
-        }
+        // Clear + enqueue must share one guild lock so a concurrent queue POST cannot
+        // succeed then be wiped by clearUpcoming between unlocked clear and locked add.
+        const enqueue: EnqueuePlaylistResult = await replaceUpcomingWithResolvedPlaylistTracks(
+            player,
+            resolved,
+            requester.requesterId,
+            shuffle
+        )
 
         const state = await toPlayerStateResponse(guildId, requester.requesterId, player)
 

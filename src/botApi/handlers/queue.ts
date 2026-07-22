@@ -8,6 +8,7 @@ import { toQueueResponse } from "../../shared/player-state.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { searchAndEnqueue } from "./searchAndEnqueue.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
+import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 
 const MAX_QUEUE_PAGE_LIMIT = 100
 
@@ -124,8 +125,15 @@ export async function queueDELETE(
     const player = getBotClient().lavalink.getPlayer(guildId)
     try {
         if (player) {
-            await player.queue.splice(0, player.queue.tracks.length)
-            schedulePlayerSessionSave(player)
+            // Serialize with searchAndEnqueue / playlist replace / reorder so clear cannot
+            // interleave with a remove+insert reorder (resurrecting a cleared track).
+            await withGuildPlayerQueueLock(guildId, async () => {
+                const size = player.queue.tracks.length
+                if (size > 0) {
+                    await player.queue.splice(0, size)
+                }
+                schedulePlayerSessionSave(player)
+            })
             playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
         }
         return {
