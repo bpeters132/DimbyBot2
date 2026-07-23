@@ -565,6 +565,24 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     )
                 }
 
+                const savedBaseName = downloadedFile.replace(/\.wav$/i, "")
+
+                // Auto-play only from the bot's current voice channel. Otherwise Play Local /
+                // ensurePlayerConnected would destroy the active session and move the bot.
+                const existingPlayer = client.lavalink.getPlayer(guildId)
+                const botVoiceChannelId = guild.members.me?.voice.channel?.id ?? null
+                const playerVoiceChannelId = existingPlayer?.voiceChannelId ?? null
+                const occupiedVoiceChannelId = playerVoiceChannelId || botVoiceChannelId
+                if (occupiedVoiceChannelId && occupiedVoiceChannelId !== voiceChannel.id) {
+                    await interaction.editReply({
+                        content:
+                            `Saved as **${savedBaseName}**.\n` +
+                            `You need to be in the same voice channel as the bot to auto-play.\n` +
+                            `Use \`/play ${savedBaseName}\` from that channel when ready.`,
+                    })
+                    return
+                }
+
                 // Auto-play logic using handleQueryAndPlay
                 try {
                     await updateReply("Attempting to play the downloaded track...", true)
@@ -588,6 +606,17 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     if (!player) {
                         await interaction.editReply({
                             content: "Could not start the music player.",
+                        })
+                        return
+                    }
+
+                    // Re-check after createPlayer: refuse to move an already-bound player.
+                    if (player.voiceChannelId && player.voiceChannelId !== voiceChannel.id) {
+                        await interaction.editReply({
+                            content:
+                                `Saved as **${savedBaseName}**.\n` +
+                                `You need to be in the same voice channel as the bot to auto-play.\n` +
+                                `Use \`/play ${savedBaseName}\` from that channel when ready.`,
                         })
                         return
                     }
