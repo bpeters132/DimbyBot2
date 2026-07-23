@@ -37,6 +37,7 @@ import {
 import { playerBroadcaster } from "../shared/websocket/PlayerBroadcaster.js"
 import { clearPlayerSession, schedulePlayerSessionSave } from "../util/playerSessionPersistence.js"
 import { countHumanMembers } from "../util/voiceChannelMembers.js"
+import { skipCurrentTrack } from "../util/skipCurrentTrack.js"
 
 /** Rate-limit `queueUpdate` websocket fan-out on Lavalink position ticks (pause/resume still immediate). */
 const lastQueueUpdateBroadcastAtMs = new Map<string, number>()
@@ -263,7 +264,15 @@ export default async (client: BotClient) => {
             client.debug(
                 `[LavaMgrEvents] Attempting to skip stuck track in guild ${player.guildId}.`
             )
-            await player.skip()
+            try {
+                // Default skip() throws when upcoming queue is empty (e.g. last/autoplay track).
+                await skipCurrentTrack(player)
+            } catch (e: unknown) {
+                client.error(
+                    `[LavaMgrEvents] Failed to skip stuck track in guild ${player.guildId}:`,
+                    e
+                )
+            }
         })
         .on(
             "trackError",
