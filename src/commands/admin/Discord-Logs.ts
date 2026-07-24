@@ -134,7 +134,9 @@ function formatConfig(cfg: GuildDiscordLogSettings): string {
 export default {
     data: new SlashCommandBuilder()
         .setName("discord-logs")
-        .setDescription("Configure Discord channels for bot log forwarding in this server.")
+        .setDescription(
+            "Configure Discord channels for guild-scoped bot log forwarding in this server."
+        )
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
         .setDMPermission(false)
         .addSubcommand((sub) =>
