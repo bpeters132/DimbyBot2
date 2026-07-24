@@ -3,7 +3,7 @@ import type { PlaylistTrackData } from "../types/index.js"
 import { thumbnailFromLavalinkTrack } from "./trackThumbnail.js"
 import {
     isRRQActive,
-    rebalancePlayerQueueRoundRobin,
+    rebalancePlayerQueueRoundRobinAssumingLock,
     stampRequesterUserIdOnTracks,
 } from "./rrqDisconnect.js"
 import { startPlaybackIfNeeded } from "./musicManager.js"
@@ -129,7 +129,8 @@ export async function enqueueResolvedPlaylistTracks(
         stampRequesterUserIdOnTracks(toQueue, requesterId)
         player.queue.add(toQueue)
         if (isRRQActive(player)) {
-            await rebalancePlayerQueueRoundRobin(player)
+            // Already holding the guild queue lock — do not re-enter via rebalancePlayerQueueRoundRobin.
+            await rebalancePlayerQueueRoundRobinAssumingLock(player)
         }
         let playbackStarted = false
         let playbackError: string | undefined

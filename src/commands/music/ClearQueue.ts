@@ -2,6 +2,8 @@ import { SlashCommandBuilder } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
+import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
+import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -80,14 +82,25 @@ export default {
         }
 
         try {
-            const queueSize = player.queue.tracks.length
-            client.debug(
-                `[ClearQueue] Clearing queue for guild ${guild.id}. Current size: ${queueSize}`
-            )
+            const cleared = await withGuildPlayerQueueLock(guild.id, async () => {
+                const queueSize = player.queue.tracks.length
+                if (queueSize === 0) return 0
+                client.debug(
+                    `[ClearQueue] Clearing queue for guild ${guild.id}. Current size: ${queueSize}`
+                )
+                await player.queue.splice(0, queueSize)
+                schedulePlayerSessionSave(player)
+                return queueSize
+            })
 
-            await player.queue.splice(0, queueSize)
+            if (cleared === 0) {
+                return interaction.reply({
+                    content: "The queue is already empty.",
+                    ephemeral: true,
+                })
+            }
 
-            await interaction.reply({ content: `Cleared ${queueSize} tracks from the queue.` })
+            await interaction.reply({ content: `Cleared ${cleared} tracks from the queue.` })
             client.debug(`[ClearQueue] Successfully cleared queue for guild ${guild.id}`)
         } catch (error) {
             client.error("[ClearQueue] Error clearing the queue:", error)
