@@ -188,7 +188,10 @@ describe("fingerprints and recent history", () => {
         rememberAutoplayPlayed(player, info({ author: "Adele", title: "Hello" }))
         rememberAutoplayPlayed(player, info({ author: "Adele", title: "Hello (Lyrics)" }))
         assert.equal(
-            isAutoplayRecentlyPlayed(player, info({ author: "Adele", title: "Hello Official Audio" })),
+            isAutoplayRecentlyPlayed(
+                player,
+                info({ author: "Adele", title: "Hello Official Audio" })
+            ),
             true
         )
         assert.equal(
@@ -201,11 +204,20 @@ describe("fingerprints and recent history", () => {
         }
         const recent = player.get("autoplayRecentSongs") as string[]
         assert.equal(recent.length, AUTOPLAY_RECENT_SONG_CAP)
-        assert.equal(isAutoplayRecentlyPlayed(player, info({ author: "Adele", title: "Hello" })), false)
+        assert.equal(
+            isAutoplayRecentlyPlayed(player, info({ author: "Adele", title: "Hello" })),
+            false
+        )
 
         clearAutoplayRecent(player)
         assert.equal(
-            isAutoplayRecentlyPlayed(player, info({ author: `Artist${AUTOPLAY_RECENT_SONG_CAP + 4}`, title: `Song ${AUTOPLAY_RECENT_SONG_CAP + 4}` })),
+            isAutoplayRecentlyPlayed(
+                player,
+                info({
+                    author: `Artist${AUTOPLAY_RECENT_SONG_CAP + 4}`,
+                    title: `Song ${AUTOPLAY_RECENT_SONG_CAP + 4}`,
+                })
+            ),
             false
         )
     })

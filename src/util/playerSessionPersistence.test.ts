@@ -142,10 +142,7 @@ describe("shouldClearPlayerSessionOnDestroy", () => {
         assert.equal(shouldClearPlayerSessionOnDestroy("DisconnectAllNodes"), false)
         assert.equal(shouldClearPlayerSessionOnDestroy("ReconnectAllNodes"), false)
         assert.equal(shouldClearPlayerSessionOnDestroy("PlayerChangeNodeFail"), false)
-        assert.equal(
-            shouldClearPlayerSessionOnDestroy("PlayerChangeNodeFailNoEligibleNode"),
-            false
-        )
+        assert.equal(shouldClearPlayerSessionOnDestroy("PlayerChangeNodeFailNoEligibleNode"), false)
     })
 
     it("preserves sessions for library max-errors auto-destroy", () => {
