@@ -4,9 +4,11 @@ import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import {
     isRRQActive,
-    rebalancePlayerQueueRoundRobin,
+    rebalancePlayerQueueRoundRobinAssumingLock,
     stampRequesterUserIdOnTracks,
 } from "../../util/rrqDisconnect.js"
+import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
+import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -70,10 +72,13 @@ export default {
 
         const track = res.tracks[0]
         stampRequesterUserIdOnTracks([track], interaction.user.id)
-        player.queue.add(track, 0)
-        if (isRRQActive(player)) {
-            await rebalancePlayerQueueRoundRobin(player)
-        }
+        await withGuildPlayerQueueLock(guild.id, async () => {
+            player.queue.add(track, 0)
+            if (isRRQActive(player)) {
+                await rebalancePlayerQueueRoundRobinAssumingLock(player)
+            }
+            schedulePlayerSessionSave(player)
+        })
         return interaction.editReply(
             `Added [${track.info.title}](${track.info.uri}) to the top of the queue.`
         )
