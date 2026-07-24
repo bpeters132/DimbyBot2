@@ -147,11 +147,7 @@ describe("playlist replace clear+add must share one guild lock", () => {
 describe("queue clear vs reorder under guild lock", () => {
     it("prevents clear from interleaving between reorder remove and insert", async () => {
         const guildId = "guild-reorder-clear-race"
-        const player = mockMutablePlayer(guildId, [
-            mockTrack("a"),
-            mockTrack("b"),
-            mockTrack("c"),
-        ])
+        const player = mockMutablePlayer(guildId, [mockTrack("a"), mockTrack("b"), mockTrack("c")])
         const events: string[] = []
         let releaseReorder!: () => void
         const reorderGate = new Promise<void>((resolve) => {

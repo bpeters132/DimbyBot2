@@ -50,10 +50,7 @@ describe("countHumanMembers", () => {
             ),
             0
         )
-        assert.equal(
-            countHumanMembers(mockVoiceChannel({ channelId: "vc-1", voiceStates: [] })),
-            0
-        )
+        assert.equal(countHumanMembers(mockVoiceChannel({ channelId: "vc-1", voiceStates: [] })), 0)
     })
 
     it("does not rely on GuildMember cache (voiceStates remain authoritative)", () => {

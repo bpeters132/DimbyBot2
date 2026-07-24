@@ -231,9 +231,7 @@ describe("invalidatePermissionCache", () => {
     it("clears cached voice-gated resolutions so later reads recompute", async () => {
         const guildId = "guild-cache"
         const ownerId = "owner-cache"
-        const voiceStates = new Map<string, MockVoiceState>([
-            [ownerId, { channelId: "vc-1" }],
-        ])
+        const voiceStates = new Map<string, MockVoiceState>([[ownerId, { channelId: "vc-1" }]])
         const client = mockPermissionClient({
             guildId,
             ownerId,
@@ -247,7 +245,11 @@ describe("invalidatePermissionCache", () => {
 
         voiceStates.set(ownerId, { channelId: "vc-other" })
         const stale = await resolveUserPermissions(client, guildId, ownerId)
-        assert.equal(stale.inVoiceWithBot, true, "TTL cache should still serve pre-move voice state")
+        assert.equal(
+            stale.inVoiceWithBot,
+            true,
+            "TTL cache should still serve pre-move voice state"
+        )
 
         invalidatePermissionCache(guildId)
         const refreshed = await resolveUserPermissions(client, guildId, ownerId)

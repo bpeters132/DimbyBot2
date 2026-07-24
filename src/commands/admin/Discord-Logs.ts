@@ -82,10 +82,7 @@ function storeWithGuildRow(
 }
 
 /** Guild keys removed from the store map (explicit DB deletes — not inferred from stale snapshots). */
-function guildIdsRemovedFromStore(
-    before: GuildSettingsStore,
-    after: GuildSettingsStore
-): string[] {
+function guildIdsRemovedFromStore(before: GuildSettingsStore, after: GuildSettingsStore): string[] {
     return Object.keys(before).filter((id) => !(id in after))
 }
 

@@ -47,7 +47,10 @@ describe("logMessageBelongsToGuild", () => {
     })
 
     it("rejects process-wide logs with no guild id (prevents cross-tenant fan-out)", () => {
-        assert.equal(logMessageBelongsToGuild("[Database] Database connection verified.", guildA), false)
+        assert.equal(
+            logMessageBelongsToGuild("[Database] Database connection verified.", guildA),
+            false
+        )
         assert.equal(logMessageBelongsToGuild("Lavalink Node main CONNECTED", guildA), false)
     })
 

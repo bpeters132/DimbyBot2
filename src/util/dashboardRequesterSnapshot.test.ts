@@ -30,7 +30,12 @@ describe("snapshotFromRequester", () => {
             { id: "1", username: "Display" }
         )
         assert.deepEqual(
-            snapshotFromRequester({ id: "2", globalName: "   ", username: " login ", displayName: "nick" }),
+            snapshotFromRequester({
+                id: "2",
+                globalName: "   ",
+                username: " login ",
+                displayName: "nick",
+            }),
             { id: "2", username: "login" }
         )
         assert.deepEqual(
