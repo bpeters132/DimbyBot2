@@ -21,6 +21,9 @@ const MAX_EMBED_DESC = 3900
 
 const TRUNCATE_SUFFIX = "\n… (truncated)"
 
+/** Discord snowflake shape used to scope forwarded log lines to a guild. */
+const DISCORD_SNOWFLAKE_RE = /^\d{17,19}$/
+
 /** Max queued Discord forwards; oldest entries are dropped when full. */
 const DISCORD_LOG_FORWARD_QUEUE_CAP = 200
 
@@ -105,8 +108,23 @@ function truncateForDiscord(text: string): string {
 }
 
 /**
+ * Whether a process log line should be forwarded to a guild's Discord log channel.
+ * Requires an explicit guild snowflake in the message so one server cannot receive
+ * other tenants' operational logs (queries, URLs, paths, user tags, error stacks).
+ */
+export function logMessageBelongsToGuild(message: string, guildId: string): boolean {
+    if (!guildId || !DISCORD_SNOWFLAKE_RE.test(guildId)) {
+        return false
+    }
+    // Word-ish boundary: snowflakes are digits; avoid matching a longer digit run.
+    const re = new RegExp(`(?<!\\d)${guildId}(?!\\d)`)
+    return re.test(message)
+}
+
+/**
  * Sends a log line to every guild that configured Discord logging for this level.
  * Skips guilds where the channel is missing or the bot lacks permission.
+ * Only forwards lines that reference that guild's id (cross-tenant isolation).
  */
 export async function forwardLogToDiscordChannels(
     client: BotClient,
@@ -119,6 +137,9 @@ export async function forwardLogToDiscordChannels(
     for (const [guildId, guildSettings] of Object.entries(settings)) {
         const cfg = guildSettings.discordLog
         if (!cfg) {
+            continue
+        }
+        if (!logMessageBelongsToGuild(message, guildId)) {
             continue
         }
         if (!discordLogLevelAllowed(cfg, level)) {
