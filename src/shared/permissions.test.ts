@@ -21,6 +21,9 @@ function mockLavalinkPlayer(voiceChannelId: string | null, guildId = "guild-1") 
     }
 }
 
+/** Duck-typed client accepted by permission helpers (avoids full discord.js GuildMemberManager). */
+type MockPermissionClient = NonNullable<Parameters<typeof resolveOauthGuildPermissionFallback>[0]>
+
 function mockPermissionClient(opts: {
     guildId: string
     ownerId?: string
@@ -29,7 +32,7 @@ function mockPermissionClient(opts: {
     playerVoiceChannelId?: string | null
     meVoiceChannelId?: string | null
     memberFetch?: (userId: string) => Promise<unknown>
-}) {
+}): MockPermissionClient {
     const voiceStates = opts.voiceStates ?? new Map<string, MockVoiceState>()
     return {
         guilds: {
@@ -61,7 +64,7 @@ function mockPermissionClient(opts: {
                 return mockLavalinkPlayer(opts.playerVoiceChannelId, opts.guildId)
             },
         },
-    }
+    } as unknown as MockPermissionClient
 }
 
 afterEach(() => {
