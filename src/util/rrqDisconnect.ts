@@ -1,6 +1,7 @@
 import type { Player, Track, UnresolvedTrack } from "lavalink-client"
 import type { RRQDisconnectedUsersMap } from "../types/index.js"
-import { createGuildAsyncChain } from "./guildAsyncChain.js"
+import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
+import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
 
 const RRQ_DISCONNECTED_USERS_KEY = "rrqDisconnectedUsers"
 const RRQ_ENABLED_KEY = "rrqEnabled"
@@ -89,8 +90,11 @@ export function roundRobinReorderTracks(
     return result
 }
 
-/** Core reorder; must run inside enqueueRrqMutation (or call exported rebalancePlayerQueueRoundRobin). */
-async function rebalancePlayerQueueRoundRobinImpl(player: Player): Promise<void> {
+/**
+ * Core reorder. Callers must already hold {@link withGuildPlayerQueueLock} for this guild
+ * (or use {@link rebalancePlayerQueueRoundRobin}, which acquires it).
+ */
+export async function rebalancePlayerQueueRoundRobinAssumingLock(player: Player): Promise<void> {
     if (!isRRQActive(player)) return
     const tracks = player.queue.tracks
     const n = tracks.length
@@ -110,10 +114,13 @@ async function rebalancePlayerQueueRoundRobinImpl(player: Player): Promise<void>
 
 /**
  * Re-sorts `player.queue.tracks` for round-robin fairness when RRQ mode is on.
- * Serialized per guild with other RRQ queue mutations so snapshot/reorder cannot race concurrent splices.
+ * Uses the shared guild player queue lock so rebalance cannot race dashboard/Discord clears
+ * (a separate RRQ-only chain could splice a pre-clear snapshot back after clear).
  */
 export async function rebalancePlayerQueueRoundRobin(player: Player): Promise<void> {
-    return enqueueRrqMutation(player.guildId, () => rebalancePlayerQueueRoundRobinImpl(player))
+    return withGuildPlayerQueueLock(player.guildId, () =>
+        rebalancePlayerQueueRoundRobinAssumingLock(player)
+    )
 }
 
 /** Returns the per-player map of users pending RRQ disconnect cleanup, creating it if missing. */
@@ -216,8 +223,6 @@ export async function removeUserTracksFromQueue(player: Player, userId: string):
     return removed
 }
 
-const enqueueRrqMutation = createGuildAsyncChain()
-
 export type RemoveAndRebalanceRrqHooks = {
     onRemoveError?: (err: unknown) => void
     onRebalanceError?: (err: unknown) => void
@@ -225,14 +230,14 @@ export type RemoveAndRebalanceRrqHooks = {
 
 /**
  * Runs disconnect cleanup (remove user’s queued tracks, clear disconnect tracking, optional rebalance)
- * serialized per guild so reordering cannot race with other RRQ queue mutations for that player.
+ * under the shared guild player queue lock so clear/enqueue/reorder cannot interleave with splices.
  */
 export async function removeAndRebalanceRrqAfterDisconnect(
     player: Player,
     userId: string,
     hooks?: RemoveAndRebalanceRrqHooks
 ): Promise<number> {
-    return enqueueRrqMutation(player.guildId, async () => {
+    return withGuildPlayerQueueLock(player.guildId, async () => {
         let removedCount = 0
         try {
             removedCount = await removeUserTracksFromQueue(player, userId)
@@ -244,10 +249,14 @@ export async function removeAndRebalanceRrqAfterDisconnect(
 
         if (removedCount > 0 && isRRQActive(player)) {
             try {
-                await rebalancePlayerQueueRoundRobinImpl(player)
+                await rebalancePlayerQueueRoundRobinAssumingLock(player)
             } catch (rebalErr: unknown) {
                 hooks?.onRebalanceError?.(rebalErr)
             }
+        }
+
+        if (removedCount > 0) {
+            schedulePlayerSessionSave(player)
         }
 
         return removedCount
