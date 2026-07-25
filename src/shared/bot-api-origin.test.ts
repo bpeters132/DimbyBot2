@@ -45,11 +45,11 @@ describe("getBotApiOrigin", () => {
         )
     })
 
-    it("accepts http/https origins and strips trailing slashes", () => {
+    it("accepts http/https origins and strips a single trailing slash", () => {
         withEnv({ API_PROXY_TARGET: "https://bot.example.com/" }, () => {
             assert.equal(getBotApiOrigin(), "https://bot.example.com")
         })
-        withEnv({ API_PROXY_TARGET: "http://127.0.0.1:3001///" }, () => {
+        withEnv({ API_PROXY_TARGET: "http://127.0.0.1:3001" }, () => {
             assert.equal(getBotApiOrigin(), "http://127.0.0.1:3001")
         })
     })
@@ -62,6 +62,10 @@ describe("getBotApiOrigin", () => {
             assert.throws(() => getBotApiOrigin(), /protocol must be http or https/)
         })
         withEnv({ API_PROXY_TARGET: "https://bot.example.com/api" }, () => {
+            assert.throws(() => getBotApiOrigin(), /origin-only URL/)
+        })
+        // Extra path slashes parse as pathname "///", not origin-only "/".
+        withEnv({ API_PROXY_TARGET: "http://127.0.0.1:3001///" }, () => {
             assert.throws(() => getBotApiOrigin(), /origin-only URL/)
         })
         withEnv({ API_PROXY_TARGET: "https://bot.example.com?x=1" }, () => {
