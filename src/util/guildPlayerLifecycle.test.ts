@@ -125,7 +125,7 @@ describe("deferred orphan player cleanup", () => {
 
         const inFlight = await acquireGuildPlayerLifecycleReservation(guildId)
 
-        // queueEnd-style idle teardown does not itself hold a reservation.
+        // Idle teardown (queueEnd / trackError / alone-in-VC) does not itself hold a reservation.
         await tryDestroyOrphanGuildPlayer(
             guildId,
             {

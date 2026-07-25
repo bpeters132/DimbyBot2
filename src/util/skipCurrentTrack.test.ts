@@ -14,7 +14,7 @@ describe("skipCurrentTrack", () => {
         assert.deepEqual(calls, [{ skipTo: undefined, throwError: undefined }])
     })
 
-    it("uses skip(0, false) when only the current track remains", async () => {
+    it("uses skip(0, false) when the upcoming queue is empty", async () => {
         const calls: Array<{ skipTo?: number; throwError?: boolean }> = []
         await skipCurrentTrack({
             queue: { tracks: { length: 0 } },
