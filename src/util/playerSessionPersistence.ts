@@ -142,6 +142,33 @@ export function acquirePlayerSessionClearSuppressLease(
     }
 }
 
+/**
+ * Runs an ephemeral destroy under a suppress lease.
+ * LavalinkManager.destroyPlayer returns `undefined` (not a Promise) when no player exists —
+ * calling `.catch` on that throws and would leak the lease. Release when destroy does not run
+ * or rejects; a successful destroy leaves the lease for playerDestroy → clearPlayerSession.
+ */
+export async function destroyPlayerSuppressingSessionClear(
+    guildId: string,
+    destroyPlayer: () => Promise<unknown> | void | undefined
+): Promise<void> {
+    const suppressLease = acquirePlayerSessionClearSuppressLease(guildId)
+    let result: Promise<unknown> | void | undefined
+    try {
+        result = destroyPlayer()
+    } catch {
+        suppressLease.release()
+        return
+    }
+    if (result == null || typeof (result as Promise<unknown>).then !== "function") {
+        suppressLease.release()
+        return
+    }
+    await (result as Promise<unknown>).catch(() => {
+        suppressLease.release()
+    })
+}
+
 /** Set during SIGINT/SIGTERM so playerDestroy does not wipe flushed session rows. */
 export function markPlayerSessionPersistenceShuttingDown(): void {
     persistenceShuttingDown = true
