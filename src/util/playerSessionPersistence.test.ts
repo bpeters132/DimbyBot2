@@ -5,6 +5,7 @@ import {
     acquirePlayerSessionClearSuppressLease,
     clearPlayerSession,
     clearPlayerSessionRestoreInProgress,
+    destroyPlayerSuppressingSessionClear,
     getSessionClearEpochForTests,
     markPlayerSessionRestoreInProgress,
     setPlayerSessionPersistenceDbForTests,
@@ -193,6 +194,28 @@ describe("shouldSkipPlayerSessionClear", () => {
         assert.equal(shouldSkipPlayerSessionClear("guild-lease"), true)
         leaseB.release()
         assert.equal(shouldSkipPlayerSessionClear("guild-lease"), false)
+    })
+
+    it("releases suppress lease when destroyPlayer returns undefined (already gone)", async () => {
+        // Mirrors LavalinkManager.destroyPlayer: sync undefined when no player exists.
+        // The old `.catch` pattern threw TypeError and leaked the lease forever.
+        await destroyPlayerSuppressingSessionClear("guild-gone", () => undefined)
+        assert.equal(shouldSkipPlayerSessionClear("guild-gone"), false)
+    })
+
+    it("releases suppress lease when destroyPlayer rejects", async () => {
+        await destroyPlayerSuppressingSessionClear("guild-reject", () =>
+            Promise.reject(new Error("destroy failed"))
+        )
+        assert.equal(shouldSkipPlayerSessionClear("guild-reject"), false)
+    })
+
+    it("keeps suppress lease when destroyPlayer resolves (clear consumes it)", async () => {
+        await destroyPlayerSuppressingSessionClear("guild-ok", () => Promise.resolve())
+        assert.equal(shouldSkipPlayerSessionClear("guild-ok"), true)
+        // Simulate playerDestroy → clearPlayerSession consuming the lease.
+        await clearPlayerSession("guild-ok")
+        assert.equal(shouldSkipPlayerSessionClear("guild-ok"), false)
     })
 })
 

@@ -17,7 +17,7 @@ import {
     acquireGuildPlayerLifecycleReservation,
     tryDestroyOrphanGuildPlayer,
 } from "../../util/guildPlayerQueueLock.js"
-import { acquirePlayerSessionClearSuppressLease } from "../../util/playerSessionPersistence.js"
+import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
 
 export async function playerPlaylistPlayPOST(
     headers: Headers,
@@ -155,11 +155,9 @@ export async function playerPlaylistPlayPOST(
                         return playerHasQueueContent(live)
                     },
                     destroyPlayer: async () => {
-                        const suppressLease = acquirePlayerSessionClearSuppressLease(guildId)
-                        await client.lavalink.destroyPlayer(guildId).catch(() => {
-                            // Release only this attempt's lease; clearPlayerSession consumes on success.
-                            suppressLease.release()
-                        })
+                        await destroyPlayerSuppressingSessionClear(guildId, () =>
+                            client.lavalink.destroyPlayer(guildId)
+                        )
                     },
                 })
                 return {
