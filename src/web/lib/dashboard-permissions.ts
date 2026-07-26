@@ -1,43 +1,12 @@
 import type { GuildDashboardPermissionSnapshot } from "@/types/web"
 import type { WebPermissionKey } from "@/lib/web-permission-keys"
 import { webPlayerTrace } from "@/lib/web-player-debug-log"
-
-type WebPermissionDecision =
-    | { allowed: true; reason: string; memberResolved: boolean }
-    | { allowed: false; reason: string; memberResolved: boolean }
-
-/** Shared primary vs OAuth-fallback rules for dashboard gating (matches {@link requirePermissions}). */
-function resolveWebPermissionDecision(
-    snapshot: GuildDashboardPermissionSnapshot,
-    perm: WebPermissionKey
-): WebPermissionDecision {
-    if (snapshot.primaryPermissions.includes(perm)) {
-        return {
-            allowed: true,
-            reason: "allow:primaryPermissions",
-            memberResolved: snapshot.memberResolved,
-        }
-    }
-    if (!snapshot.memberResolved && snapshot.oauthPermissions.includes(perm)) {
-        return {
-            allowed: true,
-            reason: "allow:oauthPermissions (member not resolved by bot)",
-            memberResolved: snapshot.memberResolved,
-        }
-    }
-    if (snapshot.memberResolved) {
-        return {
-            allowed: false,
-            reason: `deny:memberResolved=true but primaryPermissions lacks "${perm}" (OAuth fallback is not used when the bot resolved a member)`,
-            memberResolved: true,
-        }
-    }
-    return {
-        allowed: false,
-        reason: `deny:neither primary nor oauth lists include "${perm}"`,
-        memberResolved: false,
-    }
-}
+import {
+    dashboardHasAllWebPermissions as sharedDashboardHasAllWebPermissions,
+    dashboardHasWebPermission as sharedDashboardHasWebPermission,
+    explainDashboardWebPermission as sharedExplainDashboardWebPermission,
+    resolveWebPermissionDecision,
+} from "@/shared/dashboard-web-permission"
 
 /**
  * Human-readable reason for {@link dashboardHasWebPermission} (for troubleshooting).
@@ -46,7 +15,7 @@ export function explainDashboardWebPermission(
     snapshot: GuildDashboardPermissionSnapshot,
     perm: WebPermissionKey
 ): string {
-    return resolveWebPermissionDecision(snapshot, perm).reason
+    return sharedExplainDashboardWebPermission(snapshot, perm)
 }
 
 /**
@@ -76,21 +45,15 @@ export function dashboardHasAllWebPermissions(
     snapshot: GuildDashboardPermissionSnapshot,
     perms: WebPermissionKey[]
 ): boolean {
-    const denied: WebPermissionKey[] = []
-    for (const perm of perms) {
-        const decision = resolveWebPermissionDecision(snapshot, perm)
-        if (!decision.allowed) {
-            denied.push(perm)
-        }
-    }
-    if (denied.length > 0) {
+    const allowed = sharedDashboardHasAllWebPermissions(snapshot, perms)
+    if (!allowed) {
+        const denied = perms.filter((perm) => !sharedDashboardHasWebPermission(snapshot, perm))
         webPlayerTrace("dashboardHasAllWebPermissions: denied", {
             denied,
             memberResolved: snapshot.memberResolved,
             primary: snapshot.primaryPermissions,
             oauth: snapshot.oauthPermissions,
         })
-        return false
     }
-    return true
+    return allowed
 }
