@@ -26,6 +26,10 @@ import {
     searchTracksForPlaylist,
 } from "../../util/playlistQueue.js"
 import { thumbnailFromLavalinkTrack } from "../../util/trackThumbnail.js"
+import {
+    memberMayJoinOccupiedVoice,
+    resolveOccupiedVoiceChannelId,
+} from "../../util/sameVoiceChannel.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -315,6 +319,14 @@ export default {
             }
 
             let player = client.lavalink.getPlayer(guild.id)
+
+            const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, player)
+            if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
+                return interaction.editReply({
+                    content: "You need to be in the same voice channel as the bot!",
+                })
+            }
+
             if (!player) {
                 player = await client.lavalink.createPlayer({
                     guildId: guild.id,
@@ -322,12 +334,6 @@ export default {
                     textChannelId: interaction.channelId,
                     selfDeaf: true,
                     volume: 100,
-                })
-            }
-
-            if (player.connected && player.voiceChannelId !== voiceChannel.id) {
-                return interaction.editReply({
-                    content: "You need to be in the same voice channel as the bot!",
                 })
             }
 

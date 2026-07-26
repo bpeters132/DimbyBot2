@@ -7,6 +7,10 @@ import {
 import type BotClient from "../../lib/BotClient.js"
 import { discordDeleteErrorDetails } from "../../util/discordErrorDetails.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
+import {
+    memberMayJoinOccupiedVoice,
+    resolveOccupiedVoiceChannelId,
+} from "../../util/sameVoiceChannel.js"
 
 export default async function handleControlMessages(client: BotClient, message: Message) {
     if (!message.member) {
@@ -66,8 +70,30 @@ export default async function handleControlMessages(client: BotClient, message: 
             `[ControlHandler] Bot has Connect/Speak permissions for VC ${voiceChannel.id}.`
         )
 
-        // 3. Get/Create player
+        // 3. Get/Create player — refuse if bot occupies another VC (incl. local playback).
+        const guild = message.guild
+        if (!guild) return
         let player = client.lavalink?.getPlayer(guildId)
+        const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, player)
+        if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
+            client.warn(
+                `[ControlHandler] User ${member.id} in VC ${voiceChannel.id}, but bot occupies VC ${occupiedVoiceChannelId} for guild ${guildId}.`
+            )
+            const otherVc = occupiedVoiceChannelId
+                ? client.channels.cache.get(occupiedVoiceChannelId)
+                : undefined
+            const otherName =
+                otherVc &&
+                "name" in otherVc &&
+                typeof (otherVc as { name: string }).name === "string"
+                    ? (otherVc as { name: string }).name
+                    : "Unknown Channel"
+            feedbackMessage = await sendChannel.send(
+                `${member}, I'm already playing in another voice channel (${otherName}).`
+            )
+            return
+        }
+
         if (!player) {
             client.debug(`[ControlHandler] No existing player for guild ${guildId}. Creating one.`)
             player = client.lavalink?.createPlayer({
@@ -112,24 +138,6 @@ export default async function handleControlMessages(client: BotClient, message: 
                 )
                 return
             }
-        } else if (player.voiceChannelId !== voiceChannel.id) {
-            // If the user is in a different VC than the bot
-            client.warn(
-                `[ControlHandler] User ${member.id} in VC ${voiceChannel.id}, but player is in VC ${player.voiceChannelId} for guild ${guildId}.`
-            )
-            const otherVc = player.voiceChannelId
-                ? client.channels.cache.get(player.voiceChannelId)
-                : undefined
-            const otherName =
-                otherVc &&
-                "name" in otherVc &&
-                typeof (otherVc as { name: string }).name === "string"
-                    ? (otherVc as { name: string }).name
-                    : "Unknown Channel"
-            feedbackMessage = await sendChannel.send(
-                `${member}, I'm already playing in another voice channel (${otherName}).`
-            )
-            return
         }
         client.debug(
             `[ControlHandler] Player connected status checked/handled for guild ${guildId}.`

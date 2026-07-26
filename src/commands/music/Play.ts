@@ -3,6 +3,10 @@ import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
+import {
+    memberMayJoinOccupiedVoice,
+    resolveOccupiedVoiceChannelId,
+} from "../../util/sameVoiceChannel.js"
 import { webDashboardPromoAppend } from "../../util/webDashboardUrl.js"
 
 export default {
@@ -40,6 +44,15 @@ export default {
         let player = client.lavalink.getPlayer(guild.id)
         let createdNewPlayer = false
 
+        // Cover local @discordjs/voice playback (Lavalink player destroyed) and connected sessions.
+        const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, player)
+        if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
+            return interaction.reply({
+                content: "You need to be in the same voice channel as the bot!",
+                ephemeral: true,
+            })
+        }
+
         if (!player) {
             player = await client.lavalink.createPlayer({
                 guildId: guild.id,
@@ -50,14 +63,6 @@ export default {
                 volume: 100, // Default volume
             })
             createdNewPlayer = true
-        }
-
-        if (player.connected && player.voiceChannelId !== voiceChannel.id) {
-            // Optional: Handle user being in a different channel than the bot
-            return interaction.reply({
-                content: "You need to be in the same voice channel as the bot!",
-                ephemeral: true,
-            })
         }
 
         const textChannel = interaction.channel
