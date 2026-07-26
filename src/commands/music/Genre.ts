@@ -6,6 +6,10 @@ import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
 import { seedAutoplayHistoryFromPlayer } from "../../util/autoplayHistory.js"
+import {
+    memberMayJoinOccupiedVoice,
+    resolveOccupiedVoiceChannelId,
+} from "../../util/sameVoiceChannel.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -52,6 +56,17 @@ export default {
         }
 
         const voiceChannel = member.voice.channel
+
+        {
+            const existingPlayer = client.lavalink.getPlayer(guild.id)
+            const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, existingPlayer)
+            if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
+                return interaction.editReply({
+                    content: "You need to be in the same voice channel as the bot!",
+                    ...noMentions,
+                })
+            }
+        }
 
         const textChannel = interaction.channel
         if (!textChannel?.isTextBased() || textChannel.isDMBased()) {
