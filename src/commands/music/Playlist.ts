@@ -25,6 +25,7 @@ import {
     resolveStoredPlaylistTracks,
     searchTracksForPlaylist,
 } from "../../util/playlistQueue.js"
+import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
 import { thumbnailFromLavalinkTrack } from "../../util/trackThumbnail.js"
 
 export default {
@@ -314,46 +315,58 @@ export default {
                 })
             }
 
-            let player = client.lavalink.getPlayer(guild.id)
-            if (!player) {
-                player = await client.lavalink.createPlayer({
-                    guildId: guild.id,
-                    voiceChannelId: voiceChannel.id,
-                    textChannelId: interaction.channelId,
-                    selfDeaf: true,
-                    volume: 100,
-                })
-            }
+            const playOutcome = await withGuildPlayerLifecycleReservation(guild.id, async () => {
+                let player = client.lavalink.getPlayer(guild.id)
+                if (!player) {
+                    player = await client.lavalink.createPlayer({
+                        guildId: guild.id,
+                        voiceChannelId: voiceChannel.id,
+                        textChannelId: interaction.channelId,
+                        selfDeaf: true,
+                        volume: 100,
+                    })
+                }
 
-            if (player.connected && player.voiceChannelId !== voiceChannel.id) {
+                if (player.connected && player.voiceChannelId !== voiceChannel.id) {
+                    return { kind: "wrong_channel" as const }
+                }
+
+                const { resolved, failed } = await resolveStoredPlaylistTracks(
+                    player,
+                    playlist.tracks,
+                    interaction.user
+                )
+
+                if (resolved.length === 0) {
+                    return { kind: "no_tracks" as const, name }
+                }
+
+                const enqueue = await enqueueResolvedPlaylistTracks(
+                    player,
+                    resolved,
+                    interaction.user.id,
+                    shuffle
+                )
+                return { kind: "queued" as const, name, enqueue, failed }
+            })
+
+            if (playOutcome.kind === "wrong_channel") {
                 return interaction.editReply({
                     content: "You need to be in the same voice channel as the bot!",
                 })
             }
-
-            const { resolved, failed } = await resolveStoredPlaylistTracks(
-                player,
-                playlist.tracks,
-                interaction.user
-            )
-
-            if (resolved.length === 0) {
+            if (playOutcome.kind === "no_tracks") {
                 return interaction.editReply({
-                    content: `Could not resolve any tracks from **${name}**.`,
+                    content: `Could not resolve any tracks from **${playOutcome.name}**.`,
                 })
             }
 
-            const enqueue = await enqueueResolvedPlaylistTracks(
-                player,
-                resolved,
-                interaction.user.id,
-                shuffle
-            )
-
             const failPart =
-                failed > 0 ? ` ${failed} track${failed === 1 ? "" : "s"} could not be resolved.` : ""
+                playOutcome.failed > 0
+                    ? ` ${playOutcome.failed} track${playOutcome.failed === 1 ? "" : "s"} could not be resolved.`
+                    : ""
             return interaction.editReply({
-                content: `Queued ${enqueue.queued} track${enqueue.queued === 1 ? "" : "s"} from **${name}**.${failPart}`,
+                content: `Queued ${playOutcome.enqueue.queued} track${playOutcome.enqueue.queued === 1 ? "" : "s"} from **${playOutcome.name}**.${failPart}`,
             })
         }
 

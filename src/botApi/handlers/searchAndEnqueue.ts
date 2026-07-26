@@ -128,32 +128,37 @@ export async function searchAndEnqueue(
         }
     }
 
-    let player = client.lavalink.getPlayer(guildId)
-    let createdHere = false
-    if (!player) {
-        try {
-            player = await client.lavalink.createPlayer({
-                guildId,
-                voiceChannelId: voiceChannel.id,
-                textChannelId,
-                selfDeaf: true,
-                volume: 100,
-            })
-            createdHere = true
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err)
-            console.error("[searchAndEnqueue] createPlayer failed", { guildId, requesterId, err })
-            return {
-                ok: false,
-                status: 503,
-                error: { error: "Could not create the player.", details: message },
-            }
-        }
-    }
-
-    // Cover acquisition → search/enqueue so concurrent orphan cleanup cannot destroy mid-use.
+    // Reserve before createPlayer so concurrent orphan/idle destroy cannot tear down a
+    // freshly created player in the window between create and the old post-create acquire.
     const lifecycleReservation = await acquireGuildPlayerLifecycleReservation(guildId)
     try {
+        let player = client.lavalink.getPlayer(guildId)
+        let createdHere = false
+        if (!player) {
+            try {
+                player = await client.lavalink.createPlayer({
+                    guildId,
+                    voiceChannelId: voiceChannel.id,
+                    textChannelId,
+                    selfDeaf: true,
+                    volume: 100,
+                })
+                createdHere = true
+            } catch (err: unknown) {
+                const message = err instanceof Error ? err.message : String(err)
+                console.error("[searchAndEnqueue] createPlayer failed", {
+                    guildId,
+                    requesterId,
+                    err,
+                })
+                return {
+                    ok: false,
+                    status: 503,
+                    error: { error: "Could not create the player.", details: message },
+                }
+            }
+        }
+
         if (textChannelId) {
             player.textChannelId = textChannelId
         }
