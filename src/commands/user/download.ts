@@ -4,6 +4,7 @@ import { spawn } from "child_process"
 import path from "path"
 import fs from "fs"
 import type BotClient from "../../lib/BotClient.js"
+import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
 import { getGuildSettings } from "../../util/saveControlChannel.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
@@ -576,31 +577,39 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                         })
                         return
                     }
-                    let player = client.lavalink.getPlayer(guildId)
-                    if (!player) {
-                        player = client.lavalink.createPlayer({
-                            guildId,
-                            voiceChannelId: voiceChannel.id,
-                            textChannelId: textChannel.id,
-                            selfDeaf: true,
-                        })
-                    }
-                    if (!player) {
+                    const playResult = await withGuildPlayerLifecycleReservation(
+                        guildId,
+                        async () => {
+                            let player = client.lavalink.getPlayer(guildId)
+                            if (!player) {
+                                player = client.lavalink.createPlayer({
+                                    guildId,
+                                    voiceChannelId: voiceChannel.id,
+                                    textChannelId: textChannel.id,
+                                    selfDeaf: true,
+                                })
+                            }
+                            if (!player) {
+                                return null
+                            }
+
+                            return handleQueryAndPlay(
+                                client,
+                                guildId,
+                                voiceChannel,
+                                textChannel,
+                                filePath,
+                                interaction.user,
+                                player
+                            )
+                        }
+                    )
+                    if (!playResult) {
                         await interaction.editReply({
                             content: "Could not start the music player.",
                         })
                         return
                     }
-
-                    const playResult = await handleQueryAndPlay(
-                        client,
-                        guildId,
-                        voiceChannel,
-                        textChannel,
-                        filePath,
-                        interaction.user,
-                        player
-                    )
 
                     await interaction
                         .editReply({
