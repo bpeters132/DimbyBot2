@@ -3,6 +3,7 @@ import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction, GuildMember } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 
+import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
 import { seedAutoplayHistoryFromPlayer } from "../../util/autoplayHistory.js"
 
@@ -52,33 +53,6 @@ export default {
 
         const voiceChannel = member.voice.channel
 
-        let player = client.lavalink.getPlayer(guild.id)
-
-        if (!player) {
-            try {
-                player = await client.lavalink.createPlayer({
-                    guildId: guild.id,
-                    voiceChannelId: voiceChannel.id,
-                    textChannelId: interaction.channelId,
-                    selfDeaf: true,
-                    volume: 100,
-                })
-            } catch (err) {
-                client.error("[GenreCmd] createPlayer failed:", err)
-                return interaction.editReply({
-                    content: "Could not join voice right now. Try again in a moment.",
-                    ...noMentions,
-                })
-            }
-        }
-
-        if (player.voiceChannelId && player.voiceChannelId !== voiceChannel.id) {
-            return interaction.editReply({
-                content: "You need to be in the same voice channel as the bot!",
-                ...noMentions,
-            })
-        }
-
         const textChannel = interaction.channel
         if (!textChannel?.isTextBased() || textChannel.isDMBased()) {
             return interaction.editReply({
@@ -87,16 +61,56 @@ export default {
             })
         }
 
-        const result = await handleQueryAndPlay(
-            client,
-            guild.id,
-            voiceChannel,
-            textChannel,
-            genreName,
-            interaction.user,
-            player
-        )
+        const playOutcome = await withGuildPlayerLifecycleReservation(guild.id, async () => {
+            let player = client.lavalink.getPlayer(guild.id)
 
+            if (!player) {
+                try {
+                    player = await client.lavalink.createPlayer({
+                        guildId: guild.id,
+                        voiceChannelId: voiceChannel.id,
+                        textChannelId: interaction.channelId,
+                        selfDeaf: true,
+                        volume: 100,
+                    })
+                } catch (err) {
+                    client.error("[GenreCmd] createPlayer failed:", err)
+                    return {
+                        kind: "create_failed" as const,
+                    }
+                }
+            }
+
+            if (player.voiceChannelId && player.voiceChannelId !== voiceChannel.id) {
+                return { kind: "wrong_channel" as const }
+            }
+
+            const result = await handleQueryAndPlay(
+                client,
+                guild.id,
+                voiceChannel,
+                textChannel,
+                genreName,
+                interaction.user,
+                player
+            )
+            return { kind: "played" as const, player, result }
+        })
+
+        if (playOutcome.kind === "create_failed") {
+            return interaction.editReply({
+                content: "Could not join voice right now. Try again in a moment.",
+                ...noMentions,
+            })
+        }
+        if (playOutcome.kind === "wrong_channel") {
+            return interaction.editReply({
+                content: "You need to be in the same voice channel as the bot!",
+                ...noMentions,
+            })
+        }
+
+        const { player, result } = playOutcome
         if (result.success) {
             player.set("autoplay", true)
             seedAutoplayHistoryFromPlayer(player)

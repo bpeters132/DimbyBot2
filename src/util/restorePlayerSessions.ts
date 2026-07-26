@@ -13,6 +13,7 @@ import {
     schedulePlayerSessionSave,
 } from "./playerSessionPersistence.js"
 import { resolvePersistedTracks } from "./playerSessionTracks.js"
+import { withGuildPlayerLifecycleReservation } from "./guildPlayerQueueLock.js"
 import { countHumanMembers } from "./voiceChannelMembers.js"
 
 let discordReady = false
@@ -133,51 +134,61 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
     markPlayerSessionRestoreInProgress(guildId)
 
     try {
-        const player = await client.lavalink.createPlayer({
-            guildId,
-            voiceChannelId,
-            textChannelId: textChannelId ?? undefined,
-            selfDeaf: true,
-            volume: snapshot.volume,
+        await withGuildPlayerLifecycleReservation(guildId, async () => {
+            // Re-check under the reservation: a concurrent create may have won the race.
+            if (client.lavalink.getPlayer(guildId)) {
+                client.debug(
+                    `[playerSession] restore skipped for ${guildId}: player appeared before hydrate`
+                )
+                return
+            }
+
+            const player = await client.lavalink.createPlayer({
+                guildId,
+                voiceChannelId,
+                textChannelId: textChannelId ?? undefined,
+                selfDeaf: true,
+                volume: snapshot.volume,
+            })
+
+            await ensurePlayerConnected(client, player, voiceChannel)
+
+            const { resolved, failed } = await resolvePersistedTracks(player, tracksToRestore)
+            if (failed > 0) {
+                client.warn(
+                    `[playerSession] restore for ${guildId}: ${failed}/${tracksToRestore.length} tracks failed to resolve`
+                )
+            }
+            if (resolved.length === 0) {
+                client.warn(
+                    `[playerSession] restore for ${guildId}: no tracks resolved; destroying player`
+                )
+                await player.destroy()
+                await deletePlayerSession(guildId)
+                return
+            }
+
+            await player.queue.add(resolved)
+
+            if (snapshot.repeatMode !== "off") {
+                await player.setRepeatMode(snapshot.repeatMode)
+            }
+            player.set("autoplay", snapshot.autoplay)
+            player.set("rrqEnabled", snapshot.rrqEnabled)
+
+            await startPlaybackIfNeeded(player)
+            if (snapshot.paused && player.playing) {
+                await player.pause()
+            }
+
+            client.info(
+                `[playerSession] restored player for guild ${guildId} (${resolved.length} tracks, humans=${humans})`
+            )
+
+            scheduleControlMessageUpdate(client, guildId)
+            playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
+            schedulePlayerSessionSave(player)
         })
-
-        await ensurePlayerConnected(client, player, voiceChannel)
-
-        const { resolved, failed } = await resolvePersistedTracks(player, tracksToRestore)
-        if (failed > 0) {
-            client.warn(
-                `[playerSession] restore for ${guildId}: ${failed}/${tracksToRestore.length} tracks failed to resolve`
-            )
-        }
-        if (resolved.length === 0) {
-            client.warn(
-                `[playerSession] restore for ${guildId}: no tracks resolved; destroying player`
-            )
-            await player.destroy()
-            await deletePlayerSession(guildId)
-            return
-        }
-
-        await player.queue.add(resolved)
-
-        if (snapshot.repeatMode !== "off") {
-            await player.setRepeatMode(snapshot.repeatMode)
-        }
-        player.set("autoplay", snapshot.autoplay)
-        player.set("rrqEnabled", snapshot.rrqEnabled)
-
-        await startPlaybackIfNeeded(player)
-        if (snapshot.paused && player.playing) {
-            await player.pause()
-        }
-
-        client.info(
-            `[playerSession] restored player for guild ${guildId} (${resolved.length} tracks, humans=${humans})`
-        )
-
-        scheduleControlMessageUpdate(client, guildId)
-        playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
-        schedulePlayerSessionSave(player)
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         client.error(`[playerSession] restore failed for guild ${guildId}: ${msg}`)

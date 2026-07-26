@@ -59,6 +59,19 @@ export async function acquireGuildPlayerLifecycleReservation(
     })
 }
 
+/** Acquires a lifecycle reservation, runs `work`, then always releases. */
+export async function withGuildPlayerLifecycleReservation<T>(
+    guildId: string,
+    work: () => Promise<T>
+): Promise<T> {
+    const lease = await acquireGuildPlayerLifecycleReservation(guildId)
+    try {
+        return await work()
+    } finally {
+        lease.release()
+    }
+}
+
 /** Active lifecycle reservations for a guild (includes the calling request while it holds one). */
 export function getGuildPlayerLifecycleReservationCount(guildId: string): number {
     return guildPlayerLifecycleReservations.get(guildId) ?? 0
