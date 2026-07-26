@@ -4,6 +4,10 @@ import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
+import {
+    memberMayJoinOccupiedVoice,
+    resolveOccupiedVoiceChannelId,
+} from "../../util/sameVoiceChannel.js"
 import { webDashboardPromoAppend } from "../../util/webDashboardUrl.js"
 
 export default {
@@ -35,6 +39,18 @@ export default {
         const voiceChannel = member.voice.channel
         if (!voiceChannel) {
             return interaction.reply({ content: "Join a voice channel first!", ephemeral: true })
+        }
+
+        // Cover local @discordjs/voice playback (Lavalink player destroyed) and connected sessions.
+        {
+            const existingPlayer = client.lavalink.getPlayer(guild.id)
+            const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, existingPlayer)
+            if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
+                return interaction.reply({
+                    content: "You need to be in the same voice channel as the bot!",
+                    ephemeral: true,
+                })
+            }
         }
 
         const textChannel = interaction.channel

@@ -27,6 +27,10 @@ import {
 } from "../../util/playlistQueue.js"
 import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
 import { thumbnailFromLavalinkTrack } from "../../util/trackThumbnail.js"
+import {
+    memberMayJoinOccupiedVoice,
+    resolveOccupiedVoiceChannelId,
+} from "../../util/sameVoiceChannel.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -313,6 +317,16 @@ export default {
                 return interaction.editReply({
                     content: `**${name}** has no tracks.`,
                 })
+            }
+
+            {
+                const existingPlayer = client.lavalink.getPlayer(guild.id)
+                const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, existingPlayer)
+                if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
+                    return interaction.editReply({
+                        content: "You need to be in the same voice channel as the bot!",
+                    })
+                }
             }
 
             const playOutcome = await withGuildPlayerLifecycleReservation(guild.id, async () => {

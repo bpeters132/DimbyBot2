@@ -16,6 +16,10 @@ import {
     withGuildPlayerQueueLock,
 } from "../../util/guildPlayerQueueLock.js"
 import { playerHasQueueContent } from "../../util/playlistQueue.js"
+import {
+    memberMayJoinOccupiedVoice,
+    resolveOccupiedVoiceChannelId,
+} from "../../util/sameVoiceChannel.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
 
@@ -125,6 +129,19 @@ export async function searchAndEnqueue(
             ok: false,
             status: 403,
             error: { error: "Bot lacks permission to join this voice channel." },
+        }
+    }
+
+    // Refuse takeover while bot occupies another VC (incl. local playback with no Lavalink player).
+    {
+        const existingPlayer = client.lavalink.getPlayer(guildId)
+        const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, existingPlayer)
+        if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
+            return {
+                ok: false,
+                status: 403,
+                error: { error: "You need to be in the same voice channel as the bot." },
+            }
         }
     }
 
