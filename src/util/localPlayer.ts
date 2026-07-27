@@ -17,30 +17,37 @@ import type {
     LocalPlayerState,
     QueryPlayResult,
 } from "../types/index.js"
+import {
+    beginLocalPlaySessionHandoff,
+    type LocalPlaySessionHandoff,
+} from "./localPlaySessionHandoff.js"
 
 const activeLocalPlayers = new Map<string, ActiveLocalPlayer>()
 const pendingLocalPlayGuildIds = new Set<string>()
 
-/** Resolves when Lavalink emits `playerDestroy` for the guild or after `timeoutMs` (teardown handoff). */
+/**
+ * Resolves when Lavalink emits `playerDestroy` for the guild or after `timeoutMs`.
+ * Returns whether the destroy event was observed (vs timeout).
+ */
 function waitForLavalinkPlayerDestroy(
     client: BotClient,
     guildId: string,
     timeoutMs: number
-): Promise<void> {
+): Promise<boolean> {
     return new Promise((resolve) => {
         let settled = false
-        const finish = () => {
+        const finish = (eventSeen: boolean) => {
             if (settled) return
             settled = true
             clearTimeout(timer)
             client.lavalink.off("playerDestroy", onDestroy)
-            resolve()
+            resolve(eventSeen)
         }
         const onDestroy = (p: Player) => {
             if (p.guildId !== guildId) return
-            finish()
+            finish(true)
         }
-        const timer = setTimeout(finish, timeoutMs)
+        const timer = setTimeout(() => finish(false), timeoutMs)
         client.lavalink.on("playerDestroy", onDestroy)
     })
 }
@@ -81,6 +88,7 @@ export async function playLocalFile(
     pendingLocalPlayGuildIds.add(guildId)
 
     let postLavalinkHandoff: Promise<void> = new Promise((r) => queueMicrotask(r))
+    let sessionHandoff: LocalPlaySessionHandoff | null = null
 
     if (lavalinkPlayer) {
         client.debug(
@@ -98,8 +106,11 @@ export async function playLocalFile(
             }
         }
         if (client.lavalink.players.has(guildId)) {
-            postLavalinkHandoff = waitForLavalinkPlayerDestroy(client, guildId, 2000)
-            try {
+            // Preserve the DB session across destroy until local Ready succeeds.
+            // Otherwise playerDestroy → clearPlayerSession wipes the queue on a failed join.
+            let destroyEventWait: Promise<boolean> = Promise.resolve(false)
+            sessionHandoff = await beginLocalPlaySessionHandoff(lavalinkPlayer, async () => {
+                destroyEventWait = waitForLavalinkPlayerDestroy(client, guildId, 2000)
                 client.debug(
                     `[LocalPlayer] Attempting to destroy existing Lavalink player for guild ${guildId}.`
                 )
@@ -116,12 +127,15 @@ export async function playLocalFile(
                         `[LocalPlayer] Attempted to delete player from Lavalink manager for guild ${guildId}, but it was not found (or delete returned false).`
                     )
                 }
-            } catch (e: unknown) {
-                const msg = e instanceof Error ? e.message : String(e)
+            })
+            if (!sessionHandoff.destroyedLavalink) {
                 client.warn(
-                    `[LocalPlayer] Failed to destroy or delete Lavalink player in guild ${guildId}: ${msg}. Proceeding with @discordjs/voice connection attempt.`
+                    `[LocalPlayer] Failed to destroy Lavalink player in guild ${guildId}. Proceeding with @discordjs/voice connection attempt.`
                 )
             }
+            postLavalinkHandoff = destroyEventWait.then((eventSeen) => {
+                if (eventSeen) sessionHandoff?.markDestroyEventSeen()
+            })
         } else {
             client.debug(
                 `[LocalPlayer] No Lavalink player found in manager for guild ${guildId} prior to local play.`
@@ -171,6 +185,9 @@ export async function playLocalFile(
                 `[LocalPlayer] Failed to join or get ready in voice channel ${voiceChannel.id} for guild ${guildId}:`,
                 error
             )
+            // Keep the persisted Lavalink session so a restart (or later restore) can recover
+            // the queue that was torn down before this failed local join.
+            sessionHandoff?.releaseLeftoverSuppressLease()
             if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
                 connection.destroy()
             }
@@ -179,6 +196,15 @@ export async function playLocalFile(
                 feedbackText: "I couldn't connect to your voice channel to play the local file.",
                 error: error instanceof Error ? error : new Error(String(error)),
             }
+        }
+
+        try {
+            await sessionHandoff?.clearSessionAfterLocalReady()
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e)
+            client.warn(
+                `[LocalPlayer] clearPlayerSession after local Ready failed for guild ${guildId}: ${msg}`
+            )
         }
 
         const conn = connection!
