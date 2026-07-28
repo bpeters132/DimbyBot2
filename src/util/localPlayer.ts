@@ -94,22 +94,22 @@ export async function playLocalFile(
         client.debug(
             `[LocalPlayer] Checking Lavalink player state for guild ${guildId}. Connected: ${lavalinkPlayer.connected}, Playing: ${lavalinkPlayer.playing}`
         )
-        if (lavalinkPlayer.playing) {
-            try {
-                await lavalinkPlayer.stopPlaying(true, false)
-                client.debug(`[LocalPlayer] Stopped Lavalink player in guild ${guildId}.`)
-            } catch (e: unknown) {
-                const msg = e instanceof Error ? e.message : String(e)
-                client.warn(
-                    `[LocalPlayer] Failed to stop Lavalink player in guild ${guildId}: ${msg}`
-                )
-            }
-        }
         if (client.lavalink.players.has(guildId)) {
-            // Preserve the DB session across destroy until local Ready succeeds.
-            // Otherwise playerDestroy → clearPlayerSession wipes the queue on a failed join.
+            // Flush the full queue *before* stopPlaying(true) clears upcoming tracks, then
+            // suppress clearPlayerSession across destroy so a failed local join can restore.
             let destroyEventWait: Promise<boolean> = Promise.resolve(false)
             sessionHandoff = await beginLocalPlaySessionHandoff(lavalinkPlayer, async () => {
+                if (lavalinkPlayer.playing) {
+                    try {
+                        await lavalinkPlayer.stopPlaying(true, false)
+                        client.debug(`[LocalPlayer] Stopped Lavalink player in guild ${guildId}.`)
+                    } catch (e: unknown) {
+                        const msg = e instanceof Error ? e.message : String(e)
+                        client.warn(
+                            `[LocalPlayer] Failed to stop Lavalink player in guild ${guildId}: ${msg}`
+                        )
+                    }
+                }
                 destroyEventWait = waitForLavalinkPlayerDestroy(client, guildId, 2000)
                 client.debug(
                     `[LocalPlayer] Attempting to destroy existing Lavalink player for guild ${guildId}.`
@@ -140,6 +140,17 @@ export async function playLocalFile(
             client.debug(
                 `[LocalPlayer] No Lavalink player found in manager for guild ${guildId} prior to local play.`
             )
+            if (lavalinkPlayer.playing) {
+                try {
+                    await lavalinkPlayer.stopPlaying(true, false)
+                    client.debug(`[LocalPlayer] Stopped Lavalink player in guild ${guildId}.`)
+                } catch (e: unknown) {
+                    const msg = e instanceof Error ? e.message : String(e)
+                    client.warn(
+                        `[LocalPlayer] Failed to stop Lavalink player in guild ${guildId}: ${msg}`
+                    )
+                }
+            }
         }
     }
 
@@ -185,8 +196,7 @@ export async function playLocalFile(
                 `[LocalPlayer] Failed to join or get ready in voice channel ${voiceChannel.id} for guild ${guildId}:`,
                 error
             )
-            // Keep the persisted Lavalink session so a restart (or later restore) can recover
-            // the queue that was torn down before this failed local join.
+            // Keep the persisted Lavalink session (full queue flushed before stop/destroy).
             sessionHandoff?.releaseLeftoverSuppressLease()
             if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
                 connection.destroy()

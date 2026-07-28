@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { afterEach, describe, it } from "node:test"
 import type { Player, Track } from "lavalink-client"
+import type { PlayerSessionSnapshotV1 } from "../types/index.js"
 import {
     acquirePlayerSessionClearSuppressLease,
     clearPlayerSession,
@@ -9,16 +10,16 @@ import {
 } from "./playerSessionPersistence.js"
 import { beginLocalPlaySessionHandoff } from "./localPlaySessionHandoff.js"
 
-function mockTrack(): Track {
+function mockTrack(title = "Song"): Track {
     return {
-        encoded: "enc",
+        encoded: `enc-${title}`,
         info: {
-            title: "Song",
+            title,
             author: "Artist",
-            uri: "https://example.com/t",
+            uri: `https://example.com/${title}`,
             duration: 1000,
             isStream: false,
-            identifier: "id",
+            identifier: title,
             isSeekable: true,
             sourceName: "http",
             artworkUrl: null,
@@ -28,7 +29,10 @@ function mockTrack(): Track {
     } as unknown as Track
 }
 
-function mockPlayer(guildId: string): Player {
+function mockPlayer(
+    guildId: string,
+    opts: { current?: Track | null; tracks?: Track[] } = {}
+): Player {
     const store = new Map<string, unknown>()
     return {
         guildId,
@@ -39,8 +43,8 @@ function mockPlayer(guildId: string): Player {
         paused: false,
         playing: true,
         queue: {
-            current: mockTrack(),
-            tracks: [],
+            current: opts.current === undefined ? mockTrack("Current") : opts.current,
+            tracks: opts.tracks ?? [],
         },
         get: (key: string) => store.get(key),
         set: (key: string, value: unknown) => {
@@ -52,6 +56,44 @@ function mockPlayer(guildId: string): Player {
 describe("beginLocalPlaySessionHandoff", () => {
     afterEach(() => {
         setPlayerSessionPersistenceDbForTests(null)
+    })
+
+    it("flushes upcoming queue before destroy callback clears tracks (join-fail restore)", async () => {
+        const guildId = "guild-local-handoff-queue-order"
+        const upsertedQueues: PlayerSessionSnapshotV1["queue"][] = []
+        const deletes: string[] = []
+
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async (_id, _vc, _text, snapshot) => {
+                upsertedQueues.push(snapshot.queue)
+            },
+            deletePlayerSession: async (id) => {
+                deletes.push(id)
+            },
+        })
+
+        const upcoming = [mockTrack("Next-1"), mockTrack("Next-2")]
+        const player = mockPlayer(guildId, { tracks: upcoming })
+
+        const handoff = await beginLocalPlaySessionHandoff(player, async () => {
+            // Simulate stopPlaying(true) + destroy after the flush must already have run.
+            player.queue.tracks.length = 0
+            player.queue.current = null
+            assert.equal(shouldSkipPlayerSessionClear(guildId), true)
+            await clearPlayerSession(guildId)
+        })
+        handoff.markDestroyEventSeen()
+
+        assert.equal(handoff.destroyedLavalink, true)
+        assert.equal(upsertedQueues.length, 1)
+        assert.equal(upsertedQueues[0].length, 2)
+        assert.equal(upsertedQueues[0][0]?.info.title, "Next-1")
+        assert.equal(upsertedQueues[0][1]?.info.title, "Next-2")
+        assert.deepEqual(deletes, [])
+
+        // Failed local VC join: preserved row still has the full upcoming queue.
+        handoff.releaseLeftoverSuppressLease()
+        assert.deepEqual(deletes, [])
     })
 
     it("keeps the session row when local join fails after Lavalink destroy", async () => {
