@@ -87,8 +87,8 @@ describe("beginLocalPlaySessionHandoff", () => {
         assert.equal(handoff.destroyedLavalink, true)
         assert.equal(upsertedQueues.length, 1)
         assert.equal(upsertedQueues[0].length, 2)
-        assert.equal(upsertedQueues[0][0]?.info.title, "Next-1")
-        assert.equal(upsertedQueues[0][1]?.info.title, "Next-2")
+        assert.equal(upsertedQueues[0][0]?.title, "Next-1")
+        assert.equal(upsertedQueues[0][1]?.title, "Next-2")
         assert.deepEqual(deletes, [])
 
         // Failed local VC join: preserved row still has the full upcoming queue.
