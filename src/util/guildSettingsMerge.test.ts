@@ -31,11 +31,11 @@ describe("mergeGuildSettingsRow", () => {
 
     it("builds a row from snapshot alone when the DB row is missing", () => {
         const merged = mergeGuildSettingsRow(undefined, {
-            discordLog: { channelId: "log1" },
+            discordLog: { allChannelId: "log1" },
             downloadsMaxMb: 100,
         })
         assert.deepEqual(merged, {
-            discordLog: { channelId: "log1" },
+            discordLog: { allChannelId: "log1" },
             downloadsMaxMb: 100,
         })
     })
@@ -55,7 +55,7 @@ describe("mergeGuildSettingsRow", () => {
                 controlChannelId: "c1",
                 controlMessageId: "m1",
                 downloadsMaxMb: 50,
-                discordLog: { channelId: "d1" },
+                discordLog: { allChannelId: "d1" },
             },
             {},
             [...GUILD_SETTING_FIELD_KEYS]
