@@ -2,6 +2,7 @@ import { headers } from "next/headers"
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import type { AuthenticatedSession } from "@/lib/api-auth"
+import { decideAdminAccess } from "../../shared/admin-access-decision.js"
 import { resolveDiscordUserSnowflake } from "../../shared/discord-user-id.js"
 import { getCachedOwnerId } from "../../shared/permissions.js"
 
@@ -21,52 +22,43 @@ export async function resolveAdminAccess(reqHeaders: Headers): Promise<AdminAcce
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
         console.error("[admin-access] getSession failed:", message)
-        return {
-            ok: false,
-            status: 503,
-            error: "Service Unavailable",
-            details: "Could not load your session. Please try again later.",
-        }
+        return decideAdminAccess({
+            sessionLoadFailed: true,
+            hasSessionUser: false,
+            discordUserId: null,
+            ownerId: null,
+        })
     }
 
     if (!session?.user?.id) {
-        return { ok: false, status: 401, error: "Unauthorized" }
+        return decideAdminAccess({
+            hasSessionUser: false,
+            discordUserId: null,
+            ownerId: getCachedOwnerId(),
+        })
     }
 
     let discordUserId: string | null
+    let discordResolveFailed = false
     try {
         discordUserId = await resolveDiscordUserSnowflake(session.user.id, reqHeaders)
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         console.error("[admin-access] resolveDiscordUserSnowflake failed:", msg)
-        return {
-            ok: false,
-            status: 403,
-            error: "Discord account required",
-            details: "Sign in with Discord, or sign out and sign in again.",
-        }
-    }
-    if (!discordUserId) {
-        return {
-            ok: false,
-            status: 403,
-            error: "Discord account required",
-            details:
-                "We could not resolve your Discord user id. Sign in with Discord, or sign out and sign in again.",
-        }
+        discordUserId = null
+        discordResolveFailed = true
     }
 
-    const ownerId = getCachedOwnerId()
-    if (!ownerId || discordUserId !== ownerId) {
-        return {
-            ok: false,
-            status: 403,
-            error: "Forbidden",
-            details: "Developer access required.",
-        }
+    const decision = decideAdminAccess({
+        hasSessionUser: true,
+        discordResolveFailed,
+        discordUserId,
+        ownerId: getCachedOwnerId(),
+    })
+    if (decision.ok === false) {
+        return decision
     }
-
-    return { ok: true, session, discordUserId }
+    return { ok: true, session, discordUserId: decision.discordUserId }
 }
 
 /** True when the current session is the bot owner (`OWNER_ID`). */
