@@ -6,6 +6,7 @@ import {
     hasPendingOrphanDestroyForTests,
     tryDestroyOrphanGuildPlayer,
     waitForPendingOrphanDestroyForTests,
+    withGuildPlayerLifecycleReservation,
 } from "./guildPlayerQueueLock.js"
 
 describe("guild player lifecycle reservation", () => {
@@ -18,6 +19,53 @@ describe("guild player lifecycle reservation", () => {
         assert.ok(getGuildPlayerLifecycleReservationCount("guild-life") > 0)
         b.release()
         assert.equal(getGuildPlayerLifecycleReservationCount("guild-life"), 0)
+    })
+
+    it("withGuildPlayerLifecycleReservation always releases after work", async () => {
+        const guildId = "guild-with-reserve"
+        await withGuildPlayerLifecycleReservation(guildId, async () => {
+            assert.equal(getGuildPlayerLifecycleReservationCount(guildId), 1)
+        })
+        assert.equal(getGuildPlayerLifecycleReservationCount(guildId), 0)
+    })
+
+    it("withGuildPlayerLifecycleReservation releases when work throws", async () => {
+        const guildId = "guild-with-reserve-throw"
+        await assert.rejects(
+            () =>
+                withGuildPlayerLifecycleReservation(guildId, async () => {
+                    assert.equal(getGuildPlayerLifecycleReservationCount(guildId), 1)
+                    throw new Error("boom")
+                }),
+            /boom/
+        )
+        assert.equal(getGuildPlayerLifecycleReservationCount(guildId), 0)
+    })
+
+    it("defers orphan destroy while a Discord-style reservation is held without createdHere", async () => {
+        // Models Discord /play (or restore) holding a reservation while web search cleanup runs.
+        const guildId = "guild-discord-vs-web-orphan"
+        let destroyed = false
+
+        const discordPlay = await acquireGuildPlayerLifecycleReservation(guildId)
+        const webSearch = await acquireGuildPlayerLifecycleReservation(guildId)
+
+        await tryDestroyOrphanGuildPlayer(guildId, {
+            hasQueueContent: () => false,
+            destroyPlayer: async () => {
+                destroyed = true
+            },
+        })
+        assert.equal(destroyed, false)
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), true)
+
+        webSearch.release()
+        assert.equal(destroyed, false)
+        assert.equal(getGuildPlayerLifecycleReservationCount(guildId), 1)
+
+        discordPlay.release()
+        await waitForPendingOrphanDestroyForTests(guildId)
+        assert.equal(destroyed, true)
     })
 })
 
@@ -117,5 +165,31 @@ describe("deferred orphan player cleanup", () => {
         next.release()
         holder.release()
         await waitForPendingOrphanDestroyForTests(guildId)
+    })
+
+    it("defers idle destroy when reservedByCaller is 0 and a reservation is held", async () => {
+        const guildId = "guild-orphan-idle-timer"
+        let destroyed = false
+
+        const inFlight = await acquireGuildPlayerLifecycleReservation(guildId)
+
+        // Idle teardown (queueEnd / trackError / alone-in-VC) does not itself hold a reservation.
+        await tryDestroyOrphanGuildPlayer(
+            guildId,
+            {
+                hasQueueContent: () => false,
+                destroyPlayer: async () => {
+                    destroyed = true
+                },
+            },
+            0
+        )
+        assert.equal(destroyed, false)
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), true)
+
+        inFlight.release()
+        await waitForPendingOrphanDestroyForTests(guildId)
+        assert.equal(destroyed, true)
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), false)
     })
 })

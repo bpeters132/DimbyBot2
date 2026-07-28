@@ -142,6 +142,33 @@ export function acquirePlayerSessionClearSuppressLease(
     }
 }
 
+/**
+ * Runs an ephemeral destroy under a suppress lease.
+ * LavalinkManager.destroyPlayer returns `undefined` (not a Promise) when no player exists —
+ * calling `.catch` on that throws and would leak the lease. Release when destroy does not run
+ * or rejects; a successful destroy leaves the lease for playerDestroy → clearPlayerSession.
+ */
+export async function destroyPlayerSuppressingSessionClear(
+    guildId: string,
+    destroyPlayer: () => Promise<unknown> | void | undefined
+): Promise<void> {
+    const suppressLease = acquirePlayerSessionClearSuppressLease(guildId)
+    let result: Promise<unknown> | void | undefined
+    try {
+        result = destroyPlayer()
+    } catch {
+        suppressLease.release()
+        return
+    }
+    if (result == null || typeof (result as Promise<unknown>).then !== "function") {
+        suppressLease.release()
+        return
+    }
+    await (result as Promise<unknown>).catch(() => {
+        suppressLease.release()
+    })
+}
+
 /** Set during SIGINT/SIGTERM so playerDestroy does not wipe flushed session rows. */
 export function markPlayerSessionPersistenceShuttingDown(): void {
     persistenceShuttingDown = true
@@ -325,6 +352,35 @@ export async function flushAllPlayerSessionSaves(): Promise<void> {
             )
         }
     }
+}
+
+/**
+ * Library / infrastructure destroy reasons that must not wipe persisted sessions.
+ * Intentional app destroys (`player.destroy()` with no reason, alone-in-VC, /stop, etc.)
+ * still clear so queues do not resurrect after an explicit teardown.
+ */
+const PRESERVE_SESSION_DESTROY_REASONS = new Set([
+    "Disconnected",
+    "PlayerReconnectFail",
+    "LavalinkNoVoice",
+    "NodeDestroy",
+    "NodeDeleted",
+    "NodeReconnectFail",
+    "DisconnectAllNodes",
+    "ReconnectAllNodes",
+    "PlayerChangeNodeFail",
+    "PlayerChangeNodeFailNoEligibleNode",
+    "TrackErrorMaxTracksErroredPerTime",
+    "TrackStuckMaxTracksErroredPerTime",
+])
+
+/**
+ * Whether `playerDestroy` should delete the DB session for this destroy reason.
+ * Non-string reasons (typical app `player.destroy()`) clear; known infra reasons preserve.
+ */
+export function shouldClearPlayerSessionOnDestroy(reason: unknown): boolean {
+    if (typeof reason !== "string" || reason.length === 0) return true
+    return !PRESERVE_SESSION_DESTROY_REASONS.has(reason)
 }
 
 /** Removes a persisted session row (intentional destroy or stale cleanup). */

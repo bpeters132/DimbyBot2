@@ -2,6 +2,8 @@ import { SlashCommandBuilder } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
+import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
+import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 
 export default {
     data: new SlashCommandBuilder().setName("shuffle").setDescription("Shuffle the current queue"),
@@ -47,7 +49,11 @@ export default {
             })
         }
 
-        await player.queue.shuffle()
+        await withGuildPlayerQueueLock(guild.id, async () => {
+            if (player.queue.tracks.length < 2) return
+            await player.queue.shuffle()
+            schedulePlayerSessionSave(player)
+        })
         await interaction.reply("Queue shuffled.")
     },
 }

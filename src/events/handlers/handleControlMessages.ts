@@ -6,7 +6,16 @@ import {
 } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import { discordDeleteErrorDetails } from "../../util/discordErrorDetails.js"
+import {
+    tryDestroyOrphanGuildPlayer,
+    withGuildPlayerLifecycleReservation,
+} from "../../util/guildPlayerQueueLock.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
+import { playerHasQueueContent } from "../../util/playlistQueue.js"
+import {
+    memberMayJoinOccupiedVoice,
+    resolveOccupiedVoiceChannelId,
+} from "../../util/sameVoiceChannel.js"
 
 export default async function handleControlMessages(client: BotClient, message: Message) {
     if (!message.member) {
@@ -66,93 +75,149 @@ export default async function handleControlMessages(client: BotClient, message: 
             `[ControlHandler] Bot has Connect/Speak permissions for VC ${voiceChannel.id}.`
         )
 
-        // 3. Get/Create player
-        let player = client.lavalink?.getPlayer(guildId)
-        if (!player) {
-            client.debug(`[ControlHandler] No existing player for guild ${guildId}. Creating one.`)
-            player = client.lavalink?.createPlayer({
-                guildId,
-                voiceChannelId: voiceChannel.id,
-                textChannelId: sendChannel.id,
-                selfDeaf: true,
-                volume: 100, // TODO: Make volume configurable?
-            })
-            client.debug(`[ControlHandler] Created Lavalink player for guild ${guildId}.`)
-        } else {
-            client.debug(
-                `[ControlHandler] Found existing player for guild ${guildId}. Connected: ${player.connected}`
-            )
+        // 3. Refuse if bot occupies another VC (incl. local playback), then reserve + get/create.
+        const guild = message.guild
+        if (!guild) return
+        {
+            const existingPlayer = client.lavalink?.getPlayer(guildId)
+            const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, existingPlayer)
+            if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
+                client.warn(
+                    `[ControlHandler] User ${member.id} in VC ${voiceChannel.id}, but bot occupies VC ${occupiedVoiceChannelId} for guild ${guildId}.`
+                )
+                const otherVc = occupiedVoiceChannelId
+                    ? client.channels.cache.get(occupiedVoiceChannelId)
+                    : undefined
+                const otherName =
+                    otherVc &&
+                    "name" in otherVc &&
+                    typeof (otherVc as { name: string }).name === "string"
+                        ? (otherVc as { name: string }).name
+                        : "Unknown Channel"
+                feedbackMessage = await sendChannel.send(
+                    `${member}, I'm already playing in another voice channel (${otherName}).`
+                )
+                return
+            }
         }
 
-        if (!player) {
+        const controlOutcome = await withGuildPlayerLifecycleReservation(guildId, async () => {
+            let player = client.lavalink?.getPlayer(guildId)
+            let createdHere = false
+            if (!player) {
+                client.debug(
+                    `[ControlHandler] No existing player for guild ${guildId}. Creating one.`
+                )
+                player = client.lavalink?.createPlayer({
+                    guildId,
+                    voiceChannelId: voiceChannel.id,
+                    textChannelId: sendChannel.id,
+                    selfDeaf: true,
+                    volume: 100, // TODO: Make volume configurable?
+                })
+                createdHere = true
+                client.debug(`[ControlHandler] Created Lavalink player for guild ${guildId}.`)
+            } else {
+                client.debug(
+                    `[ControlHandler] Found existing player for guild ${guildId}. Connected: ${player.connected}`
+                )
+            }
+
+            if (!player) {
+                return { kind: "no_player" as const }
+            }
+
+            const cleanupCreatedPlayer = async (): Promise<void> => {
+                if (!createdHere) return
+                await tryDestroyOrphanGuildPlayer(guildId, {
+                    hasQueueContent: () => {
+                        const live = client.lavalink?.getPlayer(guildId) ?? player
+                        return live ? playerHasQueueContent(live) : false
+                    },
+                    destroyPlayer: async () => {
+                        await client.lavalink?.destroyPlayer(guildId)
+                    },
+                })
+            }
+
+            if (!player.connected) {
+                client.debug(
+                    `[ControlHandler] Player not connected for guild ${guildId}. Attempting connection to VC ${voiceChannel.id}.`
+                )
+                player.voiceChannelId = voiceChannel.id
+                player.textChannelId = sendChannel.id
+                try {
+                    await player.connect()
+                    client.debug(
+                        `[ControlHandler] Player successfully connected to VC ${voiceChannel.id} in guild ${guildId}.`
+                    )
+                } catch (connectError: unknown) {
+                    client.error(
+                        `[ControlHandler] Player failed to connect in guild ${guildId}:`,
+                        connectError
+                    )
+                    await cleanupCreatedPlayer()
+                    return { kind: "connect_failed" as const }
+                }
+            } else if (player.voiceChannelId !== voiceChannel.id) {
+                // If the user is in a different VC than the bot
+                client.warn(
+                    `[ControlHandler] User ${member.id} in VC ${voiceChannel.id}, but player is in VC ${player.voiceChannelId} for guild ${guildId}.`
+                )
+                const otherVc = player.voiceChannelId
+                    ? client.channels.cache.get(player.voiceChannelId)
+                    : undefined
+                const otherName =
+                    otherVc &&
+                    "name" in otherVc &&
+                    typeof (otherVc as { name: string }).name === "string"
+                        ? (otherVc as { name: string }).name
+                        : "Unknown Channel"
+                return { kind: "wrong_channel" as const, otherName }
+            }
+            client.debug(
+                `[ControlHandler] Player connected status checked/handled for guild ${guildId}.`
+            )
+
+            // 5, 6, 7: Use the centralized handler
+            const result = await handleQueryAndPlay(
+                client,
+                guildId,
+                voiceChannel,
+                sendChannel,
+                content,
+                message.author,
+                player
+            )
+            return { kind: "played" as const, result }
+        })
+
+        if (controlOutcome.kind === "no_player") {
             feedbackMessage = await sendChannel.send(
                 `${member}, Could not start the music player. Try again in a moment.`
             )
             return
         }
-
-        if (!player.connected) {
-            client.debug(
-                `[ControlHandler] Player not connected for guild ${guildId}. Attempting connection to VC ${voiceChannel.id}.`
-            )
-            player.voiceChannelId = voiceChannel.id
-            player.textChannelId = sendChannel.id
-            try {
-                await player.connect()
-                client.debug(
-                    `[ControlHandler] Player successfully connected to VC ${voiceChannel.id} in guild ${guildId}.`
-                )
-            } catch (connectError: unknown) {
-                client.error(
-                    `[ControlHandler] Player failed to connect in guild ${guildId}:`,
-                    connectError
-                )
-                feedbackMessage = await sendChannel.send(
-                    `${member}, I couldn't connect to your voice channel.`
-                )
-                return
-            }
-        } else if (player.voiceChannelId !== voiceChannel.id) {
-            // If the user is in a different VC than the bot
-            client.warn(
-                `[ControlHandler] User ${member.id} in VC ${voiceChannel.id}, but player is in VC ${player.voiceChannelId} for guild ${guildId}.`
-            )
-            const otherVc = player.voiceChannelId
-                ? client.channels.cache.get(player.voiceChannelId)
-                : undefined
-            const otherName =
-                otherVc &&
-                "name" in otherVc &&
-                typeof (otherVc as { name: string }).name === "string"
-                    ? (otherVc as { name: string }).name
-                    : "Unknown Channel"
+        if (controlOutcome.kind === "connect_failed") {
             feedbackMessage = await sendChannel.send(
-                `${member}, I'm already playing in another voice channel (${otherName}).`
+                `${member}, I couldn't connect to your voice channel.`
             )
             return
         }
-        client.debug(
-            `[ControlHandler] Player connected status checked/handled for guild ${guildId}.`
-        )
-
-        // 5, 6, 7: Use the centralized handler
-        const result = await handleQueryAndPlay(
-            client,
-            guildId,
-            voiceChannel,
-            sendChannel,
-            content,
-            message.author,
-            player
-        )
+        if (controlOutcome.kind === "wrong_channel") {
+            feedbackMessage = await sendChannel.send(
+                `${member}, I'm already playing in another voice channel (${controlOutcome.otherName}).`
+            )
+            return
+        }
 
         client.debug(
-            `[ControlHandler] handleQueryAndPlay result for guild ${guildId}: Success=${result.success}, Feedback="${result.feedbackText}"`
+            `[ControlHandler] handleQueryAndPlay result for guild ${guildId}: Success=${controlOutcome.result.success}, Feedback="${controlOutcome.result.feedbackText}"`
         )
 
         // Send feedback from the result
-        if (result.feedbackText) {
-            feedbackMessage = await sendChannel.send(result.feedbackText)
+        if (controlOutcome.result.feedbackText) {
+            feedbackMessage = await sendChannel.send(controlOutcome.result.feedbackText)
         }
         // Note: updateControlMessage is called inside handleQueryAndPlay if needed.
     } catch (error: unknown) {

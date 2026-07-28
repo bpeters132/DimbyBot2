@@ -1,4 +1,5 @@
 import type { VoiceBasedChannel } from "discord.js"
+import type { Player } from "lavalink-client"
 import type BotClient from "../lib/BotClient.js"
 import type { PlayerSessionData } from "../types/index.js"
 import { deletePlayerSession, listPlayerSessions } from "../repositories/playerSessionRepository.js"
@@ -13,7 +14,16 @@ import {
     schedulePlayerSessionSave,
 } from "./playerSessionPersistence.js"
 import { resolvePersistedTracks } from "./playerSessionTracks.js"
+import { withGuildPlayerLifecycleReservation } from "./guildPlayerQueueLock.js"
 import { countHumanMembers } from "./voiceChannelMembers.js"
+
+/**
+ * Whether a successful partial hydrate may overwrite the persisted session snapshot.
+ * Transient resolve failures must keep the prior full snapshot on disk.
+ */
+export function shouldPersistRestoredPlayerSession(transientFailures: number): boolean {
+    return transientFailures <= 0
+}
 
 let discordReady = false
 let restoreInFlight = false
@@ -24,7 +34,12 @@ const STALE_SESSION_DISCORD_CODES = new Set([
     10004, // Unknown Guild
 ])
 
-function isStaleSessionDiscordError(error: unknown): boolean {
+/**
+ * True when a Discord API failure means the persisted voice channel/guild is gone
+ * (safe to delete the session). Transient/network errors must return false so restore
+ * can retry later without wiping the queue snapshot.
+ */
+export function isStaleSessionDiscordError(error: unknown): boolean {
     const code = getDiscordErrorCode(error)
     return code !== undefined && STALE_SESSION_DISCORD_CODES.has(code)
 }
@@ -132,52 +147,84 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
     const textChannelId = resolveTextChannelId(session)
     markPlayerSessionRestoreInProgress(guildId)
 
+    let playerToPersist: Player | null = null
     try {
-        const player = await client.lavalink.createPlayer({
-            guildId,
-            voiceChannelId,
-            textChannelId: textChannelId ?? undefined,
-            selfDeaf: true,
-            volume: snapshot.volume,
+        await withGuildPlayerLifecycleReservation(guildId, async () => {
+            // Re-check under the reservation: a concurrent create may have won the race.
+            if (client.lavalink.getPlayer(guildId)) {
+                client.debug(
+                    `[playerSession] restore skipped for ${guildId}: player appeared before hydrate`
+                )
+                return
+            }
+
+            const player = await client.lavalink.createPlayer({
+                guildId,
+                voiceChannelId,
+                textChannelId: textChannelId ?? undefined,
+                selfDeaf: true,
+                volume: snapshot.volume,
+            })
+
+            await ensurePlayerConnected(client, player, voiceChannel)
+
+            const { resolved, failed, transientFailures } = await resolvePersistedTracks(
+                player,
+                tracksToRestore
+            )
+            if (failed > 0) {
+                client.warn(
+                    `[playerSession] restore for ${guildId}: ${failed}/${tracksToRestore.length} tracks failed to resolve` +
+                        (transientFailures > 0 ? ` (${transientFailures} transient)` : "")
+                )
+            }
+            if (resolved.length === 0) {
+                await player.destroy()
+                // Lavalink/source blips that throw during decode/search must not wipe the snapshot.
+                // Deterministic no-match (search returned nothing usable) still deletes.
+                if (transientFailures > 0) {
+                    client.warn(
+                        `[playerSession] restore for ${guildId}: no tracks resolved due to transient failures; preserving session`
+                    )
+                    return
+                }
+                client.warn(
+                    `[playerSession] restore for ${guildId}: no tracks resolved; destroying player`
+                )
+                await deletePlayerSession(guildId)
+                return
+            }
+
+            await player.queue.add(resolved)
+
+            if (snapshot.repeatMode !== "off") {
+                await player.setRepeatMode(snapshot.repeatMode)
+            }
+            player.set("autoplay", snapshot.autoplay)
+            player.set("rrqEnabled", snapshot.rrqEnabled)
+
+            await startPlaybackIfNeeded(player)
+            if (snapshot.paused && player.playing) {
+                await player.pause()
+            }
+
+            client.info(
+                `[playerSession] restored player for guild ${guildId} (${resolved.length} tracks, humans=${humans})`
+            )
+
+            scheduleControlMessageUpdate(client, guildId)
+            playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
+            // schedulePlayerSessionSave is a no-op while restore-in-progress; persist after clear.
+            // Skip save when some tracks failed transiently — otherwise a partial hydrate would
+            // permanently drop those entries from the session snapshot.
+            if (shouldPersistRestoredPlayerSession(transientFailures)) {
+                playerToPersist = player
+            } else {
+                client.warn(
+                    `[playerSession] restore for ${guildId}: skipping session save after ${transientFailures} transient failure(s); preserving prior snapshot`
+                )
+            }
         })
-
-        await ensurePlayerConnected(client, player, voiceChannel)
-
-        const { resolved, failed } = await resolvePersistedTracks(player, tracksToRestore)
-        if (failed > 0) {
-            client.warn(
-                `[playerSession] restore for ${guildId}: ${failed}/${tracksToRestore.length} tracks failed to resolve`
-            )
-        }
-        if (resolved.length === 0) {
-            client.warn(
-                `[playerSession] restore for ${guildId}: no tracks resolved; destroying player`
-            )
-            await player.destroy()
-            await deletePlayerSession(guildId)
-            return
-        }
-
-        await player.queue.add(resolved)
-
-        if (snapshot.repeatMode !== "off") {
-            await player.setRepeatMode(snapshot.repeatMode)
-        }
-        player.set("autoplay", snapshot.autoplay)
-        player.set("rrqEnabled", snapshot.rrqEnabled)
-
-        await startPlaybackIfNeeded(player)
-        if (snapshot.paused && player.playing) {
-            await player.pause()
-        }
-
-        client.info(
-            `[playerSession] restored player for guild ${guildId} (${resolved.length} tracks, humans=${humans})`
-        )
-
-        scheduleControlMessageUpdate(client, guildId)
-        playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
-        schedulePlayerSessionSave(player)
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         client.error(`[playerSession] restore failed for guild ${guildId}: ${msg}`)
@@ -185,9 +232,14 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
         if (orphan) {
             await orphan.destroy().catch(() => undefined)
         }
+        playerToPersist = null
         // Transient failures (Lavalink/Discord blips) must not wipe the persisted snapshot.
     } finally {
         clearPlayerSessionRestoreInProgress(guildId)
+    }
+
+    if (playerToPersist) {
+        schedulePlayerSessionSave(playerToPersist)
     }
 }
 

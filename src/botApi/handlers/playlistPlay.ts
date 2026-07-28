@@ -8,16 +8,16 @@ import { toPlayerStateResponse } from "../../shared/player-state.js"
 import { getPlaylistById } from "../../repositories/playlistRepository.js"
 import { searchAndEnqueue } from "./searchAndEnqueue.js"
 import {
-    clearUpcomingQueue,
-    enqueueResolvedPlaylistTracks,
     type EnqueuePlaylistResult,
     playerHasQueueContent,
+    replaceUpcomingWithResolvedPlaylistTracks,
     resolveStoredPlaylistTracks,
-    restoreUpcomingQueue,
-    snapshotUpcomingQueue,
 } from "../../util/playlistQueue.js"
-import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
-import { acquirePlayerSessionClearSuppressLease } from "../../util/playerSessionPersistence.js"
+import {
+    acquireGuildPlayerLifecycleReservation,
+    tryDestroyOrphanGuildPlayer,
+} from "../../util/guildPlayerQueueLock.js"
+import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
 
 export async function playerPlaylistPlayPOST(
     headers: Headers,
@@ -138,77 +138,67 @@ export async function playerPlaylistPlayPOST(
         }
 
         const player = voiceSetup.player
-        const { resolved, failed } = await resolveStoredPlaylistTracks(
-            player,
-            playlist.tracks,
-            requesterPayload
-        )
-
-        if (resolved.length === 0) {
-            // Serialize emptiness check + destroy with enqueue so a concurrent queue add cannot
-            // land between the check and teardown.
-            await withGuildPlayerQueueLock(guildId, async () => {
-                if (playerHasQueueContent(player)) return
-                const suppressLease = acquirePlayerSessionClearSuppressLease(guildId)
-                await client.lavalink.destroyPlayer(guildId).catch(() => {
-                    // Release only this attempt's lease; clearPlayerSession consumes on success.
-                    suppressLease.release()
-                })
-            })
-            return {
-                status: 404,
-                body: {
-                    ok: false,
-                    error: {
-                        error: "No matches found.",
-                        details: "Could not resolve any tracks from this playlist.",
-                    },
-                },
-            }
-        }
-
-        const savedUpcoming = snapshotUpcomingQueue(player)
-        let enqueue: EnqueuePlaylistResult
+        // Cover resolve → enqueue/cleanup so queueEnd idle destroy and concurrent orphan
+        // teardown cannot kill the player while playlist tracks are still resolving.
+        const lifecycleReservation = await acquireGuildPlayerLifecycleReservation(guildId)
         try {
-            await clearUpcomingQueue(player)
-            enqueue = await enqueueResolvedPlaylistTracks(
+            const { resolved, failed } = await resolveStoredPlaylistTracks(
+                player,
+                playlist.tracks,
+                requesterPayload
+            )
+
+            if (resolved.length === 0) {
+                await tryDestroyOrphanGuildPlayer(guildId, {
+                    hasQueueContent: () => {
+                        const live = client.lavalink.getPlayer(guildId) ?? player
+                        return playerHasQueueContent(live)
+                    },
+                    destroyPlayer: async () => {
+                        await destroyPlayerSuppressingSessionClear(guildId, () =>
+                            client.lavalink.destroyPlayer(guildId)
+                        )
+                    },
+                })
+                return {
+                    status: 404,
+                    body: {
+                        ok: false,
+                        error: {
+                            error: "No matches found.",
+                            details: "Could not resolve any tracks from this playlist.",
+                        },
+                    },
+                }
+            }
+
+            // Clear + enqueue must share one guild lock so a concurrent queue POST cannot
+            // succeed then be wiped by clearUpcoming between unlocked clear and locked add.
+            const enqueue: EnqueuePlaylistResult = await replaceUpcomingWithResolvedPlaylistTracks(
                 player,
                 resolved,
                 requester.requesterId,
                 shuffle
             )
-        } catch (enqueueErr: unknown) {
-            try {
-                await restoreUpcomingQueue(player, savedUpcoming)
-            } catch (restoreErr: unknown) {
-                const restoreMessage =
-                    restoreErr instanceof Error ? restoreErr.message : String(restoreErr)
-                console.error(
-                    "[playerPlaylistPlayPOST] failed to restore queue after enqueue error",
-                    {
-                        guildId,
-                        restoreMessage,
-                    }
-                )
-            }
-            throw enqueueErr
-        }
 
-        const state = await toPlayerStateResponse(guildId, requester.requesterId, player)
+            const state = await toPlayerStateResponse(guildId, requester.requesterId, player)
 
-        return {
-            status: 200,
-            body: {
-                ok: true,
-                data: {
-                    state,
-                    playlistId: playlist.id,
-                    playlistName: playlist.name,
-                    queued: enqueue.queued,
-                    failed,
-                    shuffle,
+            return {
+                status: 200,
+                body: {
+                    ok: true,
+                    data: {
+                        state,
+                        playlistId: playlist.id,
+                        playlistName: playlist.name,
+                        queued: enqueue.queued,
+                        failed,
+                        shuffle,
+                    },
                 },
-            },
+            }
+        } finally {
+            lifecycleReservation.release()
         }
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)

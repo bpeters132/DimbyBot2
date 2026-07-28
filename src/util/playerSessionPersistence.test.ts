@@ -5,11 +5,13 @@ import {
     acquirePlayerSessionClearSuppressLease,
     clearPlayerSession,
     clearPlayerSessionRestoreInProgress,
+    destroyPlayerSuppressingSessionClear,
     getSessionClearEpochForTests,
     markPlayerSessionRestoreInProgress,
     setPlayerSessionPersistenceDbForTests,
     shouldSkipPlayerSessionClear,
     shouldSkipPlayerSessionClearForState,
+    shouldClearPlayerSessionOnDestroy,
     shouldUndoStaleSessionUpsert,
     snapshotFromPlayer,
     writePlayerSessionForTests,
@@ -120,6 +122,41 @@ describe("snapshotFromPlayer", () => {
     })
 })
 
+describe("shouldClearPlayerSessionOnDestroy", () => {
+    it("clears for intentional app destroys (undefined / empty reason)", () => {
+        assert.equal(shouldClearPlayerSessionOnDestroy(undefined), true)
+        assert.equal(shouldClearPlayerSessionOnDestroy(null), true)
+        assert.equal(shouldClearPlayerSessionOnDestroy(""), true)
+        assert.equal(shouldClearPlayerSessionOnDestroy("custom leave"), true)
+    })
+
+    it("preserves sessions for Discord disconnect and reconnect failure", () => {
+        assert.equal(shouldClearPlayerSessionOnDestroy("Disconnected"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("PlayerReconnectFail"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("LavalinkNoVoice"), false)
+    })
+
+    it("preserves sessions for node / infra teardown reasons", () => {
+        assert.equal(shouldClearPlayerSessionOnDestroy("NodeDestroy"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("NodeDeleted"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("NodeReconnectFail"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("DisconnectAllNodes"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("ReconnectAllNodes"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("PlayerChangeNodeFail"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("PlayerChangeNodeFailNoEligibleNode"), false)
+    })
+
+    it("preserves sessions for library max-errors auto-destroy", () => {
+        assert.equal(shouldClearPlayerSessionOnDestroy("TrackErrorMaxTracksErroredPerTime"), false)
+        assert.equal(shouldClearPlayerSessionOnDestroy("TrackStuckMaxTracksErroredPerTime"), false)
+    })
+
+    it("still clears when the voice channel itself is deleted", () => {
+        assert.equal(shouldClearPlayerSessionOnDestroy("ChannelDeleted"), true)
+        assert.equal(shouldClearPlayerSessionOnDestroy("QueueEmpty"), true)
+    })
+})
+
 describe("shouldSkipPlayerSessionClear", () => {
     afterEach(() => {
         clearPlayerSessionRestoreInProgress("guild-restore")
@@ -157,6 +194,59 @@ describe("shouldSkipPlayerSessionClear", () => {
         assert.equal(shouldSkipPlayerSessionClear("guild-lease"), true)
         leaseB.release()
         assert.equal(shouldSkipPlayerSessionClear("guild-lease"), false)
+    })
+
+    it("releases suppress lease when destroyPlayer returns undefined (already gone)", async () => {
+        // Mirrors LavalinkManager.destroyPlayer: sync undefined when no player exists.
+        // The old `.catch` pattern threw TypeError and leaked the lease forever.
+        await destroyPlayerSuppressingSessionClear("guild-gone", () => undefined)
+        assert.equal(shouldSkipPlayerSessionClear("guild-gone"), false)
+    })
+
+    it("releases suppress lease when destroyPlayer rejects", async () => {
+        await destroyPlayerSuppressingSessionClear("guild-reject", () =>
+            Promise.reject(new Error("destroy failed"))
+        )
+        assert.equal(shouldSkipPlayerSessionClear("guild-reject"), false)
+    })
+
+    it("keeps suppress lease when destroyPlayer resolves (clear consumes it)", async () => {
+        await destroyPlayerSuppressingSessionClear("guild-ok", () => Promise.resolve())
+        assert.equal(shouldSkipPlayerSessionClear("guild-ok"), true)
+        // Simulate playerDestroy → clearPlayerSession consuming the lease.
+        await clearPlayerSession("guild-ok")
+        assert.equal(shouldSkipPlayerSessionClear("guild-ok"), false)
+    })
+})
+
+describe("clearPlayerSession suppress lease consumption", () => {
+    afterEach(() => {
+        setPlayerSessionPersistenceDbForTests(null)
+    })
+
+    it("consumes one suppress lease without deleting or bumping the clear epoch", async () => {
+        const guildId = "guild-suppress-consume"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        const epochBefore = getSessionClearEpochForTests(guildId)
+        acquirePlayerSessionClearSuppressLease(guildId)
+        await clearPlayerSession(guildId)
+
+        assert.deepEqual(events, [])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore)
+        assert.equal(shouldSkipPlayerSessionClear(guildId), false)
+
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, ["delete"])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
     })
 })
 

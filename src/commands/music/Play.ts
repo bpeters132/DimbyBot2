@@ -2,7 +2,12 @@ import { SlashCommandBuilder } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
+import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
+import {
+    memberMayJoinOccupiedVoice,
+    resolveOccupiedVoiceChannelId,
+} from "../../util/sameVoiceChannel.js"
 import { webDashboardPromoAppend } from "../../util/webDashboardUrl.js"
 
 export default {
@@ -36,28 +41,16 @@ export default {
             return interaction.reply({ content: "Join a voice channel first!", ephemeral: true })
         }
 
-        // Use getPlayer first to potentially reuse existing player
-        let player = client.lavalink.getPlayer(guild.id)
-        let createdNewPlayer = false
-
-        if (!player) {
-            player = await client.lavalink.createPlayer({
-                guildId: guild.id,
-                voiceChannelId: voiceChannel.id,
-                textChannelId: interaction.channelId, // Bind player to interaction channel initially
-                selfDeaf: true,
-                // selfMute: false, // Default is false
-                volume: 100, // Default volume
-            })
-            createdNewPlayer = true
-        }
-
-        if (player.connected && player.voiceChannelId !== voiceChannel.id) {
-            // Optional: Handle user being in a different channel than the bot
-            return interaction.reply({
-                content: "You need to be in the same voice channel as the bot!",
-                ephemeral: true,
-            })
+        // Cover local @discordjs/voice playback (Lavalink player destroyed) and connected sessions.
+        {
+            const existingPlayer = client.lavalink.getPlayer(guild.id)
+            const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, existingPlayer)
+            if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
+                return interaction.reply({
+                    content: "You need to be in the same voice channel as the bot!",
+                    ephemeral: true,
+                })
+            }
         }
 
         const textChannel = interaction.channel
@@ -70,14 +63,46 @@ export default {
 
         await interaction.deferReply()
 
-        const result = await handleQueryAndPlay(
-            client,
+        // Hold a lifecycle reservation across create + search so web orphan cleanup cannot
+        // destroy the player while Discord /play is still resolving tracks.
+        const { createdNewPlayer, result } = await withGuildPlayerLifecycleReservation(
             guild.id,
-            voiceChannel,
-            textChannel,
-            query,
-            interaction.user,
-            player
+            async () => {
+                let player = client.lavalink.getPlayer(guild.id)
+                let createdNewPlayer = false
+
+                if (!player) {
+                    player = await client.lavalink.createPlayer({
+                        guildId: guild.id,
+                        voiceChannelId: voiceChannel.id,
+                        textChannelId: interaction.channelId,
+                        selfDeaf: true,
+                        volume: 100,
+                    })
+                    createdNewPlayer = true
+                }
+
+                if (player.connected && player.voiceChannelId !== voiceChannel.id) {
+                    return {
+                        createdNewPlayer: false,
+                        result: {
+                            success: false,
+                            feedbackText: "You need to be in the same voice channel as the bot!",
+                        },
+                    }
+                }
+
+                const result = await handleQueryAndPlay(
+                    client,
+                    guild.id,
+                    voiceChannel,
+                    textChannel,
+                    query,
+                    interaction.user,
+                    player
+                )
+                return { createdNewPlayer, result }
+            }
         )
 
         let replyText = result.feedbackText || "Something went wrong."

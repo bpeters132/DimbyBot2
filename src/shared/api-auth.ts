@@ -15,6 +15,8 @@ import { auth } from "./auth-node.js"
 import { tryGetBotClient } from "../lib/botClientRegistry.js"
 import { webPlayerDebug, webPlayerWarn } from "./web-player-debug-log.js"
 import { getBotApiOrigin } from "./bot-api-origin.js"
+import { normalizeDashboardPermissionSnapshotResponse } from "./dashboard-permission-snapshot.js"
+import { decideAdminAccess } from "./admin-access-decision.js"
 
 export interface AuthenticatedSession {
     user: {
@@ -278,115 +280,6 @@ export async function resolveAuthenticatedGuildAccess(
 }
 
 const DASHBOARD_PERM_UPSTREAM_FETCH_MS = 10_000
-
-function snapshotErrorMessageFromPayload(body: Record<string, unknown>): string {
-    if (typeof body.error === "string") return body.error
-    const nested = body.error
-    if (nested && typeof nested === "object" && nested !== null && "error" in nested) {
-        const inner = (nested as { error?: unknown }).error
-        if (typeof inner === "string") return inner
-    }
-    return "Request failed"
-}
-
-function snapshotErrorDetailsFromPayload(body: Record<string, unknown>): string | undefined {
-    if (typeof body.details === "string") return body.details
-    const nested = body.error
-    if (nested && typeof nested === "object" && nested !== null && "details" in nested) {
-        const d = (nested as { details?: unknown }).details
-        if (typeof d === "string") return d
-    }
-    return undefined
-}
-
-/**
- * Maps bot Express JSON (including generic `{ ok: false, error: { error } }` errors) into
- * {@link GuildDashboardSnapshotResult}.
- */
-function normalizeDashboardPermissionSnapshotResponse(
-    parsed: unknown,
-    httpStatus: number
-): GuildDashboardSnapshotResult {
-    if (!parsed || typeof parsed !== "object" || !("ok" in parsed)) {
-        return {
-            ok: false,
-            status: httpStatus >= 400 ? httpStatus : 502,
-            error: "Invalid bot response",
-            details: "The bot API returned an unexpected payload for dashboard permissions.",
-        }
-    }
-    const body = parsed as Record<string, unknown>
-    if (body.ok === false) {
-        const status =
-            typeof body.status === "number" && Number.isFinite(body.status)
-                ? Math.floor(body.status)
-                : httpStatus >= 400
-                  ? httpStatus
-                  : 502
-        return {
-            ok: false,
-            status,
-            error: snapshotErrorMessageFromPayload(body),
-            details: snapshotErrorDetailsFromPayload(body),
-        }
-    }
-    if (body.ok !== true) {
-        return {
-            ok: false,
-            status: 502,
-            error: "Invalid bot response",
-            details: "The bot API returned an unexpected `ok` field for dashboard permissions.",
-        }
-    }
-
-    const discordUserId = body.discordUserId
-    if (typeof discordUserId !== "string") {
-        return {
-            ok: false,
-            status: 502,
-            error: "Invalid bot response",
-            details: "Dashboard permission snapshot is missing `discordUserId`.",
-        }
-    }
-
-    const snap = body.snapshot
-    if (!snap || typeof snap !== "object") {
-        return {
-            ok: false,
-            status: 502,
-            error: "Invalid bot response",
-            details: "Dashboard permission snapshot is missing `snapshot`.",
-        }
-    }
-    const s = snap as Record<string, unknown>
-    const primary = s.primaryPermissions
-    const oauth = s.oauthPermissions
-    const allowedWebPermissions = new Set<string>(Object.values(WebPermission))
-    const isValidPermissionList = (value: unknown): value is string[] =>
-        Array.isArray(value) &&
-        value.every((p) => typeof p === "string" && allowedWebPermissions.has(p))
-    if (!isValidPermissionList(primary) || !isValidPermissionList(oauth)) {
-        return {
-            ok: false,
-            status: 502,
-            error: "Invalid bot response",
-            details: "Dashboard permission snapshot has invalid permission arrays.",
-        }
-    }
-
-    return {
-        ok: true,
-        snapshot: {
-            memberResolved: Boolean(s.memberResolved),
-            primaryPermissions: primary,
-            oauthPermissions: oauth,
-            ...(typeof s.optimisticBotUnavailable === "boolean"
-                ? { optimisticBotUnavailable: s.optimisticBotUnavailable }
-                : {}),
-        },
-        discordUserId,
-    }
-}
 
 /**
  * Resolves primary + OAuth permission lists when a {@link BotClient} is already available (in-process
@@ -673,6 +566,7 @@ export async function requireDeveloperAccess(
 
     const resolvedHeaders = asHeaders(headers)
     let discordUserId: string | null
+    let discordResolveFailed = false
     try {
         discordUserId = await resolveDiscordUserSnowflake(
             sessionResult.session.user.id,
@@ -681,37 +575,23 @@ export async function requireDeveloperAccess(
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error)
         console.error("[api-auth] requireDeveloperAccess resolveDiscordUserSnowflake failed:", msg)
-        return {
-            ok: false,
-            status: 403,
-            error: "Discord account required",
-            details:
-                "Discord account required — please sign in with Discord or try again.",
-        }
-    }
-    if (!discordUserId) {
-        return {
-            ok: false,
-            status: 403,
-            error: "Discord account required",
-            details:
-                "We could not resolve your Discord user id (needed for roles and voice state). Sign in with Discord, or sign out and sign in again.",
-        }
+        discordUserId = null
+        discordResolveFailed = true
     }
 
-    const ownerId = getCachedOwnerId()
-    if (!ownerId || discordUserId !== ownerId) {
-        return {
-            ok: false,
-            status: 403,
-            error: "Forbidden",
-            details: "Developer access required.",
-        }
+    const decision = decideAdminAccess({
+        hasSessionUser: true,
+        discordResolveFailed,
+        discordUserId,
+        ownerId: getCachedOwnerId(),
+    })
+    if (decision.ok === false) {
+        return decision
     }
 
     return {
         ok: true,
         session: sessionResult.session,
-        discordUserId,
+        discordUserId: decision.discordUserId,
     }
 }

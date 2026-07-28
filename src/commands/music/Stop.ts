@@ -2,7 +2,12 @@ import { SlashCommandBuilder } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction, Message } from "discord.js"
 import { discordDeleteErrorDetails } from "../../util/discordErrorDetails.js"
+import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import { stopLocalPlayer, getLocalPlayerState } from "../../util/localPlayer.js"
+import {
+    memberMayJoinOccupiedVoice,
+    resolveOccupiedVoiceChannelId,
+} from "../../util/sameVoiceChannel.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -14,6 +19,33 @@ export default {
         if (!guild) {
             return interaction.reply({
                 content: "Use this command in a server.",
+                ephemeral: true,
+            })
+        }
+
+        const member = guildMemberFromInteraction(interaction)
+        if (!member) {
+            return interaction.reply({
+                content: "Could not resolve your member profile. Try again.",
+                ephemeral: true,
+            })
+        }
+
+        const voiceChannel = member.voice.channel
+        if (!voiceChannel) {
+            return interaction.reply({
+                content: "Join a voice channel first!",
+                ephemeral: true,
+            })
+        }
+
+        // Require same VC (incl. local playback with no Lavalink player) so remote /stop
+        // cannot wipe another channel's session.
+        const lavalinkPlayer = client.lavalink.players.get(guild.id)
+        const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, lavalinkPlayer)
+        if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
+            return interaction.reply({
+                content: "You need to be in the same voice channel as the bot!",
                 ephemeral: true,
             })
         }
@@ -32,8 +64,6 @@ export default {
             }
         }
 
-        // Attempt to stop Lavalink player
-        const lavalinkPlayer = client.lavalink.players.get(guild.id)
         if (lavalinkPlayer) {
             // Check if it was actually doing something or had a queue
             if (

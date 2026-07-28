@@ -7,7 +7,7 @@ import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
 import type { PermissionGuardSuccess } from "../../shared/api-auth.js"
 import { resolveWebDashboardTextChannelId } from "../webDashboardTextChannel.js"
 import {
-    acquirePlayerSessionClearSuppressLease,
+    destroyPlayerSuppressingSessionClear,
     schedulePlayerSessionSave,
 } from "../../util/playerSessionPersistence.js"
 import {
@@ -16,6 +16,10 @@ import {
     withGuildPlayerQueueLock,
 } from "../../util/guildPlayerQueueLock.js"
 import { playerHasQueueContent } from "../../util/playlistQueue.js"
+import {
+    memberMayJoinOccupiedVoice,
+    resolveOccupiedVoiceChannelId,
+} from "../../util/sameVoiceChannel.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
 
@@ -128,32 +132,50 @@ export async function searchAndEnqueue(
         }
     }
 
-    let player = client.lavalink.getPlayer(guildId)
-    let createdHere = false
-    if (!player) {
-        try {
-            player = await client.lavalink.createPlayer({
-                guildId,
-                voiceChannelId: voiceChannel.id,
-                textChannelId,
-                selfDeaf: true,
-                volume: 100,
-            })
-            createdHere = true
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err)
-            console.error("[searchAndEnqueue] createPlayer failed", { guildId, requesterId, err })
+    // Refuse takeover while bot occupies another VC (incl. local playback with no Lavalink player).
+    {
+        const existingPlayer = client.lavalink.getPlayer(guildId)
+        const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, existingPlayer)
+        if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
             return {
                 ok: false,
-                status: 503,
-                error: { error: "Could not create the player.", details: message },
+                status: 403,
+                error: { error: "You need to be in the same voice channel as the bot." },
             }
         }
     }
 
-    // Cover acquisition → search/enqueue so concurrent orphan cleanup cannot destroy mid-use.
+    // Reserve before createPlayer so concurrent orphan/idle destroy cannot tear down a
+    // freshly created player in the window between create and the old post-create acquire.
     const lifecycleReservation = await acquireGuildPlayerLifecycleReservation(guildId)
     try {
+        let player = client.lavalink.getPlayer(guildId)
+        let createdHere = false
+        if (!player) {
+            try {
+                player = await client.lavalink.createPlayer({
+                    guildId,
+                    voiceChannelId: voiceChannel.id,
+                    textChannelId,
+                    selfDeaf: true,
+                    volume: 100,
+                })
+                createdHere = true
+            } catch (err: unknown) {
+                const message = err instanceof Error ? err.message : String(err)
+                console.error("[searchAndEnqueue] createPlayer failed", {
+                    guildId,
+                    requesterId,
+                    err,
+                })
+                return {
+                    ok: false,
+                    status: 503,
+                    error: { error: "Could not create the player.", details: message },
+                }
+            }
+        }
+
         if (textChannelId) {
             player.textChannelId = textChannelId
         }
@@ -167,11 +189,9 @@ export async function searchAndEnqueue(
                     return playerHasQueueContent(live)
                 },
                 destroyPlayer: async () => {
-                    const suppressLease = acquirePlayerSessionClearSuppressLease(guildId)
-                    await client.lavalink.destroyPlayer(guildId).catch(() => {
-                        // Release only this attempt's lease; clearPlayerSession consumes on success.
-                        suppressLease.release()
-                    })
+                    await destroyPlayerSuppressingSessionClear(guildId, () =>
+                        client.lavalink.destroyPlayer(guildId)
+                    )
                 },
             })
         }

@@ -35,8 +35,15 @@ import {
     userHasQueuedTracks,
 } from "../util/rrqDisconnect.js"
 import { playerBroadcaster } from "../shared/websocket/PlayerBroadcaster.js"
-import { clearPlayerSession, schedulePlayerSessionSave } from "../util/playerSessionPersistence.js"
+import {
+    clearPlayerSession,
+    schedulePlayerSessionSave,
+    shouldClearPlayerSessionOnDestroy,
+} from "../util/playerSessionPersistence.js"
+import { tryDestroyOrphanGuildPlayer } from "../util/guildPlayerQueueLock.js"
 import { countHumanMembers } from "../util/voiceChannelMembers.js"
+import { playerHasQueueContent } from "../util/playlistQueue.js"
+import { skipCurrentTrack } from "../util/skipCurrentTrack.js"
 
 /** Rate-limit `queueUpdate` websocket fan-out on Lavalink position ticks (pause/resume still immediate). */
 const lastQueueUpdateBroadcastAtMs = new Map<string, number>()
@@ -116,12 +123,18 @@ export default async (client: BotClient) => {
             )
             lastQueueUpdateBroadcastAtMs.delete(player.guildId)
             player.set(DASHBOARD_REQUESTER_KEY, undefined)
-            void clearPlayerSession(player.guildId).catch((err: unknown) => {
-                const msg = err instanceof Error ? err.message : String(err)
-                client.error(
-                    `[LavaMgrEvents] clearPlayerSession failed (guildId=${player.guildId}): ${msg}`
+            if (shouldClearPlayerSessionOnDestroy(reason)) {
+                void clearPlayerSession(player.guildId).catch((err: unknown) => {
+                    const msg = err instanceof Error ? err.message : String(err)
+                    client.error(
+                        `[LavaMgrEvents] clearPlayerSession failed (guildId=${player.guildId}): ${msg}`
+                    )
+                })
+            } else {
+                client.debug(
+                    `[LavaMgrEvents] Preserving player session for guild ${player.guildId} after destroy reason: ${String(reason)}`
                 )
-            })
+            }
             scheduleControlMessageUpdate(client, player.guildId, "playerDestroy")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, null, "playerDestroy")
         })
@@ -263,7 +276,15 @@ export default async (client: BotClient) => {
             client.debug(
                 `[LavaMgrEvents] Attempting to skip stuck track in guild ${player.guildId}.`
             )
-            await player.skip()
+            try {
+                // Default skip() throws when upcoming queue is empty (e.g. last/autoplay track).
+                await skipCurrentTrack(player)
+            } catch (e: unknown) {
+                client.error(
+                    `[LavaMgrEvents] Failed to skip stuck track in guild ${player.guildId}:`,
+                    e
+                )
+            }
         })
         .on(
             "trackError",
@@ -349,12 +370,55 @@ export default async (client: BotClient) => {
                     `[LavaMgrEvents] Attempting to skip track after error in guild ${player.guildId}.`
                 )
                 if (player.queue.tracks.length > 0) {
-                    await player.skip()
-                } else {
+                    try {
+                        await skipCurrentTrack(player)
+                    } catch (e: unknown) {
+                        client.error(
+                            `[LavaMgrEvents] Failed to skip after track error in guild ${player.guildId}:`,
+                            e
+                        )
+                    }
+                } else if (player.get("autoplay") === true) {
+                    // Library trackError does not advance to queueEnd; ending the current track
+                    // lets onEmptyQueue.autoPlayFunction run instead of wiping the session.
                     client.debug(
-                        `[LavaMgrEvents] Queue is empty, not skipping after error in guild ${player.guildId}.`
+                        `[LavaMgrEvents] Queue empty with autoplay on; ending current track for guild ${player.guildId}.`
                     )
-                    await player.destroy()
+                    try {
+                        await skipCurrentTrack(player)
+                    } catch (e: unknown) {
+                        client.error(
+                            `[LavaMgrEvents] Failed to end track for autoplay after error in guild ${player.guildId}:`,
+                            e
+                        )
+                    }
+                } else {
+                    // Reservation-aware: in-flight dashboard search/enqueue must not be destroyed.
+                    const trackErrorGuildId = player.guildId
+                    client.debug(
+                        `[LavaMgrEvents] Queue is empty after track error in guild ${trackErrorGuildId}; attempting reservation-aware destroy.`
+                    )
+                    await tryDestroyOrphanGuildPlayer(
+                        trackErrorGuildId,
+                        {
+                            hasQueueContent: () => {
+                                const live = client.lavalink.getPlayer(trackErrorGuildId)
+                                if (!live) return true
+                                return playerHasQueueContent(live)
+                            },
+                            destroyPlayer: async () => {
+                                const live = client.lavalink.getPlayer(trackErrorGuildId)
+                                if (!live || playerHasQueueContent(live)) {
+                                    client.debug(
+                                        `[LavaMgrEvents] Player ${trackErrorGuildId} regained queue content after track error; not destroying.`
+                                    )
+                                    return
+                                }
+                                await live.destroy()
+                            },
+                        },
+                        0
+                    )
                 }
             }
         )
@@ -383,25 +447,42 @@ export default async (client: BotClient) => {
                     )
             }
 
-            // Standard player destroy timeout
+            // Standard player destroy timeout — reservation-aware so in-flight search/enqueue
+            // (web dashboard) is not torn down mid-request when the queue just ended.
             client.debug(
                 `[LavaMgrEvents] Setting standard timeout to destroy player ${player.guildId} after queue end.`
             )
+            const queueEndGuildId = player.guildId
             setTimeout(() => {
                 void (async () => {
                     client.debug(
-                        `[LavaMgrEvents] Executing standard queue end timeout check for player ${player.guildId}.`
+                        `[LavaMgrEvents] Executing standard queue end timeout check for player ${queueEndGuildId}.`
                     )
-                    if (player && player.queue.tracks.length === 0 && !player.queue.current) {
-                        client.debug(
-                            `[LavaMgrEvents] Player ${player.guildId} is idle, destroying after queue end timeout.`
-                        )
-                        await player.destroy()
-                    } else {
-                        client.debug(
-                            `[LavaMgrEvents] Player ${player.guildId} has new tracks or state changed, not destroying after standard timeout. Player: ${!!player}, Queue Size: ${player?.queue.tracks.length}, Current: ${!!player?.queue.current}`
-                        )
-                    }
+                    await tryDestroyOrphanGuildPlayer(
+                        queueEndGuildId,
+                        {
+                            hasQueueContent: () => {
+                                const live = client.lavalink.getPlayer(queueEndGuildId)
+                                // Already gone — treat as "has content" so we do not re-destroy.
+                                if (!live) return true
+                                return playerHasQueueContent(live)
+                            },
+                            destroyPlayer: async () => {
+                                const live = client.lavalink.getPlayer(queueEndGuildId)
+                                if (!live || playerHasQueueContent(live)) {
+                                    client.debug(
+                                        `[LavaMgrEvents] Player ${queueEndGuildId} has new tracks or state changed, not destroying after standard timeout.`
+                                    )
+                                    return
+                                }
+                                client.debug(
+                                    `[LavaMgrEvents] Player ${queueEndGuildId} is idle, destroying after queue end timeout.`
+                                )
+                                await live.destroy()
+                            },
+                        },
+                        0
+                    )
                 })()
             }, 5000)
         })
@@ -424,53 +505,86 @@ export default async (client: BotClient) => {
             client.debug(
                 `[LavaMgrEvents] User left player's channel: Guild ${player.guildId}, User: ${userId}`
             )
+            const aloneGuildId = player.guildId
             const voiceChannel = player.voiceChannelId
                 ? client.channels.cache.get(player.voiceChannelId)
                 : undefined
             if (voiceChannel) {
                 client.debug(
-                    `[LavaMgrEvents] Setting timeout to check if bot is alone in VC ${player.voiceChannelId} for guild ${player.guildId}.`
+                    `[LavaMgrEvents] Setting timeout to check if bot is alone in VC ${player.voiceChannelId} for guild ${aloneGuildId}.`
                 )
                 setTimeout(async () => {
                     client.debug(
-                        `[LavaMgrEvents] Executing check if bot is alone for player ${player.guildId}.`
+                        `[LavaMgrEvents] Executing check if bot is alone for player ${aloneGuildId}.`
                     )
                     try {
-                        const vcId = player.voiceChannelId
-                        if (!vcId) return
+                        const livePlayer = client.lavalink.getPlayer(aloneGuildId)
+                        const vcId = livePlayer?.voiceChannelId
+                        if (!livePlayer || !vcId) return
                         const updatedVoiceChannel = await client.channels
                             .fetch(vcId)
                             .catch(() => null)
                         if (updatedVoiceChannel && updatedVoiceChannel.isVoiceBased()) {
                             const humanCount = countHumanMembers(updatedVoiceChannel)
                             client.debug(
-                                `[LavaMgrEvents] Current human member count in VC ${player.voiceChannelId}: ${humanCount}`
-                            ) // Log count
+                                `[LavaMgrEvents] Current human member count in VC ${vcId}: ${humanCount}`
+                            )
                             if (humanCount === 0) {
                                 client.info(
-                                    `[LavaMgrEvents] Destroying player in Guild ${player.guildId} as bot is alone.`
+                                    `[LavaMgrEvents] Bot alone in Guild ${aloneGuildId}; reservation-aware destroy.`
                                 )
-                                await updateControlMessage(client, player.guildId).catch(
-                                    (ctrlErr: unknown) => {
-                                        const msg =
-                                            ctrlErr instanceof Error
-                                                ? ctrlErr.message
-                                                : String(ctrlErr)
-                                        client.error(
-                                            `[LavaMgrEvents] updateControlMessage failed (beforeDestroyAlone, guildId=${player.guildId}): ${msg}`
-                                        )
-                                    }
+                                // reservedByCaller=0: in-flight search/playlist resolve must finish
+                                // (or defer teardown) instead of being killed mid-request.
+                                await tryDestroyOrphanGuildPlayer(
+                                    aloneGuildId,
+                                    {
+                                        // Alone policy destroys even with queue content; only
+                                        // lifecycle reservations should defer. destroyPlayer
+                                        // re-checks humans so a deferred run after rejoin is safe.
+                                        hasQueueContent: () => false,
+                                        destroyPlayer: async () => {
+                                            const live = client.lavalink.getPlayer(aloneGuildId)
+                                            if (!live) return
+                                            const liveVcId = live.voiceChannelId
+                                            if (!liveVcId) return
+                                            const stillAloneChannel = await client.channels
+                                                .fetch(liveVcId)
+                                                .catch(() => null)
+                                            if (
+                                                !stillAloneChannel ||
+                                                !stillAloneChannel.isVoiceBased() ||
+                                                countHumanMembers(stillAloneChannel) > 0
+                                            ) {
+                                                client.debug(
+                                                    `[LavaMgrEvents] Skipping alone destroy for ${aloneGuildId}; humans present or channel gone.`
+                                                )
+                                                return
+                                            }
+                                            await updateControlMessage(client, aloneGuildId).catch(
+                                                (ctrlErr: unknown) => {
+                                                    const msg =
+                                                        ctrlErr instanceof Error
+                                                            ? ctrlErr.message
+                                                            : String(ctrlErr)
+                                                    client.error(
+                                                        `[LavaMgrEvents] updateControlMessage failed (beforeDestroyAlone, guildId=${aloneGuildId}): ${msg}`
+                                                    )
+                                                }
+                                            )
+                                            await live.destroy()
+                                        },
+                                    },
+                                    0
                                 )
-                                await player.destroy()
                             }
                         } else {
                             client.warn(
-                                `[LavaMgrEvents] Could not verify member count for player ${player.guildId}. Channel ${player.voiceChannelId} not found or not voice-based.`
+                                `[LavaMgrEvents] Could not verify member count for player ${aloneGuildId}. Channel ${vcId} not found or not voice-based.`
                             )
                         }
                     } catch (error: unknown) {
                         client.error(
-                            `[LavaMgrEvents] Error checking channel members for player ${player.guildId}:`,
+                            `[LavaMgrEvents] Error checking channel members for player ${aloneGuildId}:`,
                             error
                         )
                     }

@@ -66,8 +66,9 @@ The current layout is intentional and supported: exclusion in `tsconfig.json` pl
 
 ## Testing Guidelines
 
-- No test framework is configured in `package.json`.
-- If you add tests, keep them near `src/` and document how to run them.
+- Unit tests use Node’s built-in test runner via `tsx`: `yarn test` runs `src/**/*.test.ts` next to the code under test.
+- Prefer keeping new suites under `src/` (e.g. `src/util/*.test.ts`, `src/shared/*.test.ts`).
+- Suggested manual checks: `yarn lint`, `yarn typecheck`, and `yarn test`.
 
 ## Commit & Pull Request Guidelines
 

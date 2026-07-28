@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
+import { memberMayControlPlayerVoice } from "../../util/sameVoiceChannel.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -41,6 +42,13 @@ export default {
 
         if (!player || !player.queue.current) {
             return interaction.reply({ content: "Nothing is playing.", ephemeral: true })
+        }
+
+        if (!memberMayControlPlayerVoice(player.voiceChannelId, voiceChannel.id)) {
+            return interaction.reply({
+                content: "You need to be in the same voice channel as the bot!",
+                ephemeral: true,
+            })
         }
 
         const current = player.queue.current

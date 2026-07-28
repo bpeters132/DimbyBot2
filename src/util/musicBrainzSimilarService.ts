@@ -3,6 +3,8 @@
  * @see https://musicbrainz.org/doc/MusicBrainz_API — rate limit ~1 req/s; User-Agent required.
  */
 
+import { escapeLucenePhrase } from "./escapeLucenePhrase.js"
+
 const MB_ROOT = "https://musicbrainz.org/ws/2"
 
 let lastMbRequestAt = 0
@@ -46,16 +48,6 @@ async function mbFetch(pathQuery: string): Promise<Response> {
         },
     })
     return res
-}
-
-/**
- * @param {string} s
- */
-function escapeLucenePhrase(s: string) {
-    return String(s || "")
-        .trim()
-        .replace(/\\/g, "\\\\")
-        .replace(/"/g, '\\"')
 }
 
 /**
