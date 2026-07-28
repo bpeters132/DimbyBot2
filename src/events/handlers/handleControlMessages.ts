@@ -6,8 +6,12 @@ import {
 } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import { discordDeleteErrorDetails } from "../../util/discordErrorDetails.js"
-import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
+import {
+    tryDestroyOrphanGuildPlayer,
+    withGuildPlayerLifecycleReservation,
+} from "../../util/guildPlayerQueueLock.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
+import { playerHasQueueContent } from "../../util/playlistQueue.js"
 import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
@@ -99,6 +103,7 @@ export default async function handleControlMessages(client: BotClient, message: 
 
         const controlOutcome = await withGuildPlayerLifecycleReservation(guildId, async () => {
             let player = client.lavalink?.getPlayer(guildId)
+            let createdHere = false
             if (!player) {
                 client.debug(
                     `[ControlHandler] No existing player for guild ${guildId}. Creating one.`
@@ -110,6 +115,7 @@ export default async function handleControlMessages(client: BotClient, message: 
                     selfDeaf: true,
                     volume: 100, // TODO: Make volume configurable?
                 })
+                createdHere = true
                 client.debug(`[ControlHandler] Created Lavalink player for guild ${guildId}.`)
             } else {
                 client.debug(
@@ -119,6 +125,19 @@ export default async function handleControlMessages(client: BotClient, message: 
 
             if (!player) {
                 return { kind: "no_player" as const }
+            }
+
+            const cleanupCreatedPlayer = async (): Promise<void> => {
+                if (!createdHere) return
+                await tryDestroyOrphanGuildPlayer(guildId, {
+                    hasQueueContent: () => {
+                        const live = client.lavalink?.getPlayer(guildId) ?? player
+                        return live ? playerHasQueueContent(live) : false
+                    },
+                    destroyPlayer: async () => {
+                        await client.lavalink?.destroyPlayer(guildId)
+                    },
+                })
             }
 
             if (!player.connected) {
@@ -137,6 +156,7 @@ export default async function handleControlMessages(client: BotClient, message: 
                         `[ControlHandler] Player failed to connect in guild ${guildId}:`,
                         connectError
                     )
+                    await cleanupCreatedPlayer()
                     return { kind: "connect_failed" as const }
                 }
             } else if (player.voiceChannelId !== voiceChannel.id) {

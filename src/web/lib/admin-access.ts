@@ -2,9 +2,9 @@ import { headers } from "next/headers"
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import type { AuthenticatedSession } from "@/lib/api-auth"
-import { decideAdminAccess } from "../../shared/admin-access-decision.js"
-import { resolveDiscordUserSnowflake } from "../../shared/discord-user-id.js"
-import { getCachedOwnerId } from "../../shared/permissions.js"
+import { decideAdminAccess } from "@/shared/admin-access-decision"
+import { resolveDiscordUserSnowflake } from "@/shared/discord-user-id"
+import { getCachedOwnerId } from "@/shared/permissions"
 
 export type AdminAccessResult =
     | { ok: true; session: AuthenticatedSession; discordUserId: string }
@@ -22,29 +22,20 @@ export async function resolveAdminAccess(reqHeaders: Headers): Promise<AdminAcce
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
         console.error("[admin-access] getSession failed:", message)
-        const decision = decideAdminAccess({
+        return decideAdminAccess({
             sessionLoadFailed: true,
             hasSessionUser: false,
             discordUserId: null,
             ownerId: null,
-        })
-        if (decision.ok === false) return decision
-        return {
-            ok: false,
-            status: 503,
-            error: "Service Unavailable",
-            details: "Could not load your session. Please try again later.",
-        }
+        }) as Extract<AdminAccessResult, { ok: false }>
     }
 
     if (!session?.user?.id) {
-        const decision = decideAdminAccess({
+        return decideAdminAccess({
             hasSessionUser: false,
             discordUserId: null,
             ownerId: getCachedOwnerId(),
-        })
-        if (decision.ok === false) return decision
-        return { ok: false, status: 401, error: "Unauthorized" }
+        }) as Extract<AdminAccessResult, { ok: false }>
     }
 
     let discordUserId: string | null

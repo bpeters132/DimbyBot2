@@ -22,10 +22,14 @@ import {
 import {
     enqueueResolvedPlaylistTracks,
     pickPlayerForPlaylistSearch,
+    playerHasQueueContent,
     resolveStoredPlaylistTracks,
     searchTracksForPlaylist,
 } from "../../util/playlistQueue.js"
-import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
+import {
+    tryDestroyOrphanGuildPlayer,
+    withGuildPlayerLifecycleReservation,
+} from "../../util/guildPlayerQueueLock.js"
 import { thumbnailFromLavalinkTrack } from "../../util/trackThumbnail.js"
 import {
     memberMayJoinOccupiedVoice,
@@ -344,6 +348,7 @@ export default {
                     guild.id,
                     async () => {
                         let player = client.lavalink.getPlayer(guild.id)
+                        let createdHere = false
                         if (!player) {
                             player = await client.lavalink.createPlayer({
                                 guildId: guild.id,
@@ -352,9 +357,24 @@ export default {
                                 selfDeaf: true,
                                 volume: 100,
                             })
+                            createdHere = true
+                        }
+
+                        const cleanupCreatedPlayer = async (): Promise<void> => {
+                            if (!createdHere) return
+                            await tryDestroyOrphanGuildPlayer(guild.id, {
+                                hasQueueContent: () => {
+                                    const live = client.lavalink.getPlayer(guild.id) ?? player
+                                    return playerHasQueueContent(live)
+                                },
+                                destroyPlayer: async () => {
+                                    await client.lavalink.destroyPlayer(guild.id)
+                                },
+                            })
                         }
 
                         if (player.connected && player.voiceChannelId !== voiceChannel.id) {
+                            await cleanupCreatedPlayer()
                             return { kind: "wrong_channel" as const }
                         }
 
@@ -365,6 +385,7 @@ export default {
                         )
 
                         if (resolved.length === 0) {
+                            await cleanupCreatedPlayer()
                             return { kind: "no_tracks" as const, name }
                         }
 

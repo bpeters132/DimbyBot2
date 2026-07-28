@@ -16,6 +16,7 @@ import { tryGetBotClient } from "../lib/botClientRegistry.js"
 import { webPlayerDebug, webPlayerWarn } from "./web-player-debug-log.js"
 import { getBotApiOrigin } from "./bot-api-origin.js"
 import { normalizeDashboardPermissionSnapshotResponse } from "./dashboard-permission-snapshot.js"
+import { decideAdminAccess } from "./admin-access-decision.js"
 
 export interface AuthenticatedSession {
     user: {
@@ -565,6 +566,7 @@ export async function requireDeveloperAccess(
 
     const resolvedHeaders = asHeaders(headers)
     let discordUserId: string | null
+    let discordResolveFailed = false
     try {
         discordUserId = await resolveDiscordUserSnowflake(
             sessionResult.session.user.id,
@@ -573,36 +575,23 @@ export async function requireDeveloperAccess(
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error)
         console.error("[api-auth] requireDeveloperAccess resolveDiscordUserSnowflake failed:", msg)
-        return {
-            ok: false,
-            status: 403,
-            error: "Discord account required",
-            details: "Discord account required — please sign in with Discord or try again.",
-        }
-    }
-    if (!discordUserId) {
-        return {
-            ok: false,
-            status: 403,
-            error: "Discord account required",
-            details:
-                "We could not resolve your Discord user id (needed for roles and voice state). Sign in with Discord, or sign out and sign in again.",
-        }
+        discordUserId = null
+        discordResolveFailed = true
     }
 
-    const ownerId = getCachedOwnerId()
-    if (!ownerId || discordUserId !== ownerId) {
-        return {
-            ok: false,
-            status: 403,
-            error: "Forbidden",
-            details: "Developer access required.",
-        }
+    const decision = decideAdminAccess({
+        hasSessionUser: true,
+        discordResolveFailed,
+        discordUserId,
+        ownerId: getCachedOwnerId(),
+    })
+    if (decision.ok === false) {
+        return decision
     }
 
     return {
         ok: true,
         session: sessionResult.session,
-        discordUserId,
+        discordUserId: decision.discordUserId,
     }
 }

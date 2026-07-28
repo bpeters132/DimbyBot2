@@ -19,6 +19,6 @@ export function resolveDownloadsMaxMb(
 
 /** True when `configured` is a usable custom downloads limit (≥ 1 MB). */
 export function isCustomDownloadsMaxMb(configured: unknown): boolean {
-    const parsed = Number(configured ?? Number.NaN)
+    const parsed = Number.parseFloat(String(configured ?? ""))
     return Number.isFinite(parsed) && parsed >= 1
 }

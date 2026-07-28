@@ -39,12 +39,13 @@ export function normalizeDashboardPermissionSnapshotResponse(
     }
     const body = parsed as Record<string, unknown>
     if (body.ok === false) {
-        const status =
+        const statusRaw =
             typeof body.status === "number" && Number.isFinite(body.status)
                 ? Math.floor(body.status)
                 : httpStatus >= 400
                   ? httpStatus
                   : 502
+        const status = statusRaw >= 400 && statusRaw <= 599 ? statusRaw : 502
         return {
             ok: false,
             status,

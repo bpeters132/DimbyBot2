@@ -4,7 +4,10 @@ import type { ChatInputCommandInteraction, Message } from "discord.js"
 import { discordDeleteErrorDetails } from "../../util/discordErrorDetails.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import { stopLocalPlayer, getLocalPlayerState } from "../../util/localPlayer.js"
-import { memberMayControlPlayerVoice } from "../../util/sameVoiceChannel.js"
+import {
+    memberMayJoinOccupiedVoice,
+    resolveOccupiedVoiceChannelId,
+} from "../../util/sameVoiceChannel.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -36,12 +39,11 @@ export default {
             })
         }
 
-        // Require same VC so remote /stop cannot wipe another channel's player session.
+        // Require same VC (incl. local playback with no Lavalink player) so remote /stop
+        // cannot wipe another channel's session.
         const lavalinkPlayer = client.lavalink.players.get(guild.id)
-        if (
-            lavalinkPlayer &&
-            !memberMayControlPlayerVoice(lavalinkPlayer.voiceChannelId, voiceChannel.id)
-        ) {
+        const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, lavalinkPlayer)
+        if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
             return interaction.reply({
                 content: "You need to be in the same voice channel as the bot!",
                 ephemeral: true,

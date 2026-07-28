@@ -239,9 +239,11 @@ export async function removeAndRebalanceRrqAfterDisconnect(
 ): Promise<number> {
     return withGuildPlayerQueueLock(player.guildId, async () => {
         let removedCount = 0
+        let removeFailed = false
         try {
             removedCount = await removeUserTracksFromQueue(player, userId)
         } catch (err: unknown) {
+            removeFailed = true
             hooks?.onRemoveError?.(err)
         } finally {
             clearDisconnectedUser(player, userId)
@@ -255,7 +257,8 @@ export async function removeAndRebalanceRrqAfterDisconnect(
             }
         }
 
-        if (removedCount > 0) {
+        // Persist even when remove threw mid-loop (partial mutation, removedCount still 0).
+        if (removedCount > 0 || removeFailed) {
             schedulePlayerSessionSave(player)
         }
 

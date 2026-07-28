@@ -1,4 +1,5 @@
 import type { VoiceBasedChannel } from "discord.js"
+import type { Player } from "lavalink-client"
 import type BotClient from "../lib/BotClient.js"
 import type { PlayerSessionData } from "../types/index.js"
 import { deletePlayerSession, listPlayerSessions } from "../repositories/playerSessionRepository.js"
@@ -138,6 +139,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
     const textChannelId = resolveTextChannelId(session)
     markPlayerSessionRestoreInProgress(guildId)
 
+    let playerToPersist: Player | null = null
     try {
         await withGuildPlayerLifecycleReservation(guildId, async () => {
             // Re-check under the reservation: a concurrent create may have won the race.
@@ -204,7 +206,8 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
 
             scheduleControlMessageUpdate(client, guildId)
             playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
-            schedulePlayerSessionSave(player)
+            // schedulePlayerSessionSave is a no-op while restore-in-progress; persist after clear.
+            playerToPersist = player
         })
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -213,9 +216,14 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
         if (orphan) {
             await orphan.destroy().catch(() => undefined)
         }
+        playerToPersist = null
         // Transient failures (Lavalink/Discord blips) must not wipe the persisted snapshot.
     } finally {
         clearPlayerSessionRestoreInProgress(guildId)
+    }
+
+    if (playerToPersist) {
+        schedulePlayerSessionSave(playerToPersist)
     }
 }
 

@@ -8,6 +8,10 @@ import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueue
 import { handleQueryAndPlay } from "../../util/musicManager.js"
 import { getGuildSettings } from "../../util/saveControlChannel.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
+import {
+    memberMayJoinOccupiedVoice,
+    resolveOccupiedVoiceChannelId,
+} from "../../util/sameVoiceChannel.js"
 import type { DownloadsMetadataStore } from "../../types/index.js"
 import {
     downloadMetadataEntryMatchesGuild,
@@ -667,10 +671,8 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 // Auto-play only from the bot's current voice channel. Otherwise Play Local /
                 // ensurePlayerConnected would destroy the active session and move the bot.
                 const existingPlayer = client.lavalink.getPlayer(guildId)
-                const botVoiceChannelId = guild.members.me?.voice.channel?.id ?? null
-                const playerVoiceChannelId = existingPlayer?.voiceChannelId ?? null
-                const occupiedVoiceChannelId = playerVoiceChannelId || botVoiceChannelId
-                if (occupiedVoiceChannelId && occupiedVoiceChannelId !== voiceChannel.id) {
+                const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, existingPlayer)
+                if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
                     await interaction.editReply({
                         content:
                             `Saved as **${savedBaseName}**.\n` +

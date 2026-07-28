@@ -34,9 +34,17 @@ describe("isCustomDownloadsMaxMb", () => {
     it("is true only for finite limits ≥ 1", () => {
         assert.equal(isCustomDownloadsMaxMb(1), true)
         assert.equal(isCustomDownloadsMaxMb(500), true)
+        assert.equal(isCustomDownloadsMaxMb("12.5"), true)
+        assert.equal(isCustomDownloadsMaxMb("12.5abc"), true)
         assert.equal(isCustomDownloadsMaxMb(0), false)
         assert.equal(isCustomDownloadsMaxMb(-1), false)
         assert.equal(isCustomDownloadsMaxMb(undefined), false)
         assert.equal(isCustomDownloadsMaxMb("abc"), false)
+    })
+
+    it("agrees with resolveDownloadsMaxMb on trailing-junk numbers", () => {
+        const raw = "12.5abc"
+        assert.equal(isCustomDownloadsMaxMb(raw), true)
+        assert.equal(resolveDownloadsMaxMb(raw), 12.5)
     })
 })
