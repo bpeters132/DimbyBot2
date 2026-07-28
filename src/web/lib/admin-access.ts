@@ -22,20 +22,29 @@ export async function resolveAdminAccess(reqHeaders: Headers): Promise<AdminAcce
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
         console.error("[admin-access] getSession failed:", message)
-        return decideAdminAccess({
+        const decision = decideAdminAccess({
             sessionLoadFailed: true,
             hasSessionUser: false,
             discordUserId: null,
             ownerId: null,
         })
+        if (decision.ok === false) return decision
+        return {
+            ok: false,
+            status: 503,
+            error: "Service Unavailable",
+            details: "Could not load your session. Please try again later.",
+        }
     }
 
     if (!session?.user?.id) {
-        return decideAdminAccess({
+        const decision = decideAdminAccess({
             hasSessionUser: false,
             discordUserId: null,
             ownerId: getCachedOwnerId(),
         })
+        if (decision.ok === false) return decision
+        return { ok: false, status: 401, error: "Unauthorized" }
     }
 
     let discordUserId: string | null

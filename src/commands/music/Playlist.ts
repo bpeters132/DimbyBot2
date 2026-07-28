@@ -98,7 +98,10 @@ export default {
                     opt.setName("name").setDescription("Playlist name").setRequired(true)
                 )
                 .addBooleanOption((opt) =>
-                    opt.setName("shuffle").setDescription("Shuffle before queuing").setRequired(false)
+                    opt
+                        .setName("shuffle")
+                        .setDescription("Shuffle before queuing")
+                        .setRequired(false)
                 )
         ),
 
@@ -122,269 +125,280 @@ export default {
         const subcommand = interaction.options.getSubcommand()
 
         try {
-        if (subcommand === "create") {
-            const name = interaction.options.getString("name", true)
-            const existing = await getPlaylist(userId, name)
-            if (existing) {
+            if (subcommand === "create") {
+                const name = interaction.options.getString("name", true)
+                const existing = await getPlaylist(userId, name)
+                if (existing) {
+                    return interaction.reply({
+                        content: `You already have a playlist named **${name}**.`,
+                        ephemeral: true,
+                    })
+                }
+                await createPlaylist(userId, name)
                 return interaction.reply({
-                    content: `You already have a playlist named **${name}**.`,
-                    ephemeral: true,
-                })
-            }
-            await createPlaylist(userId, name)
-            return interaction.reply({
-                content: `Created playlist **${name}**.`,
-                ephemeral: true,
-            })
-        }
-
-        if (subcommand === "delete") {
-            const name = interaction.options.getString("name", true)
-            const existing = await getPlaylist(userId, name)
-            if (!existing) {
-                return interaction.reply({
-                    content: `No playlist named **${name}** found.`,
-                    ephemeral: true,
-                })
-            }
-            await deletePlaylist(userId, name)
-            return interaction.reply({
-                content: `Deleted playlist **${name}**.`,
-                ephemeral: true,
-            })
-        }
-
-        if (subcommand === "list") {
-            const playlists = await getUserPlaylists(userId)
-            if (playlists.length === 0) {
-                return interaction.reply({
-                    content:
-                        "You don't have any playlists yet. Use `/playlist create` to make one!",
-                    ephemeral: true,
-                })
-            }
-            const embed = new EmbedBuilder()
-                .setColor(0x0099ff)
-                .setTitle("Your Playlists")
-                .setDescription(
-                    playlists
-                        .map(
-                            (p) =>
-                                `**${p.name}** — ${p.trackCount} track${p.trackCount === 1 ? "" : "s"}`
-                        )
-                        .join("\n")
-                )
-                .setTimestamp()
-            return interaction.reply({ embeds: [embed], ephemeral: true })
-        }
-
-        if (subcommand === "view") {
-            const name = interaction.options.getString("name", true)
-            const playlist = await getPlaylist(userId, name)
-            if (!playlist) {
-                return interaction.reply({
-                    content: `No playlist named **${name}** found.`,
-                    ephemeral: true,
-                })
-            }
-            return showPaginatedPlaylistView(interaction, client, playlist.name, playlist.tracks)
-        }
-
-        if (subcommand === "add") {
-            const name = interaction.options.getString("name", true)
-            const query = interaction.options.getString("query")
-            const playlist = await getPlaylist(userId, name)
-            if (!playlist) {
-                return interaction.reply({
-                    content: `No playlist named **${name}** found.`,
+                    content: `Created playlist **${name}**.`,
                     ephemeral: true,
                 })
             }
 
-            if (query) {
-                await interaction.deferReply({ ephemeral: true })
-                const player = pickPlayerForPlaylistSearch(client.lavalink, guild.id)
-                if (!player) {
-                    return interaction.editReply({
+            if (subcommand === "delete") {
+                const name = interaction.options.getString("name", true)
+                const existing = await getPlaylist(userId, name)
+                if (!existing) {
+                    return interaction.reply({
+                        content: `No playlist named **${name}** found.`,
+                        ephemeral: true,
+                    })
+                }
+                await deletePlaylist(userId, name)
+                return interaction.reply({
+                    content: `Deleted playlist **${name}**.`,
+                    ephemeral: true,
+                })
+            }
+
+            if (subcommand === "list") {
+                const playlists = await getUserPlaylists(userId)
+                if (playlists.length === 0) {
+                    return interaction.reply({
                         content:
-                            "The bot is not in a voice channel anywhere. Join voice in a server with the bot, or try again later.",
+                            "You don't have any playlists yet. Use `/playlist create` to make one!",
+                        ephemeral: true,
                     })
                 }
-                const found = await searchTracksForPlaylist(player, query, interaction.user)
-                if (found.ok === false) {
-                    return interaction.editReply({ content: found.error })
+                const embed = new EmbedBuilder()
+                    .setColor(0x0099ff)
+                    .setTitle("Your Playlists")
+                    .setDescription(
+                        playlists
+                            .map(
+                                (p) =>
+                                    `**${p.name}** — ${p.trackCount} track${p.trackCount === 1 ? "" : "s"}`
+                            )
+                            .join("\n")
+                    )
+                    .setTimestamp()
+                return interaction.reply({ embeds: [embed], ephemeral: true })
+            }
+
+            if (subcommand === "view") {
+                const name = interaction.options.getString("name", true)
+                const playlist = await getPlaylist(userId, name)
+                if (!playlist) {
+                    return interaction.reply({
+                        content: `No playlist named **${name}** found.`,
+                        ephemeral: true,
+                    })
                 }
-                const addedAt = new Date()
-                const added = await addTracksToPlaylist(
-                    playlist.id,
-                    found.tracks.map((t) => ({
-                        title: t.title,
-                        uri: t.uri,
-                        author: t.author,
-                        duration: t.duration,
-                        thumbnailUrl: t.thumbnailUrl,
-                        addedAt,
-                    }))
+                return showPaginatedPlaylistView(
+                    interaction,
+                    client,
+                    playlist.name,
+                    playlist.tracks
                 )
-                if (added.length === 1) {
-                    const t = added[0]!
-                    return interaction.editReply({
-                        content: `Added **[${t.title}](${t.uri})** to **${name}**.`,
+            }
+
+            if (subcommand === "add") {
+                const name = interaction.options.getString("name", true)
+                const query = interaction.options.getString("query")
+                const playlist = await getPlaylist(userId, name)
+                if (!playlist) {
+                    return interaction.reply({
+                        content: `No playlist named **${name}** found.`,
+                        ephemeral: true,
                     })
                 }
-                return interaction.editReply({
-                    content: `Added **${added.length}** tracks to **${name}**.`,
+
+                if (query) {
+                    await interaction.deferReply({ ephemeral: true })
+                    const player = pickPlayerForPlaylistSearch(client.lavalink, guild.id)
+                    if (!player) {
+                        return interaction.editReply({
+                            content:
+                                "The bot is not in a voice channel anywhere. Join voice in a server with the bot, or try again later.",
+                        })
+                    }
+                    const found = await searchTracksForPlaylist(player, query, interaction.user)
+                    if (found.ok === false) {
+                        return interaction.editReply({ content: found.error })
+                    }
+                    const addedAt = new Date()
+                    const added = await addTracksToPlaylist(
+                        playlist.id,
+                        found.tracks.map((t) => ({
+                            title: t.title,
+                            uri: t.uri,
+                            author: t.author,
+                            duration: t.duration,
+                            thumbnailUrl: t.thumbnailUrl,
+                            addedAt,
+                        }))
+                    )
+                    if (added.length === 1) {
+                        const t = added[0]!
+                        return interaction.editReply({
+                            content: `Added **[${t.title}](${t.uri})** to **${name}**.`,
+                        })
+                    }
+                    return interaction.editReply({
+                        content: `Added **${added.length}** tracks to **${name}**.`,
+                    })
+                }
+
+                const player = client.lavalink.players.get(guild.id)
+                const current = player?.queue.current
+                if (!current) {
+                    return interaction.reply({
+                        content: "Nothing is playing. Provide a `query` or start playback first.",
+                        ephemeral: true,
+                    })
+                }
+                const info = current.info
+                const uri = typeof info.uri === "string" ? info.uri.trim() : ""
+                if (!uri) {
+                    return interaction.reply({
+                        content: "The current track has no URL and cannot be saved to a playlist.",
+                        ephemeral: true,
+                    })
+                }
+                await addTracksToPlaylist(playlist.id, [
+                    {
+                        title: info.title ?? "Unknown",
+                        uri,
+                        author: info.author ?? "Unknown",
+                        duration: info.duration ?? 0,
+                        thumbnailUrl: thumbnailFromLavalinkTrack(current),
+                        addedAt: new Date(),
+                    },
+                ])
+                return interaction.reply({
+                    content: `Added **[${info.title}](${uri})** to **${name}**.`,
+                    ephemeral: true,
                 })
             }
 
-            const player = client.lavalink.players.get(guild.id)
-            const current = player?.queue.current
-            if (!current) {
+            if (subcommand === "remove") {
+                const name = interaction.options.getString("name", true)
+                const index = interaction.options.getInteger("index", true)
+                const playlist = await getPlaylist(userId, name)
+                if (!playlist) {
+                    return interaction.reply({
+                        content: `No playlist named **${name}** found.`,
+                        ephemeral: true,
+                    })
+                }
+                if (index < 1 || index > playlist.tracks.length) {
+                    return interaction.reply({
+                        content: `Invalid index. Choose between 1 and ${playlist.tracks.length}.`,
+                        ephemeral: true,
+                    })
+                }
+                const track = playlist.tracks[index - 1]!
+                await removeTrackFromPlaylistById(playlist.id, track.id)
                 return interaction.reply({
-                    content: "Nothing is playing. Provide a `query` or start playback first.",
+                    content: `Removed **${track.title}** from **${name}**.`,
                     ephemeral: true,
                 })
             }
-            const info = current.info
-            const uri = typeof info.uri === "string" ? info.uri.trim() : ""
-            if (!uri) {
-                return interaction.reply({
-                    content: "The current track has no URL and cannot be saved to a playlist.",
-                    ephemeral: true,
-                })
-            }
-            await addTracksToPlaylist(playlist.id, [
+
+            if (subcommand === "play") {
+                const name = interaction.options.getString("name", true)
+                const shuffle = interaction.options.getBoolean("shuffle") ?? false
+
+                const voiceChannel = member.voice.channel
+                if (!voiceChannel) {
+                    return interaction.reply({
+                        content: "Join a voice channel first!",
+                        ephemeral: true,
+                    })
+                }
+
+                await interaction.deferReply({ ephemeral: true })
+
+                const playlist = await getPlaylist(userId, name)
+                if (!playlist) {
+                    return interaction.editReply({
+                        content: `No playlist named **${name}** found.`,
+                    })
+                }
+                if (playlist.tracks.length === 0) {
+                    return interaction.editReply({
+                        content: `**${name}** has no tracks.`,
+                    })
+                }
+
                 {
-                    title: info.title ?? "Unknown",
-                    uri,
-                    author: info.author ?? "Unknown",
-                    duration: info.duration ?? 0,
-                    thumbnailUrl: thumbnailFromLavalinkTrack(current),
-                    addedAt: new Date(),
-                },
-            ])
-            return interaction.reply({
-                content: `Added **[${info.title}](${uri})** to **${name}**.`,
-                ephemeral: true,
-            })
-        }
+                    const existingPlayer = client.lavalink.getPlayer(guild.id)
+                    const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(
+                        guild,
+                        existingPlayer
+                    )
+                    if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
+                        return interaction.editReply({
+                            content: "You need to be in the same voice channel as the bot!",
+                        })
+                    }
+                }
 
-        if (subcommand === "remove") {
-            const name = interaction.options.getString("name", true)
-            const index = interaction.options.getInteger("index", true)
-            const playlist = await getPlaylist(userId, name)
-            if (!playlist) {
-                return interaction.reply({
-                    content: `No playlist named **${name}** found.`,
-                    ephemeral: true,
-                })
-            }
-            if (index < 1 || index > playlist.tracks.length) {
-                return interaction.reply({
-                    content: `Invalid index. Choose between 1 and ${playlist.tracks.length}.`,
-                    ephemeral: true,
-                })
-            }
-            const track = playlist.tracks[index - 1]!
-            await removeTrackFromPlaylistById(playlist.id, track.id)
-            return interaction.reply({
-                content: `Removed **${track.title}** from **${name}**.`,
-                ephemeral: true,
-            })
-        }
+                const playOutcome = await withGuildPlayerLifecycleReservation(
+                    guild.id,
+                    async () => {
+                        let player = client.lavalink.getPlayer(guild.id)
+                        if (!player) {
+                            player = await client.lavalink.createPlayer({
+                                guildId: guild.id,
+                                voiceChannelId: voiceChannel.id,
+                                textChannelId: interaction.channelId,
+                                selfDeaf: true,
+                                volume: 100,
+                            })
+                        }
 
-        if (subcommand === "play") {
-            const name = interaction.options.getString("name", true)
-            const shuffle = interaction.options.getBoolean("shuffle") ?? false
+                        if (player.connected && player.voiceChannelId !== voiceChannel.id) {
+                            return { kind: "wrong_channel" as const }
+                        }
 
-            const voiceChannel = member.voice.channel
-            if (!voiceChannel) {
-                return interaction.reply({
-                    content: "Join a voice channel first!",
-                    ephemeral: true,
-                })
-            }
+                        const { resolved, failed } = await resolveStoredPlaylistTracks(
+                            player,
+                            playlist.tracks,
+                            interaction.user
+                        )
 
-            await interaction.deferReply({ ephemeral: true })
+                        if (resolved.length === 0) {
+                            return { kind: "no_tracks" as const, name }
+                        }
 
-            const playlist = await getPlaylist(userId, name)
-            if (!playlist) {
-                return interaction.editReply({
-                    content: `No playlist named **${name}** found.`,
-                })
-            }
-            if (playlist.tracks.length === 0) {
-                return interaction.editReply({
-                    content: `**${name}** has no tracks.`,
-                })
-            }
+                        const enqueue = await enqueueResolvedPlaylistTracks(
+                            player,
+                            resolved,
+                            interaction.user.id,
+                            shuffle
+                        )
+                        return { kind: "queued" as const, name, enqueue, failed }
+                    }
+                )
 
-            {
-                const existingPlayer = client.lavalink.getPlayer(guild.id)
-                const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, existingPlayer)
-                if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
+                if (playOutcome.kind === "wrong_channel") {
                     return interaction.editReply({
                         content: "You need to be in the same voice channel as the bot!",
                     })
                 }
-            }
-
-            const playOutcome = await withGuildPlayerLifecycleReservation(guild.id, async () => {
-                let player = client.lavalink.getPlayer(guild.id)
-                if (!player) {
-                    player = await client.lavalink.createPlayer({
-                        guildId: guild.id,
-                        voiceChannelId: voiceChannel.id,
-                        textChannelId: interaction.channelId,
-                        selfDeaf: true,
-                        volume: 100,
+                if (playOutcome.kind === "no_tracks") {
+                    return interaction.editReply({
+                        content: `Could not resolve any tracks from **${playOutcome.name}**.`,
                     })
                 }
 
-                if (player.connected && player.voiceChannelId !== voiceChannel.id) {
-                    return { kind: "wrong_channel" as const }
-                }
-
-                const { resolved, failed } = await resolveStoredPlaylistTracks(
-                    player,
-                    playlist.tracks,
-                    interaction.user
-                )
-
-                if (resolved.length === 0) {
-                    return { kind: "no_tracks" as const, name }
-                }
-
-                const enqueue = await enqueueResolvedPlaylistTracks(
-                    player,
-                    resolved,
-                    interaction.user.id,
-                    shuffle
-                )
-                return { kind: "queued" as const, name, enqueue, failed }
-            })
-
-            if (playOutcome.kind === "wrong_channel") {
+                const failPart =
+                    playOutcome.failed > 0
+                        ? ` ${playOutcome.failed} track${playOutcome.failed === 1 ? "" : "s"} could not be resolved.`
+                        : ""
                 return interaction.editReply({
-                    content: "You need to be in the same voice channel as the bot!",
-                })
-            }
-            if (playOutcome.kind === "no_tracks") {
-                return interaction.editReply({
-                    content: `Could not resolve any tracks from **${playOutcome.name}**.`,
+                    content: `Queued ${playOutcome.enqueue.queued} track${playOutcome.enqueue.queued === 1 ? "" : "s"} from **${playOutcome.name}**.${failPart}`,
                 })
             }
 
-            const failPart =
-                playOutcome.failed > 0
-                    ? ` ${playOutcome.failed} track${playOutcome.failed === 1 ? "" : "s"} could not be resolved.`
-                    : ""
-            return interaction.editReply({
-                content: `Queued ${playOutcome.enqueue.queued} track${playOutcome.enqueue.queued === 1 ? "" : "s"} from **${playOutcome.name}**.${failPart}`,
-            })
-        }
-
-        return interaction.reply({ content: "Unknown subcommand.", ephemeral: true })
+            return interaction.reply({ content: "Unknown subcommand.", ephemeral: true })
         } catch (err: unknown) {
             console.error("[Playlist command] execute failed", err)
             const content = "An error occurred while processing your request."

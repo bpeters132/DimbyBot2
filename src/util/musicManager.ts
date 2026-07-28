@@ -22,10 +22,7 @@ import {
 import { downloadMetadataFileBelongsToGuild } from "./downloadMetadataKeys.js"
 import { getDownloadMetadataStore } from "./downloadMetadataStore.js"
 import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
-import {
-    memberMayJoinOccupiedVoice,
-    resolveOccupiedVoiceChannelId,
-} from "./sameVoiceChannel.js"
+import { memberMayJoinOccupiedVoice, resolveOccupiedVoiceChannelId } from "./sameVoiceChannel.js"
 
 type SearchAttempt =
     | { source: string; success: true; loadType?: string }
@@ -436,10 +433,7 @@ export async function handleQueryAndPlay(
 
         const currentLocalPlayerState = getLocalPlayerState(guildId)
         if (currentLocalPlayerState && currentLocalPlayerState.isPlaying) {
-            const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(
-                voiceChannel.guild,
-                player
-            )
+            const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(voiceChannel.guild, player)
             if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
                 return {
                     success: false,

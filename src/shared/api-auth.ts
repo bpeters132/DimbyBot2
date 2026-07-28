@@ -577,8 +577,7 @@ export async function requireDeveloperAccess(
             ok: false,
             status: 403,
             error: "Discord account required",
-            details:
-                "Discord account required — please sign in with Discord or try again.",
+            details: "Discord account required — please sign in with Discord or try again.",
         }
     }
     if (!discordUserId) {

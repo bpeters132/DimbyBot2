@@ -40,10 +40,7 @@ describe("guildWebPlayerPageUrl", () => {
 
             // Path on BETTER_AUTH_URL is ignored; only origin is used.
             process.env.BETTER_AUTH_URL = "https://dash.example.com/auth/callback"
-            assert.equal(
-                guildWebPlayerPageUrl("1"),
-                "https://dash.example.com/dashboard/1"
-            )
+            assert.equal(guildWebPlayerPageUrl("1"), "https://dash.example.com/dashboard/1")
         } finally {
             if (prev === undefined) delete process.env.BETTER_AUTH_URL
             else process.env.BETTER_AUTH_URL = prev

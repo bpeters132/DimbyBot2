@@ -14,10 +14,7 @@ describe("dashboard web permission merge", () => {
             primaryPermissions: [WebPermission.CONTROL_PLAYBACK],
             oauthPermissions: [],
         }
-        assert.equal(
-            dashboardHasWebPermission(snapshot, WebPermission.CONTROL_PLAYBACK),
-            true
-        )
+        assert.equal(dashboardHasWebPermission(snapshot, WebPermission.CONTROL_PLAYBACK), true)
         assert.equal(
             explainDashboardWebPermission(snapshot, WebPermission.CONTROL_PLAYBACK),
             "allow:primaryPermissions"

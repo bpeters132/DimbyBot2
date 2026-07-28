@@ -31,15 +31,12 @@ describe("resolveWebRequesterDiscordId", () => {
     })
 
     it("rejects empty or non-string requesterDiscordUserId when provided", () => {
-        assert.deepEqual(
-            resolveWebRequesterDiscordId({ requesterDiscordUserId: "" }, SESSION_ID),
-            {
-                ok: false,
-                status: 400,
-                error: "Invalid requesterDiscordUserId.",
-                details: "Must be a non-empty string when provided.",
-            }
-        )
+        assert.deepEqual(resolveWebRequesterDiscordId({ requesterDiscordUserId: "" }, SESSION_ID), {
+            ok: false,
+            status: 400,
+            error: "Invalid requesterDiscordUserId.",
+            details: "Must be a non-empty string when provided.",
+        })
         assert.deepEqual(
             resolveWebRequesterDiscordId({ requesterDiscordUserId: "   " }, SESSION_ID),
             {
@@ -49,15 +46,12 @@ describe("resolveWebRequesterDiscordId", () => {
                 details: "Must be a non-empty string when provided.",
             }
         )
-        assert.deepEqual(
-            resolveWebRequesterDiscordId({ requesterDiscordUserId: 42 }, SESSION_ID),
-            {
-                ok: false,
-                status: 400,
-                error: "Invalid requesterDiscordUserId.",
-                details: "Must be a non-empty string when provided.",
-            }
-        )
+        assert.deepEqual(resolveWebRequesterDiscordId({ requesterDiscordUserId: 42 }, SESSION_ID), {
+            ok: false,
+            status: 400,
+            error: "Invalid requesterDiscordUserId.",
+            details: "Must be a non-empty string when provided.",
+        })
     })
 
     it("rejects a requesterDiscordUserId that does not match the signed-in account", () => {

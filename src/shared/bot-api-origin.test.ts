@@ -2,10 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { getBotApiOrigin } from "./bot-api-origin.js"
 
-function withEnv(
-    overrides: Record<string, string | undefined>,
-    fn: () => void
-): void {
+function withEnv(overrides: Record<string, string | undefined>, fn: () => void): void {
     const previous = new Map<string, string | undefined>()
     for (const key of Object.keys(overrides)) {
         previous.set(key, process.env[key])
