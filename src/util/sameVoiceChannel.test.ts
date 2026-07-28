@@ -1,9 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import {
-    memberMayJoinOccupiedVoice,
-    resolveOccupiedVoiceChannelId,
-} from "./sameVoiceChannel.js"
+import { memberMayJoinOccupiedVoice, resolveOccupiedVoiceChannelId } from "./sameVoiceChannel.js"
 
 describe("resolveOccupiedVoiceChannelId", () => {
     it("prefers live bot Discord VC (local playback with no Lavalink player)", () => {
