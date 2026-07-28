@@ -13,6 +13,9 @@ import {
  * Destroying Lavalink fires `playerDestroy` → `clearPlayerSession`. Without a suppress
  * lease, a failed local VC join after destroy permanently deletes the persisted queue.
  * Hold a suppress lease across destroy, then clear only after local Ready succeeds.
+ *
+ * Callers must not mutate the live queue (e.g. `stopPlaying(true)`) before this runs —
+ * the flush below captures `player.queue` as-is.
  */
 export type LocalPlaySessionHandoff = {
     /** True when Lavalink destroy was attempted successfully (player torn down). */
@@ -31,6 +34,9 @@ export type LocalPlaySessionHandoff = {
 /**
  * Flushes the live snapshot, acquires a suppress lease, then runs `destroyLavalink`.
  * On destroy failure the lease is released immediately.
+ *
+ * `destroyLavalink` may clear/stop the player — do that only inside the callback so the
+ * flushed snapshot still includes upcoming tracks.
  */
 export async function beginLocalPlaySessionHandoff(
     player: Player,
