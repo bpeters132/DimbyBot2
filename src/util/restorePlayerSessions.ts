@@ -17,6 +17,14 @@ import { resolvePersistedTracks } from "./playerSessionTracks.js"
 import { withGuildPlayerLifecycleReservation } from "./guildPlayerQueueLock.js"
 import { countHumanMembers } from "./voiceChannelMembers.js"
 
+/**
+ * Whether a successful partial hydrate may overwrite the persisted session snapshot.
+ * Transient resolve failures must keep the prior full snapshot on disk.
+ */
+export function shouldPersistRestoredPlayerSession(transientFailures: number): boolean {
+    return transientFailures <= 0
+}
+
 let discordReady = false
 let restoreInFlight = false
 
@@ -207,7 +215,15 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
             scheduleControlMessageUpdate(client, guildId)
             playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
             // schedulePlayerSessionSave is a no-op while restore-in-progress; persist after clear.
-            playerToPersist = player
+            // Skip save when some tracks failed transiently — otherwise a partial hydrate would
+            // permanently drop those entries from the session snapshot.
+            if (shouldPersistRestoredPlayerSession(transientFailures)) {
+                playerToPersist = player
+            } else {
+                client.warn(
+                    `[playerSession] restore for ${guildId}: skipping session save after ${transientFailures} transient failure(s); preserving prior snapshot`
+                )
+            }
         })
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)

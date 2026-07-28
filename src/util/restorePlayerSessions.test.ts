@@ -1,6 +1,9 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { isStaleSessionDiscordError } from "./restorePlayerSessions.js"
+import {
+    isStaleSessionDiscordError,
+    shouldPersistRestoredPlayerSession,
+} from "./restorePlayerSessions.js"
 
 describe("isStaleSessionDiscordError", () => {
     it("treats unknown channel/guild as permanently stale (safe to delete session)", () => {
@@ -16,5 +19,17 @@ describe("isStaleSessionDiscordError", () => {
         assert.equal(isStaleSessionDiscordError({ code: "EAI_AGAIN" }), false)
         assert.equal(isStaleSessionDiscordError(new Error("fetch failed")), false)
         assert.equal(isStaleSessionDiscordError(null), false)
+    })
+})
+
+describe("shouldPersistRestoredPlayerSession", () => {
+    it("allows save when every track resolved (no transient failures)", () => {
+        assert.equal(shouldPersistRestoredPlayerSession(0), true)
+    })
+
+    it("blocks save when at least one track failed transiently (partial hydrate)", () => {
+        // One resolved + one transient failure must not overwrite the full prior snapshot.
+        assert.equal(shouldPersistRestoredPlayerSession(1), false)
+        assert.equal(shouldPersistRestoredPlayerSession(2), false)
     })
 })
