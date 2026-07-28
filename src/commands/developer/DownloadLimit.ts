@@ -3,9 +3,12 @@ import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import type { GuildSettingsStore } from "../../types/index.js"
 
+import {
+    DEFAULT_DOWNLOADS_MAX_MB,
+    isCustomDownloadsMaxMb,
+    resolveDownloadsMaxMb,
+} from "../../util/downloadsMaxMb.js"
 import { getGuildSettings, saveGuildSettings } from "../../util/saveControlChannel.js"
-
-const DEFAULT_MAX_DIR_SIZE_MB = 1000
 
 export default {
     data: new SlashCommandBuilder()
@@ -99,9 +102,8 @@ export default {
 
         if (subcommand === "show") {
             const configured = settings[targetGuildId].downloadsMaxMb
-            const parsed = Number(configured ?? Number.NaN)
-            const validCustom = Number.isFinite(parsed) && parsed >= 1
-            const limit = validCustom ? parsed : DEFAULT_MAX_DIR_SIZE_MB
+            const validCustom = isCustomDownloadsMaxMb(configured)
+            const limit = resolveDownloadsMaxMb(configured)
             const suffix = validCustom ? " (custom)" : " (default)"
             return interaction.reply({
                 content: `Download limit for guild ${targetGuildId}: ${limit}MB${suffix}.`,
@@ -148,7 +150,7 @@ export default {
                 }
             }
             return interaction.reply({
-                content: `Cleared custom download limit for guild ${targetGuildId}. Default is ${DEFAULT_MAX_DIR_SIZE_MB}MB.`,
+                content: `Cleared custom download limit for guild ${targetGuildId}. Default is ${DEFAULT_DOWNLOADS_MAX_MB}MB.`,
                 flags: [MessageFlags.Ephemeral],
             })
         }
