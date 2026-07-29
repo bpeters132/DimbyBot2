@@ -11,6 +11,7 @@ import {
     withGuildPlayerLifecycleReservation,
 } from "../../util/guildPlayerQueueLock.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
+import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
 import { playerHasQueueContent } from "../../util/playlistQueue.js"
 import {
     memberMayJoinOccupiedVoice,
@@ -129,13 +130,17 @@ export default async function handleControlMessages(client: BotClient, message: 
 
             const cleanupCreatedPlayer = async (): Promise<void> => {
                 if (!createdHere) return
+                // Match web search/enqueue teardown: failed connect after create must not wipe a
+                // prior persisted session still awaiting restore.
                 await tryDestroyOrphanGuildPlayer(guildId, {
                     hasQueueContent: () => {
                         const live = client.lavalink?.getPlayer(guildId) ?? player
                         return live ? playerHasQueueContent(live) : false
                     },
                     destroyPlayer: async () => {
-                        await client.lavalink?.destroyPlayer(guildId)
+                        await destroyPlayerSuppressingSessionClear(guildId, () =>
+                            client.lavalink?.destroyPlayer(guildId)
+                        )
                     },
                 })
             }

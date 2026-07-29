@@ -248,6 +248,30 @@ describe("clearPlayerSession suppress lease consumption", () => {
         assert.deepEqual(events, ["delete"])
         assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
     })
+
+    it("Discord ephemeral create-fail teardown preserves the prior session row", async () => {
+        // Models /playlist play + control-channel connect cleanup after createPlayer when a
+        // prior persisted session still exists (restore deferred / infra destroy preserved it).
+        // Without suppress, playerDestroy → clearPlayerSession would delete that row.
+        const guildId = "guild-discord-ephemeral-orphan"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        await destroyPlayerSuppressingSessionClear(guildId, () => Promise.resolve())
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, [])
+
+        // A later intentional destroy (e.g. /stop) must still clear.
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, ["delete"])
+    })
 })
 
 describe("shouldUndoStaleSessionUpsert", () => {

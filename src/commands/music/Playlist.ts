@@ -30,6 +30,7 @@ import {
     tryDestroyOrphanGuildPlayer,
     withGuildPlayerLifecycleReservation,
 } from "../../util/guildPlayerQueueLock.js"
+import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
 import { thumbnailFromLavalinkTrack } from "../../util/trackThumbnail.js"
 import {
     memberMayJoinOccupiedVoice,
@@ -362,13 +363,17 @@ export default {
 
                         const cleanupCreatedPlayer = async (): Promise<void> => {
                             if (!createdHere) return
+                            // Match web playlist/search teardown: ephemeral create-then-fail must not
+                            // wipe a prior persisted session still awaiting restore.
                             await tryDestroyOrphanGuildPlayer(guild.id, {
                                 hasQueueContent: () => {
                                     const live = client.lavalink.getPlayer(guild.id) ?? player
                                     return playerHasQueueContent(live)
                                 },
                                 destroyPlayer: async () => {
-                                    await client.lavalink.destroyPlayer(guild.id)
+                                    await destroyPlayerSuppressingSessionClear(guild.id, () =>
+                                        client.lavalink.destroyPlayer(guild.id)
+                                    )
                                 },
                             })
                         }
