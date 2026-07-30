@@ -130,8 +130,8 @@ export default async function handleControlMessages(client: BotClient, message: 
 
             const cleanupCreatedPlayer = async (): Promise<void> => {
                 if (!createdHere) return
-                // Match web search/enqueue teardown: failed connect after create must not wipe a
-                // prior persisted session still awaiting restore.
+                // Match web search/enqueue teardown: ephemeral destroy must not wipe a prior
+                // persisted session still awaiting restore.
                 await tryDestroyOrphanGuildPlayer(guildId, {
                     hasQueueContent: () => {
                         const live = client.lavalink?.getPlayer(guildId) ?? player
@@ -194,6 +194,11 @@ export default async function handleControlMessages(client: BotClient, message: 
                 message.author,
                 player
             )
+            // Failed search after create previously left an empty orphan; alone-in-VC destroy
+            // then cleared any prior persisted session. Tear down with suppress like web.
+            if (!result.success) {
+                await cleanupCreatedPlayer()
+            }
             return { kind: "played" as const, result }
         })
 

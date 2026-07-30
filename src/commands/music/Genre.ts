@@ -3,9 +3,14 @@ import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction, GuildMember } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 
-import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
+import {
+    tryDestroyOrphanGuildPlayer,
+    withGuildPlayerLifecycleReservation,
+} from "../../util/guildPlayerQueueLock.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
 import { seedAutoplayHistoryFromPlayer } from "../../util/autoplayHistory.js"
+import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
+import { playerHasQueueContent } from "../../util/playlistQueue.js"
 import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
@@ -78,6 +83,7 @@ export default {
 
         const playOutcome = await withGuildPlayerLifecycleReservation(guild.id, async () => {
             let player = client.lavalink.getPlayer(guild.id)
+            let createdHere = false
 
             if (!player) {
                 try {
@@ -88,6 +94,7 @@ export default {
                         selfDeaf: true,
                         volume: 100,
                     })
+                    createdHere = true
                 } catch (err) {
                     client.error("[GenreCmd] createPlayer failed:", err)
                     return {
@@ -109,6 +116,21 @@ export default {
                 interaction.user,
                 player
             )
+            // Match web searchAndEnqueue: failed genre search after create must not leave an
+            // orphan whose later alone-in-VC destroy wipes a prior persisted session.
+            if (createdHere && !result.success) {
+                await tryDestroyOrphanGuildPlayer(guild.id, {
+                    hasQueueContent: () => {
+                        const live = client.lavalink.getPlayer(guild.id) ?? player
+                        return playerHasQueueContent(live)
+                    },
+                    destroyPlayer: async () => {
+                        await destroyPlayerSuppressingSessionClear(guild.id, () =>
+                            client.lavalink.destroyPlayer(guild.id)
+                        )
+                    },
+                })
+            }
             return { kind: "played" as const, player, result }
         })
 

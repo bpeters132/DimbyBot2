@@ -272,6 +272,30 @@ describe("clearPlayerSession suppress lease consumption", () => {
         await clearPlayerSession(guildId)
         assert.deepEqual(events, ["delete"])
     })
+
+    it("Discord /play /genre failed-search teardown preserves the prior session row", async () => {
+        // Models createPlayer + failed handleQueryAndPlay cleanup in Play.ts / Genre.ts /
+        // control-channel search fail. Without suppress, a later alone-in-VC destroy of the
+        // orphan would clearPlayerSession and delete a restorable prior snapshot.
+        const guildId = "guild-discord-play-orphan"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        await destroyPlayerSuppressingSessionClear(guildId, () => Promise.resolve())
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, [])
+
+        // A later intentional destroy (e.g. /stop) must still clear.
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, ["delete"])
+    })
 })
 
 describe("shouldUndoStaleSessionUpsert", () => {
