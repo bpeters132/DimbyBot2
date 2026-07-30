@@ -2,8 +2,13 @@ import { SlashCommandBuilder } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
-import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
+import {
+    tryDestroyOrphanGuildPlayer,
+    withGuildPlayerLifecycleReservation,
+} from "../../util/guildPlayerQueueLock.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
+import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
+import { playerHasQueueContent } from "../../util/playlistQueue.js"
 import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
@@ -101,6 +106,21 @@ export default {
                     interaction.user,
                     player
                 )
+                // Match web searchAndEnqueue: failed search after create must not leave an
+                // orphan whose later alone-in-VC destroy wipes a prior persisted session.
+                if (createdNewPlayer && !result.success) {
+                    await tryDestroyOrphanGuildPlayer(guild.id, {
+                        hasQueueContent: () => {
+                            const live = client.lavalink.getPlayer(guild.id) ?? player
+                            return playerHasQueueContent(live)
+                        },
+                        destroyPlayer: async () => {
+                            await destroyPlayerSuppressingSessionClear(guild.id, () =>
+                                client.lavalink.destroyPlayer(guild.id)
+                            )
+                        },
+                    })
+                }
                 return { createdNewPlayer, result }
             }
         )

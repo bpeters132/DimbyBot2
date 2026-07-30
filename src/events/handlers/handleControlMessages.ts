@@ -11,6 +11,7 @@ import {
     withGuildPlayerLifecycleReservation,
 } from "../../util/guildPlayerQueueLock.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
+import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
 import { playerHasQueueContent } from "../../util/playlistQueue.js"
 import {
     memberMayJoinOccupiedVoice,
@@ -129,13 +130,17 @@ export default async function handleControlMessages(client: BotClient, message: 
 
             const cleanupCreatedPlayer = async (): Promise<void> => {
                 if (!createdHere) return
+                // Match web search/enqueue teardown: ephemeral destroy must not wipe a prior
+                // persisted session still awaiting restore.
                 await tryDestroyOrphanGuildPlayer(guildId, {
                     hasQueueContent: () => {
                         const live = client.lavalink?.getPlayer(guildId) ?? player
                         return live ? playerHasQueueContent(live) : false
                     },
                     destroyPlayer: async () => {
-                        await client.lavalink?.destroyPlayer(guildId)
+                        await destroyPlayerSuppressingSessionClear(guildId, () =>
+                            client.lavalink?.destroyPlayer(guildId)
+                        )
                     },
                 })
             }
@@ -189,6 +194,11 @@ export default async function handleControlMessages(client: BotClient, message: 
                 message.author,
                 player
             )
+            // Failed search after create previously left an empty orphan; alone-in-VC destroy
+            // then cleared any prior persisted session. Tear down with suppress like web.
+            if (!result.success) {
+                await cleanupCreatedPlayer()
+            }
             return { kind: "played" as const, result }
         })
 
