@@ -4,8 +4,13 @@ import { spawn } from "child_process"
 import path from "path"
 import fs from "fs"
 import type BotClient from "../../lib/BotClient.js"
-import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
+import {
+    tryDestroyOrphanGuildPlayer,
+    withGuildPlayerLifecycleReservation,
+} from "../../util/guildPlayerQueueLock.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
+import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
+import { playerHasQueueContent } from "../../util/playlistQueue.js"
 import { getGuildSettings } from "../../util/saveControlChannel.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import {
@@ -697,6 +702,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                         guildId,
                         async () => {
                             let player = client.lavalink.getPlayer(guildId)
+                            let createdHere = false
                             if (!player) {
                                 player = client.lavalink.createPlayer({
                                     guildId,
@@ -704,12 +710,13 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                                     textChannelId: textChannel.id,
                                     selfDeaf: true,
                                 })
+                                createdHere = true
                             }
                             if (!player) {
                                 return null
                             }
 
-                            return handleQueryAndPlay(
+                            const result = await handleQueryAndPlay(
                                 client,
                                 guildId,
                                 voiceChannel,
@@ -718,6 +725,23 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                                 interaction.user,
                                 player
                             )
+                            // Match /play and web searchAndEnqueue: failed autoplay after create
+                            // must not leave an orphan whose later alone-in-VC destroy wipes a
+                            // prior persisted session.
+                            if (createdHere && !result.success) {
+                                await tryDestroyOrphanGuildPlayer(guildId, {
+                                    hasQueueContent: () => {
+                                        const live = client.lavalink.getPlayer(guildId) ?? player
+                                        return playerHasQueueContent(live)
+                                    },
+                                    destroyPlayer: async () => {
+                                        await destroyPlayerSuppressingSessionClear(guildId, () =>
+                                            client.lavalink.destroyPlayer(guildId)
+                                        )
+                                    },
+                                })
+                            }
+                            return result
                         }
                     )
                     if (!playResult) {

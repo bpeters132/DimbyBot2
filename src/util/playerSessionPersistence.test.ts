@@ -248,6 +248,30 @@ describe("clearPlayerSession suppress lease consumption", () => {
         assert.deepEqual(events, ["delete"])
         assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
     })
+
+    it("Discord /download autoplay failed-play teardown preserves the prior session row", async () => {
+        // Models createPlayer + failed handleQueryAndPlay cleanup in download.ts autoplay.
+        // Without suppress, a later alone-in-VC destroy of the orphan would clearPlayerSession
+        // and delete a restorable prior snapshot.
+        const guildId = "guild-discord-download-orphan"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        await destroyPlayerSuppressingSessionClear(guildId, () => Promise.resolve())
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, [])
+
+        // A later intentional destroy (e.g. /stop) must still clear.
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, ["delete"])
+    })
 })
 
 describe("shouldUndoStaleSessionUpsert", () => {
