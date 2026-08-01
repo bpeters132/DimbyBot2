@@ -1,4 +1,4 @@
-import type { LoggerInterface } from "../types/index.js"
+import type { DownloadsMetadataStore, LoggerInterface } from "../types/index.js"
 
 /** Unit separator — not used in Discord snowflakes or typical `.wav` names; stable composite store keys. */
 export const DOWNLOAD_METADATA_KEY_SEP = "\x1f"
@@ -115,4 +115,37 @@ export function downloadMetadataKeysForFile(
         }
     }
     return keys
+}
+
+/** Parses downloadDate from metadata; rejects non-date types and Invalid Date. */
+export function parseValidDownloadDate(value: unknown): Date | null {
+    if (typeof value !== "string" && typeof value !== "number") return null
+    const parsed = new Date(value)
+    return Number.isFinite(parsed.getTime()) ? parsed : null
+}
+
+/**
+ * Selects the latest metadata entry per physical fileName for a guild.
+ * Composite and legacy keys for the same file collapse to one row (newest downloadDate wins).
+ */
+export function dedupeMetadataByFileName(
+    metadata: DownloadsMetadataStore,
+    guildId: string
+): Map<string, { key: string; info: DownloadsMetadataStore[string] }> {
+    const result = new Map<string, { key: string; info: DownloadsMetadataStore[string] }>()
+    for (const [key, info] of Object.entries(metadata)) {
+        if (!downloadMetadataEntryMatchesGuild(key, info, guildId)) continue
+        const fileName = parseDownloadMetadataStoreKey(key).fileName
+        const existing = result.get(fileName)
+        if (!existing) {
+            result.set(fileName, { key, info })
+            continue
+        }
+        const existingDate = parseValidDownloadDate(existing.info.downloadDate)?.getTime() ?? 0
+        const candidateDate = parseValidDownloadDate(info.downloadDate)?.getTime() ?? 0
+        if (candidateDate >= existingDate) {
+            result.set(fileName, { key, info })
+        }
+    }
+    return result
 }
