@@ -14,6 +14,11 @@ const SAVE_DEBOUNCE_MS = 2000
 const pendingSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const pendingPlayers = new Map<string, Player>()
 const restoreInProgressGuilds = new Set<string>()
+/**
+ * After a partial restore with transient resolve failures, keep the prior full DB snapshot.
+ * Event-driven / shutdown saves must not overwrite that row with the hydrated subset.
+ */
+const preservePriorSnapshotGuilds = new Set<string>()
 /** Bumped on intentional clear so in-flight debounced writes cannot resurrect deleted rows. */
 const sessionClearEpochByGuild = new Map<string, number>()
 /**
@@ -218,6 +223,24 @@ function isRestoreInProgress(guildId: string): boolean {
 }
 
 /**
+ * Blocks session overwrites after a partial hydrate with transient track failures.
+ * Cleared on intentional session delete or a later full restore that may persist.
+ */
+export function markPlayerSessionPreservePriorSnapshot(guildId: string): void {
+    preservePriorSnapshotGuilds.add(guildId)
+}
+
+/** Clears the preserve-prior-snapshot guard for a guild. */
+export function clearPlayerSessionPreservePriorSnapshot(guildId: string): void {
+    preservePriorSnapshotGuilds.delete(guildId)
+}
+
+/** True when saves must not overwrite the prior full DB snapshot for this guild. */
+export function shouldPreservePriorPlayerSessionSnapshot(guildId: string): boolean {
+    return preservePriorSnapshotGuilds.has(guildId)
+}
+
+/**
  * Pure guard used by clearPlayerSession: shutdown flush, mid-restore, and suppress leases.
  * Exported for regression tests.
  */
@@ -240,6 +263,8 @@ export function shouldSkipPlayerSessionClear(guildId: string): boolean {
 
 async function writePlayerSession(player: Player, saveEpoch: number): Promise<void> {
     if (getSessionClearEpoch(player.guildId) !== saveEpoch) return
+    // Defense in depth: flush/shutdown paths must honor the same partial-restore guard.
+    if (shouldPreservePriorPlayerSessionSnapshot(player.guildId)) return
 
     const snapshot = snapshotFromPlayer(player)
     const voiceChannelId = player.voiceChannelId
@@ -253,6 +278,7 @@ async function writePlayerSession(player: Player, saveEpoch: number): Promise<vo
     await withGuildPersistenceLock(guildId, async () => {
         // Re-check under the lock: a clear may have landed while we waited for the chain.
         if (getSessionClearEpoch(guildId) !== saveEpoch) return
+        if (shouldPreservePriorPlayerSessionSnapshot(guildId)) return
 
         // Claim a persist generation before awaiting so a newer write/clear can outrank this undo.
         const writeGeneration = bumpSessionPersistGeneration(guildId)
@@ -290,7 +316,13 @@ export function getSessionClearEpochForTests(guildId: string): number {
 
 /** Debounced upsert of the player session snapshot (~2s per guild). */
 export function schedulePlayerSessionSave(player: Player): void {
-    if (persistenceShuttingDown || isRestoreInProgress(player.guildId)) return
+    if (
+        persistenceShuttingDown ||
+        isRestoreInProgress(player.guildId) ||
+        shouldPreservePriorPlayerSessionSnapshot(player.guildId)
+    ) {
+        return
+    }
 
     const guildId = player.guildId
     const saveEpoch = getSessionClearEpoch(guildId)
@@ -303,6 +335,7 @@ export function schedulePlayerSessionSave(player: Player): void {
         const latest = pendingPlayers.get(guildId)
         pendingPlayers.delete(guildId)
         if (!latest || getSessionClearEpoch(guildId) !== saveEpoch) return
+        if (shouldPreservePriorPlayerSessionSnapshot(guildId)) return
         void writePlayerSession(latest, saveEpoch).catch((err: unknown) => {
             const client = tryGetBotClient()
             const msg = err instanceof Error ? err.message : String(err)
@@ -343,6 +376,7 @@ export async function flushAllPlayerSessionSaves(): Promise<void> {
     if (!client) return
     for (const player of client.lavalink.players.values()) {
         if (isRestoreInProgress(player.guildId)) continue
+        if (shouldPreservePriorPlayerSessionSnapshot(player.guildId)) continue
         try {
             await writePlayerSession(player, getSessionClearEpoch(player.guildId))
         } catch (err: unknown) {
@@ -400,6 +434,9 @@ export async function clearPlayerSession(guildId: string): Promise<void> {
         if (hasSuppressLease) releaseOneSuppressLease(guildId)
         return
     }
+
+    // Intentional delete: stop preserving a prior snapshot for this guild.
+    clearPlayerSessionPreservePriorSnapshot(guildId)
 
     // Bump before awaiting the persistence lock so immediately following saves capture the new epoch.
     bumpSessionClearEpoch(guildId)
