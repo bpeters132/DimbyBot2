@@ -4,11 +4,15 @@ import type { Player, Track } from "lavalink-client"
 import {
     acquirePlayerSessionClearSuppressLease,
     clearPlayerSession,
+    clearPlayerSessionPreservePriorSnapshot,
     clearPlayerSessionRestoreInProgress,
     destroyPlayerSuppressingSessionClear,
     getSessionClearEpochForTests,
+    markPlayerSessionPreservePriorSnapshot,
     markPlayerSessionRestoreInProgress,
+    schedulePlayerSessionSave,
     setPlayerSessionPersistenceDbForTests,
+    shouldPreservePriorPlayerSessionSnapshot,
     shouldSkipPlayerSessionClear,
     shouldSkipPlayerSessionClearForState,
     shouldClearPlayerSessionOnDestroy,
@@ -263,6 +267,54 @@ describe("shouldUndoStaleSessionUpsert", () => {
 
     it("does not undo when clear epoch still matches the save epoch", () => {
         assert.equal(shouldUndoStaleSessionUpsert(1, 1, 3, 3), false)
+    })
+})
+
+describe("preserve prior snapshot after partial restore", () => {
+    afterEach(() => {
+        clearPlayerSessionPreservePriorSnapshot("guild-partial-restore")
+        setPlayerSessionPersistenceDbForTests(null)
+    })
+
+    it("blocks schedulePlayerSessionSave and direct writes while preserve is set", async () => {
+        const guildId = "guild-partial-restore"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        const player = mockPlayer({})
+        player.guildId = guildId
+
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), true)
+
+        // Mirrors trackStart/trackEnd after clearPlayerSessionRestoreInProgress.
+        schedulePlayerSessionSave(player)
+        await writePlayerSessionForTests(player, getSessionClearEpochForTests(guildId))
+        assert.deepEqual(events, [])
+
+        clearPlayerSessionPreservePriorSnapshot(guildId)
+        await writePlayerSessionForTests(player, getSessionClearEpochForTests(guildId))
+        assert.deepEqual(events, ["upsert"])
+    })
+
+    it("clears the preserve guard on intentional session delete", async () => {
+        const guildId = "guild-partial-restore"
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => undefined,
+            deletePlayerSession: async () => undefined,
+        })
+
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), true)
+        await clearPlayerSession(guildId)
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), false)
     })
 })
 
