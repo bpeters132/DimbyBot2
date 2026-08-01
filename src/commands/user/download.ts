@@ -23,21 +23,16 @@ import {
     getDownloadMetadataStore,
     saveDownloadMetadataStore,
 } from "../../util/downloadMetadataStore.js"
+import {
+    buildYtDlpMatchFilter,
+    resolveDownloadsMaxMb,
+} from "../../util/downloadsMaxMb.js"
 
 // Maximum age of files in days before automatic cleanup
 const MAX_FILE_AGE_DAYS = 7
 
-// Maximum total size of downloads directory in MB (default fallback)
-const DEFAULT_MAX_DIR_SIZE_MB = 1000
-
 /** Wall-clock limit for a single yt-dlp run (live / very long media). */
 const DOWNLOAD_PROCESS_TIMEOUT_MS = 10 * 60 * 1000
-
-/**
- * Rough upper bound on WAV output (~10 MiB/min for 16-bit 44.1kHz stereo).
- * Used only for yt-dlp duration filtering before download starts.
- */
-const APPROX_WAV_MIB_PER_MINUTE = 10
 
 /**
  * Resolves the configured downloads size limit for a guild.
@@ -48,24 +43,12 @@ const APPROX_WAV_MIB_PER_MINUTE = 10
 function getMaxDirSizeMb(client: BotClient, guildId: string) {
     const settings = getGuildSettings()
     const guildSettings = settings[guildId] || {}
-    const configured = guildSettings.downloadsMaxMb
-    const parsed = Number.parseFloat(String(configured ?? ""))
-    if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_MAX_DIR_SIZE_MB
-    return parsed
+    return resolveDownloadsMaxMb(guildSettings.downloadsMaxMb)
 }
 
 /** Max accepted on-disk size for one download (guild quota, in bytes). */
 function getMaxDownloadBytes(maxDirSizeMb: number): number {
     return Math.max(1, maxDirSizeMb) * 1024 * 1024
-}
-
-/**
- * yt-dlp match-filter: reject live streams and media whose estimated WAV size
- * would exceed the guild downloads quota.
- */
-function buildYtDlpMatchFilter(maxDirSizeMb: number): string {
-    const maxDurationSec = Math.max(60, Math.floor((maxDirSizeMb / APPROX_WAV_MIB_PER_MINUTE) * 60))
-    return `!is_live & duration <= ${maxDurationSec}`
 }
 
 /**
