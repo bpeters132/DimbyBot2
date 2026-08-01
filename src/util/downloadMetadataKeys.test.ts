@@ -3,12 +3,14 @@ import { describe, it } from "node:test"
 import {
     DOWNLOAD_METADATA_KEY_SEP,
     DOWNLOAD_METADATA_UNKNOWN_GUILD_ID,
+    dedupeMetadataByFileName,
     downloadMetadataEntryMatchesGuild,
     downloadMetadataFileBelongsToGuild,
     downloadMetadataKeysForFile,
     downloadMetadataStoreKey,
     effectiveDownloadMetadataGuildId,
     parseDownloadMetadataStoreKey,
+    parseValidDownloadDate,
 } from "./downloadMetadataKeys.js"
 
 describe("downloadMetadataStoreKey / parseDownloadMetadataStoreKey", () => {
@@ -100,5 +102,64 @@ describe("downloadMetadataFileBelongsToGuild / entryMatchesGuild / keysForFile",
             downloadMetadataKeysForFile({ [fileName]: { guildId: "x" } }, fileName, guildId),
             []
         )
+    })
+})
+
+describe("parseValidDownloadDate", () => {
+    it("accepts finite string and number timestamps", () => {
+        const iso = parseValidDownloadDate("2026-07-01T12:00:00.000Z")
+        assert.ok(iso)
+        assert.equal(iso.toISOString(), "2026-07-01T12:00:00.000Z")
+        const ms = parseValidDownloadDate(1_720_000_000_000)
+        assert.ok(ms)
+        assert.equal(ms.getTime(), 1_720_000_000_000)
+    })
+
+    it("rejects invalid types and Invalid Date", () => {
+        assert.equal(parseValidDownloadDate(undefined), null)
+        assert.equal(parseValidDownloadDate(null), null)
+        assert.equal(parseValidDownloadDate({}), null)
+        assert.equal(parseValidDownloadDate("not-a-date"), null)
+        assert.equal(parseValidDownloadDate(Number.NaN), null)
+    })
+})
+
+describe("dedupeMetadataByFileName", () => {
+    it("keeps the newest entry when composite and legacy keys collide", () => {
+        const guildId = "guild-1"
+        const fileName = "track.wav"
+        const composite = downloadMetadataStoreKey(guildId, fileName)
+        const older = Date.parse("2026-01-01T00:00:00.000Z")
+        const newer = Date.parse("2026-06-01T00:00:00.000Z")
+        const deduped = dedupeMetadataByFileName(
+            {
+                [composite]: { guildId, downloadDate: older },
+                [fileName]: { guildId, downloadDate: newer },
+                [downloadMetadataStoreKey("guild-2", fileName)]: {
+                    guildId: "guild-2",
+                    downloadDate: newer + 1,
+                },
+            },
+            guildId
+        )
+        assert.equal(deduped.size, 1)
+        const row = deduped.get(fileName)
+        assert.ok(row)
+        assert.equal(row.key, fileName)
+        assert.equal(row.info.downloadDate, newer)
+    })
+
+    it("treats missing downloadDate as epoch so dated rows win", () => {
+        const guildId = "guild-1"
+        const fileName = "undated.wav"
+        const composite = downloadMetadataStoreKey(guildId, fileName)
+        const deduped = dedupeMetadataByFileName(
+            {
+                [fileName]: { guildId },
+                [composite]: { guildId, downloadDate: "2026-03-01T00:00:00.000Z" },
+            },
+            guildId
+        )
+        assert.equal(deduped.get(fileName)?.key, composite)
     })
 })

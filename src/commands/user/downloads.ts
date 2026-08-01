@@ -8,58 +8,25 @@ import type BotClient from "../../lib/BotClient.js"
 import { getGuildSettings } from "../../util/saveControlChannel.js"
 import type { DownloadsMetadataStore } from "../../types/index.js"
 import {
-    downloadMetadataEntryMatchesGuild,
+    dedupeMetadataByFileName,
     downloadMetadataKeysForFile,
     parseDownloadMetadataStoreKey,
+    parseValidDownloadDate,
 } from "../../util/downloadMetadataKeys.js"
 import {
     getDownloadMetadataStore,
     saveDownloadMetadataStore,
 } from "../../util/downloadMetadataStore.js"
-
-const DEFAULT_MAX_DIR_SIZE_MB = 1000
-
-/** Selects the latest metadata entry per physical fileName for a guild. */
-function dedupeMetadataByFileName(
-    metadata: DownloadsMetadataStore,
-    guildId: string
-): Map<string, { key: string; info: DownloadsMetadataStore[string] }> {
-    const result = new Map<string, { key: string; info: DownloadsMetadataStore[string] }>()
-    for (const [key, info] of Object.entries(metadata)) {
-        if (!downloadMetadataEntryMatchesGuild(key, info, guildId)) continue
-        const fileName = parseDownloadMetadataStoreKey(key).fileName
-        const existing = result.get(fileName)
-        if (!existing) {
-            result.set(fileName, { key, info })
-            continue
-        }
-        const existingDate = parseValidDownloadDate(existing.info.downloadDate)?.getTime() ?? 0
-        const candidateDate = parseValidDownloadDate(info.downloadDate)?.getTime() ?? 0
-        if (candidateDate >= existingDate) {
-            result.set(fileName, { key, info })
-        }
-    }
-    return result
-}
-
-function parseValidDownloadDate(value: unknown): Date | null {
-    if (typeof value !== "string" && typeof value !== "number") return null
-    const parsed = new Date(value)
-    return Number.isFinite(parsed.getTime()) ? parsed : null
-}
+import { resolveDownloadsMaxMb } from "../../util/downloadsMaxMb.js"
 
 /**
  * Resolves the configured downloads size limit for a guild.
- * @param {import('../../lib/BotClient.js').default} client The bot client instance.
- * @param {string} guildId The guild ID to read settings for.
- * @returns {number} The max directory size in MB.
+ * Invalid/zero/negative settings fall back via {@link resolveDownloadsMaxMb}.
  */
 function getMaxDirSizeMb(client: BotClient, guildId: string) {
     const settings = getGuildSettings()
     const guildSettings = settings[guildId] || {}
-    const configured = guildSettings.downloadsMaxMb
-    const parsed = Number.parseFloat(String(configured ?? ""))
-    return Number.isNaN(parsed) ? DEFAULT_MAX_DIR_SIZE_MB : parsed
+    return resolveDownloadsMaxMb(guildSettings.downloadsMaxMb)
 }
 
 const data = new SlashCommandBuilder()
