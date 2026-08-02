@@ -7,14 +7,7 @@ import { toPlayerStateResponse } from "../../shared/player-state.js"
 import { webPlayerDebug } from "../../shared/web-player-debug-log.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
-
-type PlayerAction = "pause" | "skip" | "stop" | "seek" | "loop" | "shuffle" | "autoplay"
-
-function parseAction(value: unknown): PlayerAction | null {
-    const allowed: PlayerAction[] = ["pause", "skip", "stop", "seek", "loop", "shuffle", "autoplay"]
-    if (typeof value !== "string") return null
-    return allowed.includes(value as PlayerAction) ? (value as PlayerAction) : null
-}
+import { parsePlayerAction } from "../parseBotApiParams.js"
 
 export async function playerGET(
     headers: Headers,
@@ -88,7 +81,7 @@ export async function playerPOST(
         action?: unknown
         value?: unknown
     }
-    const action = parseAction(body.action)
+    const action = parsePlayerAction(body.action)
     if (!action) {
         return {
             status: 400,

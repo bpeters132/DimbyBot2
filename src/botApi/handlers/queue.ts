@@ -9,20 +9,9 @@ import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { searchAndEnqueue } from "./searchAndEnqueue.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
+import { parseQueueQueryNumber } from "../parseBotApiParams.js"
 
 const MAX_QUEUE_PAGE_LIMIT = 100
-
-function clampInt(value: number, min: number, max: number): number {
-    return Math.min(max, Math.max(min, value))
-}
-
-/** Parses a query integer, truncates toward zero, and clamps to inclusive bounds. */
-function parseNumber(value: string | null, fallback: number, min: number, max: number): number {
-    if (value === null) return fallback
-    const parsed = Number(value)
-    if (!Number.isFinite(parsed)) return fallback
-    return clampInt(Math.trunc(parsed), min, max)
-}
 
 export async function queueGET(
     headers: Headers,
@@ -37,8 +26,8 @@ export async function queueGET(
         }
     }
 
-    const page = parseNumber(searchParams.get("page"), 1, 1, 10_000)
-    const limit = parseNumber(searchParams.get("limit"), 20, 1, MAX_QUEUE_PAGE_LIMIT)
+    const page = parseQueueQueryNumber(searchParams.get("page"), 1, 1, 10_000)
+    const limit = parseQueueQueryNumber(searchParams.get("limit"), 20, 1, MAX_QUEUE_PAGE_LIMIT)
     const player = getBotClient().lavalink.getPlayer(guildId)
     return {
         status: 200,

@@ -7,14 +7,7 @@ import { toQueueResponse } from "../../shared/player-state.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
-
-function parseIndex(value: string): number | null {
-    const index = Number(value)
-    if (!Number.isInteger(index) || index < 0) {
-        return null
-    }
-    return index
-}
+import { parseQueueIndex } from "../parseBotApiParams.js"
 
 export async function queueIndexDELETE(
     headers: Headers,
@@ -30,7 +23,7 @@ export async function queueIndexDELETE(
             }
         }
 
-        const queueIndex = parseIndex(indexParam)
+        const queueIndex = parseQueueIndex(indexParam)
         if (queueIndex === null) {
             return {
                 status: 400,
@@ -105,7 +98,7 @@ export async function queueIndexPATCH(
             }
         }
 
-        const sourceIndex = parseIndex(indexParam)
+        const sourceIndex = parseQueueIndex(indexParam)
         const body = (typeof rawBody === "object" && rawBody !== null ? rawBody : {}) as {
             newIndex?: unknown
         }
