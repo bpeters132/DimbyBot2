@@ -1,12 +1,9 @@
-import type {
-    DownloadFileMetadata,
-    DownloadsMetadataStore,
-    LoggerInterface,
-} from "../types/index.js"
+import type { DownloadsMetadataStore, LoggerInterface } from "../types/index.js"
 import {
     getDownloadMetadataStoreFromDatabase,
     replaceDownloadMetadataStoreInDatabase,
 } from "../repositories/downloadMetadataRepository.js"
+import { mergeDownloadMetadataForSave } from "./downloadMetadataMerge.js"
 import { loggerFromPartial } from "./loggerFromPartial.js"
 
 let downloadMetadataCache: DownloadsMetadataStore = {}
@@ -17,12 +14,6 @@ function cloneStore(store: DownloadsMetadataStore): DownloadsMetadataStore {
     return typeof structuredClone === "function"
         ? structuredClone(store)
         : (JSON.parse(JSON.stringify(store)) as DownloadsMetadataStore)
-}
-
-function cloneMetadataEntry(entry: DownloadFileMetadata): DownloadFileMetadata {
-    return typeof structuredClone === "function"
-        ? structuredClone(entry)
-        : (JSON.parse(JSON.stringify(entry)) as DownloadFileMetadata)
 }
 
 /** Loads download metadata from the database into the in-memory cache. */
@@ -94,21 +85,11 @@ export async function saveDownloadMetadataStore(
         const logger = loggerFromPartial(loggerInstance)
         try {
             const dbStore = await getDownloadMetadataStoreFromDatabase()
-            const merged = cloneStore(dbStore)
-            if (hasTouchedOption) {
-                for (const key of touchedStoreKeys) {
-                    const row = nextCache[key]
-                    if (row !== undefined) {
-                        merged[key] = cloneMetadataEntry(row)
-                    }
-                }
-            } else if (deleteStoreKeys.length === 0) {
-                for (const [key, row] of Object.entries(nextCache)) {
-                    if (row !== undefined) {
-                        merged[key] = cloneMetadataEntry(row)
-                    }
-                }
-            }
+            // Strip deleteStoreKeys from the upsert map so delete-then-upsert cannot resurrect rows.
+            const merged = mergeDownloadMetadataForSave(dbStore, nextCache, {
+                deleteStoreKeys,
+                touchedStoreKeys: hasTouchedOption ? touchedStoreKeys : undefined,
+            })
             const result = await replaceDownloadMetadataStoreInDatabase(merged, {
                 deleteStoreKeys,
             })
@@ -121,11 +102,7 @@ export async function saveDownloadMetadataStore(
                     "[downloadMetadata] replaceDownloadMetadataStoreInDatabase succeeded but cache reload failed; using persisted snapshot",
                     reloadErr
                 )
-                const fallback = cloneStore(merged)
-                for (const key of deleteStoreKeys) {
-                    delete fallback[key]
-                }
-                downloadMetadataCache = fallback
+                downloadMetadataCache = cloneStore(merged)
                 initialized = true
                 return false
             }
