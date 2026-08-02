@@ -219,6 +219,36 @@ describe("shouldSkipPlayerSessionClear", () => {
     })
 })
 
+describe("clearPlayerSession clear-epoch timing", () => {
+    afterEach(() => {
+        setPlayerSessionPersistenceDbForTests(null)
+    })
+
+    it("bumps the clear epoch synchronously before awaiting DB delete", async () => {
+        // /stop must await player.destroy() so playerDestroy → clearPlayerSession runs this
+        // sync preamble before a successor /play can schedule a save under the old epoch.
+        const guildId = "guild-stop-epoch-sync"
+        let releaseDelete!: () => void
+        const deleteGate = new Promise<void>((resolve) => {
+            releaseDelete = resolve
+        })
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => undefined,
+            deletePlayerSession: async () => {
+                await deleteGate
+            },
+        })
+
+        const epochBefore = getSessionClearEpochForTests(guildId)
+        const clearP = clearPlayerSession(guildId)
+        // Epoch must already be bumped while delete is still blocked.
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
+        releaseDelete()
+        await clearP
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
+    })
+})
+
 describe("clearPlayerSession suppress lease consumption", () => {
     afterEach(() => {
         setPlayerSessionPersistenceDbForTests(null)
