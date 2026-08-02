@@ -6,7 +6,7 @@ const DISCORD_USER_API_UA = "DimbyBotDashboard/1.0 (OAuth user token)"
 /** Attempts including the first request; keeps dashboard guild loads from failing on transient 429s. */
 const GUILD_LIST_MAX_ATTEMPTS = 4
 /** Upper bound on a single wait so one bad payload cannot stall the server unbounded. */
-const GUILD_LIST_MAX_RETRY_WAIT_MS = 60_000
+export const GUILD_LIST_MAX_RETRY_WAIT_MS = 60_000
 const GUILD_LIST_MIN_RETRY_WAIT_MS = 500
 const GUILD_LIST_REQUEST_TIMEOUT_MS = 10_000
 /** Wall-clock cap for the whole retry loop (per token fetch), including waits between attempts. */
@@ -65,7 +65,8 @@ if (typeof sweepInterval.unref === "function") {
     sweepInterval.unref()
 }
 
-function isDiscordUserGuildRow(value: unknown): value is DiscordUserGuild {
+/** Validates one Discord `/users/@me/guilds` row before it reaches the dashboard. */
+export function isDiscordUserGuildRow(value: unknown): value is DiscordUserGuild {
     if (!value || typeof value !== "object") {
         return false
     }
@@ -76,11 +77,36 @@ function isDiscordUserGuildRow(value: unknown): value is DiscordUserGuild {
     return row.icon === null || typeof row.icon === "string"
 }
 
+/**
+ * Parses a successful Discord guilds JSON body into typed rows.
+ * Rejects the whole payload if any element is malformed.
+ */
+export function parseDiscordUserGuildsPayload(
+    parsed: unknown
+): { ok: true; guilds: DiscordUserGuild[] } | { ok: false } {
+    if (!Array.isArray(parsed)) {
+        return { ok: false }
+    }
+    const guilds: DiscordUserGuild[] = []
+    for (const item of parsed) {
+        if (!isDiscordUserGuildRow(item)) {
+            return { ok: false }
+        }
+        guilds.push({
+            id: item.id,
+            name: item.name,
+            icon: item.icon ?? null,
+        })
+    }
+    return { ok: true, guilds }
+}
+
 function delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function guildListExponentialBackoffMs(attempt: number): number {
+/** Exponential backoff base (pre-jitter) for guild-list retries. */
+export function guildListExponentialBackoffMs(attempt: number): number {
     const exp = GUILD_LIST_MIN_RETRY_WAIT_MS * 2 ** Math.max(0, attempt - 1)
     return Math.min(exp, GUILD_LIST_MAX_RETRY_WAIT_MS)
 }
@@ -110,7 +136,9 @@ function writeSuccessCache(accessToken: string, guilds: DiscordUserGuild[]): voi
 /**
  * Discord 429 responses include `Retry-After` (seconds) and/or a JSON body with `retry_after` (seconds).
  */
-function discordRetryAfterMs(response: Response, bodyText: string): number {
+export function discordRetryAfterMs(response: {
+    headers: { get(name: string): string | null }
+}, bodyText: string): number {
     const header = response.headers.get("retry-after")
     if (header) {
         const sec = Number.parseFloat(header.trim())
@@ -184,21 +212,11 @@ async function fetchDiscordUserGuildsOnce(accessToken: string): Promise<FetchUse
             } catch {
                 return { ok: false, status: 0, message: "invalid-discord-guilds-response" }
             }
-            if (!Array.isArray(parsed)) {
+            const guildsParsed = parseDiscordUserGuildsPayload(parsed)
+            if (!guildsParsed.ok) {
                 return { ok: false, status: 0, message: "invalid-discord-guilds-response" }
             }
-            const guilds: DiscordUserGuild[] = []
-            for (const item of parsed) {
-                if (!isDiscordUserGuildRow(item)) {
-                    return { ok: false, status: 0, message: "invalid-discord-guilds-response" }
-                }
-                guilds.push({
-                    id: item.id,
-                    name: item.name,
-                    icon: item.icon ?? null,
-                })
-            }
-            return { ok: true, guilds }
+            return { ok: true, guilds: guildsParsed.guilds }
         }
 
         if (response.status === 429) {

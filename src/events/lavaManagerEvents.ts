@@ -17,6 +17,7 @@ import type {
 } from "lavalink-client"
 import type BotClient from "../lib/BotClient.js"
 import { getGuildSettings } from "../util/saveControlChannel.js"
+import { escapeDiscordMarkdown } from "../util/escapeDiscordMarkdown.js"
 import { rememberAutoplayPlayed } from "../util/autoplayHistory.js"
 import { updateControlMessage } from "./handlers/handleControlChannel.js"
 import { discordDeleteErrorDetails } from "../util/discordErrorDetails.js"
@@ -70,14 +71,6 @@ function isTextSendable(channel: unknown): channel is GuildTextSendable {
         "send" in channel &&
         typeof (channel as { send?: unknown }).send === "function"
     )
-}
-
-function escapeDiscordMarkdown(text: string): string {
-    return text
-        .replace(/\\/g, "\\\\")
-        .replace(/\*/g, "\\*")
-        .replace(/_/g, "\\_")
-        .replace(/`/g, "\\`")
 }
 
 function getControlChannelIdSafe(client: BotClient, guildId: string): string | undefined {
