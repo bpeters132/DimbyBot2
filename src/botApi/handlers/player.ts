@@ -7,6 +7,7 @@ import { toPlayerStateResponse } from "../../shared/player-state.js"
 import { webPlayerDebug } from "../../shared/web-player-debug-log.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
+import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 
 type PlayerAction = "pause" | "skip" | "stop" | "seek" | "loop" | "shuffle" | "autoplay"
 
@@ -132,7 +133,12 @@ export async function playerPOST(
                 break
             }
             case "shuffle":
-                await player.queue.shuffle()
+                // Serialize with dashboard clear/reorder and Discord RRQ mutations so shuffle
+                // cannot interleave between a locked remove+insert (lost / duplicated tracks).
+                await withGuildPlayerQueueLock(guildId, async () => {
+                    if (player.queue.tracks.length < 2) return
+                    await player.queue.shuffle()
+                })
                 break
             case "autoplay":
                 player.set("autoplay", !player.get("autoplay"))
