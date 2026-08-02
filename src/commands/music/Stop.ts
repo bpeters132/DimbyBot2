@@ -65,19 +65,34 @@ export default {
         }
 
         if (lavalinkPlayer) {
-            // Check if it was actually doing something or had a queue
-            if (
+            // Await destroy so playerDestroy → clearPlayerSession bumps the session epoch
+            // before this command continues. Fire-and-forget destroy lets Lavalink delete the
+            // old player from the map mid-teardown, a successor /play create a new player, then
+            // the late playerDestroy clear wipe that new session (Leave/web stop already await).
+            const wasActive =
                 lavalinkPlayer.playing ||
-                lavalinkPlayer.queue.current ||
+                Boolean(lavalinkPlayer.queue.current) ||
                 lavalinkPlayer.queue.tracks.length > 0
-            ) {
-                lavalinkPlayer.destroy()
-                client.debug(`[StopCmd] Destroyed Lavalink player for guild ${guild.id}`)
-                stoppedLavalink = true
-            } else {
-                lavalinkPlayer.destroy()
-                lavalinkIdleCleaned = true
-                client.debug(`[StopCmd] Cleaned up inactive Lavalink player for guild ${guild.id}`)
+            try {
+                await lavalinkPlayer.destroy()
+                if (wasActive) {
+                    client.debug(`[StopCmd] Destroyed Lavalink player for guild ${guild.id}`)
+                    stoppedLavalink = true
+                } else {
+                    lavalinkIdleCleaned = true
+                    client.debug(
+                        `[StopCmd] Cleaned up inactive Lavalink player for guild ${guild.id}`
+                    )
+                }
+            } catch (error: unknown) {
+                client.error(
+                    `[StopCmd] Failed to destroy Lavalink player for guild ${guild.id}:`,
+                    error
+                )
+                return interaction.reply({
+                    content: "An error occurred while trying to stop playback.",
+                    ephemeral: true,
+                })
             }
         }
 
