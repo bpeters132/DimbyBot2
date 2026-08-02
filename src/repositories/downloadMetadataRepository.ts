@@ -181,6 +181,20 @@ export async function replaceDownloadMetadataStoreInDatabase(
     const UPSERT_BATCH = 32
     let rowsDeleted = 0
 
+    // Never upsert rows that were explicitly deleted in this call — callers may still pass a
+    // full db snapshot that still contains those keys (delete-then-resurrect bug).
+    const deletedGuildFileKeys = new Set<string>()
+    for (const storeKey of deleteStoreKeys) {
+        const parsed = parseDownloadMetadataStoreKey(storeKey)
+        if (parsed.guildId !== null && parsed.guildId.length > 0) {
+            deletedGuildFileKeys.add(`${parsed.guildId}|${parsed.fileName}`)
+        }
+    }
+    const rowsToWrite =
+        deletedGuildFileKeys.size === 0
+            ? rows
+            : rows.filter((row) => !deletedGuildFileKeys.has(`${row.guildId}|${row.fileName}`))
+
     await prisma.$transaction(async (tx) => {
         const deleteConditions = deleteConditionsForStoreKeys(deleteStoreKeys)
         if (deleteConditions.length > 0) {
@@ -190,8 +204,8 @@ export async function replaceDownloadMetadataStoreInDatabase(
             rowsDeleted = deleted.count
         }
 
-        for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
-            const batch = rows.slice(i, i + UPSERT_BATCH)
+        for (let i = 0; i < rowsToWrite.length; i += UPSERT_BATCH) {
+            const batch = rowsToWrite.slice(i, i + UPSERT_BATCH)
             const existingBefore = await tx.downloadMetadata.findMany({
                 where: {
                     OR: batch.map((row) => ({
@@ -227,5 +241,5 @@ export async function replaceDownloadMetadataStoreInDatabase(
         }
     })
 
-    return { rowsWritten: rows.length, rowsDeleted, skippedEntries }
+    return { rowsWritten: rowsToWrite.length, rowsDeleted, skippedEntries }
 }
