@@ -154,6 +154,30 @@ describe("beginLocalPlaySessionHandoff", () => {
         assert.deepEqual(deletes, [guildId])
     })
 
+    it("clears the session on Ready even when handoff destroy threw", async () => {
+        const guildId = "guild-local-handoff-ready-after-destroy-fail"
+        const deletes: string[] = []
+
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => undefined,
+            deletePlayerSession: async (id) => {
+                deletes.push(id)
+            },
+        })
+
+        const player = mockPlayer(guildId)
+        const handoff = await beginLocalPlaySessionHandoff(player, async () => {
+            throw new Error("destroy failed")
+        })
+
+        assert.equal(handoff.destroyedLavalink, false)
+        assert.equal(shouldSkipPlayerSessionClear(guildId), true)
+
+        await handoff.clearSessionAfterLocalReady()
+        assert.deepEqual(deletes, [guildId])
+        assert.equal(shouldSkipPlayerSessionClear(guildId), false)
+    })
+
     it("releases leftover suppress lease when playerDestroy never fires", async () => {
         const guildId = "guild-local-handoff-timeout"
         setPlayerSessionPersistenceDbForTests({
@@ -171,11 +195,15 @@ describe("beginLocalPlaySessionHandoff", () => {
         assert.equal(shouldSkipPlayerSessionClear(guildId), false)
     })
 
-    it("releases the lease immediately when destroy throws", async () => {
+    it("keeps the suppress lease when destroy throws so queueEnd idle clear is skipped", async () => {
         const guildId = "guild-local-handoff-destroy-fail"
+        const deletes: string[] = []
+
         setPlayerSessionPersistenceDbForTests({
             upsertPlayerSession: async () => undefined,
-            deletePlayerSession: async () => undefined,
+            deletePlayerSession: async (id) => {
+                deletes.push(id)
+            },
         })
 
         const player = mockPlayer(guildId)
@@ -184,6 +212,15 @@ describe("beginLocalPlaySessionHandoff", () => {
         })
 
         assert.equal(handoff.destroyedLavalink, false)
+        assert.equal(shouldSkipPlayerSessionClear(guildId), true)
+
+        // Simulate queueEnd idle destroy → playerDestroy → clearPlayerSession while lease held.
+        await clearPlayerSession(guildId)
+        assert.deepEqual(deletes, [], "idle clear must not wipe flushed snapshot")
+        assert.equal(shouldSkipPlayerSessionClear(guildId), false)
+
+        // Join-fail path: leftover release must not underflow after playerDestroy consumed lease.
+        handoff.releaseLeftoverSuppressLease()
         assert.equal(shouldSkipPlayerSessionClear(guildId), false)
     })
 
