@@ -330,6 +330,18 @@ export function isPlayer(value: unknown): value is Player {
     return true
 }
 
+/**
+ * True when a Lavalink-shaped player has something to show as an active session:
+ * playing/paused, a current track, or upcoming queue tracks.
+ * Used by voice-context to pick which guild the dashboard should open.
+ */
+export function isActivePlayerSession(player: unknown): boolean {
+    if (!isPlayer(player)) return false
+    if (player.playing || player.paused) return true
+    if (player.queue?.current) return true
+    return (player.queue?.tracks?.length ?? 0) > 0
+}
+
 /** Shared player state body; `currentTrack` must already include requester usernames when needed. */
 export function composePlayerStateResponse(
     guildId: string,
@@ -453,12 +465,7 @@ export function snapshotGuildListPlayer(
     queueCount: number
 } | null {
     const p = isPlayer(lavalinkPlayer) ? lavalinkPlayer : null
-    const voice = summarizeVoiceForWeb(
-        guildId,
-        discordUserId ?? "",
-        p,
-        clientArg
-    )
+    const voice = summarizeVoiceForWeb(guildId, discordUserId ?? "", p, clientArg)
     if (!p && !voice.botInVoiceChannel) {
         return null
     }

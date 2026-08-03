@@ -3,6 +3,7 @@ import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import { memberMayControlPlayerVoice } from "../../util/sameVoiceChannel.js"
+import { resolveSeekPositionMs } from "../../util/seekPosition.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -53,20 +54,15 @@ export default {
 
         const current = player.queue.current
 
-        const durationMs = current.info.duration ?? 0
-        const durationSec = Math.max(0, Math.floor(durationMs / 1000))
-        if (durationSec > 0 && position > durationSec) {
+        const seek = resolveSeekPositionMs(position, current.info.duration ?? 0)
+        if (seek.ok === false) {
             return interaction.reply({
-                content: `That position is past the end of the track (~${durationSec}s).`,
+                content: `That position is past the end of the track (~${seek.durationSec}s).`,
                 ephemeral: true,
             })
         }
 
-        const seekMs = Math.min(
-            Math.max(0, position * 1000),
-            durationMs > 0 ? durationMs : Number.MAX_SAFE_INTEGER
-        )
-        await player.seek(seekMs)
+        await player.seek(seek.seekMs)
         await interaction.reply("Seek complete.")
     },
 }
