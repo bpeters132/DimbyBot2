@@ -196,6 +196,23 @@ export async function playLocalFile(
                 `[LocalPlayer] Failed to join or get ready in voice channel ${voiceChannel.id} for guild ${guildId}:`,
                 error
             )
+            // Destroy-fail leaves an empty Lavalink player; tear it down under the suppress
+            // lease so queueEnd idle clear cannot wipe the flushed snapshot, then release.
+            if (sessionHandoff && !sessionHandoff.destroyedLavalink) {
+                const leftover = client.lavalink.getPlayer(guildId)
+                if (leftover) {
+                    try {
+                        await leftover.destroy()
+                        sessionHandoff.markDestroyEventSeen()
+                    } catch (destroyErr: unknown) {
+                        const msg =
+                            destroyErr instanceof Error ? destroyErr.message : String(destroyErr)
+                        client.warn(
+                            `[LocalPlayer] Leftover Lavalink destroy after join fail for guild ${guildId}: ${msg}`
+                        )
+                    }
+                }
+            }
             // Keep the persisted Lavalink session (full queue flushed before stop/destroy).
             sessionHandoff?.releaseLeftoverSuppressLease()
             if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
@@ -209,6 +226,23 @@ export async function playLocalFile(
         }
 
         try {
+            // Same leftover path when handoff destroy threw but local Ready succeeded:
+            // remove the empty player under lease, then intentionally clear the snapshot.
+            if (sessionHandoff && !sessionHandoff.destroyedLavalink) {
+                const leftover = client.lavalink.getPlayer(guildId)
+                if (leftover) {
+                    try {
+                        await leftover.destroy()
+                        sessionHandoff.markDestroyEventSeen()
+                    } catch (destroyErr: unknown) {
+                        const msg =
+                            destroyErr instanceof Error ? destroyErr.message : String(destroyErr)
+                        client.warn(
+                            `[LocalPlayer] Leftover Lavalink destroy after local Ready for guild ${guildId}: ${msg}`
+                        )
+                    }
+                }
+            }
             await sessionHandoff?.clearSessionAfterLocalReady()
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e)
