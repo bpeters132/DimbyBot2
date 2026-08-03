@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
+    isActivePlayerSession,
     isPlayer,
     resolveBotVoiceChannelId,
     snapshotGuildListPlayer,
@@ -92,6 +93,24 @@ describe("isPlayer", () => {
             }),
             false
         )
+    })
+})
+
+describe("isActivePlayerSession", () => {
+    it("is false for non-players and empty idle players", () => {
+        assert.equal(isActivePlayerSession(null), false)
+        assert.equal(isActivePlayerSession({ voiceChannelId: "vc" }), false)
+        assert.equal(isActivePlayerSession(mockPlayer({ playing: false, paused: false })), false)
+    })
+
+    it("is true when playing, paused, current track, or upcoming queue exists", () => {
+        assert.equal(isActivePlayerSession(mockPlayer({ playing: true })), true)
+        assert.equal(isActivePlayerSession(mockPlayer({ paused: true })), true)
+        assert.equal(
+            isActivePlayerSession(mockPlayer({ current: { info: { title: "Song" } } })),
+            true
+        )
+        assert.equal(isActivePlayerSession(mockPlayer({ tracks: [{}] })), true)
     })
 })
 

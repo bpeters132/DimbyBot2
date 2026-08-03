@@ -28,7 +28,8 @@ function getRequiredEnv(
 
 const SAFE_ERROR_SNIPPET_MAX = 200
 
-function redactTokenLikeString(s: string): string {
+/** Redacts bearer tokens and common OAuth secret patterns from log/error strings. */
+export function redactTokenLikeString(s: string): string {
     let out = s
     out = out.replace(/bearer\s+\S+/gi, "Bearer [redacted]")
     out = out.replace(/access_token\s*=\s*\S+/gi, "access_token=[redacted]")
@@ -40,7 +41,7 @@ function redactTokenLikeString(s: string): string {
 }
 
 /** Redacts verbose Discord/token payloads from thrown errors (keys-only for objects, truncated strings). */
-function safeJsonSnippet(value: unknown, maxLen = SAFE_ERROR_SNIPPET_MAX): string {
+export function safeJsonSnippet(value: unknown, maxLen = SAFE_ERROR_SNIPPET_MAX): string {
     if (value === null || value === undefined) {
         return String(value)
     }
