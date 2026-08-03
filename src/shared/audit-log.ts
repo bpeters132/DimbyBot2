@@ -6,7 +6,8 @@ const OMITTED_KEY_PATTERN = /^(headers|body|request|response)$/i
 const MAX_DEPTH = 4
 const MAX_STRING_LENGTH = 600
 
-function sanitizeAuditDetails(value: unknown, depth = 0): unknown {
+/** Defensive redaction/truncation for audit `details` (backup when callers pass unsafe shapes). */
+export function sanitizeAuditDetails(value: unknown, depth = 0): unknown {
     if (depth > MAX_DEPTH) return "[truncated-depth]"
     if (value instanceof Error) {
         return {

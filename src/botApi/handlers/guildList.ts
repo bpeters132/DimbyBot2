@@ -1,5 +1,6 @@
 import { auth } from "../../shared/auth-node.js"
 import { fetchDiscordUserGuilds } from "../../util/discordUserGuilds.js"
+import { discordGuildIconUrl } from "../../util/discordGuildIconUrl.js"
 import { DISCORD_BOT_INVITE_PERMISSIONS } from "../../shared/discordBotPermissions.js"
 import { getAuthenticatedSession } from "../../shared/api-auth.js"
 import { resolveDiscordUserSnowflake } from "../../shared/discord-user-id.js"
@@ -7,11 +8,6 @@ import { snapshotGuildListPlayer } from "../../shared/player-state.js"
 import { tryGetBotClient } from "../../lib/botClientRegistry.js"
 import type { ApiResponse } from "../../types/index.js"
 import type { GuildListResponse } from "../../types/web.js"
-
-function discordGuildIconUrl(guildId: string, icon: string | null): string | null {
-    if (!icon) return null
-    return `https://cdn.discordapp.com/icons/${guildId}/${icon}.png?size=128`
-}
 
 export async function guildListGET(
     headers: Headers
@@ -114,10 +110,7 @@ export async function guildListGET(
         }
     }
 
-    const discordUserId = await resolveDiscordUserSnowflake(
-        sessionResult.session.user.id,
-        headers
-    )
+    const discordUserId = await resolveDiscordUserSnowflake(sessionResult.session.user.id, headers)
 
     const userGuilds = discordGuilds.guilds
     const botGuilds = botClient.guilds.cache

@@ -1,21 +1,10 @@
 import { getAuthenticatedSession } from "../../shared/api-auth.js"
 import { resolveDiscordUserSnowflake } from "../../shared/discord-user-id.js"
-import { isPlayer, summarizeVoiceForWeb } from "../../shared/player-state.js"
+import { isActivePlayerSession, summarizeVoiceForWeb } from "../../shared/player-state.js"
 import { getBotClient, tryGetBotClient } from "../../lib/botClientRegistry.js"
 import type { ApiResponse } from "../../types/index.js"
 import type { VoiceContextResponse } from "../../types/web.js"
-
-function discordGuildIconUrl(guildId: string, icon: string | null | undefined): string | null {
-    if (!icon) return null
-    return `https://cdn.discordapp.com/icons/${guildId}/${icon}.png?size=128`
-}
-
-function isActivePlayerSession(player: unknown): boolean {
-    if (!isPlayer(player)) return false
-    if (player.playing || player.paused) return true
-    if (player.queue?.current) return true
-    return (player.queue?.tracks?.length ?? 0) > 0
-}
+import { discordGuildIconUrl } from "../../util/discordGuildIconUrl.js"
 
 /** Guild where the viewer shares a VC with the bot and the bot has an active player session. */
 export async function voiceContextGET(
@@ -32,10 +21,7 @@ export async function voiceContextGET(
         }
     }
 
-    const discordUserId = await resolveDiscordUserSnowflake(
-        sessionResult.session.user.id,
-        headers
-    )
+    const discordUserId = await resolveDiscordUserSnowflake(sessionResult.session.user.id, headers)
     if (!discordUserId) {
         return {
             status: 403,
