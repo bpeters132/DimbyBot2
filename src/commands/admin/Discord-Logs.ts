@@ -96,6 +96,9 @@ function guildSettingsSaveOptions(
     const options: SaveGuildSettingsOptions = {
         deleteGuildIds: guildIdsRemovedFromStore(before, afterStore),
         touchedGuildIds: [guildId],
+        // Only write discordLog — a full-row snapshot would resurrect concurrent control-channel /
+        // download-limit clears (merge applies every key present on the detached row).
+        touchedGuildFields: { [guildId]: ["discordLog"] },
     }
     if (before[guildId]?.discordLog && !workingRow.discordLog) {
         options.clearedGuildFields = { [guildId]: ["discordLog"] }
