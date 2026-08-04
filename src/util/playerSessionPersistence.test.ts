@@ -6,10 +6,12 @@ import {
     clearPlayerSession,
     clearPlayerSessionPreservePriorSnapshot,
     clearPlayerSessionRestoreInProgress,
+    consumePlayerSessionClearSuppressLease,
     destroyPlayerSuppressingSessionClear,
     getSessionClearEpochForTests,
     markPlayerSessionPreservePriorSnapshot,
     markPlayerSessionRestoreInProgress,
+    resolvePlayerDestroySessionClearAction,
     schedulePlayerSessionSave,
     setPlayerSessionPersistenceDbForTests,
     shouldPreservePriorPlayerSessionSnapshot,
@@ -158,6 +160,73 @@ describe("shouldClearPlayerSessionOnDestroy", () => {
     it("still clears when the voice channel itself is deleted", () => {
         assert.equal(shouldClearPlayerSessionOnDestroy("ChannelDeleted"), true)
         assert.equal(shouldClearPlayerSessionOnDestroy("QueueEmpty"), true)
+    })
+})
+
+describe("resolvePlayerDestroySessionClearAction", () => {
+    it("clears when reason says clear and no live successor", () => {
+        const destroyed = mockPlayer({})
+        assert.equal(resolvePlayerDestroySessionClearAction(undefined, destroyed, null), "clear")
+        assert.equal(
+            resolvePlayerDestroySessionClearAction(undefined, destroyed, undefined),
+            "clear"
+        )
+        // Same object still registered (unlikely after deletePlayer) → still clear.
+        assert.equal(
+            resolvePlayerDestroySessionClearAction(undefined, destroyed, destroyed),
+            "clear"
+        )
+    })
+
+    it("skips clear when a different live player already owns the guild", () => {
+        const destroyed = mockPlayer({})
+        const successor = mockPlayer({})
+        assert.equal(
+            resolvePlayerDestroySessionClearAction(undefined, destroyed, successor),
+            "skip-successor"
+        )
+        assert.equal(
+            resolvePlayerDestroySessionClearAction("QueueEmpty", destroyed, successor),
+            "skip-successor"
+        )
+    })
+
+    it("preserves for infra reasons even when a successor is live", () => {
+        const destroyed = mockPlayer({})
+        const successor = mockPlayer({})
+        assert.equal(
+            resolvePlayerDestroySessionClearAction("Disconnected", destroyed, successor),
+            "preserve-reason"
+        )
+        assert.equal(
+            resolvePlayerDestroySessionClearAction("NodeDestroy", destroyed, null),
+            "preserve-reason"
+        )
+    })
+})
+
+describe("consumePlayerSessionClearSuppressLease", () => {
+    afterEach(() => {
+        setPlayerSessionPersistenceDbForTests(null)
+    })
+
+    it("consumes one lease without requiring clearPlayerSession", async () => {
+        const guildId = "guild-consume-suppress"
+        acquirePlayerSessionClearSuppressLease(guildId)
+        assert.equal(shouldSkipPlayerSessionClear(guildId), true)
+        assert.equal(consumePlayerSessionClearSuppressLease(guildId), true)
+        assert.equal(shouldSkipPlayerSessionClear(guildId), false)
+        assert.equal(consumePlayerSessionClearSuppressLease(guildId), false)
+
+        // A later intentional clear must still delete (no leftover suppress).
+        let deleted = false
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async () => {
+                deleted = true
+            },
+        })
+        await clearPlayerSession(guildId)
+        assert.equal(deleted, true)
     })
 })
 
