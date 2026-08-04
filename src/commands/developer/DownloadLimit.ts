@@ -116,6 +116,7 @@ export default {
             settings[targetGuildId].downloadsMaxMb = sizeMb
             const ok = await saveGuildSettings(settings, client, {
                 touchedGuildIds: [targetGuildId],
+                touchedGuildFields: { [targetGuildId]: ["downloadsMaxMb"] },
             })
             if (!ok) {
                 client.error("[DownloadLimit] Failed to persist guild settings after set.")
@@ -139,6 +140,7 @@ export default {
                 }
                 const ok = await saveGuildSettings(settings, client, {
                     touchedGuildIds: [targetGuildId],
+                    touchedGuildFields: { [targetGuildId]: ["downloadsMaxMb"] },
                     clearedGuildFields: { [targetGuildId]: ["downloadsMaxMb"] },
                 })
                 if (!ok) {

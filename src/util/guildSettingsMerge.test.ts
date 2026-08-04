@@ -1,6 +1,10 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { GUILD_SETTING_FIELD_KEYS, mergeGuildSettingsRow } from "./guildSettingsMerge.js"
+import {
+    GUILD_SETTING_FIELD_KEYS,
+    mergeGuildSettingsRow,
+    pickGuildSettingsFields,
+} from "./guildSettingsMerge.js"
 
 describe("mergeGuildSettingsRow", () => {
     it("keeps DB fields omitted from the snapshot (no cross-field clobber)", () => {
@@ -69,5 +73,69 @@ describe("mergeGuildSettingsRow", () => {
         assert.equal(db.downloadsMaxMb, 10)
         assert.equal(merged.downloadsMaxMb, 20)
         assert.notEqual(merged, db)
+    })
+
+    it("touchedFields ignore stale sibling keys on a full-row RMW snapshot", () => {
+        // DB after concurrent /control-channel unset (control fields cleared).
+        const dbAfterUnset = {
+            discordLog: { allChannelId: "log-old" },
+        }
+        // Stale /discord-logs snapshot still carries the pre-unset control channel ids.
+        const staleFullRowSnapshot = {
+            controlChannelId: "c-stale",
+            controlMessageId: "m-stale",
+            discordLog: { allChannelId: "log-new" },
+        }
+        const withoutTouch = mergeGuildSettingsRow(dbAfterUnset, staleFullRowSnapshot)
+        assert.equal(withoutTouch.controlChannelId, "c-stale")
+        assert.equal(withoutTouch.controlMessageId, "m-stale")
+
+        const withTouch = mergeGuildSettingsRow(dbAfterUnset, staleFullRowSnapshot, [], [
+            "discordLog",
+        ])
+        assert.deepEqual(withTouch, { discordLog: { allChannelId: "log-new" } })
+        assert.equal("controlChannelId" in withTouch, false)
+    })
+
+    it("touchedFields + clearedFields still clear without resurrecting siblings", () => {
+        const db = {
+            controlChannelId: "c1",
+            downloadsMaxMb: 250,
+            discordLog: { allChannelId: "log1" },
+        }
+        const staleSnapshot = {
+            controlChannelId: "c1",
+            downloadsMaxMb: 250,
+            discordLog: { allChannelId: "log1" },
+        }
+        const merged = mergeGuildSettingsRow(db, staleSnapshot, ["discordLog"], ["discordLog"])
+        assert.deepEqual(merged, {
+            controlChannelId: "c1",
+            downloadsMaxMb: 250,
+        })
+    })
+})
+
+describe("pickGuildSettingsFields", () => {
+    it("copies only requested defined fields", () => {
+        assert.deepEqual(
+            pickGuildSettingsFields(
+                {
+                    controlChannelId: "c1",
+                    controlMessageId: "m1",
+                    downloadsMaxMb: 10,
+                    discordLog: { allChannelId: "d1" },
+                },
+                ["discordLog", "downloadsMaxMb"]
+            ),
+            {
+                downloadsMaxMb: 10,
+                discordLog: { allChannelId: "d1" },
+            }
+        )
+    })
+
+    it("returns {} for missing rows", () => {
+        assert.deepEqual(pickGuildSettingsFields(undefined, ["controlChannelId"]), {})
     })
 })
