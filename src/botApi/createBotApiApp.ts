@@ -23,32 +23,7 @@ import {
     playlistsPOST,
 } from "./handlers/playlists.js"
 import { playerPlaylistPlayPOST } from "./handlers/playlistPlay.js"
-
-/** Redacts credentials and long base64-like blobs from bot API error strings before JSON responses. */
-function redactBotApiErrorText(text: string): string {
-    return text
-        .replace(/(token|secret|password|cookie)\s*[=:]\s*[^\s]+/gi, "$1=[redacted]")
-        .replace(/Bearer\s+[^\s]+/gi, "Bearer [redacted]")
-        .replace(/([a-z][a-z0-9+.-]*:\/\/)[^@/?#\s]+@/gi, "$1[redacted]@")
-        .replace(/\b[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[redacted]")
-}
-
-function sanitizeBotApiError(err: unknown): {
-    name: string
-    message: string
-    safeStack?: string
-} {
-    if (err instanceof Error) {
-        const redactedMessage = redactBotApiErrorText(err.message)
-        const firstLine = err.stack?.split("\n")[0]
-        const safeStack = firstLine ? redactBotApiErrorText(firstLine) : undefined
-        return { name: err.name, message: redactedMessage, safeStack }
-    }
-    if (typeof err === "string") {
-        return { name: "Error", message: "[redacted]" }
-    }
-    return { name: "UnknownError", message: "Unexpected error shape" }
-}
+import { sanitizeBotApiError } from "./sanitizeBotApiError.js"
 
 /**
  * Express app for bot-backed REST routes (`/api/guilds/...`) shared with Next route handlers.
@@ -230,10 +205,7 @@ export function createBotApiApp(): express.Express {
 
     app.get("/api/playlists/:playlistId", async (req, res, next) => {
         try {
-            const r = await playlistsDetailGET(
-                incomingMessageToHeaders(req),
-                req.params.playlistId
-            )
+            const r = await playlistsDetailGET(incomingMessageToHeaders(req), req.params.playlistId)
             res.status(r.status).json(r.body)
         } catch (error) {
             next(error)
@@ -242,10 +214,7 @@ export function createBotApiApp(): express.Express {
 
     app.delete("/api/playlists/:playlistId", async (req, res, next) => {
         try {
-            const r = await playlistsDELETE(
-                incomingMessageToHeaders(req),
-                req.params.playlistId
-            )
+            const r = await playlistsDELETE(incomingMessageToHeaders(req), req.params.playlistId)
             res.status(r.status).json(r.body)
         } catch (error) {
             next(error)
