@@ -109,6 +109,12 @@ export type SaveGuildSettingsOptions = {
      * ignored and the latest database values are kept (prevents lost updates across concurrent saves).
      */
     touchedGuildIds?: string[]
+    /**
+     * Per-guild fields to take from the snapshot row. Required for safe concurrent saves when the
+     * snapshot still contains unrelated keys from a full `getGuildSettings()` clone — without this,
+     * a concurrent clear of another field is silently restored.
+     */
+    touchedGuildFields?: Partial<Record<string, (keyof GuildSettings)[]>>
     /** Per-guild setting fields to clear explicitly (e.g. control-channel unset). */
     clearedGuildFields?: Partial<Record<string, (keyof GuildSettings)[]>>
 }
@@ -131,6 +137,7 @@ export async function saveGuildSettings(
         (id) => typeof id === "string" && id.length > 0
     )
     const clearedGuildFields = options?.clearedGuildFields ?? {}
+    const touchedGuildFields = options?.touchedGuildFields ?? {}
     return withGuildSettingsSaveLock(async () => {
         const logger = loggerFromPartial(loggerInstance)
         logger.debug("[guildSettings] Attempting to save settings to database.")
@@ -148,8 +155,18 @@ export async function saveGuildSettings(
                         typeof key === "string" &&
                         (GUILD_SETTING_FIELD_KEYS as string[]).includes(key)
                 )
+                const touched = (touchedGuildFields[guildId] ?? []).filter(
+                    (key): key is keyof GuildSettings =>
+                        typeof key === "string" &&
+                        (GUILD_SETTING_FIELD_KEYS as string[]).includes(key)
+                )
                 const row = settingsSnapshot[guildId]
-                const nextRow = mergeGuildSettingsRow(merged[guildId], row, cleared)
+                const nextRow = mergeGuildSettingsRow(
+                    merged[guildId],
+                    row,
+                    cleared,
+                    touched.length > 0 ? touched : undefined
+                )
                 if (Object.keys(nextRow).length === 0) {
                     delete merged[guildId]
                     emptyAfterMergeGuildIds.push(guildId)
