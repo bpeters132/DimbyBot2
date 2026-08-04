@@ -383,6 +383,35 @@ export function shouldClearPlayerSessionOnDestroy(reason: unknown): boolean {
     return !PRESERVE_SESSION_DESTROY_REASONS.has(reason)
 }
 
+/**
+ * How `playerDestroy` should treat the persisted session.
+ *
+ * Lavalink `Player.destroy()` removes the guild from the manager map and awaits
+ * `node.destroyPlayer` *before* emitting `playerDestroy`. A successor can be created
+ * in that window; clearing by guild id would wipe the successor's snapshot.
+ */
+export type PlayerDestroySessionClearAction = "clear" | "skip-successor" | "preserve-reason"
+
+export function resolvePlayerDestroySessionClearAction(
+    reason: unknown,
+    destroyedPlayer: object,
+    livePlayer: object | null | undefined
+): PlayerDestroySessionClearAction {
+    if (!shouldClearPlayerSessionOnDestroy(reason)) return "preserve-reason"
+    if (livePlayer != null && livePlayer !== destroyedPlayer) return "skip-successor"
+    return "clear"
+}
+
+/**
+ * Consumes one suppress lease without deleting the DB row.
+ * Used when destroy completed but a successor player already owns the guild slot.
+ */
+export function consumePlayerSessionClearSuppressLease(guildId: string): boolean {
+    if (!hasActiveSuppressLease(guildId)) return false
+    releaseOneSuppressLease(guildId)
+    return true
+}
+
 /** Removes a persisted session row (intentional destroy or stale cleanup). */
 export async function clearPlayerSession(guildId: string): Promise<void> {
     // Evaluate preserve/skip before bumping the clear epoch or cancelling pending saves.

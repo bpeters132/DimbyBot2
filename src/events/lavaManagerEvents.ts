@@ -37,8 +37,9 @@ import {
 import { playerBroadcaster } from "../shared/websocket/PlayerBroadcaster.js"
 import {
     clearPlayerSession,
+    consumePlayerSessionClearSuppressLease,
+    resolvePlayerDestroySessionClearAction,
     schedulePlayerSessionSave,
-    shouldClearPlayerSessionOnDestroy,
 } from "../util/playerSessionPersistence.js"
 import { tryDestroyOrphanGuildPlayer } from "../util/guildPlayerQueueLock.js"
 import { countHumanMembers } from "../util/voiceChannelMembers.js"
@@ -123,13 +124,22 @@ export default async (client: BotClient) => {
             )
             lastQueueUpdateBroadcastAtMs.delete(player.guildId)
             player.set(DASHBOARD_REQUESTER_KEY, undefined)
-            if (shouldClearPlayerSessionOnDestroy(reason)) {
+            // Lavalink deletes the map entry before this emit; a successor may already be live.
+            const livePlayer = client.lavalink.getPlayer(player.guildId)
+            const clearAction = resolvePlayerDestroySessionClearAction(reason, player, livePlayer)
+            if (clearAction === "clear") {
                 void clearPlayerSession(player.guildId).catch((err: unknown) => {
                     const msg = err instanceof Error ? err.message : String(err)
                     client.error(
                         `[LavaMgrEvents] clearPlayerSession failed (guildId=${player.guildId}): ${msg}`
                     )
                 })
+            } else if (clearAction === "skip-successor") {
+                // Destroy finished after a replacement player was created — keep its session.
+                consumePlayerSessionClearSuppressLease(player.guildId)
+                client.debug(
+                    `[LavaMgrEvents] Skipping session clear for guild ${player.guildId}: successor player already live`
+                )
             } else {
                 client.debug(
                     `[LavaMgrEvents] Preserving player session for guild ${player.guildId} after destroy reason: ${String(reason)}`
