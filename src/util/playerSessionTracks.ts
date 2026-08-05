@@ -86,8 +86,10 @@ async function resolvePersistedTrackAtIndex(
                 }
                 return { track: first, transientFailure: false }
             }
-            // Search completed but no usable match — permanent for this snapshot.
-            return { track: null, transientFailure: false }
+            // No usable match. If decode already threw, keep this transient — empty/wrong
+            // search results during a Lavalink/source blip must not look "permanent" or
+            // restore will deletePlayerSession when every track fails the same way.
+            return { track: null, transientFailure: sawTransientFailure }
         } catch {
             return { track: null, transientFailure: true }
         }
