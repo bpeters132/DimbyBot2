@@ -6,6 +6,7 @@ import {
     type ErrorHistoryEntry,
 } from "../../../lib/errorHistory.js"
 import type { ApiResponse } from "../../../types/index.js"
+import { parseAdminErrorsLimit } from "../../adminRequestParams.js"
 
 export interface AdminErrorsListResponse {
     entries: ErrorHistoryEntry[]
@@ -13,13 +14,6 @@ export interface AdminErrorsListResponse {
 
 export interface AdminErrorsClearResponse {
     cleared: true
-}
-
-function parseLimit(raw: string | null): number {
-    if (!raw) return 100
-    const n = Number.parseInt(raw, 10)
-    if (!Number.isFinite(n)) return 100
-    return Math.max(1, Math.min(n, 500))
 }
 
 export async function adminErrorsGET(
@@ -34,7 +28,7 @@ export async function adminErrorsGET(
         }
     }
 
-    const limit = parseLimit(query.get("limit"))
+    const limit = parseAdminErrorsLimit(query.get("limit"))
     const guildId = query.get("guildId")?.trim()
     const entries = guildId ? getErrorsByGuild(guildId, limit) : getRecentErrors(limit)
 
