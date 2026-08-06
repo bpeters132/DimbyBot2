@@ -125,12 +125,14 @@ export default async (client: BotClient) => {
             lastQueueUpdateBroadcastAtMs.delete(player.guildId)
             player.set(DASHBOARD_REQUESTER_KEY, undefined)
             if (shouldClearPlayerSessionOnDestroy(reason)) {
-                void clearPlayerSession(player.guildId).catch((err: unknown) => {
-                    const msg = err instanceof Error ? err.message : String(err)
-                    client.error(
-                        `[LavaMgrEvents] clearPlayerSession failed (guildId=${player.guildId}): ${msg}`
-                    )
-                })
+                void clearPlayerSession(player.guildId, { destroyReason: reason }).catch(
+                    (err: unknown) => {
+                        const msg = err instanceof Error ? err.message : String(err)
+                        client.error(
+                            `[LavaMgrEvents] clearPlayerSession failed (guildId=${player.guildId}): ${msg}`
+                        )
+                    }
+                )
             } else {
                 client.debug(
                     `[LavaMgrEvents] Preserving player session for guild ${player.guildId} after destroy reason: ${String(reason)}`
@@ -483,7 +485,9 @@ export default async (client: BotClient) => {
                                 client.debug(
                                     `[LavaMgrEvents] Player ${queueEndGuildId} is idle, destroying after queue end timeout.`
                                 )
-                                await live.destroy()
+                                // Tag QueueEmpty so preserve-prior can skip the DB delete after a
+                                // partial restore; /stop and /leave use destroy() with no reason.
+                                await live.destroy("QueueEmpty")
                             },
                         },
                         0
