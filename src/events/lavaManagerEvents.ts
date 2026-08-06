@@ -44,6 +44,7 @@ import { tryDestroyOrphanGuildPlayer } from "../util/guildPlayerQueueLock.js"
 import { countHumanMembers } from "../util/voiceChannelMembers.js"
 import { playerHasQueueContent } from "../util/playlistQueue.js"
 import { skipCurrentTrack } from "../util/skipCurrentTrack.js"
+import { shouldApplicationSkipOnTrackStuck } from "../util/trackStuckAdvance.js"
 
 /** Rate-limit `queueUpdate` websocket fan-out on Lavalink position ticks (pause/resume still immediate). */
 const lastQueueUpdateBroadcastAtMs = new Map<string, number>()
@@ -124,12 +125,14 @@ export default async (client: BotClient) => {
             lastQueueUpdateBroadcastAtMs.delete(player.guildId)
             player.set(DASHBOARD_REQUESTER_KEY, undefined)
             if (shouldClearPlayerSessionOnDestroy(reason)) {
-                void clearPlayerSession(player.guildId).catch((err: unknown) => {
-                    const msg = err instanceof Error ? err.message : String(err)
-                    client.error(
-                        `[LavaMgrEvents] clearPlayerSession failed (guildId=${player.guildId}): ${msg}`
-                    )
-                })
+                void clearPlayerSession(player.guildId, { destroyReason: reason }).catch(
+                    (err: unknown) => {
+                        const msg = err instanceof Error ? err.message : String(err)
+                        client.error(
+                            `[LavaMgrEvents] clearPlayerSession failed (guildId=${player.guildId}): ${msg}`
+                        )
+                    }
+                )
             } else {
                 client.debug(
                     `[LavaMgrEvents] Preserving player session for guild ${player.guildId} after destroy reason: ${String(reason)}`
@@ -273,16 +276,20 @@ export default async (client: BotClient) => {
                         client.error("[LavaMgrEvents] Failed to send trackStuck message:", e)
                     )
             }
-            client.debug(
-                `[LavaMgrEvents] Attempting to skip stuck track in guild ${player.guildId}.`
-            )
-            try {
-                // Default skip() throws when upcoming queue is empty (e.g. last/autoplay track).
-                await skipCurrentTrack(player)
-            } catch (e: unknown) {
-                client.error(
-                    `[LavaMgrEvents] Failed to skip stuck track in guild ${player.guildId}:`,
-                    e
+            // lavalink-client advances after emit (queueTrackEnd + play / empty → null track).
+            // A second skip races that path and can drop the next good track — see trackStuckAdvance.
+            if (shouldApplicationSkipOnTrackStuck()) {
+                try {
+                    await skipCurrentTrack(player)
+                } catch (e: unknown) {
+                    client.error(
+                        `[LavaMgrEvents] Failed to skip stuck track in guild ${player.guildId}:`,
+                        e
+                    )
+                }
+            } else {
+                client.debug(
+                    `[LavaMgrEvents] Stuck track reported for guild ${player.guildId}; library will advance.`
                 )
             }
         })
@@ -478,7 +485,9 @@ export default async (client: BotClient) => {
                                 client.debug(
                                     `[LavaMgrEvents] Player ${queueEndGuildId} is idle, destroying after queue end timeout.`
                                 )
-                                await live.destroy()
+                                // Tag QueueEmpty so preserve-prior can skip the DB delete after a
+                                // partial restore; /stop and /leave use destroy() with no reason.
+                                await live.destroy("QueueEmpty")
                             },
                         },
                         0

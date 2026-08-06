@@ -4,13 +4,18 @@ import type { Player, Track } from "lavalink-client"
 import {
     acquirePlayerSessionClearSuppressLease,
     clearPlayerSession,
+    clearPlayerSessionPreservePriorSnapshot,
     clearPlayerSessionRestoreInProgress,
     destroyPlayerSuppressingSessionClear,
     getSessionClearEpochForTests,
+    markPlayerSessionPreservePriorSnapshot,
     markPlayerSessionRestoreInProgress,
+    schedulePlayerSessionSave,
     setPlayerSessionPersistenceDbForTests,
+    shouldPreservePriorPlayerSessionSnapshot,
     shouldSkipPlayerSessionClear,
     shouldSkipPlayerSessionClearForState,
+    shouldSkipPlayerSessionDeleteForPreserve,
     shouldClearPlayerSessionOnDestroy,
     shouldUndoStaleSessionUpsert,
     snapshotFromPlayer,
@@ -263,6 +268,97 @@ describe("shouldUndoStaleSessionUpsert", () => {
 
     it("does not undo when clear epoch still matches the save epoch", () => {
         assert.equal(shouldUndoStaleSessionUpsert(1, 1, 3, 3), false)
+    })
+})
+
+describe("preserve prior snapshot after partial restore", () => {
+    afterEach(() => {
+        clearPlayerSessionPreservePriorSnapshot("guild-partial-restore")
+        setPlayerSessionPersistenceDbForTests(null)
+    })
+
+    it("blocks schedulePlayerSessionSave and direct writes while preserve is set", async () => {
+        const guildId = "guild-partial-restore"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        const player = mockPlayer({})
+        player.guildId = guildId
+
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), true)
+
+        // Mirrors trackStart/trackEnd after clearPlayerSessionRestoreInProgress.
+        schedulePlayerSessionSave(player)
+        await writePlayerSessionForTests(player, getSessionClearEpochForTests(guildId))
+        assert.deepEqual(events, [])
+
+        clearPlayerSessionPreservePriorSnapshot(guildId)
+        await writePlayerSessionForTests(player, getSessionClearEpochForTests(guildId))
+        assert.deepEqual(events, ["upsert"])
+    })
+
+    it("skips DB delete on idle QueueEmpty so partial-restore snapshot survives", async () => {
+        // After partial restore, empty live saves are no-ops; playerDestroy → clearPlayerSession
+        // was the wipe path for unresolved transient tracks still stored in the prior row.
+        const guildId = "guild-partial-restore"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        assert.equal(shouldSkipPlayerSessionDeleteForPreserve(guildId, "QueueEmpty"), true)
+        assert.equal(shouldSkipPlayerSessionDeleteForPreserve(guildId, undefined), false)
+
+        const epochBefore = getSessionClearEpochForTests(guildId)
+        await clearPlayerSession(guildId, { destroyReason: "QueueEmpty" })
+
+        assert.deepEqual(events, [])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore)
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), false)
+        assert.equal(shouldSkipPlayerSessionDeleteForPreserve(guildId, "QueueEmpty"), false)
+
+        // A later intentional clear (fresh session) still deletes.
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, ["delete"])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
+    })
+
+    it("deletes on user-intent clear (/stop) even while preserve-prior is set", async () => {
+        // /stop and /leave call destroy() with no reason; that must wipe the DB row so the
+        // queue does not resurrect after an explicit clear following a partial restore.
+        const guildId = "guild-partial-restore"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        const epochBefore = getSessionClearEpochForTests(guildId)
+
+        await clearPlayerSession(guildId, { destroyReason: undefined })
+
+        assert.deepEqual(events, ["delete"])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), false)
     })
 })
 
