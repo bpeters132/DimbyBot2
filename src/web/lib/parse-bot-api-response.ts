@@ -1,4 +1,4 @@
-import type { ApiResponse } from "@/types/web"
+import type { ApiResponse } from "../../types/web.js"
 
 export type BotApiActionOk<T> = { ok: true; data: T }
 export type BotApiActionErr = { ok: false; error: string }
