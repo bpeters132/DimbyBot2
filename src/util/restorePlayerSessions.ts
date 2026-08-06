@@ -9,7 +9,9 @@ import { getDiscordErrorCode } from "./discordErrorDetails.js"
 import { getGuildSettings } from "./saveControlChannel.js"
 import { ensurePlayerConnected, startPlaybackIfNeeded } from "./musicManager.js"
 import {
+    clearPlayerSessionPreservePriorSnapshot,
     clearPlayerSessionRestoreInProgress,
+    markPlayerSessionPreservePriorSnapshot,
     markPlayerSessionRestoreInProgress,
     schedulePlayerSessionSave,
 } from "./playerSessionPersistence.js"
@@ -216,10 +218,14 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
             playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
             // schedulePlayerSessionSave is a no-op while restore-in-progress; persist after clear.
             // Skip save when some tracks failed transiently — otherwise a partial hydrate would
-            // permanently drop those entries from the session snapshot.
+            // permanently drop those entries from the session snapshot. Mark preserve *before*
+            // clearPlayerSessionRestoreInProgress so trackStart/trackEnd/shutdown/idle clear
+            // cannot race and wipe the prior full row.
             if (shouldPersistRestoredPlayerSession(transientFailures)) {
+                clearPlayerSessionPreservePriorSnapshot(guildId)
                 playerToPersist = player
             } else {
+                markPlayerSessionPreservePriorSnapshot(guildId)
                 client.warn(
                     `[playerSession] restore for ${guildId}: skipping session save after ${transientFailures} transient failure(s); preserving prior snapshot`
                 )
