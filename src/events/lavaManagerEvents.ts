@@ -44,6 +44,7 @@ import { tryDestroyOrphanGuildPlayer } from "../util/guildPlayerQueueLock.js"
 import { countHumanMembers } from "../util/voiceChannelMembers.js"
 import { playerHasQueueContent } from "../util/playlistQueue.js"
 import { skipCurrentTrack } from "../util/skipCurrentTrack.js"
+import { shouldApplicationSkipOnTrackStuck } from "../util/trackStuckAdvance.js"
 
 /** Rate-limit `queueUpdate` websocket fan-out on Lavalink position ticks (pause/resume still immediate). */
 const lastQueueUpdateBroadcastAtMs = new Map<string, number>()
@@ -273,16 +274,20 @@ export default async (client: BotClient) => {
                         client.error("[LavaMgrEvents] Failed to send trackStuck message:", e)
                     )
             }
-            client.debug(
-                `[LavaMgrEvents] Attempting to skip stuck track in guild ${player.guildId}.`
-            )
-            try {
-                // Default skip() throws when upcoming queue is empty (e.g. last/autoplay track).
-                await skipCurrentTrack(player)
-            } catch (e: unknown) {
-                client.error(
-                    `[LavaMgrEvents] Failed to skip stuck track in guild ${player.guildId}:`,
-                    e
+            // lavalink-client advances after emit (queueTrackEnd + play / empty → null track).
+            // A second skip races that path and can drop the next good track — see trackStuckAdvance.
+            if (shouldApplicationSkipOnTrackStuck()) {
+                try {
+                    await skipCurrentTrack(player)
+                } catch (e: unknown) {
+                    client.error(
+                        `[LavaMgrEvents] Failed to skip stuck track in guild ${player.guildId}:`,
+                        e
+                    )
+                }
+            } else {
+                client.debug(
+                    `[LavaMgrEvents] Stuck track reported for guild ${player.guildId}; library will advance.`
                 )
             }
         })
