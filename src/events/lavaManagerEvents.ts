@@ -122,12 +122,14 @@ export default async (client: BotClient) => {
             const livePlayer = client.lavalink.getPlayer(player.guildId)
             const clearAction = resolvePlayerDestroySessionClearAction(reason, player, livePlayer)
             if (clearAction === "clear") {
-                void clearPlayerSession(player.guildId).catch((err: unknown) => {
-                    const msg = err instanceof Error ? err.message : String(err)
-                    client.error(
-                        `[LavaMgrEvents] clearPlayerSession failed (guildId=${player.guildId}): ${msg}`
-                    )
-                })
+                void clearPlayerSession(player.guildId, { destroyReason: reason }).catch(
+                    (err: unknown) => {
+                        const msg = err instanceof Error ? err.message : String(err)
+                        client.error(
+                            `[LavaMgrEvents] clearPlayerSession failed (guildId=${player.guildId}): ${msg}`
+                        )
+                    }
+                )
             } else if (clearAction === "skip-successor") {
                 // Destroy finished after a replacement player was created — keep its session.
                 consumePlayerSessionClearSuppressLease(player.guildId)
@@ -486,7 +488,9 @@ export default async (client: BotClient) => {
                                 client.debug(
                                     `[LavaMgrEvents] Player ${queueEndGuildId} is idle, destroying after queue end timeout.`
                                 )
-                                await live.destroy()
+                                // Tag QueueEmpty so preserve-prior can skip the DB delete after a
+                                // partial restore; /stop and /leave use destroy() with no reason.
+                                await live.destroy("QueueEmpty")
                             },
                         },
                         0
