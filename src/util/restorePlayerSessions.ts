@@ -219,7 +219,8 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
             // schedulePlayerSessionSave is a no-op while restore-in-progress; persist after clear.
             // Skip save when some tracks failed transiently — otherwise a partial hydrate would
             // permanently drop those entries from the session snapshot. Mark preserve *before*
-            // clearPlayerSessionRestoreInProgress so trackStart/trackEnd/shutdown cannot race.
+            // clearPlayerSessionRestoreInProgress so trackStart/trackEnd/shutdown/idle clear
+            // cannot race and wipe the prior full row.
             if (shouldPersistRestoredPlayerSession(transientFailures)) {
                 clearPlayerSessionPreservePriorSnapshot(guildId)
                 playerToPersist = player

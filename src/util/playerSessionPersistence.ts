@@ -16,7 +16,8 @@ const pendingPlayers = new Map<string, Player>()
 const restoreInProgressGuilds = new Set<string>()
 /**
  * After a partial restore with transient resolve failures, keep the prior full DB snapshot.
- * Event-driven / shutdown saves must not overwrite that row with the hydrated subset.
+ * Event-driven / shutdown saves must not overwrite that row with the hydrated subset, and
+ * idle QueueEmpty / intentional destroy must not delete it while this guard is set.
  */
 const preservePriorSnapshotGuilds = new Set<string>()
 /** Bumped on intentional clear so in-flight debounced writes cannot resurrect deleted rows. */
@@ -224,7 +225,8 @@ function isRestoreInProgress(guildId: string): boolean {
 
 /**
  * Blocks session overwrites after a partial hydrate with transient track failures.
- * Cleared on intentional session delete or a later full restore that may persist.
+ * Cleared when a later full restore may persist, or when clearPlayerSession consumes the guard
+ * (skipping the DB delete so idle QueueEmpty cannot wipe the prior full snapshot).
  */
 export function markPlayerSessionPreservePriorSnapshot(guildId: string): void {
     preservePriorSnapshotGuilds.add(guildId)
@@ -235,7 +237,7 @@ export function clearPlayerSessionPreservePriorSnapshot(guildId: string): void {
     preservePriorSnapshotGuilds.delete(guildId)
 }
 
-/** True when saves must not overwrite the prior full DB snapshot for this guild. */
+/** True when saves/clears must not overwrite or delete the prior full DB snapshot for this guild. */
 export function shouldPreservePriorPlayerSessionSnapshot(guildId: string): boolean {
     return preservePriorSnapshotGuilds.has(guildId)
 }
@@ -254,11 +256,22 @@ export function shouldSkipPlayerSessionClearForState(
 
 /** True when clearPlayerSession must not delete the DB row for this guild. */
 export function shouldSkipPlayerSessionClear(guildId: string): boolean {
-    return shouldSkipPlayerSessionClearForState(
-        persistenceShuttingDown,
-        isRestoreInProgress(guildId),
-        hasActiveSuppressLease(guildId)
+    return (
+        shouldSkipPlayerSessionClearForState(
+            persistenceShuttingDown,
+            isRestoreInProgress(guildId),
+            hasActiveSuppressLease(guildId)
+        ) || shouldPreservePriorPlayerSessionSnapshot(guildId)
     )
+}
+
+function cancelPendingPlayerSessionSave(guildId: string): void {
+    const timer = pendingSaveTimers.get(guildId)
+    if (timer) {
+        clearTimeout(timer)
+        pendingSaveTimers.delete(guildId)
+    }
+    pendingPlayers.delete(guildId)
 }
 
 async function writePlayerSession(player: Player, saveEpoch: number): Promise<void> {
@@ -464,20 +477,21 @@ export async function clearPlayerSession(guildId: string): Promise<void> {
         return
     }
 
-    // Intentional delete: stop preserving a prior snapshot for this guild.
-    clearPlayerSessionPreservePriorSnapshot(guildId)
+    // Partial restore left a fuller DB snapshot than the live player. Idle QueueEmpty (and
+    // other intentional destroys) must not delete that row — empty live saves are already
+    // no-ops, so clear was the only wipe path for unresolved transient tracks.
+    if (shouldPreservePriorPlayerSessionSnapshot(guildId)) {
+        clearPlayerSessionPreservePriorSnapshot(guildId)
+        cancelPendingPlayerSessionSave(guildId)
+        return
+    }
 
     // Bump before awaiting the persistence lock so immediately following saves capture the new epoch.
     bumpSessionClearEpoch(guildId)
     // Invalidate in-flight write undos so they cannot delete a row rewritten after this clear.
     bumpSessionPersistGeneration(guildId)
 
-    const timer = pendingSaveTimers.get(guildId)
-    if (timer) {
-        clearTimeout(timer)
-        pendingSaveTimers.delete(guildId)
-    }
-    pendingPlayers.delete(guildId)
+    cancelPendingPlayerSessionSave(guildId)
 
     await withGuildPersistenceLock(guildId, async () => {
         await persistenceDb.deletePlayerSession(guildId)

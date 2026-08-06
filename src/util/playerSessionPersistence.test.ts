@@ -475,17 +475,35 @@ describe("preserve prior snapshot after partial restore", () => {
         assert.deepEqual(events, ["upsert"])
     })
 
-    it("clears the preserve guard on intentional session delete", async () => {
+    it("skips DB delete on idle clear so QueueEmpty cannot wipe the prior full snapshot", async () => {
+        // After partial restore, empty live saves are no-ops; playerDestroy → clearPlayerSession
+        // was the wipe path for unresolved transient tracks still stored in the prior row.
         const guildId = "guild-partial-restore"
+        const events: string[] = []
         setPlayerSessionPersistenceDbForTests({
-            upsertPlayerSession: async () => undefined,
-            deletePlayerSession: async () => undefined,
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
         })
 
         markPlayerSessionPreservePriorSnapshot(guildId)
-        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), true)
+        assert.equal(shouldSkipPlayerSessionClear(guildId), true)
+
+        const epochBefore = getSessionClearEpochForTests(guildId)
         await clearPlayerSession(guildId)
+
+        assert.deepEqual(events, [])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore)
         assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), false)
+        assert.equal(shouldSkipPlayerSessionClear(guildId), false)
+
+        // A later intentional clear (fresh session) still deletes.
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, ["delete"])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
     })
 })
 
