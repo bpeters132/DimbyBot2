@@ -20,6 +20,7 @@ import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
 } from "../../util/sameVoiceChannel.js"
+import { isMemberFetchNotFound } from "../../util/discordMemberFetchError.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
 
@@ -41,21 +42,6 @@ export type SearchAndEnqueueResult = SearchAndEnqueueSuccess | SearchAndEnqueueF
 export type SearchAndEnqueueOptions = {
     /** Connect the player to the requester's VC without searching or enqueueing. */
     connectOnly?: boolean
-}
-
-function isMemberFetchNotFound(error: unknown): boolean {
-    if (!error || typeof error !== "object") return false
-    const maybe = error as {
-        status?: unknown
-        code?: unknown
-        name?: unknown
-    }
-    return (
-        maybe.status === 404 ||
-        maybe.code === 404 ||
-        maybe.code === 10007 ||
-        maybe.name === "UnknownMember"
-    )
 }
 
 /**
