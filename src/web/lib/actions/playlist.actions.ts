@@ -4,67 +4,24 @@ import type {
     AddPlaylistTrackBody,
     AddPlaylistTrackFromQueryBody,
     AddTracksFromQueryResponse,
-    ApiResponse,
     PlaylistData,
     PlaylistListResponse,
     PlaylistPlayResponse,
     PlaylistTrackData,
 } from "@/types/web"
+import {
+    parseBotApiActionResponse,
+    type BotApiActionErr,
+    type BotApiActionOk,
+} from "@/lib/parse-bot-api-response"
 import { playlistPlayTimeoutMs } from "@/lib/playlist-play-timeout"
 import { serverFetchBot } from "@/server/fetch-bot-api"
 
-type Ok<T> = { ok: true; data: T }
-type Err = { ok: false; error: string }
+type Ok<T> = BotApiActionOk<T>
+type Err = BotApiActionErr
 
 async function parseApiResponse<T>(res: Response): Promise<Ok<T> | Err> {
-    const text = await res.text()
-    if (!text.trim()) {
-        return {
-            ok: false,
-            error: res.ok
-                ? "Empty response from bot API."
-                : `Request failed (${res.status}): empty body.`,
-        }
-    }
-    let payload: ApiResponse<T>
-    try {
-        payload = JSON.parse(text) as ApiResponse<T>
-    } catch {
-        return {
-            ok: false,
-            error: res.ok
-                ? "Invalid JSON from bot API."
-                : `Request failed (${res.status}): invalid JSON.`,
-        }
-    }
-    if (!res.ok) {
-        if (payload.ok === false && payload.error && typeof payload.error === "object") {
-            const errObj = payload.error as { error?: string; details?: string }
-            const msg =
-                [errObj.details, errObj.error].filter(Boolean).join(" — ") ||
-                `Request failed (${res.status}).`
-            return { ok: false, error: msg }
-        }
-        return { ok: false, error: `Request failed (${res.status}).` }
-    }
-    if (payload.ok === false) {
-        const err: unknown = payload.error
-        if (err != null && typeof err === "object") {
-            const errObj = err as { error?: string; details?: string }
-            const msg =
-                [errObj.details, errObj.error].filter(Boolean).join(" — ") ||
-                "Bot API returned an error."
-            return { ok: false, error: msg }
-        }
-        if (typeof err === "string" && err.trim()) {
-            return { ok: false, error: err.trim() }
-        }
-        return { ok: false, error: "Bot API returned an error." }
-    }
-    if (payload.data === undefined || payload.data === null) {
-        return { ok: false, error: "Bot API returned success without data." }
-    }
-    return { ok: true, data: payload.data }
+    return parseBotApiActionResponse<T>(res)
 }
 
 export async function getPlaylistsAction(): Promise<Ok<PlaylistListResponse> | Err> {
