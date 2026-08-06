@@ -1,19 +1,12 @@
 import { headers } from "next/headers"
+import { resolveFetchTimeoutMs } from "@/lib/bot-api-timeout"
 import { getBotApiOrigin } from "@/server/bot-api-origin"
 import { isBotApiVerbose, logBotApiVerbose } from "@/server/bot-api-verbose"
 import { getOriginFallback } from "@/server/origin-fallback"
 
-const DEFAULT_UPSTREAM_FETCH_TIMEOUT_MS = 10_000
-const MAX_UPSTREAM_FETCH_TIMEOUT_MS = 300_000
-
 /**
  * Calls the bot REST API from the Next server using the current request cookies (session).
  */
-function resolveFetchTimeoutMs(timeoutMs?: number): number {
-    if (timeoutMs === undefined) return DEFAULT_UPSTREAM_FETCH_TIMEOUT_MS
-    if (!Number.isFinite(timeoutMs)) return DEFAULT_UPSTREAM_FETCH_TIMEOUT_MS
-    return Math.min(Math.max(Math.floor(timeoutMs), 1000), MAX_UPSTREAM_FETCH_TIMEOUT_MS)
-}
 
 export async function serverFetchBot(
     pathnameAndSearch: string,

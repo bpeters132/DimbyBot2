@@ -1,16 +1,9 @@
 import { NextResponse } from "next/server"
 import { randomUUID } from "node:crypto"
+import { readBotApiProxyTimeoutMs } from "@/lib/bot-api-timeout"
 import { getBotApiOrigin } from "@/server/bot-api-origin"
 import { isBotApiVerbose, logBotApiVerbose } from "@/server/bot-api-verbose"
 import { getOriginFallback } from "@/server/origin-fallback"
-
-function readBotApiProxyTimeoutMs(): number {
-    const raw = process.env.BOT_API_PROXY_TIMEOUT_MS?.trim()
-    if (!raw) return 4000
-    const n = Number.parseInt(raw, 10)
-    if (!Number.isFinite(n)) return 4000
-    return Math.min(Math.max(n, 1000), 120_000)
-}
 
 /**
  * Forwards the request to the bot HTTP server (Express + `/ws` on BOT_API_PORT).
