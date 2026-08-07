@@ -16,11 +16,20 @@ function hasMusicBrainzContact() {
     )
 }
 
-function musicBrainzDisabled() {
+/**
+ * True when MusicBrainz similar-track lookup is off (`MUSICBRAINZ_SIMILAR=0|false|off`)
+ * or when no contact URL is configured (API User-Agent requirement).
+ */
+export function isMusicBrainzSimilarDisabled() {
     const v = process.env.MUSICBRAINZ_SIMILAR?.trim()?.toLowerCase() ?? ""
     if (v === "0" || v === "false" || v === "off") return true
     if (!hasMusicBrainzContact()) return true
     return false
+}
+
+/** Clamps the similar-track request limit to 1…50 (default 15). */
+export function clampMusicBrainzSimilarLimit(limit: unknown): number {
+    return Math.min(Math.max(Number(limit) || 15, 1), 50)
 }
 
 function musicBrainzUserAgent() {
@@ -51,10 +60,10 @@ async function mbFetch(pathQuery: string): Promise<Response> {
 }
 
 /**
- * @param {unknown} rec
- * @returns {{ artist: string, title: string } | null}
+ * Maps a MusicBrainz recording payload to an autoplay `{ artist, title }` seed.
+ * Fail-closed on missing/blank titles; falls back to "Unknown Artist" when credits are absent.
  */
-function recordingToSim(rec: unknown) {
+export function recordingToSim(rec: unknown): { artist: string; title: string } | null {
     if (!rec || typeof rec !== "object") return null
     const r = rec as {
         title?: unknown
@@ -70,6 +79,30 @@ function recordingToSim(rec: unknown) {
         (typeof first?.artist?.name === "string" && first.artist.name.trim()) ||
         "Unknown Artist"
     return { artist: name, title }
+}
+
+/**
+ * Collects related-artist MBIDs from a MusicBrainz `artist-rels` payload, skipping the seed
+ * and duplicates. Caps at `maxIds` (default 12).
+ */
+export function relatedArtistMbidsFromRelations(
+    relations: unknown,
+    seedArtistMbid: string,
+    maxIds = 12
+): string[] {
+    if (!Array.isArray(relations)) return []
+    const cap = Math.min(Math.max(Number(maxIds) || 12, 1), 50)
+    const ids: string[] = []
+    const seen = new Set([seedArtistMbid])
+    for (const rel of relations) {
+        const other = (rel as { artist?: { id?: string } } | null)?.artist
+        const id = typeof other?.id === "string" ? other.id : ""
+        if (!id || seen.has(id)) continue
+        seen.add(id)
+        ids.push(id)
+        if (ids.length >= cap) break
+    }
+    return ids
 }
 
 /**
@@ -104,20 +137,8 @@ async function fetchRelatedArtistMbids(artistMbid: string) {
     })
     const res = await mbFetch(`/artist/${artistMbid}?${params}`)
     if (!res.ok) return []
-    const data = (await res.json()) as { relations?: { artist?: { id?: string } }[] }
-    const relations = data?.relations
-    if (!Array.isArray(relations)) return []
-    const ids: string[] = []
-    const seen = new Set([artistMbid])
-    for (const rel of relations) {
-        const other = rel?.artist
-        const id = typeof other?.id === "string" ? other.id : ""
-        if (!id || seen.has(id)) continue
-        seen.add(id)
-        ids.push(id)
-        if (ids.length >= 12) break
-    }
-    return ids
+    const data = (await res.json()) as { relations?: unknown }
+    return relatedArtistMbidsFromRelations(data?.relations, artistMbid, 12)
 }
 
 /**
@@ -151,8 +172,8 @@ async function browseRecordingsForArtist(artistMbid: string, limit: number) {
  * @returns {Promise<{ tracks: { artist: string, title: string }[], failure?: string, failureDetail?: string }>}
  */
 export async function getMusicBrainzSimilarTracks(artist: string, _trackTitle: string, limit = 15) {
-    const cap = Math.min(Math.max(Number(limit) || 15, 1), 50)
-    if (musicBrainzDisabled()) {
+    const cap = clampMusicBrainzSimilarLimit(limit)
+    if (isMusicBrainzSimilarDisabled()) {
         return { tracks: [], failure: "musicbrainz_disabled" }
     }
 
