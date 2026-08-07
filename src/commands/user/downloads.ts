@@ -16,6 +16,13 @@ import {
     getDownloadMetadataStore,
     saveDownloadMetadataStore,
 } from "../../util/downloadMetadataStore.js"
+import {
+    isResolvedPathInsideDir,
+    listAgedUntrackedGuildDownloadFiles,
+    listDownloadFilesWithPrefix,
+    guildDownloadFilePrefix,
+    UNTRACKED_DOWNLOAD_ORPHAN_AGE_MS,
+} from "../../util/downloadArtifacts.js"
 
 const DEFAULT_MAX_DIR_SIZE_MB = 1000
 
@@ -259,6 +266,16 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 [...dedupedEntries.values()].map(async ({ key, info }) => {
                     const file = parseDownloadMetadataStoreKey(key).fileName
                     const filePath = path.join(downloadsDir, file)
+                    if (!isResolvedPathInsideDir(downloadsDir, filePath)) {
+                        client.warn(
+                            `[Downloads] Refusing path traversal for metadata file "${file}" (guildId=${guildId})`
+                        )
+                        return {
+                            name: file,
+                            path: filePath,
+                            date: null as Date | null,
+                        }
+                    }
                     let date: Date | null = parseValidDownloadDate(info.downloadDate)
                     if (!date) {
                         try {
@@ -289,6 +306,9 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 })
             )
             const files = fileRows.filter((file) => {
+                if (!isResolvedPathInsideDir(downloadsDir, file.path)) {
+                    return false
+                }
                 if (!removeAll) {
                     return Boolean(file.date && file.date < cutoffDate)
                 }
@@ -302,14 +322,6 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                         `[Downloads] Skipped ${skippedCount} file(s) due to stat errors (date=null); cleanup may be incomplete (guildId=${guildId}).`
                     )
                 }
-            }
-
-            if (files.length === 0) {
-                return interaction.editReply(
-                    removeAll
-                        ? "No downloaded files found for this server."
-                        : `No files older than ${days} days found for this server.`
-                )
             }
 
             let deletedCount = 0
@@ -346,6 +358,50 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                         errors.push(`${file.name}: Could not delete this file.`)
                     }
                 }
+            }
+
+            // Failed downloads leave guild-prefixed files with no metadata; reclaim them here too.
+            const trackedNames = new Set(
+                Object.entries(metadata)
+                    .filter(([key, info]) => downloadMetadataEntryMatchesGuild(key, info, guildId))
+                    .map(([key]) => parseDownloadMetadataStoreKey(key).fileName)
+            )
+            const orphanCandidates = removeAll
+                ? listDownloadFilesWithPrefix(downloadsDir, guildDownloadFilePrefix(guildId)).filter(
+                      (f) => !trackedNames.has(f.name)
+                  )
+                : listAgedUntrackedGuildDownloadFiles(
+                      downloadsDir,
+                      guildId,
+                      trackedNames,
+                      UNTRACKED_DOWNLOAD_ORPHAN_AGE_MS
+                  )
+            for (const orphan of orphanCandidates) {
+                try {
+                    await fsp.unlink(orphan.path)
+                    totalSize += orphan.size
+                    deletedCount++
+                } catch (err: unknown) {
+                    const code =
+                        err && typeof err === "object" && "code" in err
+                            ? (err as NodeJS.ErrnoException).code
+                            : ""
+                    if (code !== "ENOENT") {
+                        client.warn(
+                            `[Downloads] orphan cleanup unlink failed for ${orphan.name} (guildId=${guildId})`,
+                            err
+                        )
+                        errors.push(`${orphan.name}: Could not delete orphan file.`)
+                    }
+                }
+            }
+
+            if (deletedCount === 0 && files.length === 0 && orphanCandidates.length === 0) {
+                return interaction.editReply(
+                    removeAll
+                        ? "No downloaded files found for this server."
+                        : `No files older than ${days} days found for this server.`
+                )
             }
 
             const metadataSaved = await saveDownloadMetadataStore(metadata, client, {
