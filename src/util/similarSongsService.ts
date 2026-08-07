@@ -10,14 +10,21 @@ let spotifyTokenCache: SpotifyTokenCache = null
 
 /**
  * ISO 3166-1 alpha-2. Required for top-tracks and search with client credentials.
+ * Invalid / blank values fall back to `US`.
  */
-function getSpotifyMarket() {
-    const raw =
-        process.env.SPOTIFY_MARKET?.trim() ||
-        process.env.LAVALINK_SPOTIFY_COUNTRY_CODE?.trim() ||
-        "US"
-    const up = raw.toUpperCase()
+export function resolveSpotifyMarket(raw?: string | null): string {
+    const fromEnv =
+        raw === undefined
+            ? process.env.SPOTIFY_MARKET?.trim() ||
+              process.env.LAVALINK_SPOTIFY_COUNTRY_CODE?.trim() ||
+              "US"
+            : String(raw ?? "").trim() || "US"
+    const up = fromEnv.toUpperCase()
     return /^[A-Z]{2}$/.test(up) ? up : "US"
+}
+
+function getSpotifyMarket() {
+    return resolveSpotifyMarket()
 }
 
 type TrackSeedContextOk = {
@@ -78,7 +85,8 @@ async function fetchTrackSeedContext(
     }
 }
 
-function isValidArtist(a: unknown): a is { id: string; name?: string } {
+/** True when a Spotify artist object has a non-empty string `id`. */
+export function isValidSpotifyArtist(a: unknown): a is { id: string; name?: string } {
     if (!a || typeof a !== "object") return false
     const id = (a as { id?: unknown }).id
     return typeof id === "string" && id.length > 0
@@ -104,7 +112,7 @@ async function fetchRelatedArtists(accessToken: string, artistId: string) {
         const data = (await res.json()) as { artists?: unknown[] }
         const list = data?.artists
         if (!Array.isArray(list)) return { ok: true, artists: [] }
-        const artists = list.filter(isValidArtist).map((a) => ({
+        const artists = list.filter(isValidSpotifyArtist).map((a) => ({
             id: a.id,
             name: typeof a.name === "string" ? a.name : undefined,
         }))
@@ -176,7 +184,14 @@ async function searchTopTracksByArtistName(
     }
 }
 
-function spotifyTrackToSim(t: unknown, excludeTrackIds: Set<string>) {
+/**
+ * Maps a Spotify track payload to an autoplay `{ artist, title }` seed.
+ * Skips missing ids, excluded seed ids, and blank titles.
+ */
+export function spotifyTrackToSim(
+    t: unknown,
+    excludeTrackIds: Set<string>
+): { artist: string; title: string } | null {
     if (!t || typeof t !== "object") return null
     const tr = t as { id?: unknown; name?: unknown; artists?: { name?: unknown }[] }
     const id = typeof tr.id === "string" ? tr.id : ""
