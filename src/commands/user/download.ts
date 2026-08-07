@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from "discord.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { spawn } from "child_process"
+import { randomBytes } from "crypto"
 import path from "path"
 import fs from "fs"
 import type BotClient from "../../lib/BotClient.js"
@@ -23,15 +24,20 @@ import {
     getDownloadMetadataStore,
     saveDownloadMetadataStore,
 } from "../../util/downloadMetadataStore.js"
+import {
+    DOWNLOAD_PROCESS_TIMEOUT_MS,
+    UNTRACKED_DOWNLOAD_ORPHAN_AGE_MS,
+    guildDownloadFilePrefix,
+    isResolvedPathInsideDir,
+    listAgedUntrackedGuildDownloadFiles,
+    removeDownloadFilesWithPrefix,
+} from "../../util/downloadArtifacts.js"
 
 // Maximum age of files in days before automatic cleanup
 const MAX_FILE_AGE_DAYS = 7
 
 // Maximum total size of downloads directory in MB (default fallback)
 const DEFAULT_MAX_DIR_SIZE_MB = 1000
-
-/** Wall-clock limit for a single yt-dlp run (live / very long media). */
-const DOWNLOAD_PROCESS_TIMEOUT_MS = 10 * 60 * 1000
 
 /**
  * Rough upper bound on WAV output (~10 MiB/min for 16-bit 44.1kHz stereo).
@@ -104,6 +110,12 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
     for (const [storeKey, fileInfo] of entries) {
         const baseFileName = parseDownloadMetadataStoreKey(storeKey).fileName
         const filePath = path.join(downloadsDir, baseFileName)
+        if (!isResolvedPathInsideDir(downloadsDir, filePath)) {
+            client.error(
+                `[Download Cleanup] Refusing path traversal for metadata file "${baseFileName}"`
+            )
+            continue
+        }
         const metadataKeysForFile = downloadMetadataKeysForFile(metadata, baseFileName, guildId)
         let downloadDate = fileInfo?.downloadDate ? new Date(fileInfo.downloadDate) : null
         let stats = null
@@ -185,6 +197,30 @@ async function cleanupOldFiles(downloadsDir: string, client: BotClient, guildId:
         }
     }
 
+    // Failed/timed-out yt-dlp runs leave guild-prefixed files with no metadata; reclaim aged ones.
+    const trackedNames = new Set(
+        Object.entries(metadata)
+            .filter(([key, info]) => downloadMetadataEntryMatchesGuild(key, info, guildId))
+            .map(([key]) => parseDownloadMetadataStoreKey(key).fileName)
+    )
+    for (const orphan of listAgedUntrackedGuildDownloadFiles(
+        downloadsDir,
+        guildId,
+        trackedNames,
+        UNTRACKED_DOWNLOAD_ORPHAN_AGE_MS
+    )) {
+        try {
+            totalSize += orphan.size
+            fs.unlinkSync(orphan.path)
+            deletedCount++
+            client.debug(
+                `[Download Cleanup] Removed untracked orphan "${orphan.name}" (${orphan.size} bytes).`
+            )
+        } catch (error: unknown) {
+            client.error(`[Download Cleanup] Failed to delete orphan "${orphan.name}":`, error)
+        }
+    }
+
     return { deletedCount, totalSize }
 }
 
@@ -228,6 +264,10 @@ async function enforceDirectoryLimit(
             continue
         }
         const filePath = path.join(downloadsDir, name)
+        if (!isResolvedPathInsideDir(downloadsDir, filePath)) {
+            client.error(`[download] refusing path traversal for metadata file`, { name })
+            continue
+        }
         let stats: fs.Stats
         try {
             stats = fs.statSync(filePath)
@@ -245,6 +285,22 @@ async function enforceDirectoryLimit(
         }
         seenFiles.set(name, { name, path: filePath, date, size: stats.size })
     }
+
+    // Include aged untracked guild-prefixed files so failed downloads cannot bypass the quota.
+    for (const orphan of listAgedUntrackedGuildDownloadFiles(
+        downloadsDir,
+        guildId,
+        new Set(seenFiles.keys()),
+        UNTRACKED_DOWNLOAD_ORPHAN_AGE_MS
+    )) {
+        seenFiles.set(orphan.name, {
+            name: orphan.name,
+            path: orphan.path,
+            date: new Date(orphan.mtimeMs),
+            size: orphan.size,
+        })
+    }
+
     const files: SizedFile[] = [...seenFiles.values()]
 
     const totalSize = files.reduce((size, file) => size + file.size, 0)
@@ -260,15 +316,17 @@ async function enforceDirectoryLimit(
         let deletedSize = 0
         let metadataDirty = false
         const deletedStoreKeys = new Set<string>()
+        let remainingBytes = totalSize
 
         for (const file of candidates) {
-            if (totalSizeMB - deletedSize / (1024 * 1024) <= maxDirSizeMb) {
+            if (remainingBytes / (1024 * 1024) <= maxDirSizeMb) {
                 break
             }
             try {
                 fs.unlinkSync(file.path)
                 deletedCount++
                 deletedSize += file.size
+                remainingBytes -= file.size
                 for (const metaKey of downloadMetadataKeysForFile(metadata, file.name, guildId)) {
                     delete metadata[metaKey]
                     deletedStoreKeys.add(metaKey)
@@ -365,7 +423,17 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
         // Create downloads directory if it doesn't exist
         const downloadsDir = path.join(process.cwd(), "downloads")
-        const downloadFilePrefix = `${guildId}_`
+        const downloadFilePrefix = guildDownloadFilePrefix(guildId)
+        const downloadRunId = randomBytes(8).toString("hex")
+        const downloadRunPrefix = `${downloadFilePrefix}${downloadRunId}_`
+        const reclaimFailedRunArtifacts = (reason: string) => {
+            const reclaimed = removeDownloadFilesWithPrefix(downloadsDir, downloadRunPrefix)
+            if (reclaimed.deletedCount > 0) {
+                client.debug(
+                    `[Download] Reclaimed ${reclaimed.deletedCount} failed-run artifact(s) after ${reason} (${(reclaimed.deletedSize / (1024 * 1024)).toFixed(2)}MB).`
+                )
+            }
+        }
         if (!fs.existsSync(downloadsDir)) {
             fs.mkdirSync(downloadsDir)
         }
@@ -418,7 +486,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 "--match-filter",
                 matchFilter,
                 "-o",
-                `${downloadsDir}/${downloadFilePrefix}%(title)s.%(ext)s`,
+                `${downloadsDir}/${downloadRunPrefix}%(title)s.%(ext)s`,
             ])
         } catch (syncErr: unknown) {
             client.error("[Download] spawn(yt-dlp) failed synchronously:", syncErr)
@@ -512,6 +580,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
         downloadProcess.on("close", async (code: number | null) => {
             try {
                 if (timedOut) {
+                    reclaimFailedRunArtifacts("timeout")
                     await interaction
                         .editReply({
                             content:
@@ -524,6 +593,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 }
                 if (code !== 0) {
                     client.error(`[Download] yt-dlp process exited with code ${code}`)
+                    reclaimFailedRunArtifacts(`exit code ${code}`)
                     await interaction
                         .editReply({
                             content:
@@ -560,7 +630,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
                     const wavFiles = files
                         .filter(
-                            (file) => file.startsWith(downloadFilePrefix) && file.endsWith(".wav")
+                            (file) => file.startsWith(downloadRunPrefix) && file.endsWith(".wav")
                         )
                         .map((file) => ({
                             name: file,
@@ -580,12 +650,32 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
                 if (!filePath || !downloadedFile) {
                     client.error(`[Download] Could not determine downloaded file path.`)
+                    reclaimFailedRunArtifacts("missing output path")
                     await interaction
                         .editReply(
                             "Could not find the downloaded file after the download process. Please check logs."
                         )
                         .catch((e: unknown) =>
                             client.error("Failed to edit reply on file not found", e)
+                        )
+                    return
+                }
+
+                if (
+                    !downloadedFile.startsWith(downloadRunPrefix) ||
+                    !isResolvedPathInsideDir(downloadsDir, filePath)
+                ) {
+                    client.error(
+                        `[Download] Rejecting unexpected output path outside this run: ${downloadedFile}`
+                    )
+                    reclaimFailedRunArtifacts("unexpected output path")
+                    await interaction
+                        .editReply({
+                            content:
+                                "Download finished but the output file could not be verified. Please try again.",
+                        })
+                        .catch((e: unknown) =>
+                            client.error("Failed to edit reply on unexpected download path", e)
                         )
                     return
                 }
@@ -598,6 +688,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     downloadedStats = fs.statSync(filePath)
                 } catch (statErr: unknown) {
                     client.error("[Download] Failed to stat downloaded file:", statErr)
+                    reclaimFailedRunArtifacts("stat failure")
                     await interaction
                         .editReply({
                             content:
@@ -612,11 +703,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     client.error(
                         `[Download] Rejecting oversized file ${downloadedFile} (${downloadedStats.size} bytes > ${maxDownloadBytes} byte guild limit)`
                     )
-                    try {
-                        fs.unlinkSync(filePath)
-                    } catch (unlinkErr: unknown) {
-                        client.error("[Download] Failed to unlink oversized download:", unlinkErr)
-                    }
+                    reclaimFailedRunArtifacts("oversized output")
                     await interaction
                         .editReply({
                             content: `Download rejected: the resulting file exceeds this server's download limit (${maxDirSizeMb}MB). Try a shorter video.`,
@@ -758,6 +845,7 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 }
             } catch (error: unknown) {
                 client.error("[Download] Unexpected error in close handler", error)
+                reclaimFailedRunArtifacts("close handler error")
                 await updateReply(
                     "An unexpected error occurred while finalizing the download. Please try again later.",
                     true

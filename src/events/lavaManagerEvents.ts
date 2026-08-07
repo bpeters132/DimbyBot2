@@ -44,6 +44,8 @@ import { tryDestroyOrphanGuildPlayer } from "../util/guildPlayerQueueLock.js"
 import { countHumanMembers } from "../util/voiceChannelMembers.js"
 import { playerHasQueueContent } from "../util/playlistQueue.js"
 import { skipCurrentTrack } from "../util/skipCurrentTrack.js"
+import { endCurrentTrackForAutoplay } from "../util/endCurrentTrackForAutoplay.js"
+import { safeIdlePlayerDestroy } from "../util/safeIdlePlayerDestroy.js"
 
 /** Rate-limit `queueUpdate` websocket fan-out on Lavalink position ticks (pause/resume still immediate). */
 const lastQueueUpdateBroadcastAtMs = new Map<string, number>()
@@ -381,11 +383,13 @@ export default async (client: BotClient) => {
                 } else if (player.get("autoplay") === true) {
                     // Library trackError does not advance to queueEnd; ending the current track
                     // lets onEmptyQueue.autoPlayFunction run instead of wiping the session.
+                    // Prefer stopPlaying over skip(): skip sets internal_skipped and bypasses
+                    // minAutoPlayMs, which can tight-loop autoplay when catalog picks keep erroring.
                     client.debug(
                         `[LavaMgrEvents] Queue empty with autoplay on; ending current track for guild ${player.guildId}.`
                     )
                     try {
-                        await skipCurrentTrack(player)
+                        await endCurrentTrackForAutoplay(player)
                     } catch (e: unknown) {
                         client.error(
                             `[LavaMgrEvents] Failed to end track for autoplay after error in guild ${player.guildId}:`,
@@ -398,7 +402,7 @@ export default async (client: BotClient) => {
                     client.debug(
                         `[LavaMgrEvents] Queue is empty after track error in guild ${trackErrorGuildId}; attempting reservation-aware destroy.`
                     )
-                    await tryDestroyOrphanGuildPlayer(
+                    await safeIdlePlayerDestroy(
                         trackErrorGuildId,
                         {
                             hasQueueContent: () => {
@@ -417,7 +421,12 @@ export default async (client: BotClient) => {
                                 await live.destroy()
                             },
                         },
-                        0
+                        (err: unknown) => {
+                            const msg = err instanceof Error ? err.message : String(err)
+                            client.error(
+                                `[LavaMgrEvents] Idle destroy after track error failed (guildId=${trackErrorGuildId}): ${msg}`
+                            )
+                        }
                     )
                 }
             }
@@ -458,7 +467,7 @@ export default async (client: BotClient) => {
                     client.debug(
                         `[LavaMgrEvents] Executing standard queue end timeout check for player ${queueEndGuildId}.`
                     )
-                    await tryDestroyOrphanGuildPlayer(
+                    await safeIdlePlayerDestroy(
                         queueEndGuildId,
                         {
                             hasQueueContent: () => {
@@ -481,9 +490,19 @@ export default async (client: BotClient) => {
                                 await live.destroy()
                             },
                         },
-                        0
+                        (err: unknown) => {
+                            const msg = err instanceof Error ? err.message : String(err)
+                            client.error(
+                                `[LavaMgrEvents] Idle destroy after queue end failed (guildId=${queueEndGuildId}): ${msg}`
+                            )
+                        }
                     )
-                })()
+                })().catch((err: unknown) => {
+                    const msg = err instanceof Error ? err.message : String(err)
+                    client.error(
+                        `[LavaMgrEvents] Queue end idle-destroy task rejected (guildId=${queueEndGuildId}): ${msg}`
+                    )
+                })
             }, 5000)
         })
 
@@ -658,7 +677,12 @@ export default async (client: BotClient) => {
                                     )
                             }
                         }
-                    })()
+                    })().catch((err: unknown) => {
+                        const msg = err instanceof Error ? err.message : String(err)
+                        client.error(
+                            `[LavaMgrEvents] RRQ disconnect cleanup task rejected (guildId=${guildId}, userId=${userId}): ${msg}`
+                        )
+                    })
                 }, 60_000)
                 trackDisconnectedUser(player, userId, timeoutHandle)
             }
