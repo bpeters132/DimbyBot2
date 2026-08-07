@@ -6,7 +6,7 @@ const withGuildPlayerQueueChain = createGuildAsyncChain()
 const guildPlayerLifecycleReservations = new Map<string, number>()
 
 /** Orphan destroy deferred because other lifecycle reservations were still held. */
-type PendingOrphanDestroy = {
+export type PendingOrphanDestroy = {
     hasQueueContent: () => boolean
     destroyPlayer: () => Promise<void>
 }
