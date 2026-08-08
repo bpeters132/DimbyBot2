@@ -24,7 +24,11 @@ import {
 } from "../util/autoplayHistory.js"
 import { updateControlMessage } from "../events/handlers/handleControlChannel.js"
 import { getGuildSettings } from "../util/saveControlChannel.js"
-import { isRRQActive, rebalancePlayerQueueRoundRobin } from "../util/rrqDisconnect.js"
+import { withGuildPlayerQueueLock } from "../util/guildPlayerQueueLock.js"
+import {
+    isRRQActive,
+    rebalancePlayerQueueRoundRobinAssumingLock,
+} from "../util/rrqDisconnect.js"
 import type BotClient from "./BotClient.js"
 
 /** If title starts with artist then a separator (-–—:|), returns the rest; otherwise null (no dynamic RegExp from user data). */
@@ -272,10 +276,18 @@ async function tryQueueAndPlayAutoplay(
 
         if (!shouldStillInjectAutoplayTrack(player)) return false
 
-        player.queue.add(lavalinkTrack)
-        if (isRRQActive(player)) {
-            await rebalancePlayerQueueRoundRobin(player)
-        }
+        // Hold the guild queue lock for inject + RRQ so dashboard replaceUpcoming rollback
+        // (splice entire upcoming) cannot delete an unlocked autoplay enqueue mid-flight.
+        const injected = await withGuildPlayerQueueLock(player.guildId, async () => {
+            if (!shouldStillInjectAutoplayTrack(player)) return false
+            await player.queue.add(lavalinkTrack)
+            if (isRRQActive(player)) {
+                await rebalancePlayerQueueRoundRobinAssumingLock(player)
+            }
+            return true
+        })
+        if (!injected) return false
+
         try {
             await player.play()
         } catch (playErr: unknown) {
@@ -284,7 +296,9 @@ async function tryQueueAndPlayAutoplay(
                 `[LavalinkManager] Autoplay failed to start "${lavalinkTrack.info?.title}": ${pmsg}`
             )
             try {
-                await player.queue.remove(lavalinkTrack)
+                await withGuildPlayerQueueLock(player.guildId, async () => {
+                    await player.queue.remove(lavalinkTrack)
+                })
             } catch (removeErr: unknown) {
                 const rmsg = removeErr instanceof Error ? removeErr.message : String(removeErr)
                 client.debug(

@@ -41,6 +41,12 @@ export type SearchAndEnqueueResult = SearchAndEnqueueSuccess | SearchAndEnqueueF
 export type SearchAndEnqueueOptions = {
     /** Connect the player to the requester's VC without searching or enqueueing. */
     connectOnly?: boolean
+    /**
+     * Caller already holds {@link acquireGuildPlayerLifecycleReservation} for this guild.
+     * Skip acquire/release so connect + later resolve/enqueue can share one continuous lease
+     * (avoids a gap where deferred idle destroy can tear down the player and clear the session).
+     */
+    externalLifecycleReservation?: boolean
 }
 
 function isMemberFetchNotFound(error: unknown): boolean {
@@ -147,7 +153,10 @@ export async function searchAndEnqueue(
 
     // Reserve before createPlayer so concurrent orphan/idle destroy cannot tear down a
     // freshly created player in the window between create and the old post-create acquire.
-    const lifecycleReservation = await acquireGuildPlayerLifecycleReservation(guildId)
+    // playlistPlay may pass externalLifecycleReservation so connect + resolve share one lease.
+    const ownLifecycleReservation = options?.externalLifecycleReservation
+        ? null
+        : await acquireGuildPlayerLifecycleReservation(guildId)
     try {
         let player = client.lavalink.getPlayer(guildId)
         let createdHere = false
@@ -332,6 +341,6 @@ export async function searchAndEnqueue(
             }
         })
     } finally {
-        lifecycleReservation.release()
+        ownLifecycleReservation?.release()
     }
 }

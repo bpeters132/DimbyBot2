@@ -192,4 +192,65 @@ describe("deferred orphan player cleanup", () => {
         assert.equal(destroyed, true)
         assert.equal(hasPendingOrphanDestroyForTests(guildId), false)
     })
+
+    it("documents playlistPlay connectOnly gap: releasing before resolve lets deferred idle destroy run", async () => {
+        // Models the pre-fix playlistPlay path: searchAndEnqueue(connectOnly) released its
+        // lease, then a second acquire wrapped resolve. queueEnd idle destroy deferred during
+        // connectOnly and ran on that release — plain destroy cleared the player/session while
+        // playlistPlay still held a stale player reference.
+        const guildId = "guild-playlist-connect-gap"
+        let destroyed = false
+
+        const connectOnlyLease = await acquireGuildPlayerLifecycleReservation(guildId)
+        await tryDestroyOrphanGuildPlayer(
+            guildId,
+            {
+                hasQueueContent: () => false,
+                destroyPlayer: async () => {
+                    destroyed = true
+                },
+            },
+            0
+        )
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), true)
+
+        connectOnlyLease.release()
+        await waitForPendingOrphanDestroyForTests(guildId)
+        assert.equal(destroyed, true)
+
+        // Too late: resolve/enqueue would run against a destroyed player / wiped session.
+        const resolveLease = await acquireGuildPlayerLifecycleReservation(guildId)
+        assert.equal(getGuildPlayerLifecycleReservationCount(guildId), 1)
+        resolveLease.release()
+    })
+
+    it("keeps deferred idle destroy blocked for continuous connect+resolve lease (playlistPlay fix)", async () => {
+        const guildId = "guild-playlist-continuous-lease"
+        let destroyed = false
+
+        const continuousLease = await acquireGuildPlayerLifecycleReservation(guildId)
+
+        // Idle timer during connectOnly (externalLifecycleReservation shares this lease).
+        await tryDestroyOrphanGuildPlayer(
+            guildId,
+            {
+                hasQueueContent: () => false,
+                destroyPlayer: async () => {
+                    destroyed = true
+                },
+            },
+            0
+        )
+        assert.equal(destroyed, false)
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), true)
+
+        // Still resolving/enqueueing under the same lease — destroy must not run.
+        assert.equal(getGuildPlayerLifecycleReservationCount(guildId), 1)
+        await Promise.resolve()
+        assert.equal(destroyed, false)
+
+        continuousLease.release()
+        await waitForPendingOrphanDestroyForTests(guildId)
+        assert.equal(destroyed, true)
+    })
 })
