@@ -176,3 +176,88 @@ describe("queue clear vs reorder under guild lock", () => {
         assert.equal(player.queue.tracks.length, 0)
     })
 })
+
+describe("replaceUpcoming rollback vs Discord / autoplay enqueue lock", () => {
+    it("wipes unlocked concurrent adds during rollback (documents pre-fix race)", async () => {
+        // replaceUpcomingWithResolvedPlaylistTracks catch path: splice(0, size) then restore
+        // savedUpcoming. handleQueryAndPlay / autoplay used to queue.add without the guild lock,
+        // so tracks enqueued during rollback were deleted.
+        const guildId = "guild-replace-rollback-unlocked"
+        const player = mockMutablePlayer(guildId, [mockTrack("old-a"), mockTrack("old-b")])
+        const savedUpcoming = [...player.queue.tracks]
+        let releaseRollback!: () => void
+        const rollbackGate = new Promise<void>((resolve) => {
+            releaseRollback = resolve
+        })
+
+        const rollbackP = (async () => {
+            const size = player.queue.tracks.length
+            if (size > 0) await player.queue.splice(0, size)
+            await rollbackGate
+            // Unlocked Discord-style add lands here before restore completes.
+            player.queue.add(mockTrack("discord-play"))
+            if (player.queue.tracks.length > 0) {
+                await player.queue.splice(0, player.queue.tracks.length)
+            }
+            if (savedUpcoming.length > 0) {
+                await player.queue.splice(0, 0, savedUpcoming)
+            }
+        })()
+
+        await Promise.resolve()
+        assert.deepEqual(
+            player.queue.tracks.map((t) => t.info.title),
+            []
+        )
+        releaseRollback()
+        await rollbackP
+        assert.deepEqual(
+            player.queue.tracks.map((t) => t.info.title),
+            ["old-a", "old-b"]
+        )
+    })
+
+    it("keeps locked Discord-style enqueue until after rollback finishes", async () => {
+        const guildId = "guild-replace-rollback-locked"
+        const player = mockMutablePlayer(guildId, [mockTrack("old-a"), mockTrack("old-b")])
+        const savedUpcoming = [...player.queue.tracks]
+        const events: string[] = []
+        let releaseRollback!: () => void
+        const rollbackGate = new Promise<void>((resolve) => {
+            releaseRollback = resolve
+        })
+
+        const rollbackP = withGuildPlayerQueueLock(guildId, async () => {
+            const size = player.queue.tracks.length
+            if (size > 0) await player.queue.splice(0, size)
+            events.push("rollback-cleared")
+            await rollbackGate
+            if (player.queue.tracks.length > 0) {
+                await player.queue.splice(0, player.queue.tracks.length)
+            }
+            if (savedUpcoming.length > 0) {
+                await player.queue.splice(0, 0, savedUpcoming)
+            }
+            events.push("rollback-restored")
+        })
+
+        await Promise.resolve()
+        await Promise.resolve()
+        assert.deepEqual(events, ["rollback-cleared"])
+
+        // Mirrors musicManager / autoplay after taking withGuildPlayerQueueLock.
+        const enqueueP = withGuildPlayerQueueLock(guildId, async () => {
+            player.queue.add(mockTrack("discord-play"))
+            events.push("enqueue")
+        })
+
+        releaseRollback()
+        await Promise.all([rollbackP, enqueueP])
+
+        assert.deepEqual(events, ["rollback-cleared", "rollback-restored", "enqueue"])
+        assert.deepEqual(
+            player.queue.tracks.map((t) => t.info.title),
+            ["old-a", "old-b", "discord-play"]
+        )
+    })
+})
