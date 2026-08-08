@@ -125,23 +125,25 @@ export async function playerPlaylistPlayPOST(
             username: guard.session.user?.name ?? "web-user",
         }
 
-        const voiceSetup = await searchAndEnqueue(
-            client,
-            guildId,
-            requester.requesterId,
-            "",
-            guard,
-            { connectOnly: true }
-        )
-        if (voiceSetup.ok === false) {
-            return { status: voiceSetup.status, body: { ok: false, error: voiceSetup.error } }
-        }
-
-        const player = voiceSetup.player
-        // Cover resolve → enqueue/cleanup so queueEnd idle destroy and concurrent orphan
-        // teardown cannot kill the player while playlist tracks are still resolving.
+        // One continuous lease for connect + resolve + enqueue. Previously connectOnly
+        // released its reservation before this acquire; deferred queueEnd idle destroy
+        // (plain destroy → clearPlayerSession) could then run in that gap and wipe the
+        // restorable session while playlistPlay still held a stale player reference.
         const lifecycleReservation = await acquireGuildPlayerLifecycleReservation(guildId)
         try {
+            const voiceSetup = await searchAndEnqueue(
+                client,
+                guildId,
+                requester.requesterId,
+                "",
+                guard,
+                { connectOnly: true, externalLifecycleReservation: true }
+            )
+            if (voiceSetup.ok === false) {
+                return { status: voiceSetup.status, body: { ok: false, error: voiceSetup.error } }
+            }
+
+            const player = voiceSetup.player
             const { resolved, failed } = await resolveStoredPlaylistTracks(
                 player,
                 playlist.tracks,
