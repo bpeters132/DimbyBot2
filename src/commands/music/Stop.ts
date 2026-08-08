@@ -8,6 +8,7 @@ import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
 } from "../../util/sameVoiceChannel.js"
+import { destroyLavalinkPlayerForStop } from "../../util/stopLavalinkPlayer.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -54,6 +55,7 @@ export default {
         let stoppedLavalink = false
         /** Destroyed an idle Lavalink player (no current track / queue / playback). */
         let lavalinkIdleCleaned = false
+        let lavalinkDestroyFailed = false
 
         const localState = getLocalPlayerState(guild.id)
         const localPlayerWasActive = localState?.isPlaying || false
@@ -65,17 +67,17 @@ export default {
         }
 
         if (lavalinkPlayer) {
-            // Await destroy so playerDestroy → clearPlayerSession bumps the session epoch
-            // before this command continues. Fire-and-forget destroy lets Lavalink delete the
-            // old player from the map mid-teardown, a successor /play create a new player, then
-            // the late playerDestroy clear wipe that new session (Leave/web stop already await).
-            const wasActive =
+            const hadContent = Boolean(
                 lavalinkPlayer.playing ||
-                Boolean(lavalinkPlayer.queue.current) ||
-                lavalinkPlayer.queue.tracks.length > 0
+                    lavalinkPlayer.queue.current ||
+                    lavalinkPlayer.queue.tracks.length > 0
+            )
+            // Must await: floating destroy() rejections become unhandledRejection (process exit on Node 24).
+            // Also ensures playerDestroy → clearPlayerSession bumps the session epoch before this
+            // command continues (Leave/web stop already await).
             try {
-                await lavalinkPlayer.destroy()
-                if (wasActive) {
+                await destroyLavalinkPlayerForStop(lavalinkPlayer)
+                if (hadContent) {
                     client.debug(`[StopCmd] Destroyed Lavalink player for guild ${guild.id}`)
                     stoppedLavalink = true
                 } else {
@@ -84,20 +86,22 @@ export default {
                         `[StopCmd] Cleaned up inactive Lavalink player for guild ${guild.id}`
                     )
                 }
-            } catch (error: unknown) {
+            } catch (destroyErr: unknown) {
+                lavalinkDestroyFailed = true
                 client.error(
                     `[StopCmd] Failed to destroy Lavalink player for guild ${guild.id}:`,
-                    error
+                    destroyErr
                 )
-                return interaction.reply({
-                    content: "An error occurred while trying to stop playback.",
-                    ephemeral: true,
-                })
             }
         }
 
         let replyContent = "Nothing was playing."
-        if (stoppedLocal && stoppedLavalink) {
+        if (lavalinkDestroyFailed && stoppedLocal) {
+            replyContent =
+                "Local playback stopped, but clearing the online player failed. Try `/stop` or `/leave` again."
+        } else if (lavalinkDestroyFailed) {
+            replyContent = "Could not stop the player right now. Try again in a moment."
+        } else if (stoppedLocal && stoppedLavalink) {
             replyContent = "All playback stopped and the queue was cleared."
         } else if (stoppedLocal && lavalinkIdleCleaned) {
             replyContent = "Local playback stopped and idle Lavalink resources were cleaned up."
@@ -112,10 +116,12 @@ export default {
         }
 
         const stoppedSomething = stoppedLocal || stoppedLavalink || lavalinkIdleCleaned
+        // Destroy failures still need a user-visible reply (ephemeral unless something else stopped).
+        const shouldConfirmPublicly = stoppedSomething && !lavalinkDestroyFailed
 
         let msg: Message<boolean> | undefined
         try {
-            if (stoppedSomething) {
+            if (shouldConfirmPublicly) {
                 msg = await interaction.reply({
                     content: replyContent,
                     fetchReply: true,
@@ -132,7 +138,7 @@ export default {
             try {
                 await interaction.followUp({
                     content: replyContent,
-                    ephemeral: !stoppedSomething,
+                    ephemeral: !shouldConfirmPublicly,
                 })
             } catch (followErr: unknown) {
                 client.error("[StopCmd] followUp after reply failure also failed:", followErr)
@@ -141,7 +147,7 @@ export default {
         }
 
         // Auto-delete reply only if something was actually stopped (public confirmation)
-        if (stoppedSomething && msg) {
+        if (shouldConfirmPublicly && msg) {
             setTimeout(() => {
                 msg.delete().catch((e: unknown) => {
                     client.error("[StopCmd] Failed to delete reply (attempt 1):", e)
