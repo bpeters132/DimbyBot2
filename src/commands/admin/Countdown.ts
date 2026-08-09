@@ -7,6 +7,7 @@ import {
     type GuildTextBasedChannel,
 } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
+import { isValidHttpUrl } from "../../shared/http-url.js"
 import { buildCountdownEmbed } from "../../util/countdownEmbed.js"
 import { formatCountdownDuration } from "../../util/formatCountdownDuration.js"
 import { parseEventDateTime } from "../../util/parseEventDateTime.js"
@@ -16,17 +17,6 @@ import {
     getCountdownsForGuild,
     removeCountdown,
 } from "../../util/countdownStore.js"
-
-/** Validates that a string is an http(s) URL usable as an embed image. */
-function isValidHttpUrl(value: string): boolean {
-    let parsed: URL
-    try {
-        parsed = new URL(value)
-    } catch {
-        return false
-    }
-    return parsed.protocol === "http:" || parsed.protocol === "https:"
-}
 
 const REQUIRED_CHANNEL_PERMS = [
     PermissionFlagsBits.ViewChannel,
