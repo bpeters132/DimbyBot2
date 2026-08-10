@@ -1,22 +1,6 @@
 import { getPrismaClient } from "../lib/database.js"
+import { normalizeOptionalDiscordSnowflake } from "../shared/discord-snowflake.js"
 import type { CountdownEntry, CountdownInput, CountdownStore } from "../types/index.js"
-
-const DISCORD_SNOWFLAKE_ID_RE = /^\d{1,20}$/
-const MAX_SNOWFLAKE = (1n << 64n) - 1n
-
-/** Trims and validates a Discord snowflake: must be a positive uint64 digit string. */
-function normalizeSnowflake(value: unknown): string | null {
-    if (typeof value !== "string") return null
-    const t = value.trim()
-    if (!DISCORD_SNOWFLAKE_ID_RE.test(t)) return null
-    try {
-        const n = BigInt(t)
-        if (n < 1n || n > MAX_SNOWFLAKE) return null
-    } catch {
-        return null
-    }
-    return t
-}
 
 /** Maps a Prisma row to the domain {@link CountdownEntry} shape. */
 function toCountdownEntry(row: {
@@ -65,10 +49,10 @@ export async function getAllCountdownsFromDatabase(): Promise<CountdownStore> {
 
 /** Persists a new countdown and returns the created entry (with its assigned id). */
 export async function createCountdown(input: CountdownInput): Promise<CountdownEntry> {
-    const guildId = normalizeSnowflake(input.guildId)
-    const channelId = normalizeSnowflake(input.channelId)
-    const messageId = normalizeSnowflake(input.messageId)
-    const createdBy = normalizeSnowflake(input.createdBy)
+    const guildId = normalizeOptionalDiscordSnowflake(input.guildId)
+    const channelId = normalizeOptionalDiscordSnowflake(input.channelId)
+    const messageId = normalizeOptionalDiscordSnowflake(input.messageId)
+    const createdBy = normalizeOptionalDiscordSnowflake(input.createdBy)
     if (!guildId || !channelId || !messageId || !createdBy) {
         throw new Error("createCountdown: invalid Discord snowflake in input.")
     }
@@ -84,7 +68,9 @@ export async function createCountdown(input: CountdownInput): Promise<CountdownE
             color: input.color,
             footer: input.footer,
             finishMessage: input.finishMessage,
-            mentionRoleId: input.mentionRoleId ? normalizeSnowflake(input.mentionRoleId) : null,
+            mentionRoleId: input.mentionRoleId
+                ? normalizeOptionalDiscordSnowflake(input.mentionRoleId)
+                : null,
             targetTime: input.targetTime,
             createdBy,
         },
