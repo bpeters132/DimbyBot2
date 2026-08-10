@@ -4,6 +4,7 @@ import {
     acquireGuildPlayerLifecycleReservation,
     getGuildPlayerLifecycleReservationCount,
     hasPendingOrphanDestroyForTests,
+    shouldReplacePendingOrphanDestroy,
     tryDestroyOrphanGuildPlayer,
     waitForPendingOrphanDestroyForTests,
     withGuildPlayerLifecycleReservation,
@@ -252,5 +253,109 @@ describe("deferred orphan player cleanup", () => {
         continuousLease.release()
         await waitForPendingOrphanDestroyForTests(guildId)
         assert.equal(destroyed, true)
+    })
+
+    it("does not let naked idle destroy replace a suppress-protected pending teardown", async () => {
+        // Web create-fail defers suppress-wrapped destroy; alone/queueEnd must not strip it.
+        const guildId = "guild-orphan-suppress-wins"
+        let ranSuppress = false
+        let ranNaked = false
+
+        const discordPlay = await acquireGuildPlayerLifecycleReservation(guildId)
+        const webSearch = await acquireGuildPlayerLifecycleReservation(guildId)
+
+        await tryDestroyOrphanGuildPlayer(guildId, {
+            hasQueueContent: () => false,
+            destroyPlayer: async () => {
+                ranSuppress = true
+            },
+            suppressSessionClear: true,
+        })
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), true)
+
+        webSearch.release()
+        assert.equal(ranSuppress, false)
+
+        // Alone-in-VC / queueEnd idle path (reservedByCaller=0) tries to defer naked destroy.
+        await tryDestroyOrphanGuildPlayer(
+            guildId,
+            {
+                hasQueueContent: () => false,
+                destroyPlayer: async () => {
+                    ranNaked = true
+                },
+            },
+            0
+        )
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), true)
+
+        discordPlay.release()
+        await waitForPendingOrphanDestroyForTests(guildId)
+        assert.equal(ranSuppress, true)
+        assert.equal(ranNaked, false)
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), false)
+    })
+
+    it("allows suppress-protected teardown to replace a prior naked pending destroy", async () => {
+        const guildId = "guild-orphan-suppress-upgrades"
+        let ranSuppress = false
+        let ranNaked = false
+
+        const holder = await acquireGuildPlayerLifecycleReservation(guildId)
+
+        await tryDestroyOrphanGuildPlayer(
+            guildId,
+            {
+                hasQueueContent: () => false,
+                destroyPlayer: async () => {
+                    ranNaked = true
+                },
+            },
+            0
+        )
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), true)
+
+        await tryDestroyOrphanGuildPlayer(guildId, {
+            hasQueueContent: () => false,
+            destroyPlayer: async () => {
+                ranSuppress = true
+            },
+            suppressSessionClear: true,
+        })
+
+        holder.release()
+        await waitForPendingOrphanDestroyForTests(guildId)
+        assert.equal(ranSuppress, true)
+        assert.equal(ranNaked, false)
+    })
+})
+
+describe("shouldReplacePendingOrphanDestroy", () => {
+    it("keeps suppress pending when a naked destroy arrives", () => {
+        assert.equal(
+            shouldReplacePendingOrphanDestroy({ suppressSessionClear: true }, {}),
+            false
+        )
+        assert.equal(
+            shouldReplacePendingOrphanDestroy({ suppressSessionClear: true }, {
+                suppressSessionClear: false,
+            }),
+            false
+        )
+    })
+
+    it("allows suppress to replace naked, and same-kind replacement", () => {
+        assert.equal(shouldReplacePendingOrphanDestroy(undefined, {}), true)
+        assert.equal(
+            shouldReplacePendingOrphanDestroy({}, { suppressSessionClear: true }),
+            true
+        )
+        assert.equal(
+            shouldReplacePendingOrphanDestroy({ suppressSessionClear: true }, {
+                suppressSessionClear: true,
+            }),
+            true
+        )
+        assert.equal(shouldReplacePendingOrphanDestroy({}, {}), true)
     })
 })
