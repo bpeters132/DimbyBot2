@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
     isStaleSessionDiscordError,
+    shouldAbandonRestoreForConcurrentQueue,
     shouldPersistRestoredPlayerSession,
 } from "./restorePlayerSessions.js"
 
@@ -31,5 +32,40 @@ describe("shouldPersistRestoredPlayerSession", () => {
         // One resolved + one transient failure must not overwrite the full prior snapshot.
         assert.equal(shouldPersistRestoredPlayerSession(1), false)
         assert.equal(shouldPersistRestoredPlayerSession(2), false)
+    })
+})
+
+describe("shouldAbandonRestoreForConcurrentQueue", () => {
+    it("keeps the player when upcoming tracks were enqueued during resolve", () => {
+        assert.equal(
+            shouldAbandonRestoreForConcurrentQueue({
+                queue: { current: null, tracks: [{ id: "a" }] },
+            }),
+            true
+        )
+    })
+
+    it("keeps the player when a current track is already playing", () => {
+        assert.equal(
+            shouldAbandonRestoreForConcurrentQueue({
+                queue: { current: { id: "now" }, tracks: [] },
+            }),
+            true
+        )
+    })
+
+    it("allows destroy/delete when the hydrate player is still empty", () => {
+        assert.equal(
+            shouldAbandonRestoreForConcurrentQueue({
+                queue: { current: null, tracks: [] },
+            }),
+            false
+        )
+        assert.equal(
+            shouldAbandonRestoreForConcurrentQueue({
+                queue: { tracks: [] },
+            }),
+            false
+        )
     })
 })
