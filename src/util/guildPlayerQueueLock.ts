@@ -163,3 +163,11 @@ export function waitForPendingOrphanDestroyForTests(guildId: string): Promise<vo
 export function hasPendingOrphanDestroyForTests(guildId: string): boolean {
     return pendingOrphanDestroyByGuild.has(guildId)
 }
+
+/** Test-only: seed a pending orphan destroy without going through reservation deferral. */
+export function setPendingOrphanDestroyForTests(
+    guildId: string,
+    hooks: PendingOrphanDestroy
+): void {
+    pendingOrphanDestroyByGuild.set(guildId, hooks)
+}
