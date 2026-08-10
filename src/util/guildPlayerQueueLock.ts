@@ -123,6 +123,14 @@ export async function tryDestroyOrphanGuildPlayer(
             pendingOrphanDestroyByGuild.set(guildId, hooks)
             return
         }
+        const existing = pendingOrphanDestroyByGuild.get(guildId)
+        // Immediate path (count already 0): a naked idle/alone destroy must not discard a
+        // suppress-protected pending teardown racing with runPendingOrphanDestroy.
+        if (existing && !shouldReplacePendingOrphanDestroy(existing, hooks)) {
+            pendingOrphanDestroyByGuild.delete(guildId)
+            await existing.destroyPlayer()
+            return
+        }
         pendingOrphanDestroyByGuild.delete(guildId)
         await hooks.destroyPlayer()
     })

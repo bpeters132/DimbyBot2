@@ -267,6 +267,43 @@ describe("deferred orphan player cleanup", () => {
         assert.equal(ranSuppress, true)
         assert.equal(ranNaked, false)
     })
+
+    it("runs suppress pending when naked idle destroy races after reservations clear", async () => {
+        // Last reservation released (or never held) with suppress still pending; alone/queueEnd
+        // may acquire the lock before runPendingOrphanDestroy and must not run naked destroy.
+        const guildId = "guild-orphan-suppress-immediate-race"
+        let ranSuppress = false
+        let ranNaked = false
+
+        const holder = await acquireGuildPlayerLifecycleReservation(guildId)
+        await tryDestroyOrphanGuildPlayer(guildId, {
+            hasQueueContent: () => false,
+            destroyPlayer: async () => {
+                ranSuppress = true
+            },
+            suppressSessionClear: true,
+        })
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), true)
+
+        // Drop reservation without awaiting the deferred run — naked destroy can win the lock.
+        holder.release()
+
+        await tryDestroyOrphanGuildPlayer(
+            guildId,
+            {
+                hasQueueContent: () => false,
+                destroyPlayer: async () => {
+                    ranNaked = true
+                },
+            },
+            0
+        )
+        await waitForPendingOrphanDestroyForTests(guildId)
+
+        assert.equal(ranSuppress, true)
+        assert.equal(ranNaked, false)
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), false)
+    })
 })
 
 describe("shouldReplacePendingOrphanDestroy", () => {
