@@ -14,7 +14,10 @@ import {
     schedulePlayerSessionSave,
 } from "./playerSessionPersistence.js"
 import { resolvePersistedTracks } from "./playerSessionTracks.js"
-import { withGuildPlayerLifecycleReservation } from "./guildPlayerQueueLock.js"
+import {
+    withGuildPlayerLifecycleReservation,
+    withGuildPlayerQueueLock,
+} from "./guildPlayerQueueLock.js"
 import { countHumanMembers } from "./voiceChannelMembers.js"
 
 /**
@@ -23,6 +26,18 @@ import { countHumanMembers } from "./voiceChannelMembers.js"
  */
 export function shouldPersistRestoredPlayerSession(transientFailures: number): boolean {
     return transientFailures <= 0
+}
+
+/**
+ * True when restore must not destroy the live player / delete the session row because
+ * another request already enqueued content on the player created for hydrate.
+ * `/play` saves are no-ops while restore-in-progress, so destroying here would drop
+ * that live queue with no DB copy.
+ */
+export function shouldAbandonRestoreForConcurrentQueue(player: {
+    queue: { current?: unknown; tracks: { length: number } }
+}): boolean {
+    return Boolean(player.queue.current) || player.queue.tracks.length > 0
 }
 
 let discordReady = false
@@ -179,6 +194,15 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                 )
             }
             if (resolved.length === 0) {
+                // Concurrent /play (or web enqueue) may have filled this player while we resolved.
+                // Saves are blocked during restore-in-progress — destroying would drop that queue.
+                if (shouldAbandonRestoreForConcurrentQueue(player)) {
+                    client.warn(
+                        `[playerSession] restore for ${guildId}: no tracks resolved but live queue has content; keeping player`
+                    )
+                    playerToPersist = player
+                    return
+                }
                 await player.destroy()
                 // Lavalink/source blips that throw during decode/search must not wipe the snapshot.
                 // Deterministic no-match (search returned nothing usable) still deletes.
@@ -195,7 +219,24 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                 return
             }
 
-            await player.queue.add(resolved)
+            const hydrated = await withGuildPlayerQueueLock(guildId, async () => {
+                // User won the race: keep their queue instead of appending the old session.
+                if (shouldAbandonRestoreForConcurrentQueue(player)) {
+                    return false
+                }
+                await player.queue.add(resolved)
+                return true
+            })
+
+            if (!hydrated) {
+                client.warn(
+                    `[playerSession] restore for ${guildId}: skipped hydrate; concurrent queue content present`
+                )
+                playerToPersist = player
+                scheduleControlMessageUpdate(client, guildId)
+                playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
+                return
+            }
 
             if (snapshot.repeatMode !== "off") {
                 await player.setRepeatMode(snapshot.repeatMode)
@@ -230,9 +271,19 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
         client.error(`[playerSession] restore failed for guild ${guildId}: ${msg}`)
         const orphan = client.lavalink.getPlayer(guildId)
         if (orphan) {
-            await orphan.destroy().catch(() => undefined)
+            // Same concurrent-enqueue race as the zero-resolve path: do not destroy live content.
+            if (shouldAbandonRestoreForConcurrentQueue(orphan)) {
+                client.warn(
+                    `[playerSession] restore for ${guildId}: error after concurrent enqueue; keeping player`
+                )
+                playerToPersist = orphan
+            } else {
+                await orphan.destroy().catch(() => undefined)
+                playerToPersist = null
+            }
+        } else {
+            playerToPersist = null
         }
-        playerToPersist = null
         // Transient failures (Lavalink/Discord blips) must not wipe the persisted snapshot.
     } finally {
         clearPlayerSessionRestoreInProgress(guildId)
