@@ -159,6 +159,8 @@ export async function playerPlaylistPlayPOST(
                             client.lavalink.destroyPlayer(guildId)
                         )
                     },
+                    // Keep this pending entry if alone/queueEnd later defers a naked destroy.
+                    suppressSessionClear: true,
                 })
                 return {
                     status: 404,
