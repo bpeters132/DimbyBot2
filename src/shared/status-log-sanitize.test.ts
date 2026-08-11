@@ -53,7 +53,8 @@ describe("sanitizeParsedForLog", () => {
             assert.ok(cursor && typeof cursor === "object")
             cursor = (cursor as Record<string, unknown>).child
         }
-        assert.equal(cursor, "[too_deep]")
+        // Depth cap triggers on the next nested call (depth 11), so the 10th child is still an object.
+        assert.deepEqual(cursor, { child: "[too_deep]" })
     })
 })
 
