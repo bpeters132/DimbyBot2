@@ -17,6 +17,7 @@ import type {
     LocalPlayerState,
     QueryPlayResult,
 } from "../types/index.js"
+import { shouldDeleteLavalinkPlayerAfterDestroy } from "./lavalinkManagerPlayerDelete.js"
 import {
     beginLocalPlaySessionHandoff,
     type LocalPlaySessionHandoff,
@@ -116,16 +117,15 @@ export async function playLocalFile(
                 )
                 await lavalinkPlayer.destroy()
                 client.debug(`[LocalPlayer] Destroyed Lavalink player for guild ${guildId}.`)
-
-                const deleted = client.lavalink.players.delete(guildId)
-                if (deleted) {
-                    client.debug(
-                        `[LocalPlayer] Successfully deleted player from Lavalink manager for guild ${guildId}.`
+                // Lavalink-client already removed this guild from the manager cache before
+                // awaiting node.destroyPlayer. A successful Map.delete here would drop a
+                // concurrent createPlayer successor without destroying it.
+                if (
+                    shouldDeleteLavalinkPlayerAfterDestroy(
+                        client.lavalink.players.has(guildId)
                     )
-                } else {
-                    client.warn(
-                        `[LocalPlayer] Attempted to delete player from Lavalink manager for guild ${guildId}, but it was not found (or delete returned false).`
-                    )
+                ) {
+                    client.lavalink.players.delete(guildId)
                 }
             })
             if (!sessionHandoff.destroyedLavalink) {
