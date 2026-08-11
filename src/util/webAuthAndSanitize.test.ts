@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { authErrorMessage } from "../web/lib/auth-error-message.js"
 import { normalizeSearchParam } from "../web/lib/normalize-search-param.js"
-import { sanitizeErrorText } from "../web/lib/sanitize-log-text.js"
+import { sanitizeErrorText } from "../shared/sanitize-log-text.js"
 
 describe("sanitizeErrorText", () => {
     it("redacts bearer/basic auth, password, and token key=value forms", () => {
