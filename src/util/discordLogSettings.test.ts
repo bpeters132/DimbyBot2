@@ -63,6 +63,7 @@ describe("guildSettingsSaveOptions", () => {
         assert.deepEqual(guildSettingsSaveOptions("g1", before, after, working), {
             deleteGuildIds: ["g1"],
             touchedGuildIds: ["g1"],
+            touchedGuildFields: { g1: ["discordLog"] },
             clearedGuildFields: { g1: ["discordLog"] },
         })
     })
@@ -80,6 +81,7 @@ describe("guildSettingsSaveOptions", () => {
         assert.deepEqual(guildSettingsSaveOptions("g1", before, after, working), {
             deleteGuildIds: [],
             touchedGuildIds: ["g1"],
+            touchedGuildFields: { g1: ["discordLog"] },
         })
         assert.equal(working.discordLog?.allChannelId, "c2")
     })

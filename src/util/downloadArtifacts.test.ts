@@ -79,9 +79,6 @@ describe("downloadArtifacts", () => {
             30_000,
             now
         )
-        assert.deepEqual(
-            aged.map((f) => f.name).sort(),
-            [`${guildId}_old.wav`]
-        )
+        assert.deepEqual(aged.map((f) => f.name).sort(), [`${guildId}_old.wav`])
     })
 })

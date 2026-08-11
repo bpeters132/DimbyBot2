@@ -478,7 +478,6 @@ export type ClearPlayerSessionOptions = {
     destroyReason?: unknown
 }
 
-
 /** Removes a persisted session row (intentional destroy or stale cleanup). */
 export async function clearPlayerSession(
     guildId: string,

@@ -106,10 +106,7 @@ describe("discordRetryAfterMs", () => {
         assert.equal(discordRetryAfterMs({ headers: headers({}) }, "not-json"), 2000)
         assert.equal(discordRetryAfterMs({ headers: headers({}) }, "{}"), 2000)
         assert.equal(
-            discordRetryAfterMs(
-                { headers: headers({}) },
-                JSON.stringify({ retry_after: "soon" })
-            ),
+            discordRetryAfterMs({ headers: headers({}) }, JSON.stringify({ retry_after: "soon" })),
             2000
         )
     })

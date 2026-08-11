@@ -29,10 +29,7 @@ import {
     getDownloadMetadataStore,
     saveDownloadMetadataStore,
 } from "../../util/downloadMetadataStore.js"
-import {
-    buildYtDlpMatchFilter,
-    resolveDownloadsMaxMb,
-} from "../../util/downloadsMaxMb.js"
+import { buildYtDlpMatchFilter, resolveDownloadsMaxMb } from "../../util/downloadsMaxMb.js"
 import {
     DOWNLOAD_PROCESS_TIMEOUT_MS,
     UNTRACKED_DOWNLOAD_ORPHAN_AGE_MS,

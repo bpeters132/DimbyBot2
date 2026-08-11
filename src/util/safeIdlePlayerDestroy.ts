@@ -1,7 +1,4 @@
-import {
-    tryDestroyOrphanGuildPlayer,
-    type PendingOrphanDestroy,
-} from "./guildPlayerQueueLock.js"
+import { tryDestroyOrphanGuildPlayer, type PendingOrphanDestroy } from "./guildPlayerQueueLock.js"
 
 /**
  * Reservation-aware idle/orphan destroy that never rejects to the caller.

@@ -366,28 +366,28 @@ describe("deferred orphan player cleanup", () => {
 
 describe("shouldReplacePendingOrphanDestroy", () => {
     it("keeps suppress pending when a naked destroy arrives", () => {
+        assert.equal(shouldReplacePendingOrphanDestroy({ suppressSessionClear: true }, {}), false)
         assert.equal(
-            shouldReplacePendingOrphanDestroy({ suppressSessionClear: true }, {}),
-            false
-        )
-        assert.equal(
-            shouldReplacePendingOrphanDestroy({ suppressSessionClear: true }, {
-                suppressSessionClear: false,
-            }),
+            shouldReplacePendingOrphanDestroy(
+                { suppressSessionClear: true },
+                {
+                    suppressSessionClear: false,
+                }
+            ),
             false
         )
     })
 
     it("allows suppress to replace naked, and same-kind replacement", () => {
         assert.equal(shouldReplacePendingOrphanDestroy(undefined, {}), true)
+        assert.equal(shouldReplacePendingOrphanDestroy({}, { suppressSessionClear: true }), true)
         assert.equal(
-            shouldReplacePendingOrphanDestroy({}, { suppressSessionClear: true }),
-            true
-        )
-        assert.equal(
-            shouldReplacePendingOrphanDestroy({ suppressSessionClear: true }, {
-                suppressSessionClear: true,
-            }),
+            shouldReplacePendingOrphanDestroy(
+                { suppressSessionClear: true },
+                {
+                    suppressSessionClear: true,
+                }
+            ),
             true
         )
         assert.equal(shouldReplacePendingOrphanDestroy({}, {}), true)

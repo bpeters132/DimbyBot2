@@ -90,9 +90,12 @@ describe("mergeGuildSettingsRow", () => {
         assert.equal(withoutTouch.controlChannelId, "c-stale")
         assert.equal(withoutTouch.controlMessageId, "m-stale")
 
-        const withTouch = mergeGuildSettingsRow(dbAfterUnset, staleFullRowSnapshot, [], [
-            "discordLog",
-        ])
+        const withTouch = mergeGuildSettingsRow(
+            dbAfterUnset,
+            staleFullRowSnapshot,
+            [],
+            ["discordLog"]
+        )
         assert.deepEqual(withTouch, { discordLog: { allChannelId: "log-new" } })
         assert.equal("controlChannelId" in withTouch, false)
     })

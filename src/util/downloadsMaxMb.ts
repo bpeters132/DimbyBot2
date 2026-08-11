@@ -35,9 +35,6 @@ export function isCustomDownloadsMaxMb(configured: unknown): boolean {
  * are never rejected by a tiny quota alone.
  */
 export function buildYtDlpMatchFilter(maxDirSizeMb: number): string {
-    const maxDurationSec = Math.max(
-        60,
-        Math.floor((maxDirSizeMb / APPROX_WAV_MIB_PER_MINUTE) * 60)
-    )
+    const maxDurationSec = Math.max(60, Math.floor((maxDirSizeMb / APPROX_WAV_MIB_PER_MINUTE) * 60))
     return `!is_live & duration <= ${maxDurationSec}`
 }

@@ -8,9 +8,7 @@ export type BotApiActionResult<T> = BotApiActionOk<T> | BotApiActionErr
  * Parses a bot API `Response` into the dashboard action result shape.
  * Fail-closed on empty bodies, invalid JSON, HTTP errors, and success payloads missing `data`.
  */
-export async function parseBotApiActionResponse<T>(
-    res: Response
-): Promise<BotApiActionResult<T>> {
+export async function parseBotApiActionResponse<T>(res: Response): Promise<BotApiActionResult<T>> {
     const text = await res.text()
     if (!text.trim()) {
         return {

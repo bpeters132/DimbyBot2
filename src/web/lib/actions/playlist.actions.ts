@@ -34,9 +34,7 @@ export async function getPlaylistsAction(): Promise<Ok<PlaylistListResponse> | E
     }
 }
 
-export async function getPlaylistAction(
-    playlistId: number
-): Promise<Ok<PlaylistData> | Err> {
+export async function getPlaylistAction(playlistId: number): Promise<Ok<PlaylistData> | Err> {
     try {
         const res = await serverFetchBot(`/api/playlists/${playlistId}`)
         return parseApiResponse<PlaylistData>(res)
@@ -96,10 +94,9 @@ export async function removeTrackFromPlaylistAction(
     trackId: number
 ): Promise<Ok<{ removed: true }> | Err> {
     try {
-        const res = await serverFetchBot(
-            `/api/playlists/${playlistId}/tracks/${trackId}`,
-            { method: "DELETE" }
-        )
+        const res = await serverFetchBot(`/api/playlists/${playlistId}/tracks/${trackId}`, {
+            method: "DELETE",
+        })
         return parseApiResponse<{ removed: true }>(res)
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to remove track."
@@ -164,8 +161,7 @@ export async function playPlaylistInGuildAction(
         if (parsed.ok === false && res.status === 504) {
             return {
                 ok: false,
-                error:
-                    "The playlist is still loading on the bot but the dashboard timed out. Check the queue — tracks may appear shortly.",
+                error: "The playlist is still loading on the bot but the dashboard timed out. Check the queue — tracks may appear shortly.",
             }
         }
         return parsed

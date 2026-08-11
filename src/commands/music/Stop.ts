@@ -69,8 +69,8 @@ export default {
         if (lavalinkPlayer) {
             const hadContent = Boolean(
                 lavalinkPlayer.playing ||
-                    lavalinkPlayer.queue.current ||
-                    lavalinkPlayer.queue.tracks.length > 0
+                lavalinkPlayer.queue.current ||
+                lavalinkPlayer.queue.tracks.length > 0
             )
             // Must await: floating destroy() rejections become unhandledRejection (process exit on Node 24).
             // Also ensures playerDestroy → clearPlayerSession bumps the session epoch before this

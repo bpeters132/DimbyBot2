@@ -11,7 +11,10 @@ const MIN_BOT_API_TIMEOUT_MS = 1_000
 export function resolveFetchTimeoutMs(timeoutMs?: number): number {
     if (timeoutMs === undefined) return DEFAULT_UPSTREAM_FETCH_TIMEOUT_MS
     if (!Number.isFinite(timeoutMs)) return DEFAULT_UPSTREAM_FETCH_TIMEOUT_MS
-    return Math.min(Math.max(Math.floor(timeoutMs), MIN_BOT_API_TIMEOUT_MS), MAX_UPSTREAM_FETCH_TIMEOUT_MS)
+    return Math.min(
+        Math.max(Math.floor(timeoutMs), MIN_BOT_API_TIMEOUT_MS),
+        MAX_UPSTREAM_FETCH_TIMEOUT_MS
+    )
 }
 
 /**

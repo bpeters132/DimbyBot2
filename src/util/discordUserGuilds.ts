@@ -136,9 +136,12 @@ function writeSuccessCache(accessToken: string, guilds: DiscordUserGuild[]): voi
 /**
  * Discord 429 responses include `Retry-After` (seconds) and/or a JSON body with `retry_after` (seconds).
  */
-export function discordRetryAfterMs(response: {
-    headers: { get(name: string): string | null }
-}, bodyText: string): number {
+export function discordRetryAfterMs(
+    response: {
+        headers: { get(name: string): string | null }
+    },
+    bodyText: string
+): number {
     const header = response.headers.get("retry-after")
     if (header) {
         const sec = Number.parseFloat(header.trim())

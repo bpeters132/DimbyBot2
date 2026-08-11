@@ -28,7 +28,10 @@ describe("parseBotApiActionResponse", () => {
         })
 
         const badJson = await parseBotApiActionResponse(
-            new Response("{not-json", { status: 200, headers: { "content-type": "application/json" } })
+            new Response("{not-json", {
+                status: 200,
+                headers: { "content-type": "application/json" },
+            })
         )
         assert.deepEqual(badJson, { ok: false, error: "Invalid JSON from bot API." })
     })

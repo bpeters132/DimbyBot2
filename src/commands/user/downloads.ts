@@ -27,7 +27,6 @@ import {
     UNTRACKED_DOWNLOAD_ORPHAN_AGE_MS,
 } from "../../util/downloadArtifacts.js"
 
-
 /**
  * Resolves the configured downloads size limit for a guild.
  * Invalid/zero/negative settings fall back via {@link resolveDownloadsMaxMb}.
@@ -336,9 +335,10 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     .map(([key]) => parseDownloadMetadataStoreKey(key).fileName)
             )
             const orphanCandidates = removeAll
-                ? listDownloadFilesWithPrefix(downloadsDir, guildDownloadFilePrefix(guildId)).filter(
-                      (f) => !trackedNames.has(f.name)
-                  )
+                ? listDownloadFilesWithPrefix(
+                      downloadsDir,
+                      guildDownloadFilePrefix(guildId)
+                  ).filter((f) => !trackedNames.has(f.name))
                 : listAgedUntrackedGuildDownloadFiles(
                       downloadsDir,
                       guildId,

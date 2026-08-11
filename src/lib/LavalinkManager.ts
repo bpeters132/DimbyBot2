@@ -30,10 +30,7 @@ import {
 import { updateControlMessage } from "../events/handlers/handleControlChannel.js"
 import { getGuildSettings } from "../util/saveControlChannel.js"
 import { withGuildPlayerQueueLock } from "../util/guildPlayerQueueLock.js"
-import {
-    isRRQActive,
-    rebalancePlayerQueueRoundRobinAssumingLock,
-} from "../util/rrqDisconnect.js"
+import { isRRQActive, rebalancePlayerQueueRoundRobinAssumingLock } from "../util/rrqDisconnect.js"
 import type BotClient from "./BotClient.js"
 
 async function searchFirstPlayableTrack(

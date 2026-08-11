@@ -25,9 +25,10 @@ function mockTextChannel(opts: {
     inCache?: boolean
     fetchFails?: boolean
 }) {
-    const allowed =
-        opts.allowed ??
-        [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]
+    const allowed = opts.allowed ?? [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.SendMessages,
+    ]
     const ch = {
         id: opts.id,
         isThread: () => Boolean(opts.isThread),

@@ -1,9 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import {
-    readBotApiProxyTimeoutMs,
-    resolveFetchTimeoutMs,
-} from "../web/lib/bot-api-timeout.js"
+import { readBotApiProxyTimeoutMs, resolveFetchTimeoutMs } from "../web/lib/bot-api-timeout.js"
 
 describe("resolveFetchTimeoutMs", () => {
     it("defaults missing and non-finite values to 10s", () => {
