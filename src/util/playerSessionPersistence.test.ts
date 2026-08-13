@@ -6,6 +6,7 @@ import {
     clearPlayerSession,
     clearPlayerSessionRestoreInProgress,
     destroyPlayerSuppressingSessionClear,
+    forceClearPlayerSession,
     getSessionClearEpochForTests,
     markPlayerSessionRestoreInProgress,
     setPlayerSessionPersistenceDbForTests,
@@ -216,6 +217,61 @@ describe("shouldSkipPlayerSessionClear", () => {
         // Simulate playerDestroy → clearPlayerSession consuming the lease.
         await clearPlayerSession("guild-ok")
         assert.equal(shouldSkipPlayerSessionClear("guild-ok"), false)
+    })
+})
+
+describe("forceClearPlayerSession", () => {
+    afterEach(() => {
+        clearPlayerSessionRestoreInProgress("guild-force-restore")
+        setPlayerSessionPersistenceDbForTests(null)
+    })
+
+    it("deletes and bumps epoch while restore-in-progress (Leave must not resurrect)", async () => {
+        const guildId = "guild-force-restore"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        markPlayerSessionRestoreInProgress(guildId)
+        const epochBefore = getSessionClearEpochForTests(guildId)
+
+        // Normal clear is skipped during restore (orphan destroy / empty hydrate).
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, [])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore)
+
+        // Intentional /leave must still wipe the row.
+        await forceClearPlayerSession(guildId)
+        assert.deepEqual(events, ["delete"])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
+        assert.equal(shouldSkipPlayerSessionClear(guildId), true) // restore flag still set
+    })
+
+    it("drops suppress leases so they cannot mask a later clear", async () => {
+        const guildId = "guild-force-suppress"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        acquirePlayerSessionClearSuppressLease(guildId)
+        acquirePlayerSessionClearSuppressLease(guildId)
+        assert.equal(shouldSkipPlayerSessionClear(guildId), true)
+
+        await forceClearPlayerSession(guildId)
+        assert.deepEqual(events, ["delete"])
+        assert.equal(shouldSkipPlayerSessionClear(guildId), false)
     })
 })
 

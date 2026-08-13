@@ -2,7 +2,12 @@ import { SlashCommandBuilder, type Message } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
-import { memberMayControlPlayerVoice } from "../../util/sameVoiceChannel.js"
+import { stopLocalPlayer, getLocalPlayerState } from "../../util/localPlayer.js"
+import { forceClearPlayerSession } from "../../util/playerSessionPersistence.js"
+import {
+    memberMayJoinOccupiedVoice,
+    resolveOccupiedVoiceChannelId,
+} from "../../util/sameVoiceChannel.js"
 
 const DELETE_REPLY_DELAY_MS = 1000 * 10
 const DELETE_REPLY_RETRY_MS = 2000
@@ -26,7 +31,10 @@ function deleteWithRetry(msg: Message, client: BotClient) {
 
 export default {
     data: new SlashCommandBuilder().setName("leave").setDescription("Tell the bot to leave"),
-    /** Disconnects the bot from voice and tears down the Lavalink player for this guild. */
+    /**
+     * Disconnects the bot from voice and tears down Lavalink and/or local playback.
+     * Force-clears the persisted session so a mid-restore leave cannot resurrect the queue.
+     */
     async execute(interaction: ChatInputCommandInteraction, client: BotClient): Promise<unknown> {
         const guild = interaction.guild
         if (!guild) {
@@ -40,7 +48,6 @@ export default {
             })
         }
 
-        // Check if user is in a voice channel
         const voiceChannel = member.voice.channel
         if (!voiceChannel) {
             client.debug("Leave command failed: User not in a voice channel")
@@ -53,34 +60,44 @@ export default {
         client.debug(`User ${interaction.user.tag} is in voice channel ${voiceChannel.id}`)
 
         const player = client.lavalink.players.get(guild.id)
+        // Prefer live Discord VC so local (@discordjs/voice) playback is gated correctly
+        // when the Lavalink player was destroyed for handoff.
+        const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, player)
+        if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
+            return interaction.reply({
+                content: "You need to be in the same voice channel as the bot!",
+                ephemeral: true,
+            })
+        }
+
+        await interaction.deferReply()
+
+        let stoppedLocal = false
+        const localState = getLocalPlayerState(guild.id)
+        if (localState != null) {
+            if (stopLocalPlayer(client, guild.id)) {
+                client.debug(`[LeaveCmd] Stopped local player for guild ${guild.id}`)
+                stoppedLocal = true
+            }
+        }
 
         if (!player) {
-            // Check if player exists at all
             client.debug(
-                `Leave command check: No player found for guild ${guild.id}. Checking bot's voice state.`
+                `Leave command check: No Lavalink player for guild ${guild.id}. Checking bot voice / local cleanup.`
             )
-            // Optional: Check if the bot *thinks* it's in a channel anyway (e.g., after a crash)
             const botVoiceState = guild.members.me?.voice
-            if (botVoiceState?.channel) {
-                if (!memberMayControlPlayerVoice(botVoiceState.channel.id, voiceChannel.id)) {
-                    return interaction.reply({
-                        content: "You need to be in the same voice channel as the bot!",
-                        ephemeral: true,
-                    })
-                }
-                await interaction.deferReply()
-                client.debug(
-                    `Bot is in voice channel ${botVoiceState.channel.id}. Attempting to leave.`
-                )
+            if (stoppedLocal || botVoiceState?.channel) {
                 try {
-                    await client.lavalink.destroyPlayer(guild.id)
+                    // No-op when already gone; still force-clear in case restore left a row.
+                    await client.lavalink.destroyPlayer(guild.id).catch(() => undefined)
+                    await forceClearPlayerSession(guild.id)
                     await interaction.editReply({ content: "Left the voice channel." })
                     const msg = await interaction.fetchReply()
-                    client.debug("Successfully left voice channel via destroyPlayer.")
+                    client.debug("Successfully left voice channel (local and/or orphan VC).")
                     deleteWithRetry(msg, client)
                 } catch (error) {
                     client.error(
-                        "Error trying to leave voice channel without active player:",
+                        "Error trying to leave voice channel without active Lavalink player:",
                         error
                     )
                     await interaction.editReply(
@@ -89,23 +106,12 @@ export default {
                 }
             } else {
                 client.debug("Bot is not in a voice channel. Replying 'nothing to leave'.")
-                await interaction.reply({
+                await interaction.editReply({
                     content: "I'm not in a voice channel!",
-                    ephemeral: true,
                 })
             }
             return
         }
-
-        if (!memberMayControlPlayerVoice(player.voiceChannelId, voiceChannel.id)) {
-            return interaction.reply({
-                content: "You need to be in the same voice channel as the bot!",
-                ephemeral: true,
-            })
-        }
-
-        await interaction.deferReply()
-        client.debug("Leave command deferred reply")
 
         client.debug(
             `Found player for guild ${guild.id}. Connected: ${player.connected}, Playing: ${player.playing}`
@@ -114,8 +120,10 @@ export default {
         client.debug(`Destroying player for guild ${guild.id}`)
         try {
             await player.destroy()
+            // playerDestroy → clearPlayerSession is skipped while restore-in-progress;
+            // force-clear so an intentional leave cannot resurrect on the next reconnect.
+            await forceClearPlayerSession(guild.id)
             client.debug(`Player destroyed for guild ${guild.id}`)
-            // Use fetchReply to get the message object
             await interaction.editReply({ content: "BYE!" })
             const msg = await interaction.fetchReply()
             client.debug("Leave command successfully executed")

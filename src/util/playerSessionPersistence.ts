@@ -383,6 +383,28 @@ export function shouldClearPlayerSessionOnDestroy(reason: unknown): boolean {
     return !PRESERVE_SESSION_DESTROY_REASONS.has(reason)
 }
 
+/**
+ * Deletes the session row and bumps clear/persist epochs so in-flight saves cannot
+ * resurrect it. Shared by {@link clearPlayerSession} and {@link forceClearPlayerSession}.
+ */
+async function deletePlayerSessionRow(guildId: string): Promise<void> {
+    // Bump before awaiting the persistence lock so immediately following saves capture the new epoch.
+    bumpSessionClearEpoch(guildId)
+    // Invalidate in-flight write undos so they cannot delete a row rewritten after this clear.
+    bumpSessionPersistGeneration(guildId)
+
+    const timer = pendingSaveTimers.get(guildId)
+    if (timer) {
+        clearTimeout(timer)
+        pendingSaveTimers.delete(guildId)
+    }
+    pendingPlayers.delete(guildId)
+
+    await withGuildPersistenceLock(guildId, async () => {
+        await persistenceDb.deletePlayerSession(guildId)
+    })
+}
+
 /** Removes a persisted session row (intentional destroy or stale cleanup). */
 export async function clearPlayerSession(guildId: string): Promise<void> {
     // Evaluate preserve/skip before bumping the clear epoch or cancelling pending saves.
@@ -401,19 +423,19 @@ export async function clearPlayerSession(guildId: string): Promise<void> {
         return
     }
 
-    // Bump before awaiting the persistence lock so immediately following saves capture the new epoch.
-    bumpSessionClearEpoch(guildId)
-    // Invalidate in-flight write undos so they cannot delete a row rewritten after this clear.
-    bumpSessionPersistGeneration(guildId)
+    await deletePlayerSessionRow(guildId)
+}
 
-    const timer = pendingSaveTimers.get(guildId)
-    if (timer) {
-        clearTimeout(timer)
-        pendingSaveTimers.delete(guildId)
-    }
-    pendingPlayers.delete(guildId)
-
-    await withGuildPersistenceLock(guildId, async () => {
-        await persistenceDb.deletePlayerSession(guildId)
-    })
+/**
+ * Intentional user teardown (/leave) must delete the session even when restore-in-progress
+ * or an ephemeral suppress lease would make {@link clearPlayerSession} a no-op.
+ * Without this, `/leave` during session restore confirms leave but the queue resurrects
+ * on the next Lavalink reconnect.
+ * Still no-ops while shutting down so SIGTERM flush rows are not wiped by a racing leave.
+ */
+export async function forceClearPlayerSession(guildId: string): Promise<void> {
+    if (persistenceShuttingDown) return
+    // Drop any suppress leases for this guild so they cannot mask a later clear.
+    suppressLeaseCountByGuild.delete(guildId)
+    await deletePlayerSessionRow(guildId)
 }
