@@ -478,6 +478,22 @@ export type ClearPlayerSessionOptions = {
     destroyReason?: unknown
 }
 
+/**
+ * Deletes the session row and bumps clear/persist epochs so in-flight saves cannot
+ * resurrect it. Shared by {@link clearPlayerSession} and {@link forceClearPlayerSession}.
+ */
+async function deletePlayerSessionRow(guildId: string): Promise<void> {
+    // Bump before awaiting the persistence lock so immediately following saves capture the new epoch.
+    bumpSessionClearEpoch(guildId)
+    // Invalidate in-flight write undos so they cannot delete a row rewritten after this clear.
+    bumpSessionPersistGeneration(guildId)
+    cancelPendingPlayerSessionSave(guildId)
+
+    await withGuildPersistenceLock(guildId, async () => {
+        await persistenceDb.deletePlayerSession(guildId)
+    })
+}
+
 /** Removes a persisted session row (intentional destroy or stale cleanup). */
 export async function clearPlayerSession(
     guildId: string,
@@ -517,14 +533,22 @@ export async function clearPlayerSession(
         clearPlayerSessionPreservePriorSnapshot(guildId)
     }
 
-    // Bump before awaiting the persistence lock so immediately following saves capture the new epoch.
-    bumpSessionClearEpoch(guildId)
-    // Invalidate in-flight write undos so they cannot delete a row rewritten after this clear.
-    bumpSessionPersistGeneration(guildId)
+    await deletePlayerSessionRow(guildId)
+}
 
-    cancelPendingPlayerSessionSave(guildId)
-
-    await withGuildPersistenceLock(guildId, async () => {
-        await persistenceDb.deletePlayerSession(guildId)
-    })
+/**
+ * Intentional user teardown (/leave) must delete the session even when restore-in-progress
+ * or an ephemeral suppress lease would make {@link clearPlayerSession} a no-op.
+ * Without this, `/leave` during session restore confirms leave but the queue resurrects
+ * on the next Lavalink reconnect.
+ * Still no-ops while shutting down so SIGTERM flush rows are not wiped by a racing leave.
+ */
+export async function forceClearPlayerSession(guildId: string): Promise<void> {
+    if (persistenceShuttingDown) return
+    // Drop any suppress leases for this guild so they cannot mask a later clear.
+    suppressLeaseCountByGuild.delete(guildId)
+    if (shouldPreservePriorPlayerSessionSnapshot(guildId)) {
+        clearPlayerSessionPreservePriorSnapshot(guildId)
+    }
+    await deletePlayerSessionRow(guildId)
 }
