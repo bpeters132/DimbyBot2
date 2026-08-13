@@ -88,8 +88,8 @@ export default {
             const botVoiceState = guild.members.me?.voice
             if (stoppedLocal || botVoiceState?.channel) {
                 try {
-                    // No-op when already gone; still force-clear in case restore left a row.
-                    await client.lavalink.destroyPlayer(guild.id).catch(() => undefined)
+                    // May return undefined when no player exists — do not call .catch on it.
+                    await client.lavalink.destroyPlayer(guild.id)
                     await forceClearPlayerSession(guild.id)
                     await interaction.editReply({ content: "Left the voice channel." })
                     const msg = await interaction.fetchReply()
