@@ -2,13 +2,8 @@ import { SlashCommandBuilder } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
-import {
-    isRRQActive,
-    rebalancePlayerQueueRoundRobinAssumingLock,
-    stampRequesterUserIdOnTracks,
-} from "../../util/rrqDisconnect.js"
-import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
-import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
+import { enqueuePlayNextTrackAssumingSearchDone } from "../../util/playNextEnqueue.js"
+import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -56,31 +51,54 @@ export default {
 
         await interaction.deferReply({ ephemeral: true })
 
-        const res = await player.search(query, { requester: interaction.user })
-
-        if (!res || !res.tracks?.length) {
-            return interaction.editReply({
-                content: "No tracks found or an error occurred.",
-            })
-        }
-
-        if (res.loadType === "playlist") {
-            return interaction.editReply({
-                content: "Playlists are not supported for this command.",
-            })
-        }
-
-        const track = res.tracks[0]
-        stampRequesterUserIdOnTracks([track], interaction.user.id)
-        await withGuildPlayerQueueLock(guild.id, async () => {
-            player.queue.add(track, 0)
-            if (isRRQActive(player)) {
-                await rebalancePlayerQueueRoundRobinAssumingLock(player)
+        // Hold a lifecycle reservation across search → enqueue so queueEnd/orphan idle
+        // destroy cannot tear down the player mid-search (unlike /play, this path previously
+        // had no reservation and could enqueue onto a destroyed Player after a false success).
+        return withGuildPlayerLifecycleReservation(guild.id, async () => {
+            const searchPlayer = client.lavalink.getPlayer(guild.id)
+            if (!searchPlayer) {
+                return interaction.editReply({
+                    content: "The player stopped before the search finished. Try again.",
+                })
             }
-            schedulePlayerSessionSave(player)
+
+            let res
+            try {
+                res = await searchPlayer.search(query, { requester: interaction.user })
+            } catch (e: unknown) {
+                client.error("[PlayNextCmd] search failed:", e)
+                return interaction.editReply({
+                    content: "Search failed. Try again in a moment.",
+                })
+            }
+
+            if (!res || !res.tracks?.length) {
+                return interaction.editReply({
+                    content: "No tracks found or an error occurred.",
+                })
+            }
+
+            if (res.loadType === "playlist") {
+                return interaction.editReply({
+                    content: "Playlists are not supported for this command.",
+                })
+            }
+
+            const track = res.tracks[0]
+            const outcome = await enqueuePlayNextTrackAssumingSearchDone(
+                () => client.lavalink.getPlayer(guild.id),
+                guild.id,
+                track,
+                interaction.user.id
+            )
+            if (outcome === "no_player") {
+                return interaction.editReply({
+                    content: "The player stopped before the track could be queued. Try again.",
+                })
+            }
+            return interaction.editReply(
+                `Added [${track.info.title}](${track.info.uri}) to the top of the queue.`
+            )
         })
-        return interaction.editReply(
-            `Added [${track.info.title}](${track.info.uri}) to the top of the queue.`
-        )
     },
 }
