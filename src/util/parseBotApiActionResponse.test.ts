@@ -34,6 +34,25 @@ describe("parseBotApiActionResponse", () => {
             })
         )
         assert.deepEqual(badJson, { ok: false, error: "Invalid JSON from bot API." })
+
+        const nullRoot = await parseBotApiActionResponse(
+            new Response("null", {
+                status: 200,
+                headers: { "content-type": "application/json" },
+            })
+        )
+        assert.deepEqual(nullRoot, { ok: false, error: "Invalid response from bot API." })
+
+        const arrayRoot = await parseBotApiActionResponse(
+            new Response("[]", {
+                status: 502,
+                headers: { "content-type": "application/json" },
+            })
+        )
+        assert.deepEqual(arrayRoot, {
+            ok: false,
+            error: "Request failed (502): invalid response.",
+        })
     })
 
     it("surfaces HTTP error details when present", async () => {

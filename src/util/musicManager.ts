@@ -661,16 +661,19 @@ export async function handleQueryAndPlay(
                             feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`
                         }
                     }
-
-                    client.debug(
-                        `[MusicManager] Before play check: player.playing=${player.playing}, player.queue.tracks.length=${player.queue.tracks.length}`
-                    )
-                    await startPlaybackIfNeeded(player)
-                    schedulePlayerSessionSave(player)
-                    client.debug(
-                        `[MusicManager] Lavalink player started playing [${player.queue.current?.info?.title || "track from queue"}].`
-                    )
                 })
+
+                // Play outside the queue lock so trackError → safeIdlePlayerDestroy cannot
+                // nest on the same non-reentrant guild chain. startPlaybackIfNeeded rechecks
+                // queue state and serializes per-player starts.
+                client.debug(
+                    `[MusicManager] Before play check: player.playing=${player.playing}, player.queue.tracks.length=${player.queue.tracks.length}`
+                )
+                await startPlaybackIfNeeded(player)
+                schedulePlayerSessionSave(player)
+                client.debug(
+                    `[MusicManager] Lavalink player started playing [${player.queue.current?.info?.title || "track from queue"}].`
+                )
             } catch (playError: unknown) {
                 if (previousVoiceChannelIdBeforeEnsure !== null) {
                     player.voiceChannelId = previousVoiceChannelIdBeforeEnsure

@@ -26,7 +26,9 @@ export function readBotApiProxyTimeoutMs(
 ): number {
     const raw = envValue?.trim()
     if (!raw) return DEFAULT_BOT_API_PROXY_TIMEOUT_MS
-    const n = Number.parseInt(raw, 10)
+    // Reject partial numbers like "4000ms" — Number.parseInt would accept them.
+    if (!/^-?\d+(\.\d+)?$/.test(raw)) return DEFAULT_BOT_API_PROXY_TIMEOUT_MS
+    const n = Number(raw)
     if (!Number.isFinite(n)) return DEFAULT_BOT_API_PROXY_TIMEOUT_MS
-    return Math.min(Math.max(n, MIN_BOT_API_TIMEOUT_MS), MAX_BOT_API_PROXY_TIMEOUT_MS)
+    return Math.min(Math.max(Math.floor(n), MIN_BOT_API_TIMEOUT_MS), MAX_BOT_API_PROXY_TIMEOUT_MS)
 }

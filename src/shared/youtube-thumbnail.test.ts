@@ -21,6 +21,10 @@ describe("thumbnailUrlFromUri", () => {
         assert.equal(thumbnailUrlFromUri("   "), null)
         assert.equal(thumbnailUrlFromUri("https://open.spotify.com/track/abc"), null)
         assert.equal(thumbnailUrlFromUri("https://www.youtube.com/watch?v=short"), null)
+        assert.equal(
+            thumbnailUrlFromUri("https://evil.example/?q=https://youtu.be/dQw4w9WgXcQ"),
+            null
+        )
     })
 })
 

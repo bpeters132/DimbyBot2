@@ -1,4 +1,5 @@
 import type { GuildListItem, GuildListPlayerSummary } from "../types/web.js"
+import { normalizeOptionalDiscordSnowflake } from "./discord-snowflake.js"
 
 /** Parses a loose player summary from API JSON; rejects invalid status/queueCount. */
 export function parseGuildListPlayerSummary(raw: unknown): GuildListPlayerSummary | null {
@@ -38,8 +39,8 @@ export function parseSafeGuildListItem(entry: unknown): GuildListItem | null {
     const name = g.name.trim()
     const idRaw = g.id
     if (typeof idRaw !== "string") return null
-    const idStr = idRaw.trim()
-    if (!/^\d+$/.test(idStr)) return null
+    const idStr = normalizeOptionalDiscordSnowflake(idRaw)
+    if (idStr === null) return null
     const iconRaw = g.iconUrl
     const iconUrl = typeof iconRaw === "string" ? iconRaw.trim() : null
     const mc = g.memberCount

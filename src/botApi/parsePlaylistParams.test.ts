@@ -15,7 +15,7 @@ describe("parseStrictPositiveInt", () => {
         assert.equal(parseStrictPositiveInt(" 99 "), 99)
     })
 
-    it("rejects zero, negatives, floats, leading zeros, and junk", () => {
+    it("rejects zero, negatives, floats, leading zeros, junk, and unsafe integers", () => {
         assert.equal(parseStrictPositiveInt("0"), null)
         assert.equal(parseStrictPositiveInt("-1"), null)
         assert.equal(parseStrictPositiveInt("1.5"), null)
@@ -23,6 +23,8 @@ describe("parseStrictPositiveInt", () => {
         assert.equal(parseStrictPositiveInt(""), null)
         assert.equal(parseStrictPositiveInt("1e2"), null)
         assert.equal(parseStrictPositiveInt("abc"), null)
+        assert.equal(parseStrictPositiveInt("9007199254740992"), null)
+        assert.equal(parseStrictPositiveInt(String(Number.MAX_SAFE_INTEGER + 1)), null)
     })
 })
 
@@ -42,11 +44,12 @@ describe("parseNewPosition", () => {
         assert.equal(parseNewPosition("5"), 5)
     })
 
-    it("rejects floats, zero, negatives, and non-numeric values", () => {
+    it("rejects floats, zero, negatives, unsafe integers, and non-numeric values", () => {
         assert.equal(parseNewPosition(1.5), null)
         assert.equal(parseNewPosition(0), null)
         assert.equal(parseNewPosition(-1), null)
         assert.equal(parseNewPosition("01"), null)
+        assert.equal(parseNewPosition(Number.MAX_SAFE_INTEGER + 1), null)
         assert.equal(parseNewPosition(null), null)
         assert.equal(parseNewPosition(undefined), null)
         assert.equal(parseNewPosition({}), null)
@@ -79,6 +82,14 @@ describe("parseTrackBody", () => {
         const parsed = parseTrackBody({ ...valid, author: "   ", thumbnailUrl: "  " })
         assert.equal(parsed?.author, "Unknown")
         assert.equal(parsed?.thumbnailUrl, null)
+    })
+
+    it("returns a trimmed addedAt value", () => {
+        const parsed = parseTrackBody({
+            ...valid,
+            addedAt: "  2026-01-02T03:04:05.000Z  ",
+        })
+        assert.equal(parsed?.addedAt, "2026-01-02T03:04:05.000Z")
     })
 
     it("rejects missing title/uri, bad duration, and invalid dates", () => {

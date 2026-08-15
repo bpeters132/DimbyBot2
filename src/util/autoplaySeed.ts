@@ -80,12 +80,13 @@ export function isAllowedSearchLoadType(
 }
 
 /**
- * True when autoplay may enqueue the next track: flag on, nothing current/queued, and not already playing.
+ * True when autoplay may enqueue the next track: flag on, nothing current/queued, and not already playing or paused.
  */
 export function shouldStillInjectAutoplayTrack(player: Player): boolean {
     if (!player.get("autoplay")) return false
     if ((player.queue?.tracks?.length ?? 0) > 0) return false
     if (player.queue?.current) return false
     if (player.playing) return false
+    if (player.paused) return false
     return true
 }

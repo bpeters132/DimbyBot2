@@ -14,6 +14,10 @@ export async function safeIdlePlayerDestroy(
     try {
         await tryDestroyOrphanGuildPlayer(guildId, hooks, 0)
     } catch (err: unknown) {
-        onError(err)
+        try {
+            onError(err)
+        } catch {
+            // Preserve the non-rejection contract even when onError throws.
+        }
     }
 }

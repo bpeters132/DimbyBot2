@@ -2,12 +2,12 @@ import type { AddPlaylistTrackBody } from "../types/web.js"
 
 const STRICT_POSITIVE_INT = /^[1-9]\d*$/
 
-/** Parses a decimal integer ≥ 1; rejects leading zeros, signs, and floats. */
+/** Parses a decimal integer ≥ 1; rejects leading zeros, signs, floats, and unsafe integers. */
 export function parseStrictPositiveInt(value: string): number | null {
     const trimmed = value.trim()
     if (!STRICT_POSITIVE_INT.test(trimmed)) return null
     const n = Number.parseInt(trimmed, 10)
-    if (!Number.isFinite(n) || n < 1) return null
+    if (!Number.isSafeInteger(n) || n < 1) return null
     return n
 }
 
@@ -27,7 +27,7 @@ export function parsePosition(position: string): number | null {
  */
 export function parseNewPosition(raw: unknown): number | null {
     if (typeof raw === "number") {
-        if (!Number.isInteger(raw) || raw < 1) return null
+        if (!Number.isSafeInteger(raw) || raw < 1) return null
         return raw
     }
     if (typeof raw === "string") {
@@ -46,8 +46,10 @@ export function parseTrackBody(raw: unknown): AddPlaylistTrackBody | null {
     if (typeof b.duration !== "number" || !Number.isFinite(b.duration) || b.duration < 0) {
         return null
     }
-    if (typeof b.addedAt !== "string" || !b.addedAt.trim()) return null
-    const added = new Date(b.addedAt)
+    if (typeof b.addedAt !== "string") return null
+    const addedAt = b.addedAt.trim()
+    if (!addedAt) return null
+    const added = new Date(addedAt)
     if (Number.isNaN(added.getTime())) return null
     const thumbnailUrl =
         typeof b.thumbnailUrl === "string" && b.thumbnailUrl.trim() ? b.thumbnailUrl.trim() : null
@@ -57,6 +59,6 @@ export function parseTrackBody(raw: unknown): AddPlaylistTrackBody | null {
         author: b.author.trim() || "Unknown",
         duration: Math.floor(b.duration),
         thumbnailUrl,
-        addedAt: b.addedAt,
+        addedAt,
     }
 }

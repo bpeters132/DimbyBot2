@@ -53,22 +53,22 @@ describe("isCustomDownloadsMaxMb", () => {
 
 describe("buildYtDlpMatchFilter", () => {
     it("rejects live streams and caps duration from the guild quota", () => {
-        // 1000 MiB / 10 MiB/min → 100 min → 6000s
+        // 1000 MiB / 12 MiB/min → ~83.33 min → 5000s
         assert.equal(
             buildYtDlpMatchFilter(1000),
             `!is_live & duration <= ${Math.floor((1000 / APPROX_WAV_MIB_PER_MINUTE) * 60)}`
         )
-        assert.equal(buildYtDlpMatchFilter(1000), "!is_live & duration <= 6000")
+        assert.equal(buildYtDlpMatchFilter(1000), "!is_live & duration <= 5000")
     })
 
     it("floors duration at 60s so tiny quotas still allow short clips", () => {
-        // 1 MiB would be 6s without the floor
+        // 1 MiB would be 5s without the floor
         assert.equal(buildYtDlpMatchFilter(1), "!is_live & duration <= 60")
         assert.equal(buildYtDlpMatchFilter(0.5), "!is_live & duration <= 60")
     })
 
     it("scales linearly above the floor", () => {
-        // 50 MiB → 5 min → 300s
-        assert.equal(buildYtDlpMatchFilter(50), "!is_live & duration <= 300")
+        // 60 MiB / 12 MiB/min → 5 min → 300s
+        assert.equal(buildYtDlpMatchFilter(60), "!is_live & duration <= 300")
     })
 })

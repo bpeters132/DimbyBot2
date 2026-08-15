@@ -24,6 +24,8 @@ describe("parseAdminErrorsLimit", () => {
         assert.equal(parseAdminErrorsLimit(null), 100)
         assert.equal(parseAdminErrorsLimit(""), 100)
         assert.equal(parseAdminErrorsLimit("abc"), 100)
+        assert.equal(parseAdminErrorsLimit("250junk"), 100)
+        assert.equal(parseAdminErrorsLimit("1e3"), 100)
     })
 
     it("clamps to 1…500 so oversized limits cannot dump the full buffer unboundedly", () => {

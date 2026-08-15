@@ -29,6 +29,14 @@ export async function parseBotApiActionResponse<T>(res: Response): Promise<BotAp
                 : `Request failed (${res.status}): invalid JSON.`,
         }
     }
+    if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+        return {
+            ok: false,
+            error: res.ok
+                ? "Invalid response from bot API."
+                : `Request failed (${res.status}): invalid response.`,
+        }
+    }
     if (!res.ok) {
         if (payload.ok === false && payload.error && typeof payload.error === "object") {
             const errObj = payload.error as { error?: string; details?: string }

@@ -48,4 +48,23 @@ describe("sanitizeAuditDetails", () => {
         assert.equal(sanitized.message, "boom")
         assert.equal(typeof sanitized.stack === "string" || sanitized.stack === undefined, true)
     })
+
+    it("redacts secrets in Error message and stack before logging", () => {
+        const err = new Error('Bearer leaked-token access_token=abc123 {"access_token":"tok"}')
+        err.name = "SecretError"
+        err.stack = `SecretError: Bearer leaked-token\n    at handler (x.ts:1:1)`
+        const sanitized = sanitizeAuditDetails(err) as {
+            name: string
+            message: string
+            stack?: string
+        }
+        assert.equal(sanitized.name, "SecretError")
+        assert.match(sanitized.message, /Bearer \[redacted\]/)
+        assert.match(sanitized.message, /access_token=\[redacted\]/)
+        assert.match(sanitized.message, /"access_token":"\[redacted]"/)
+        assert.doesNotMatch(sanitized.message, /leaked-token|abc123|"tok"/)
+        assert.ok(sanitized.stack)
+        assert.match(sanitized.stack!, /Bearer \[redacted\]/)
+        assert.doesNotMatch(sanitized.stack!, /leaked-token/)
+    })
 })

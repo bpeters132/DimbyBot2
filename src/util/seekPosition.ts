@@ -16,7 +16,7 @@ export function resolveSeekPositionMs(
         Number.isFinite(durationMs) && durationMs > 0 ? Math.max(0, durationMs) : 0
     const durationSec = Math.max(0, Math.floor(safeDurationMs / 1000))
 
-    if (durationSec > 0 && safePositionSec > durationSec) {
+    if (safeDurationMs > 0 && safePositionSec * 1000 > safeDurationMs) {
         return { ok: false, reason: "past_end", durationSec }
     }
 

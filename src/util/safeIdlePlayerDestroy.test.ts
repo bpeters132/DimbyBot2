@@ -24,6 +24,22 @@ describe("safeIdlePlayerDestroy", () => {
         assert.match(String(errors[0]), /lavalink node gone/)
     })
 
+    it("still resolves when onError itself throws", async () => {
+        const guildId = `safe-idle-onerror-throw-${Date.now()}`
+        await safeIdlePlayerDestroy(
+            guildId,
+            {
+                hasQueueContent: () => false,
+                destroyPlayer: async () => {
+                    throw new Error("lavalink node gone")
+                },
+            },
+            () => {
+                throw new Error("onError blew up")
+            }
+        )
+    })
+
     it("still destroys when the player is idle and unreserved", async () => {
         const guildId = `safe-idle-ok-${Date.now()}`
         let destroyed = false

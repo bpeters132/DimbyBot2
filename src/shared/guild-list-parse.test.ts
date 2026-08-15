@@ -38,11 +38,13 @@ describe("parseSafeGuildListItem", () => {
         })
     })
 
-    it("rejects missing name, non-digit ids, and non-object entries", () => {
+    it("rejects missing name, non-snowflake ids, and non-object entries", () => {
         assert.equal(parseSafeGuildListItem(null), null)
         assert.equal(parseSafeGuildListItem({ id: "1", name: "  " }), null)
         assert.equal(parseSafeGuildListItem({ id: "abc", name: "Guild" }), null)
         assert.equal(parseSafeGuildListItem({ id: 123, name: "Guild" }), null)
+        assert.equal(parseSafeGuildListItem({ id: "0", name: "Guild" }), null)
+        assert.equal(parseSafeGuildListItem({ id: "18446744073709551616", name: "Guild" }), null)
     })
 
     it("nulls invalid memberCount and drops invalid nested player summaries", () => {

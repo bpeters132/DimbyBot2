@@ -1,7 +1,10 @@
 /** Redacts credentials that Prisma migrate stdout/stderr may echo (DATABASE_URL, tokens). */
 export function sanitizeMigrateOutput(text: string): string {
     return text
-        .replace(/postgres(?:ql)?:\/\/[^\s"'`]+/gi, "[REDACTED_DATABASE_URL]")
+        .replace(
+            /(?:postgres(?:ql)?|mysql|sqlserver|mongodb(?:\+srv)?|prisma):\/\/[^\s"'`]+/gi,
+            "[REDACTED_DATABASE_URL]"
+        )
         .replace(/(password|passwd|pwd)\s*[=:]\s*[^\s"'`]+/gi, "$1=[REDACTED]")
         .replace(/(token|secret|apikey|api[_-]?key)\s*[=:]\s*[^\s"'`]+/gi, "$1=[REDACTED]")
         .replace(/Bearer\s+[^\s"'`]+/gi, "Bearer [REDACTED]")

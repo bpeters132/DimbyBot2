@@ -23,6 +23,17 @@ describe("redactBotApiErrorText", () => {
         assert.match(out, /\[redacted]/)
         assert.doesNotMatch(out, /user:pass|eyJhbGci/)
     })
+
+    it("redacts quoted JSON credential fields", () => {
+        const out = redactBotApiErrorText(
+            '{"access_token":"tok","token":"t2","secret":"shh","password":"pw"}'
+        )
+        assert.match(out, /"access_token":"\[redacted]"/)
+        assert.match(out, /"token":"\[redacted]"/)
+        assert.match(out, /"secret":"\[redacted]"/)
+        assert.match(out, /"password":"\[redacted]"/)
+        assert.doesNotMatch(out, /tok"|"t2"|"shh"|"pw"/)
+    })
 })
 
 describe("sanitizeBotApiError", () => {

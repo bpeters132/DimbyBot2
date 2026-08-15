@@ -202,6 +202,8 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                     client.warn(
                         `[playerSession] restore for ${guildId}: no tracks resolved but live queue has content; keeping player`
                     )
+                    // Drop a leftover preserve guard so schedulePlayerSessionSave after finally can run.
+                    clearPlayerSessionPreservePriorSnapshot(guildId)
                     playerToPersist = player
                     return
                 }
@@ -234,6 +236,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                 client.warn(
                     `[playerSession] restore for ${guildId}: skipped hydrate; concurrent queue content present`
                 )
+                clearPlayerSessionPreservePriorSnapshot(guildId)
                 playerToPersist = player
                 scheduleControlMessageUpdate(client, guildId)
                 playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
@@ -282,6 +285,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                 client.warn(
                     `[playerSession] restore for ${guildId}: error after concurrent enqueue; keeping player`
                 )
+                clearPlayerSessionPreservePriorSnapshot(guildId)
                 playerToPersist = orphan
             } else {
                 await orphan.destroy().catch(() => undefined)

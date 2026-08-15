@@ -23,6 +23,7 @@ describe("readBotApiProxyTimeoutMs", () => {
         assert.equal(readBotApiProxyTimeoutMs(""), 4_000)
         assert.equal(readBotApiProxyTimeoutMs("   "), 4_000)
         assert.equal(readBotApiProxyTimeoutMs("nope"), 4_000)
+        assert.equal(readBotApiProxyTimeoutMs("4000ms"), 4_000)
         assert.equal(readBotApiProxyTimeoutMs("1.5"), 1_000)
     })
 

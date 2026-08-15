@@ -3,8 +3,8 @@ import {
     acquirePlayerSessionClearSuppressLease,
     clearPlayerSession,
     flushPlayerSessionSave,
+    hasActiveSuppressLease,
     schedulePlayerSessionSave,
-    shouldSkipPlayerSessionClear,
     type PlayerSessionClearSuppressLease,
 } from "./playerSessionPersistence.js"
 
@@ -43,7 +43,8 @@ export type LocalPlaySessionHandoff = {
  * double-released (playerDestroy may have consumed it without markDestroyEventSeen).
  */
 function handoffLeaseStillHeld(guildId: string, destroyEventSeen: boolean): boolean {
-    return !destroyEventSeen && shouldSkipPlayerSessionClear(guildId)
+    // Lease count only — restore/shutdown also make shouldSkipPlayerSessionClear true.
+    return !destroyEventSeen && hasActiveSuppressLease(guildId)
 }
 
 /**

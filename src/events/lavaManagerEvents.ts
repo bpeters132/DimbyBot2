@@ -139,6 +139,9 @@ export default async (client: BotClient) => {
                     `[LavaMgrEvents] Skipping session clear for guild ${player.guildId}: successor player already live`
                 )
             } else {
+                // preserve-reason: still consume a handoff lease so markDestroyEventSeen cannot
+                // leave it unreleased for a later intentional clear.
+                consumePlayerSessionClearSuppressLease(player.guildId)
                 client.debug(
                     `[LavaMgrEvents] Preserving player session for guild ${player.guildId} after destroy reason: ${String(reason)}`
                 )
@@ -428,7 +431,9 @@ export default async (client: BotClient) => {
                                     )
                                     return
                                 }
-                                await live.destroy()
+                                // Tag QueueEmpty so preserve-prior can skip the DB delete after a
+                                // partial restore (same contract as the queueEnd idle path).
+                                await live.destroy("QueueEmpty")
                             },
                         },
                         (err: unknown) => {

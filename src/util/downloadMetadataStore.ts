@@ -102,7 +102,12 @@ export async function saveDownloadMetadataStore(
                     "[downloadMetadata] replaceDownloadMetadataStoreInDatabase succeeded but cache reload failed; using persisted snapshot",
                     reloadErr
                 )
-                downloadMetadataCache = cloneStore(merged)
+                // Omit skipped (unresolvable) keys so the in-memory cache matches what the DB kept.
+                const fallback = cloneStore(merged)
+                for (const skipped of result.skippedEntries) {
+                    delete fallback[skipped.key]
+                }
+                downloadMetadataCache = fallback
                 initialized = true
                 return false
             }

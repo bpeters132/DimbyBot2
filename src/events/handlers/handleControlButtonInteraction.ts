@@ -377,10 +377,12 @@ export async function handleControlButtonInteraction(
                 try {
                     // Match /shuffle and dashboard shuffle: hold the guild queue lock so this
                     // cannot race a locked reorder's remove+insert or a concurrent clear.
-                    await withGuildPlayerQueueLock(guildId, async () => {
-                        if (player.queue.tracks.length < 2) return
+                    const shuffled = await withGuildPlayerQueueLock(guildId, async () => {
+                        if (player.queue.tracks.length < 2) return false
                         await player.queue.shuffle()
+                        return true
                     })
+                    if (!shuffled) break
                     actionTaken = true
                     client.debug("[ControlButtonHandler] Queue shuffled.")
                     try {

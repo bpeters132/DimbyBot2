@@ -107,7 +107,8 @@ function getSuppressLeaseCount(guildId: string): number {
     return suppressLeaseCountByGuild.get(guildId) ?? 0
 }
 
-function hasActiveSuppressLease(guildId: string): boolean {
+/** True when this guild still holds at least one ephemeral session-clear suppress lease. */
+export function hasActiveSuppressLease(guildId: string): boolean {
     return getSuppressLeaseCount(guildId) > 0
 }
 
@@ -443,8 +444,7 @@ export function shouldClearPlayerSessionOnDestroy(reason: unknown): boolean {
  * How playerDestroy should treat the persisted session.
  *
  * Lavalink Player.destroy() removes the guild from the manager map and awaits
- * 
-ode.destroyPlayer *before* emitting playerDestroy. A successor can be created
+ * node.destroyPlayer *before* emitting playerDestroy. A successor can be created
  * in that window; clearing by guild id would wipe the successor's snapshot.
  */
 export type PlayerDestroySessionClearAction = "clear" | "skip-successor" | "preserve-reason"
@@ -502,9 +502,15 @@ export async function clearPlayerSession(
     // Partial restore left a fuller DB snapshot than the live player. Idle QueueEmpty must
     // not delete that row — empty live saves are already no-ops, so clear was the only wipe
     // path for unresolved transient tracks. User-intent destroys still delete.
+    // Clear the guard under the persistence lock and bump the clear epoch first so an
+    // in-flight writePlayerSession (snapshot already captured) fails its under-lock epoch
+    // check instead of upserting a thinner hydrated subset over the preserved row.
     if (shouldSkipPlayerSessionDeleteForPreserve(guildId, options?.destroyReason)) {
-        clearPlayerSessionPreservePriorSnapshot(guildId)
         cancelPendingPlayerSessionSave(guildId)
+        await withGuildPersistenceLock(guildId, async () => {
+            bumpSessionClearEpoch(guildId)
+            clearPlayerSessionPreservePriorSnapshot(guildId)
+        })
         return
     }
     if (shouldPreservePriorPlayerSessionSnapshot(guildId)) {

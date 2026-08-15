@@ -1,3 +1,5 @@
+import { redactTokenLikeString } from "./auth-base-config.js"
+
 export type AuditLogLevel = "debug" | "info" | "warn" | "error"
 
 const SENSITIVE_KEY_PATTERN =
@@ -6,18 +8,24 @@ const OMITTED_KEY_PATTERN = /^(headers|body|request|response)$/i
 const MAX_DEPTH = 4
 const MAX_STRING_LENGTH = 600
 
+function truncateAuditString(text: string): string {
+    return text.length > MAX_STRING_LENGTH ? `${text.slice(0, MAX_STRING_LENGTH)}…` : text
+}
+
 /** Defensive redaction/truncation for audit `details` (backup when callers pass unsafe shapes). */
 export function sanitizeAuditDetails(value: unknown, depth = 0): unknown {
     if (depth > MAX_DEPTH) return "[truncated-depth]"
     if (value instanceof Error) {
         return {
             name: value.name,
-            message: value.message.slice(0, MAX_STRING_LENGTH),
-            stack: value.stack ? value.stack.slice(0, MAX_STRING_LENGTH) : undefined,
+            message: truncateAuditString(redactTokenLikeString(value.message)),
+            stack: value.stack
+                ? truncateAuditString(redactTokenLikeString(value.stack))
+                : undefined,
         }
     }
     if (typeof value === "string") {
-        return value.length > MAX_STRING_LENGTH ? `${value.slice(0, MAX_STRING_LENGTH)}…` : value
+        return truncateAuditString(value)
     }
     if (typeof value !== "object" || value === null) {
         return value

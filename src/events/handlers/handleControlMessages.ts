@@ -142,6 +142,8 @@ export default async function handleControlMessages(client: BotClient, message: 
                             client.lavalink?.destroyPlayer(guildId)
                         )
                     },
+                    // Keep this pending entry if alone/queueEnd later defers a naked destroy.
+                    suppressSessionClear: true,
                 })
             }
 

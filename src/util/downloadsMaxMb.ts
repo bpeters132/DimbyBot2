@@ -2,10 +2,10 @@
 export const DEFAULT_DOWNLOADS_MAX_MB = 1000
 
 /**
- * Rough upper bound on WAV output (~10 MiB/min for 16-bit 44.1kHz stereo).
+ * Rough upper bound on WAV output (~12 MiB/min covers 16-bit 48kHz stereo).
  * Used only for yt-dlp duration filtering before download starts.
  */
-export const APPROX_WAV_MIB_PER_MINUTE = 10
+export const APPROX_WAV_MIB_PER_MINUTE = 12
 
 /**
  * Resolves a guild downloads size limit in MB.

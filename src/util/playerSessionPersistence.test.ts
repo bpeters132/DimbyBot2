@@ -498,14 +498,16 @@ describe("preserve prior snapshot after partial restore", () => {
         await clearPlayerSession(guildId, { destroyReason: "QueueEmpty" })
 
         assert.deepEqual(events, [])
-        assert.equal(getSessionClearEpochForTests(guildId), epochBefore)
+        // Epoch bumps under the persistence lock so an in-flight write fails its epoch check
+        // before upserting a thinner hydrated subset over the preserved row.
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
         assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), false)
         assert.equal(shouldSkipPlayerSessionDeleteForPreserve(guildId, "QueueEmpty"), false)
 
         // A later intentional clear (fresh session) still deletes.
         await clearPlayerSession(guildId)
         assert.deepEqual(events, ["delete"])
-        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 2)
     })
 
     it("deletes on user-intent clear (/stop) even while preserve-prior is set", async () => {

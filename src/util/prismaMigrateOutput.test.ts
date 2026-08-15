@@ -22,6 +22,19 @@ describe("sanitizeMigrateOutput", () => {
         assert.match(out, /Bearer \[REDACTED]/)
         assert.doesNotMatch(out, /s3cret|hunter2|abc|xyz|eyJhbGci/)
     })
+
+    it("redacts non-postgres Prisma connector URLs", () => {
+        const out = sanitizeMigrateOutput(
+            [
+                "mysql://user:pass@host/db",
+                "sqlserver://user:pass@host:1433;database=app",
+                "mongodb+srv://user:pass@cluster/db",
+                "prisma://user:pass@accelerate.prisma-data.net/",
+            ].join("\n")
+        )
+        assert.equal((out.match(/\[REDACTED_DATABASE_URL]/g) ?? []).length, 4)
+        assert.doesNotMatch(out, /user:pass/)
+    })
 })
 
 describe("classifyMigrateFailure", () => {

@@ -5,6 +5,9 @@ import type { PlayerSessionSnapshotV1 } from "../types/index.js"
 import {
     acquirePlayerSessionClearSuppressLease,
     clearPlayerSession,
+    clearPlayerSessionRestoreInProgress,
+    hasActiveSuppressLease,
+    markPlayerSessionRestoreInProgress,
     setPlayerSessionPersistenceDbForTests,
     shouldSkipPlayerSessionClear,
 } from "./playerSessionPersistence.js"
@@ -222,6 +225,34 @@ describe("beginLocalPlaySessionHandoff", () => {
         // Join-fail path: leftover release must not underflow after playerDestroy consumed lease.
         handoff.releaseLeftoverSuppressLease()
         assert.equal(shouldSkipPlayerSessionClear(guildId), false)
+    })
+
+    it("does not over-release when restore is in progress after the lease was consumed", async () => {
+        const guildId = "guild-local-handoff-restore-inflight"
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => undefined,
+            deletePlayerSession: async () => undefined,
+        })
+
+        const player = mockPlayer(guildId)
+        const handoff = await beginLocalPlaySessionHandoff(player, async () => {
+            throw new Error("destroy failed")
+        })
+
+        assert.equal(hasActiveSuppressLease(guildId), true)
+        await clearPlayerSession(guildId)
+        assert.equal(hasActiveSuppressLease(guildId), false)
+
+        markPlayerSessionRestoreInProgress(guildId)
+        try {
+            // shouldSkipPlayerSessionClear is true during restore, but lease count is zero —
+            // release must not decrement further / invent a negative lease.
+            assert.equal(shouldSkipPlayerSessionClear(guildId), true)
+            handoff.releaseLeftoverSuppressLease()
+            assert.equal(hasActiveSuppressLease(guildId), false)
+        } finally {
+            clearPlayerSessionRestoreInProgress(guildId)
+        }
     })
 
     it("does not double-release after playerDestroy consumed the lease", async () => {

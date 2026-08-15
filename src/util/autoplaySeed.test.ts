@@ -15,6 +15,7 @@ function mockPlayer(opts?: {
     tracks?: unknown[]
     current?: unknown
     playing?: boolean
+    paused?: boolean
 }): Player {
     const store = new Map<string, unknown>()
     if (opts?.lastTrack) store.set("lastTrack", opts.lastTrack)
@@ -25,6 +26,7 @@ function mockPlayer(opts?: {
             store.set(key, value)
         },
         playing: opts?.playing ?? false,
+        paused: opts?.paused ?? false,
         queue: {
             current: opts?.current ?? null,
             tracks: opts?.tracks ?? [],
@@ -142,6 +144,10 @@ describe("shouldStillInjectAutoplayTrack", () => {
         )
         assert.equal(
             shouldStillInjectAutoplayTrack(mockPlayer({ autoplay: true, playing: true })),
+            false
+        )
+        assert.equal(
+            shouldStillInjectAutoplayTrack(mockPlayer({ autoplay: true, paused: true })),
             false
         )
     })
