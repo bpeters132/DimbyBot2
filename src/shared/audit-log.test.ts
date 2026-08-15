@@ -67,4 +67,13 @@ describe("sanitizeAuditDetails", () => {
         assert.match(sanitized.stack!, /Bearer \[redacted\]/)
         assert.doesNotMatch(sanitized.stack!, /leaked-token/)
     })
+
+    it("redacts direct string details before truncating", () => {
+        const sanitized = sanitizeAuditDetails(
+            "Authorization: Bearer leaked-token access_token=abc123"
+        ) as string
+        assert.match(sanitized, /Bearer \[redacted\]/)
+        assert.match(sanitized, /access_token=\[redacted\]/)
+        assert.doesNotMatch(sanitized, /leaked-token|abc123/)
+    })
 })

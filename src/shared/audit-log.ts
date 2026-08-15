@@ -25,7 +25,7 @@ export function sanitizeAuditDetails(value: unknown, depth = 0): unknown {
         }
     }
     if (typeof value === "string") {
-        return truncateAuditString(value)
+        return truncateAuditString(redactTokenLikeString(value))
     }
     if (typeof value !== "object" || value === null) {
         return value

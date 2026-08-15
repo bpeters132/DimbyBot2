@@ -19,8 +19,15 @@ export function redactBotApiErrorText(text: string): string {
         .replace(/\b[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[redacted]")
     for (const key of JSON_SECRET_KEYS) {
         const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-        out = out.replace(new RegExp(`"${escaped}"\\s*:\\s*"[^"]*"`, "gi"), `"${key}":"[redacted]"`)
-        out = out.replace(new RegExp(`"${escaped}"\\s*:\\s*'[^']*'`, "gi"), `"${key}":"[redacted]"`)
+        // Escape-aware so `{"password":"p\"ass"}` does not leave a trailing `ass"}` suffix.
+        out = out.replace(
+            new RegExp(`("${escaped}"\\s*:\\s*)"(?:\\\\.|[^"\\\\])*"`, "gi"),
+            `$1"[redacted]"`
+        )
+        out = out.replace(
+            new RegExp(`("${escaped}"\\s*:\\s*)'(?:\\\\.|[^'\\\\])*'`, "gi"),
+            `$1"[redacted]"`
+        )
     }
     return out
 }

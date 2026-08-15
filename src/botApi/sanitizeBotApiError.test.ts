@@ -34,6 +34,14 @@ describe("redactBotApiErrorText", () => {
         assert.match(out, /"password":"\[redacted]"/)
         assert.doesNotMatch(out, /tok"|"t2"|"shh"|"pw"/)
     })
+
+    it("fully redacts JSON values that contain escaped quotes", () => {
+        const doubleQuoted = redactBotApiErrorText('{"password":"p\\"ass"}')
+        assert.equal(doubleQuoted, '{"password":"[redacted]"}')
+
+        const singleQuotedValue = redactBotApiErrorText(`{"password":'p\\'ass'}`)
+        assert.equal(singleQuotedValue, '{"password":"[redacted]"}')
+    })
 })
 
 describe("sanitizeBotApiError", () => {
