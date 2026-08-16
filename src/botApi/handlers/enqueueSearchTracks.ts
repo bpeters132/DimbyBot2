@@ -1,8 +1,8 @@
 import type { Player, Track, UnresolvedTrack } from "lavalink-client"
-import { stampRequesterUserIdOnTracks } from "../util/rrqDisconnect.js"
-import { withGuildPlayerQueueLock } from "../util/guildPlayerQueueLock.js"
-import { startPlaybackIfNeeded } from "../util/musicManager.js"
-import { schedulePlayerSessionSave } from "../util/playerSessionPersistence.js"
+import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
+import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
+import { startPlaybackIfNeeded } from "../../util/musicManager.js"
+import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 
 export type EnqueueSearchTracksResult =
     | { status: "ok"; player: Player; playbackStarted: boolean; playbackError?: string }
