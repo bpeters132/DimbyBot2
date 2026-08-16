@@ -2,18 +2,32 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { escapeFenceBreaks, toCodeBlock } from "./discordCodeBlock.js"
 
+/** Escape inserts a ZWSP between every backtick in a run of length ≥ 3. */
+function escapedRun(len: number): string {
+    return Array.from({ length: len }, () => "`").join("\u200b")
+}
+
 describe("escapeFenceBreaks", () => {
     it("inserts a zero-width space so ``` cannot close an outer fence", () => {
         const out = escapeFenceBreaks("before ``` after")
         assert.equal(out.includes("```"), false)
-        assert.equal(out.includes("`\u200b``"), true)
-        assert.match(out, /before `\u200b`` after/)
+        assert.equal(out, `before ${escapedRun(3)} after`)
     })
 
     it("escapes every triple-backtick run in the string", () => {
         const out = escapeFenceBreaks("```js\ncode\n```")
-        assert.equal((out.match(/`\u200b``/g) ?? []).length, 2)
         assert.equal(out.includes("```"), false)
+        assert.equal(out, `${escapedRun(3)}js\ncode\n${escapedRun(3)}`)
+    })
+
+    it("escapes runs of four or more backticks", () => {
+        const four = escapeFenceBreaks("before ```` after")
+        assert.equal(four.includes("```"), false)
+        assert.equal(four, `before ${escapedRun(4)} after`)
+
+        const six = escapeFenceBreaks("``````")
+        assert.equal(six.includes("```"), false)
+        assert.equal(six, escapedRun(6))
     })
 })
 
@@ -28,7 +42,11 @@ describe("toCodeBlock", () => {
     it("escapes fence breakouts inside the body", () => {
         const block = toCodeBlock("txt", "evil ``` breakout")
         assert.equal(block.includes("evil ```"), false)
-        assert.match(block, /evil `\u200b`` breakout/)
+        assert.match(
+            block,
+            new RegExp(`evil ${escapedRun(3).replace(/\u200b/g, "\\u200b")} breakout`)
+        )
+        assert.equal(block.includes(`evil ${escapedRun(3)} breakout`), true)
     })
 
     it("truncates to the Discord field budget with a marker", () => {

@@ -194,8 +194,27 @@ describe("beginLocalPlaySessionHandoff", () => {
         })
 
         assert.equal(shouldSkipPlayerSessionClear(guildId), true)
+        // Do not markDestroyEventSeen unless playerDestroy was observed — premature mark
+        // would skip release and leak the suppress lease.
         handoff.releaseLeftoverSuppressLease()
         assert.equal(shouldSkipPlayerSessionClear(guildId), false)
+    })
+
+    it("does not release when destroy was marked after clear already consumed the lease", async () => {
+        const guildId = "guild-local-handoff-marked-after-consume"
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => undefined,
+            deletePlayerSession: async () => undefined,
+        })
+
+        const player = mockPlayer(guildId)
+        const handoff = await beginLocalPlaySessionHandoff(player, async () => {
+            await clearPlayerSession(guildId)
+        })
+        handoff.markDestroyEventSeen()
+        assert.equal(hasActiveSuppressLease(guildId), false)
+        handoff.releaseLeftoverSuppressLease()
+        assert.equal(hasActiveSuppressLease(guildId), false)
     })
 
     it("keeps the suppress lease when destroy throws so queueEnd idle clear is skipped", async () => {

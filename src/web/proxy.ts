@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { normalizeAuthHost } from "@/shared/normalize-auth-host"
+import { normalizeAuthHost } from "@/shared/normalize-auth-host.js"
 
 /**
  * Logs when the incoming Host does not match `BETTER_AUTH_URL` (www/scheme drift breaks OAuth cookies).

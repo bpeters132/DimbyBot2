@@ -35,8 +35,10 @@ export function redactTokenLikeString(s: string): string {
     out = out.replace(/access_token\s*=\s*\S+/gi, "access_token=[redacted]")
     out = out.replace(/refresh_token\s*=\s*\S+/gi, "refresh_token=[redacted]")
     out = out.replace(/client_secret\s*=\s*\S+/gi, "client_secret=[redacted]")
-    out = out.replace(/"access_token"\s*:\s*"[^"]*"/gi, '"access_token":"[redacted]"')
-    out = out.replace(/"refresh_token"\s*:\s*"[^"]*"/gi, '"refresh_token":"[redacted]"')
+    // Escape-aware JSON string values so `"p\"ass"` cannot leave a trailing secret suffix.
+    out = out.replace(/("access_token"\s*:\s*)"(?:\\.|[^"\\])*"/gi, '$1"[redacted]"')
+    out = out.replace(/("refresh_token"\s*:\s*)"(?:\\.|[^"\\])*"/gi, '$1"[redacted]"')
+    out = out.replace(/("client_secret"\s*:\s*)"(?:\\.|[^"\\])*"/gi, '$1"[redacted]"')
     return out
 }
 
@@ -59,7 +61,8 @@ export function safeJsonSnippet(value: unknown, maxLen = SAFE_ERROR_SNIPPET_MAX)
     } catch {
         serialized = "[unserializable]"
     }
-    return serialized.length > maxLen ? `${serialized.slice(0, maxLen)}…` : serialized
+    const redacted = redactTokenLikeString(serialized)
+    return redacted.length > maxLen ? `${redacted.slice(0, maxLen)}…` : redacted
 }
 
 /**

@@ -93,5 +93,19 @@ describe("parseBotApiActionResponse", () => {
             ok: false,
             error: "Bot API returned success without data.",
         })
+
+        const missingOk = await parseBotApiActionResponse(jsonResponse(200, { data: { id: 1 } }))
+        assert.deepEqual(missingOk, {
+            ok: false,
+            error: "Invalid response from bot API.",
+        })
+
+        const nonBoolOk = await parseBotApiActionResponse(
+            jsonResponse(200, { ok: "yes", data: { id: 1 } })
+        )
+        assert.deepEqual(nonBoolOk, {
+            ok: false,
+            error: "Invalid response from bot API.",
+        })
     })
 })

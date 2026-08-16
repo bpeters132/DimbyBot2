@@ -202,8 +202,13 @@ export async function playLocalFile(
                 const leftover = client.lavalink.getPlayer(guildId)
                 if (leftover) {
                     try {
+                        const destroyEventWait = waitForLavalinkPlayerDestroy(client, guildId, 2000)
                         await leftover.destroy()
-                        sessionHandoff.markDestroyEventSeen()
+                        // Only mark after playerDestroy is observed so releaseLeftover can still
+                        // free the lease when the event never fires.
+                        if (await destroyEventWait) {
+                            sessionHandoff.markDestroyEventSeen()
+                        }
                     } catch (destroyErr: unknown) {
                         const msg =
                             destroyErr instanceof Error ? destroyErr.message : String(destroyErr)
@@ -232,8 +237,11 @@ export async function playLocalFile(
                 const leftover = client.lavalink.getPlayer(guildId)
                 if (leftover) {
                     try {
+                        const destroyEventWait = waitForLavalinkPlayerDestroy(client, guildId, 2000)
                         await leftover.destroy()
-                        sessionHandoff.markDestroyEventSeen()
+                        if (await destroyEventWait) {
+                            sessionHandoff.markDestroyEventSeen()
+                        }
                     } catch (destroyErr: unknown) {
                         const msg =
                             destroyErr instanceof Error ? destroyErr.message : String(destroyErr)

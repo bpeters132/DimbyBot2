@@ -129,6 +129,8 @@ export default {
                             client.lavalink.destroyPlayer(guild.id)
                         )
                     },
+                    // Keep this pending entry if alone/queueEnd later defers a naked destroy.
+                    suppressSessionClear: true,
                 })
             }
             return { kind: "played" as const, player, result }

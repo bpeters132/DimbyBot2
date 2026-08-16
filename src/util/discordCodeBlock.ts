@@ -6,7 +6,7 @@ export const DISCORD_EMBED_FIELD_MAX_LENGTH = 1024
  * (zero-width space after the first backtick).
  */
 export function escapeFenceBreaks(s: string): string {
-    return s.replace(/```/g, "`\u200b``")
+    return s.replace(/`{3,}/g, (run) => run.split("").join("\u200b"))
 }
 
 /**

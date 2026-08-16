@@ -17,6 +17,18 @@ describe("redactTokenLikeString", () => {
             /"access_token":"\[redacted\]"/
         )
         assert.match(redactTokenLikeString("client_secret=shhh"), /client_secret=\[redacted\]/)
+        assert.match(
+            redactTokenLikeString('{"client_secret":"cs-value"}'),
+            /"client_secret":"\[redacted\]"/
+        )
+        assert.match(
+            redactTokenLikeString('{"access_token":"p\\"ass-secret"}'),
+            /"access_token":"\[redacted\]"/
+        )
+        assert.equal(
+            redactTokenLikeString('{"access_token":"p\\"ass-secret"}').includes("ass-secret"),
+            false
+        )
     })
 })
 
@@ -34,5 +46,12 @@ describe("safeJsonSnippet", () => {
         const snippet = safeJsonSnippet(long, 50)
         assert.equal(snippet.endsWith("…"), true)
         assert.ok(snippet.length <= 51)
+    })
+
+    it("redacts secrets inside serialized arrays", () => {
+        const snippet = safeJsonSnippet([{ client_secret: "leaked" }, "Bearer tok"])
+        assert.match(snippet, /\[redacted\]/)
+        assert.equal(snippet.includes("leaked"), false)
+        assert.equal(snippet.includes("Bearer tok"), false)
     })
 })

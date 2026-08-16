@@ -61,6 +61,9 @@ export async function parseBotApiActionResponse<T>(res: Response): Promise<BotAp
         }
         return { ok: false, error: "Bot API returned an error." }
     }
+    if (payload.ok !== true) {
+        return { ok: false, error: "Invalid response from bot API." }
+    }
     if (payload.data === undefined || payload.data === null) {
         return { ok: false, error: "Bot API returned success without data." }
     }

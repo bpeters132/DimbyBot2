@@ -806,6 +806,8 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                                             client.lavalink.destroyPlayer(guildId)
                                         )
                                     },
+                                    // Keep this pending entry if alone/queueEnd later defers a naked destroy.
+                                    suppressSessionClear: true,
                                 })
                             }
                             return result

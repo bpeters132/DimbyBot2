@@ -198,7 +198,14 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
             if (resolved.length === 0) {
                 // Concurrent /play (or web enqueue) may have filled this player while we resolved.
                 // Saves are blocked during restore-in-progress — destroying would drop that queue.
-                if (shouldAbandonRestoreForConcurrentQueue(player)) {
+                // Serialize check + destroy under the guild queue lock so an enqueue cannot land
+                // between shouldAbandonRestoreForConcurrentQueue and player.destroy().
+                const abandoned = await withGuildPlayerQueueLock(guildId, async () => {
+                    if (shouldAbandonRestoreForConcurrentQueue(player)) return true
+                    await player.destroy()
+                    return false
+                })
+                if (abandoned) {
                     client.warn(
                         `[playerSession] restore for ${guildId}: no tracks resolved but live queue has content; keeping player`
                     )
@@ -207,7 +214,6 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                     playerToPersist = player
                     return
                 }
-                await player.destroy()
                 // Lavalink/source blips that throw during decode/search must not wipe the snapshot.
                 // Deterministic no-match (search returned nothing usable) still deletes.
                 if (transientFailures > 0) {
@@ -281,14 +287,18 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
         const orphan = client.lavalink.getPlayer(guildId)
         if (orphan) {
             // Same concurrent-enqueue race as the zero-resolve path: do not destroy live content.
-            if (shouldAbandonRestoreForConcurrentQueue(orphan)) {
+            const abandoned = await withGuildPlayerQueueLock(guildId, async () => {
+                if (shouldAbandonRestoreForConcurrentQueue(orphan)) return true
+                await orphan.destroy().catch(() => undefined)
+                return false
+            })
+            if (abandoned) {
                 client.warn(
                     `[playerSession] restore for ${guildId}: error after concurrent enqueue; keeping player`
                 )
                 clearPlayerSessionPreservePriorSnapshot(guildId)
                 playerToPersist = orphan
             } else {
-                await orphan.destroy().catch(() => undefined)
                 playerToPersist = null
             }
         } else {

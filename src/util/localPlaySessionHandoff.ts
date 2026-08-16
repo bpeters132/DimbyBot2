@@ -43,7 +43,9 @@ export type LocalPlaySessionHandoff = {
  * double-released (playerDestroy may have consumed it without markDestroyEventSeen).
  */
 function handoffLeaseStillHeld(guildId: string, destroyEventSeen: boolean): boolean {
-    // Lease count only — restore/shutdown also make shouldSkipPlayerSessionClear true.
+    // destroyEventSeen means playerDestroy already consumed one lease via clearPlayerSession.
+    // Do not use lease-count alone: a concurrent lease must survive releaseLeftover.
+    // Callers must only markDestroyEventSeen after playerDestroy is observed (see localPlayer).
     return !destroyEventSeen && hasActiveSuppressLease(guildId)
 }
 
