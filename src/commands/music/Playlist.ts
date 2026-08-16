@@ -397,11 +397,15 @@ export default {
                         }
 
                         const enqueue = await enqueueResolvedPlaylistTracks(
-                            player,
+                            () => client.lavalink.getPlayer(guild.id),
+                            guild.id,
                             resolved,
                             interaction.user.id,
                             shuffle
                         )
+                        if (enqueue === "no_player") {
+                            return { kind: "player_gone" as const }
+                        }
                         return { kind: "queued" as const, name, enqueue, failed }
                     }
                 )
@@ -414,6 +418,12 @@ export default {
                 if (playOutcome.kind === "no_tracks") {
                     return interaction.editReply({
                         content: `Could not resolve any tracks from **${playOutcome.name}**.`,
+                    })
+                }
+                if (playOutcome.kind === "player_gone") {
+                    return interaction.editReply({
+                        content:
+                            "The player stopped before the playlist could be queued. Try again.",
                     })
                 }
 

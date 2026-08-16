@@ -2,18 +2,13 @@ import { PermissionFlagsBits } from "discord.js"
 import type { Player } from "lavalink-client"
 import type BotClient from "../../lib/BotClient.js"
 import type { ApiErrorPayload } from "../../types/index.js"
-import { ensurePlayerConnected, startPlaybackIfNeeded } from "../../util/musicManager.js"
-import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
+import { ensurePlayerConnected } from "../../util/musicManager.js"
 import type { PermissionGuardSuccess } from "../../shared/api-auth.js"
 import { resolveWebDashboardTextChannelId } from "../webDashboardTextChannel.js"
-import {
-    destroyPlayerSuppressingSessionClear,
-    schedulePlayerSessionSave,
-} from "../../util/playerSessionPersistence.js"
+import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
 import {
     acquireGuildPlayerLifecycleReservation,
     tryDestroyOrphanGuildPlayer,
-    withGuildPlayerQueueLock,
 } from "../../util/guildPlayerQueueLock.js"
 import { playerHasQueueContent } from "../../util/playlistQueue.js"
 import {
@@ -21,6 +16,7 @@ import {
     resolveOccupiedVoiceChannelId,
 } from "../../util/sameVoiceChannel.js"
 import { isMemberFetchNotFound } from "../../util/discordMemberFetchError.js"
+import { enqueueSearchTracksAssumingSearchDone } from "./enqueueSearchTracks.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
 
@@ -304,30 +300,31 @@ export async function searchAndEnqueue(
             }
         }
 
-        return await withGuildPlayerQueueLock(guildId, async () => {
-            if (searchResult.loadType === "playlist") {
-                stampRequesterUserIdOnTracks(searchResult.tracks, requesterId)
-                player.queue.add(searchResult.tracks)
-            } else {
-                stampRequesterUserIdOnTracks([searchResult.tracks[0]], requesterId)
-                player.queue.add(searchResult.tracks[0])
+        // Re-resolve under the lock: /stop, Leave, control stop, or web stop can destroy
+        // during search despite the lifecycle reservation (reservations only defer orphan
+        // idle teardown). Enqueueing onto the captured Player would mutate a zombie still
+        // holding in-memory tracks and schedulePlayerSessionSave would resurrect the session.
+        const enqueued = await enqueueSearchTracksAssumingSearchDone(
+            () => client.lavalink.getPlayer(guildId),
+            guildId,
+            searchResult,
+            requesterId
+        )
+        if (enqueued.status === "no_player") {
+            return {
+                ok: false,
+                status: 409,
+                error: {
+                    error: "Player stopped before the track could be queued. Try again.",
+                },
             }
-
-            try {
-                await startPlaybackIfNeeded(player)
-                schedulePlayerSessionSave(player)
-                return { ok: true, player, playbackStarted: true }
-            } catch (error: unknown) {
-                const playbackError = error instanceof Error ? error.message : String(error)
-                schedulePlayerSessionSave(player)
-                return {
-                    ok: true,
-                    player,
-                    playbackStarted: false,
-                    playbackError,
-                }
-            }
-        })
+        }
+        return {
+            ok: true,
+            player: enqueued.player,
+            playbackStarted: enqueued.playbackStarted,
+            playbackError: enqueued.playbackError,
+        }
     } finally {
         ownLifecycleReservation?.release()
     }
