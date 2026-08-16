@@ -146,60 +146,68 @@ async function enqueueTracksUnderLock(
     }
 }
 
-/** Adds resolved tracks to the player queue and starts playback when idle. */
+/** Adds resolved tracks to the *live* guild player under the shared queue lock. */
 export async function enqueueResolvedPlaylistTracks(
-    player: Player,
+    getLivePlayer: () => Player | undefined,
+    guildId: string,
     tracks: Track[],
     requesterId: string,
     shuffle: boolean
-): Promise<EnqueuePlaylistResult> {
+): Promise<EnqueuePlaylistResult | "no_player"> {
     if (tracks.length === 0) {
         return { queued: 0, failed: 0, playbackStarted: false }
     }
-    return withGuildPlayerQueueLock(player.guildId, () =>
-        enqueueTracksUnderLock(player, tracks, requesterId, shuffle)
-    )
+    return withGuildPlayerQueueLock(guildId, async () => {
+        const live = getLivePlayer()
+        if (!live) return "no_player"
+        return enqueueTracksUnderLock(live, tracks, requesterId, shuffle)
+    })
 }
 
 /**
  * Atomically replaces the upcoming queue with resolved playlist tracks.
  * Snapshot + clear + enqueue run under one guild lock so a concurrent
  * searchAndEnqueue cannot land between clear and add (silent track loss).
+ * Callers must re-resolve via `getLivePlayer` so a destroy during resolve cannot
+ * clear/add on a stale Player that is no longer in the Lavalink manager map.
  */
 export async function replaceUpcomingWithResolvedPlaylistTracks(
-    player: Player,
+    getLivePlayer: () => Player | undefined,
+    guildId: string,
     tracks: Track[],
     requesterId: string,
     shuffle: boolean
-): Promise<EnqueuePlaylistResult> {
+): Promise<EnqueuePlaylistResult | "no_player"> {
     if (tracks.length === 0) {
         return { queued: 0, failed: 0, playbackStarted: false }
     }
-    return withGuildPlayerQueueLock(player.guildId, async () => {
-        const savedUpcoming = snapshotUpcomingQueue(player)
+    return withGuildPlayerQueueLock(guildId, async () => {
+        const live = getLivePlayer()
+        if (!live) return "no_player"
+        const savedUpcoming = snapshotUpcomingQueue(live)
         try {
-            const size = player.queue.tracks.length
+            const size = live.queue.tracks.length
             if (size > 0) {
-                await player.queue.splice(0, size)
+                await live.queue.splice(0, size)
             }
-            return await enqueueTracksUnderLock(player, tracks, requesterId, shuffle)
+            return await enqueueTracksUnderLock(live, tracks, requesterId, shuffle)
         } catch (enqueueErr: unknown) {
             try {
-                const size = player.queue.tracks.length
+                const size = live.queue.tracks.length
                 if (size > 0) {
-                    await player.queue.splice(0, size)
+                    await live.queue.splice(0, size)
                 }
                 if (savedUpcoming.length > 0) {
-                    await player.queue.splice(0, 0, savedUpcoming)
+                    await live.queue.splice(0, 0, savedUpcoming)
                 }
-                schedulePlayerSessionSave(player)
+                schedulePlayerSessionSave(live)
             } catch (restoreErr: unknown) {
                 const restoreMessage =
                     restoreErr instanceof Error ? restoreErr.message : String(restoreErr)
                 console.error(
                     "[replaceUpcomingWithResolvedPlaylistTracks] failed to restore queue after enqueue error",
                     {
-                        guildId: player.guildId,
+                        guildId,
                         restoreMessage,
                     }
                 )
