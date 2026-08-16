@@ -200,11 +200,18 @@ describe("matchesCatalogCandidate", () => {
 
 describe("toggleAutoplay", () => {
     it("seeds recent history when enabling and clears it when disabling", () => {
-        const player = mockPlayer()
-        player.queue.current = trackFromInfo(info({ author: "Seed", title: "Now Playing" }))
-        player.queue.previous = [
-            trackFromInfo(info({ author: "Earlier", title: "Previous Track" })),
-        ]
+        const store = new Map<string, unknown>()
+        const player = {
+            get: (key: string) => store.get(key),
+            set: (key: string, value: unknown) => {
+                store.set(key, value)
+            },
+            queue: {
+                current: trackFromInfo(info({ author: "Seed", title: "Now Playing" })),
+                tracks: [],
+                previous: [trackFromInfo(info({ author: "Earlier", title: "Previous Track" }))],
+            },
+        } as unknown as Player
 
         assert.equal(toggleAutoplay(player), true)
         assert.equal(player.get("autoplay"), true)
