@@ -1,13 +1,14 @@
 import { requireDeveloperAccess } from "../../../shared/api-auth.js"
 import { getPrismaClient } from "../../../lib/database.js"
 import type { ApiResponse } from "../../../types/index.js"
+import { isAdminDbCleanupTarget, type AdminDbCleanupTarget } from "../../adminRequestParams.js"
 
 export interface AdminDbStatsResponse {
     sessions: { total: number; expired: number }
     verifications: { total: number; expired: number }
 }
 
-export type AdminDbCleanupTarget = "sessions" | "verifications" | "all"
+export type { AdminDbCleanupTarget }
 
 export interface AdminDbCleanupBody {
     target: AdminDbCleanupTarget
@@ -20,10 +21,6 @@ export interface AdminDbCleanupResponse {
 
 function expiredWhere() {
     return { expiresAt: { lt: new Date() } }
-}
-
-function isCleanupTarget(value: unknown): value is AdminDbCleanupTarget {
-    return value === "sessions" || value === "verifications" || value === "all"
 }
 
 export async function adminDbStatsGET(
@@ -75,7 +72,7 @@ export async function adminDbCleanupPOST(
 
     const body = rawBody as AdminDbCleanupBody | null
     const target = body?.target
-    if (!isCleanupTarget(target)) {
+    if (!isAdminDbCleanupTarget(target)) {
         return {
             status: 400,
             body: {

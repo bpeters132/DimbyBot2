@@ -8,58 +8,33 @@ import type BotClient from "../../lib/BotClient.js"
 import { getGuildSettings } from "../../util/saveControlChannel.js"
 import type { DownloadsMetadataStore } from "../../types/index.js"
 import {
+    dedupeMetadataByFileName,
     downloadMetadataEntryMatchesGuild,
     downloadMetadataKeysForFile,
     parseDownloadMetadataStoreKey,
+    parseValidDownloadDate,
 } from "../../util/downloadMetadataKeys.js"
 import {
     getDownloadMetadataStore,
     saveDownloadMetadataStore,
 } from "../../util/downloadMetadataStore.js"
-
-const DEFAULT_MAX_DIR_SIZE_MB = 1000
-
-/** Selects the latest metadata entry per physical fileName for a guild. */
-function dedupeMetadataByFileName(
-    metadata: DownloadsMetadataStore,
-    guildId: string
-): Map<string, { key: string; info: DownloadsMetadataStore[string] }> {
-    const result = new Map<string, { key: string; info: DownloadsMetadataStore[string] }>()
-    for (const [key, info] of Object.entries(metadata)) {
-        if (!downloadMetadataEntryMatchesGuild(key, info, guildId)) continue
-        const fileName = parseDownloadMetadataStoreKey(key).fileName
-        const existing = result.get(fileName)
-        if (!existing) {
-            result.set(fileName, { key, info })
-            continue
-        }
-        const existingDate = parseValidDownloadDate(existing.info.downloadDate)?.getTime() ?? 0
-        const candidateDate = parseValidDownloadDate(info.downloadDate)?.getTime() ?? 0
-        if (candidateDate >= existingDate) {
-            result.set(fileName, { key, info })
-        }
-    }
-    return result
-}
-
-function parseValidDownloadDate(value: unknown): Date | null {
-    if (typeof value !== "string" && typeof value !== "number") return null
-    const parsed = new Date(value)
-    return Number.isFinite(parsed.getTime()) ? parsed : null
-}
+import { resolveDownloadsMaxMb } from "../../util/downloadsMaxMb.js"
+import {
+    isResolvedPathInsideDir,
+    listAgedUntrackedGuildDownloadFiles,
+    listDownloadFilesWithPrefix,
+    guildDownloadFilePrefix,
+    UNTRACKED_DOWNLOAD_ORPHAN_AGE_MS,
+} from "../../util/downloadArtifacts.js"
 
 /**
  * Resolves the configured downloads size limit for a guild.
- * @param {import('../../lib/BotClient.js').default} client The bot client instance.
- * @param {string} guildId The guild ID to read settings for.
- * @returns {number} The max directory size in MB.
+ * Invalid/zero/negative settings fall back via {@link resolveDownloadsMaxMb}.
  */
 function getMaxDirSizeMb(client: BotClient, guildId: string) {
     const settings = getGuildSettings()
     const guildSettings = settings[guildId] || {}
-    const configured = guildSettings.downloadsMaxMb
-    const parsed = Number.parseFloat(String(configured ?? ""))
-    return Number.isNaN(parsed) ? DEFAULT_MAX_DIR_SIZE_MB : parsed
+    return resolveDownloadsMaxMb(guildSettings.downloadsMaxMb)
 }
 
 const data = new SlashCommandBuilder()
@@ -259,6 +234,16 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 [...dedupedEntries.values()].map(async ({ key, info }) => {
                     const file = parseDownloadMetadataStoreKey(key).fileName
                     const filePath = path.join(downloadsDir, file)
+                    if (!isResolvedPathInsideDir(downloadsDir, filePath)) {
+                        client.warn(
+                            `[Downloads] Refusing path traversal for metadata file "${file}" (guildId=${guildId})`
+                        )
+                        return {
+                            name: file,
+                            path: filePath,
+                            date: null as Date | null,
+                        }
+                    }
                     let date: Date | null = parseValidDownloadDate(info.downloadDate)
                     if (!date) {
                         try {
@@ -289,6 +274,9 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 })
             )
             const files = fileRows.filter((file) => {
+                if (!isResolvedPathInsideDir(downloadsDir, file.path)) {
+                    return false
+                }
                 if (!removeAll) {
                     return Boolean(file.date && file.date < cutoffDate)
                 }
@@ -302,14 +290,6 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                         `[Downloads] Skipped ${skippedCount} file(s) due to stat errors (date=null); cleanup may be incomplete (guildId=${guildId}).`
                     )
                 }
-            }
-
-            if (files.length === 0) {
-                return interaction.editReply(
-                    removeAll
-                        ? "No downloaded files found for this server."
-                        : `No files older than ${days} days found for this server.`
-                )
             }
 
             let deletedCount = 0
@@ -346,6 +326,51 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                         errors.push(`${file.name}: Could not delete this file.`)
                     }
                 }
+            }
+
+            // Failed downloads leave guild-prefixed files with no metadata; reclaim them here too.
+            const trackedNames = new Set(
+                Object.entries(metadata)
+                    .filter(([key, info]) => downloadMetadataEntryMatchesGuild(key, info, guildId))
+                    .map(([key]) => parseDownloadMetadataStoreKey(key).fileName)
+            )
+            const orphanCandidates = removeAll
+                ? listDownloadFilesWithPrefix(
+                      downloadsDir,
+                      guildDownloadFilePrefix(guildId)
+                  ).filter((f) => !trackedNames.has(f.name))
+                : listAgedUntrackedGuildDownloadFiles(
+                      downloadsDir,
+                      guildId,
+                      trackedNames,
+                      UNTRACKED_DOWNLOAD_ORPHAN_AGE_MS
+                  )
+            for (const orphan of orphanCandidates) {
+                try {
+                    await fsp.unlink(orphan.path)
+                    totalSize += orphan.size
+                    deletedCount++
+                } catch (err: unknown) {
+                    const code =
+                        err && typeof err === "object" && "code" in err
+                            ? (err as NodeJS.ErrnoException).code
+                            : ""
+                    if (code !== "ENOENT") {
+                        client.warn(
+                            `[Downloads] orphan cleanup unlink failed for ${orphan.name} (guildId=${guildId})`,
+                            err
+                        )
+                        errors.push(`${orphan.name}: Could not delete orphan file.`)
+                    }
+                }
+            }
+
+            if (deletedCount === 0 && files.length === 0 && orphanCandidates.length === 0) {
+                return interaction.editReply(
+                    removeAll
+                        ? "No downloaded files found for this server."
+                        : `No files older than ${days} days found for this server.`
+                )
             }
 
             const metadataSaved = await saveDownloadMetadataStore(metadata, client, {

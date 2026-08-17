@@ -4,13 +4,20 @@ import type { Player, Track } from "lavalink-client"
 import {
     acquirePlayerSessionClearSuppressLease,
     clearPlayerSession,
+    clearPlayerSessionPreservePriorSnapshot,
     clearPlayerSessionRestoreInProgress,
+    consumePlayerSessionClearSuppressLease,
     destroyPlayerSuppressingSessionClear,
     getSessionClearEpochForTests,
+    markPlayerSessionPreservePriorSnapshot,
     markPlayerSessionRestoreInProgress,
+    resolvePlayerDestroySessionClearAction,
+    schedulePlayerSessionSave,
     setPlayerSessionPersistenceDbForTests,
+    shouldPreservePriorPlayerSessionSnapshot,
     shouldSkipPlayerSessionClear,
     shouldSkipPlayerSessionClearForState,
+    shouldSkipPlayerSessionDeleteForPreserve,
     shouldClearPlayerSessionOnDestroy,
     shouldUndoStaleSessionUpsert,
     snapshotFromPlayer,
@@ -157,6 +164,73 @@ describe("shouldClearPlayerSessionOnDestroy", () => {
     })
 })
 
+describe("resolvePlayerDestroySessionClearAction", () => {
+    it("clears when reason says clear and no live successor", () => {
+        const destroyed = mockPlayer({})
+        assert.equal(resolvePlayerDestroySessionClearAction(undefined, destroyed, null), "clear")
+        assert.equal(
+            resolvePlayerDestroySessionClearAction(undefined, destroyed, undefined),
+            "clear"
+        )
+        // Same object still registered (unlikely after deletePlayer) → still clear.
+        assert.equal(
+            resolvePlayerDestroySessionClearAction(undefined, destroyed, destroyed),
+            "clear"
+        )
+    })
+
+    it("skips clear when a different live player already owns the guild", () => {
+        const destroyed = mockPlayer({})
+        const successor = mockPlayer({})
+        assert.equal(
+            resolvePlayerDestroySessionClearAction(undefined, destroyed, successor),
+            "skip-successor"
+        )
+        assert.equal(
+            resolvePlayerDestroySessionClearAction("QueueEmpty", destroyed, successor),
+            "skip-successor"
+        )
+    })
+
+    it("preserves for infra reasons even when a successor is live", () => {
+        const destroyed = mockPlayer({})
+        const successor = mockPlayer({})
+        assert.equal(
+            resolvePlayerDestroySessionClearAction("Disconnected", destroyed, successor),
+            "preserve-reason"
+        )
+        assert.equal(
+            resolvePlayerDestroySessionClearAction("NodeDestroy", destroyed, null),
+            "preserve-reason"
+        )
+    })
+})
+
+describe("consumePlayerSessionClearSuppressLease", () => {
+    afterEach(() => {
+        setPlayerSessionPersistenceDbForTests(null)
+    })
+
+    it("consumes one lease without requiring clearPlayerSession", async () => {
+        const guildId = "guild-consume-suppress"
+        acquirePlayerSessionClearSuppressLease(guildId)
+        assert.equal(shouldSkipPlayerSessionClear(guildId), true)
+        assert.equal(consumePlayerSessionClearSuppressLease(guildId), true)
+        assert.equal(shouldSkipPlayerSessionClear(guildId), false)
+        assert.equal(consumePlayerSessionClearSuppressLease(guildId), false)
+
+        // A later intentional clear must still delete (no leftover suppress).
+        let deleted = false
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async () => {
+                deleted = true
+            },
+        })
+        await clearPlayerSession(guildId)
+        assert.equal(deleted, true)
+    })
+})
+
 describe("shouldSkipPlayerSessionClear", () => {
     afterEach(() => {
         clearPlayerSessionRestoreInProgress("guild-restore")
@@ -219,6 +293,36 @@ describe("shouldSkipPlayerSessionClear", () => {
     })
 })
 
+describe("clearPlayerSession clear-epoch timing", () => {
+    afterEach(() => {
+        setPlayerSessionPersistenceDbForTests(null)
+    })
+
+    it("bumps the clear epoch synchronously before awaiting DB delete", async () => {
+        // /stop must await player.destroy() so playerDestroy → clearPlayerSession runs this
+        // sync preamble before a successor /play can schedule a save under the old epoch.
+        const guildId = "guild-stop-epoch-sync"
+        let releaseDelete!: () => void
+        const deleteGate = new Promise<void>((resolve) => {
+            releaseDelete = resolve
+        })
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => undefined,
+            deletePlayerSession: async () => {
+                await deleteGate
+            },
+        })
+
+        const epochBefore = getSessionClearEpochForTests(guildId)
+        const clearP = clearPlayerSession(guildId)
+        // Epoch must already be bumped while delete is still blocked.
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
+        releaseDelete()
+        await clearP
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
+    })
+})
+
 describe("clearPlayerSession suppress lease consumption", () => {
     afterEach(() => {
         setPlayerSessionPersistenceDbForTests(null)
@@ -248,6 +352,78 @@ describe("clearPlayerSession suppress lease consumption", () => {
         assert.deepEqual(events, ["delete"])
         assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
     })
+
+    it("Discord ephemeral create-fail teardown preserves the prior session row", async () => {
+        // Models /playlist play + control-channel connect cleanup after createPlayer when a
+        // prior persisted session still exists (restore deferred / infra destroy preserved it).
+        // Without suppress, playerDestroy → clearPlayerSession would delete that row.
+        const guildId = "guild-discord-ephemeral-orphan"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        await destroyPlayerSuppressingSessionClear(guildId, () => Promise.resolve())
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, [])
+
+        // A later intentional destroy (e.g. /stop) must still clear.
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, ["delete"])
+    })
+
+    it("Discord /play /genre failed-search teardown preserves the prior session row", async () => {
+        // Models createPlayer + failed handleQueryAndPlay cleanup in Play.ts / Genre.ts /
+        // control-channel search fail. Without suppress, a later alone-in-VC destroy of the
+        // orphan would clearPlayerSession and delete a restorable prior snapshot.
+        const guildId = "guild-discord-play-orphan"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        await destroyPlayerSuppressingSessionClear(guildId, () => Promise.resolve())
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, [])
+
+        // A later intentional destroy (e.g. /stop) must still clear.
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, ["delete"])
+    })
+
+    it("Discord /download autoplay failed-play teardown preserves the prior session row", async () => {
+        // Models createPlayer + failed handleQueryAndPlay cleanup in download.ts autoplay.
+        // Without suppress, a later alone-in-VC destroy of the orphan would clearPlayerSession
+        // and delete a restorable prior snapshot.
+        const guildId = "guild-discord-download-orphan"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        await destroyPlayerSuppressingSessionClear(guildId, () => Promise.resolve())
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, [])
+
+        // A later intentional destroy (e.g. /stop) must still clear.
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, ["delete"])
+    })
 })
 
 describe("shouldUndoStaleSessionUpsert", () => {
@@ -263,6 +439,99 @@ describe("shouldUndoStaleSessionUpsert", () => {
 
     it("does not undo when clear epoch still matches the save epoch", () => {
         assert.equal(shouldUndoStaleSessionUpsert(1, 1, 3, 3), false)
+    })
+})
+
+describe("preserve prior snapshot after partial restore", () => {
+    afterEach(() => {
+        clearPlayerSessionPreservePriorSnapshot("guild-partial-restore")
+        setPlayerSessionPersistenceDbForTests(null)
+    })
+
+    it("blocks schedulePlayerSessionSave and direct writes while preserve is set", async () => {
+        const guildId = "guild-partial-restore"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        const player = mockPlayer({})
+        player.guildId = guildId
+
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), true)
+
+        // Mirrors trackStart/trackEnd after clearPlayerSessionRestoreInProgress.
+        schedulePlayerSessionSave(player)
+        await writePlayerSessionForTests(player, getSessionClearEpochForTests(guildId))
+        assert.deepEqual(events, [])
+
+        clearPlayerSessionPreservePriorSnapshot(guildId)
+        await writePlayerSessionForTests(player, getSessionClearEpochForTests(guildId))
+        assert.deepEqual(events, ["upsert"])
+    })
+
+    it("skips DB delete on idle QueueEmpty so partial-restore snapshot survives", async () => {
+        // After partial restore, empty live saves are no-ops; playerDestroy → clearPlayerSession
+        // was the wipe path for unresolved transient tracks still stored in the prior row.
+        const guildId = "guild-partial-restore"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        assert.equal(shouldSkipPlayerSessionDeleteForPreserve(guildId, "QueueEmpty"), true)
+        assert.equal(shouldSkipPlayerSessionDeleteForPreserve(guildId, undefined), false)
+
+        const epochBefore = getSessionClearEpochForTests(guildId)
+        await clearPlayerSession(guildId, { destroyReason: "QueueEmpty" })
+
+        assert.deepEqual(events, [])
+        // Epoch bumps under the persistence lock so an in-flight write fails its epoch check
+        // before upserting a thinner hydrated subset over the preserved row.
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), false)
+        assert.equal(shouldSkipPlayerSessionDeleteForPreserve(guildId, "QueueEmpty"), false)
+
+        // A later intentional clear (fresh session) still deletes.
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, ["delete"])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 2)
+    })
+
+    it("deletes on user-intent clear (/stop) even while preserve-prior is set", async () => {
+        // /stop and /leave call destroy() with no reason; that must wipe the DB row so the
+        // queue does not resurrect after an explicit clear following a partial restore.
+        const guildId = "guild-partial-restore"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        const epochBefore = getSessionClearEpochForTests(guildId)
+
+        await clearPlayerSession(guildId, { destroyReason: undefined })
+
+        assert.deepEqual(events, ["delete"])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), false)
     })
 })
 

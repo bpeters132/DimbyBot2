@@ -2,6 +2,7 @@ import { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, MessageFlags } fr
 import type { ChatInputCommandInteraction } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { Command } from "../../types/index.js"
+import { toCodeBlock, DISCORD_EMBED_FIELD_MAX_LENGTH } from "../../util/discordCodeBlock.js"
 
 import { Buffer } from "node:buffer" // For creating file buffers
 import { createHash } from "node:crypto"
@@ -9,7 +10,7 @@ import fs from "node:fs"
 import { Worker } from "node:worker_threads"
 import { fileURLToPath } from "node:url"
 
-const MAX_FIELD_LENGTH = 1024 // Discord embed field limit
+const MAX_FIELD_LENGTH = DISCORD_EMBED_FIELD_MAX_LENGTH
 const EVAL_WORKER_WALL_MS = 15_000
 
 /** Resolved once at load; ESM URL works on Windows and with special path characters. */
@@ -56,23 +57,6 @@ function getSensitiveValues(client: BotClient): Map<string, string> {
         }
     }
     return sensitive
-}
-
-function escapeFenceBreaks(s: string): string {
-    return s.replace(/```/g, "`\u200b``")
-}
-
-/** Builds a fenced code block for embed fields: escapes triple-backtick runs, respects Discord field length. */
-function toCodeBlock(language: string, value: string): string {
-    const escaped = escapeFenceBreaks(value)
-    const open = `\`\`\`${language}\n`
-    const close = "\n```"
-    const budget = MAX_FIELD_LENGTH - open.length - close.length
-    const body =
-        escaped.length > budget
-            ? `${escaped.slice(0, Math.max(0, budget - 20))}\n...[truncated]`
-            : escaped
-    return `${open}${body}${close}`
 }
 
 type EvalWorkerMessage = { ok: true; result: string } | { ok: false; error: string }

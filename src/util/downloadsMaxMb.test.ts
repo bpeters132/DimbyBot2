@@ -1,7 +1,9 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
+    APPROX_WAV_MIB_PER_MINUTE,
     DEFAULT_DOWNLOADS_MAX_MB,
+    buildYtDlpMatchFilter,
     isCustomDownloadsMaxMb,
     resolveDownloadsMaxMb,
 } from "./downloadsMaxMb.js"
@@ -46,5 +48,27 @@ describe("isCustomDownloadsMaxMb", () => {
         const raw = "12.5abc"
         assert.equal(isCustomDownloadsMaxMb(raw), true)
         assert.equal(resolveDownloadsMaxMb(raw), 12.5)
+    })
+})
+
+describe("buildYtDlpMatchFilter", () => {
+    it("rejects live streams and caps duration from the guild quota", () => {
+        // 1000 MiB / 12 MiB/min → ~83.33 min → 5000s
+        assert.equal(
+            buildYtDlpMatchFilter(1000),
+            `!is_live & duration <= ${Math.floor((1000 / APPROX_WAV_MIB_PER_MINUTE) * 60)}`
+        )
+        assert.equal(buildYtDlpMatchFilter(1000), "!is_live & duration <= 5000")
+    })
+
+    it("floors duration at 60s so tiny quotas still allow short clips", () => {
+        // 1 MiB would be 5s without the floor
+        assert.equal(buildYtDlpMatchFilter(1), "!is_live & duration <= 60")
+        assert.equal(buildYtDlpMatchFilter(0.5), "!is_live & duration <= 60")
+    })
+
+    it("scales linearly above the floor", () => {
+        // 60 MiB / 12 MiB/min → 5 min → 300s
+        assert.equal(buildYtDlpMatchFilter(60), "!is_live & duration <= 300")
     })
 })

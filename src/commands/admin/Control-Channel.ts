@@ -128,6 +128,9 @@ export default {
                 )
                 const persisted = await saveGuildSettings(guildSettings, client, {
                     touchedGuildIds: [guild.id],
+                    touchedGuildFields: {
+                        [guild.id]: ["controlChannelId", "controlMessageId"],
+                    },
                 })
                 if (!persisted) {
                     await controlMessage.delete().catch((rollbackErr: unknown) => {
@@ -219,6 +222,9 @@ export default {
             }
             const persisted = await saveGuildSettings(guildSettings, client, {
                 touchedGuildIds: [guild.id],
+                touchedGuildFields: {
+                    [guild.id]: ["controlChannelId", "controlMessageId"],
+                },
                 clearedGuildFields: { [guild.id]: ["controlChannelId", "controlMessageId"] },
             })
             client.debug(

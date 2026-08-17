@@ -17,6 +17,7 @@ import type {
 } from "lavalink-client"
 import type BotClient from "../lib/BotClient.js"
 import { getGuildSettings } from "../util/saveControlChannel.js"
+import { escapeDiscordMarkdown } from "../util/escapeDiscordMarkdown.js"
 import { rememberAutoplayPlayed } from "../util/autoplayHistory.js"
 import { updateControlMessage } from "./handlers/handleControlChannel.js"
 import { discordDeleteErrorDetails } from "../util/discordErrorDetails.js"
@@ -37,13 +38,17 @@ import {
 import { playerBroadcaster } from "../shared/websocket/PlayerBroadcaster.js"
 import {
     clearPlayerSession,
+    consumePlayerSessionClearSuppressLease,
+    resolvePlayerDestroySessionClearAction,
     schedulePlayerSessionSave,
-    shouldClearPlayerSessionOnDestroy,
 } from "../util/playerSessionPersistence.js"
 import { tryDestroyOrphanGuildPlayer } from "../util/guildPlayerQueueLock.js"
 import { countHumanMembers } from "../util/voiceChannelMembers.js"
 import { playerHasQueueContent } from "../util/playlistQueue.js"
 import { skipCurrentTrack } from "../util/skipCurrentTrack.js"
+import { shouldApplicationSkipOnTrackStuck } from "../util/trackStuckAdvance.js"
+import { endCurrentTrackForAutoplay } from "../util/endCurrentTrackForAutoplay.js"
+import { safeIdlePlayerDestroy } from "../util/safeIdlePlayerDestroy.js"
 
 /** Rate-limit `queueUpdate` websocket fan-out on Lavalink position ticks (pause/resume still immediate). */
 const lastQueueUpdateBroadcastAtMs = new Map<string, number>()
@@ -70,14 +75,6 @@ function isTextSendable(channel: unknown): channel is GuildTextSendable {
         "send" in channel &&
         typeof (channel as { send?: unknown }).send === "function"
     )
-}
-
-function escapeDiscordMarkdown(text: string): string {
-    return text
-        .replace(/\\/g, "\\\\")
-        .replace(/\*/g, "\\*")
-        .replace(/_/g, "\\_")
-        .replace(/`/g, "\\`")
 }
 
 function getControlChannelIdSafe(client: BotClient, guildId: string): string | undefined {
@@ -123,14 +120,28 @@ export default async (client: BotClient) => {
             )
             lastQueueUpdateBroadcastAtMs.delete(player.guildId)
             player.set(DASHBOARD_REQUESTER_KEY, undefined)
-            if (shouldClearPlayerSessionOnDestroy(reason)) {
-                void clearPlayerSession(player.guildId).catch((err: unknown) => {
-                    const msg = err instanceof Error ? err.message : String(err)
-                    client.error(
-                        `[LavaMgrEvents] clearPlayerSession failed (guildId=${player.guildId}): ${msg}`
-                    )
-                })
+            // Lavalink deletes the map entry before this emit; a successor may already be live.
+            const livePlayer = client.lavalink.getPlayer(player.guildId)
+            const clearAction = resolvePlayerDestroySessionClearAction(reason, player, livePlayer)
+            if (clearAction === "clear") {
+                void clearPlayerSession(player.guildId, { destroyReason: reason }).catch(
+                    (err: unknown) => {
+                        const msg = err instanceof Error ? err.message : String(err)
+                        client.error(
+                            `[LavaMgrEvents] clearPlayerSession failed (guildId=${player.guildId}): ${msg}`
+                        )
+                    }
+                )
+            } else if (clearAction === "skip-successor") {
+                // Destroy finished after a replacement player was created — keep its session.
+                consumePlayerSessionClearSuppressLease(player.guildId)
+                client.debug(
+                    `[LavaMgrEvents] Skipping session clear for guild ${player.guildId}: successor player already live`
+                )
             } else {
+                // preserve-reason: still consume a handoff lease so markDestroyEventSeen cannot
+                // leave it unreleased for a later intentional clear.
+                consumePlayerSessionClearSuppressLease(player.guildId)
                 client.debug(
                     `[LavaMgrEvents] Preserving player session for guild ${player.guildId} after destroy reason: ${String(reason)}`
                 )
@@ -273,16 +284,20 @@ export default async (client: BotClient) => {
                         client.error("[LavaMgrEvents] Failed to send trackStuck message:", e)
                     )
             }
-            client.debug(
-                `[LavaMgrEvents] Attempting to skip stuck track in guild ${player.guildId}.`
-            )
-            try {
-                // Default skip() throws when upcoming queue is empty (e.g. last/autoplay track).
-                await skipCurrentTrack(player)
-            } catch (e: unknown) {
-                client.error(
-                    `[LavaMgrEvents] Failed to skip stuck track in guild ${player.guildId}:`,
-                    e
+            // lavalink-client advances after emit (queueTrackEnd + play / empty → null track).
+            // A second skip races that path and can drop the next good track — see trackStuckAdvance.
+            if (shouldApplicationSkipOnTrackStuck()) {
+                try {
+                    await skipCurrentTrack(player)
+                } catch (e: unknown) {
+                    client.error(
+                        `[LavaMgrEvents] Failed to skip stuck track in guild ${player.guildId}:`,
+                        e
+                    )
+                }
+            } else {
+                client.debug(
+                    `[LavaMgrEvents] Stuck track reported for guild ${player.guildId}; library will advance.`
                 )
             }
         })
@@ -381,11 +396,13 @@ export default async (client: BotClient) => {
                 } else if (player.get("autoplay") === true) {
                     // Library trackError does not advance to queueEnd; ending the current track
                     // lets onEmptyQueue.autoPlayFunction run instead of wiping the session.
+                    // Prefer stopPlaying over skip(): skip sets internal_skipped and bypasses
+                    // minAutoPlayMs, which can tight-loop autoplay when catalog picks keep erroring.
                     client.debug(
                         `[LavaMgrEvents] Queue empty with autoplay on; ending current track for guild ${player.guildId}.`
                     )
                     try {
-                        await skipCurrentTrack(player)
+                        await endCurrentTrackForAutoplay(player)
                     } catch (e: unknown) {
                         client.error(
                             `[LavaMgrEvents] Failed to end track for autoplay after error in guild ${player.guildId}:`,
@@ -398,7 +415,7 @@ export default async (client: BotClient) => {
                     client.debug(
                         `[LavaMgrEvents] Queue is empty after track error in guild ${trackErrorGuildId}; attempting reservation-aware destroy.`
                     )
-                    await tryDestroyOrphanGuildPlayer(
+                    await safeIdlePlayerDestroy(
                         trackErrorGuildId,
                         {
                             hasQueueContent: () => {
@@ -414,10 +431,17 @@ export default async (client: BotClient) => {
                                     )
                                     return
                                 }
-                                await live.destroy()
+                                // Tag QueueEmpty so preserve-prior can skip the DB delete after a
+                                // partial restore (same contract as the queueEnd idle path).
+                                await live.destroy("QueueEmpty")
                             },
                         },
-                        0
+                        (err: unknown) => {
+                            const msg = err instanceof Error ? err.message : String(err)
+                            client.error(
+                                `[LavaMgrEvents] Idle destroy after track error failed (guildId=${trackErrorGuildId}): ${msg}`
+                            )
+                        }
                     )
                 }
             }
@@ -458,7 +482,7 @@ export default async (client: BotClient) => {
                     client.debug(
                         `[LavaMgrEvents] Executing standard queue end timeout check for player ${queueEndGuildId}.`
                     )
-                    await tryDestroyOrphanGuildPlayer(
+                    await safeIdlePlayerDestroy(
                         queueEndGuildId,
                         {
                             hasQueueContent: () => {
@@ -478,12 +502,24 @@ export default async (client: BotClient) => {
                                 client.debug(
                                     `[LavaMgrEvents] Player ${queueEndGuildId} is idle, destroying after queue end timeout.`
                                 )
-                                await live.destroy()
+                                // Tag QueueEmpty so preserve-prior can skip the DB delete after a
+                                // partial restore; /stop and /leave use destroy() with no reason.
+                                await live.destroy("QueueEmpty")
                             },
                         },
-                        0
+                        (err: unknown) => {
+                            const msg = err instanceof Error ? err.message : String(err)
+                            client.error(
+                                `[LavaMgrEvents] Idle destroy after queue end failed (guildId=${queueEndGuildId}): ${msg}`
+                            )
+                        }
                     )
-                })()
+                })().catch((err: unknown) => {
+                    const msg = err instanceof Error ? err.message : String(err)
+                    client.error(
+                        `[LavaMgrEvents] Queue end idle-destroy task rejected (guildId=${queueEndGuildId}): ${msg}`
+                    )
+                })
             }, 5000)
         })
 
@@ -658,7 +694,12 @@ export default async (client: BotClient) => {
                                     )
                             }
                         }
-                    })()
+                    })().catch((err: unknown) => {
+                        const msg = err instanceof Error ? err.message : String(err)
+                        client.error(
+                            `[LavaMgrEvents] RRQ disconnect cleanup task rejected (guildId=${guildId}, userId=${userId}): ${msg}`
+                        )
+                    })
                 }, 60_000)
                 trackDisconnectedUser(player, userId, timeoutHandle)
             }

@@ -16,11 +16,12 @@ import type BotClient from "../lib/BotClient.js"
 import type { LocalFile, QueryPlayResult } from "../types/index.js"
 import {
     isRRQActive,
-    rebalancePlayerQueueRoundRobin,
+    rebalancePlayerQueueRoundRobinAssumingLock,
     stampRequesterUserIdOnTracks,
 } from "./rrqDisconnect.js"
 import { downloadMetadataFileBelongsToGuild } from "./downloadMetadataKeys.js"
 import { getDownloadMetadataStore } from "./downloadMetadataStore.js"
+import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
 import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
 import { memberMayJoinOccupiedVoice, resolveOccupiedVoiceChannelId } from "./sameVoiceChannel.js"
 
@@ -629,30 +630,42 @@ export async function handleQueryAndPlay(
                 player.voiceChannelId = voiceChannel.id
                 previousVoiceChannelIdBeforeEnsure = null
 
-                if (isPlaylistEnqueue && searchResult.tracks.length > 0) {
-                    stampRequesterUserIdOnTracks(searchResult.tracks, requester.id)
-                    player.queue.add(searchResult.tracks)
-                    client.debug(
-                        `[MusicManager] Enqueued playlist (${searchResult.tracks.length} tracks) for guild ${guildId}.`
-                    )
-                } else {
-                    stampRequesterUserIdOnTracks([trackToAdd], requester.id)
-                    player.queue.add(trackToAdd)
-                    client.debug(`[MusicManager] Enqueued single track [${trackToAdd.info.title}].`)
-                }
-
-                if (isRRQActive(player)) {
-                    await rebalancePlayerQueueRoundRobin(player)
-                }
-
-                if (!feedbackText) {
+                // Serialize with dashboard clear/replace/reorder and RRQ splices. Unlocked
+                // queue.add raced replaceUpcoming rollback (splice(0, size) of the live
+                // queue), which deleted concurrent Discord /play enqueues.
+                await withGuildPlayerQueueLock(guildId, async () => {
                     if (isPlaylistEnqueue && searchResult.tracks.length > 0) {
-                        feedbackText = `Added playlist **${searchResult.playlist?.name ?? "Unknown Playlist"}** (${searchResult.tracks.length} songs) to the queue.`
+                        stampRequesterUserIdOnTracks(searchResult.tracks, requester.id)
+                        await player.queue.add(searchResult.tracks)
+                        client.debug(
+                            `[MusicManager] Enqueued playlist (${searchResult.tracks.length} tracks) for guild ${guildId}.`
+                        )
                     } else {
-                        feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`
+                        stampRequesterUserIdOnTracks([trackToAdd], requester.id)
+                        await player.queue.add(trackToAdd)
+                        client.debug(
+                            `[MusicManager] Enqueued single track [${trackToAdd.info.title}].`
+                        )
                     }
-                }
 
+                    if (isRRQActive(player)) {
+                        // Already holding the guild queue lock — do not re-enter via
+                        // rebalancePlayerQueueRoundRobin (non-reentrant chain).
+                        await rebalancePlayerQueueRoundRobinAssumingLock(player)
+                    }
+
+                    if (!feedbackText) {
+                        if (isPlaylistEnqueue && searchResult.tracks.length > 0) {
+                            feedbackText = `Added playlist **${searchResult.playlist?.name ?? "Unknown Playlist"}** (${searchResult.tracks.length} songs) to the queue.`
+                        } else {
+                            feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`
+                        }
+                    }
+                })
+
+                // Play outside the queue lock so trackError → safeIdlePlayerDestroy cannot
+                // nest on the same non-reentrant guild chain. startPlaybackIfNeeded rechecks
+                // queue state and serializes per-player starts.
                 client.debug(
                     `[MusicManager] Before play check: player.playing=${player.playing}, player.queue.tracks.length=${player.queue.tracks.length}`
                 )

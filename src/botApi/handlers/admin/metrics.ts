@@ -1,4 +1,3 @@
-import type { Player, Track, UnresolvedTrack } from "lavalink-client"
 import { requireDeveloperAccess } from "../../../shared/api-auth.js"
 import { getBotClient } from "../../../lib/botClientRegistry.js"
 import type { ApiResponse } from "../../../types/index.js"
@@ -7,31 +6,13 @@ import type {
     AdminMetricsResponse,
     AdminMetricsPlayerSummary,
 } from "../../../types/web.js"
+import { currentTrackSummary, playerStatus } from "../../adminMetricsSummary.js"
 
 export type {
     AdminGuildSummary,
     AdminMetricsPlayerSummary,
     AdminMetricsResponse,
 } from "../../../types/web.js"
-
-function playerStatus(player: Player): "playing" | "paused" | "idle" {
-    if (player.playing) return "playing"
-    if (player.paused) return "paused"
-    return "idle"
-}
-
-function currentTrackSummary(
-    track: Track | UnresolvedTrack | null | undefined
-): AdminMetricsPlayerSummary["currentTrack"] {
-    if (!track?.info) return null
-    const info = track.info
-    const title =
-        typeof info.title === "string" && info.title.trim() ? info.title.trim() : "Unknown"
-    const author =
-        typeof info.author === "string" && info.author.trim() ? info.author.trim() : undefined
-    const uri = typeof info.uri === "string" && info.uri.trim() ? info.uri.trim() : undefined
-    return { title, author, uri }
-}
 
 export async function adminMetricsGET(
     headers: Headers

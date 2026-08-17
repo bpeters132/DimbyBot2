@@ -7,7 +7,6 @@ import type {
     PlaylistSummary as DomainPlaylistSummary,
 } from "../../types/index.js"
 import type {
-    AddPlaylistTrackBody,
     AddTracksFromQueryResponse,
     PlaylistData,
     PlaylistListResponse,
@@ -32,6 +31,13 @@ import {
     pickPlayerForPlaylistSearch,
     searchTracksForPlaylist,
 } from "../../util/playlistQueue.js"
+import {
+    parseNewPosition,
+    parsePlaylistId,
+    parsePosition,
+    parseStrictPositiveInt,
+    parseTrackBody,
+} from "../parsePlaylistParams.js"
 
 type AuthOk = { ok: true; discordUserId: string }
 type AuthFail = { ok: false; status: number; body: ApiResponse<never> }
@@ -73,24 +79,6 @@ async function resolvePlaylistUser(headers: Headers): Promise<AuthOk | AuthFail>
         logPlaylistsHandlerError("resolvePlaylistUser", error)
         return { ok: false, status: 500, body: internalErrorBody() }
     }
-}
-
-const STRICT_POSITIVE_INT = /^[1-9]\d*$/
-
-function parseStrictPositiveInt(value: string): number | null {
-    const trimmed = value.trim()
-    if (!STRICT_POSITIVE_INT.test(trimmed)) return null
-    const n = Number.parseInt(trimmed, 10)
-    if (!Number.isFinite(n) || n < 1) return null
-    return n
-}
-
-function parsePlaylistId(playlistId: string): number | null {
-    return parseStrictPositiveInt(playlistId)
-}
-
-function parsePosition(position: string): number | null {
-    return parseStrictPositiveInt(position)
 }
 
 function logPlaylistsHandlerError(handler: string, error: unknown): void {
@@ -175,30 +163,6 @@ async function requireOwnedPlaylist(
     } catch (error: unknown) {
         logPlaylistsHandlerError("requireOwnedPlaylist", error)
         return { ok: false, status: 500, body: internalErrorBody() }
-    }
-}
-
-function parseTrackBody(raw: unknown): AddPlaylistTrackBody | null {
-    if (!raw || typeof raw !== "object") return null
-    const b = raw as Record<string, unknown>
-    if (typeof b.title !== "string" || !b.title.trim()) return null
-    if (typeof b.uri !== "string" || !b.uri.trim()) return null
-    if (typeof b.author !== "string") return null
-    if (typeof b.duration !== "number" || !Number.isFinite(b.duration) || b.duration < 0) {
-        return null
-    }
-    if (typeof b.addedAt !== "string" || !b.addedAt.trim()) return null
-    const added = new Date(b.addedAt)
-    if (Number.isNaN(added.getTime())) return null
-    const thumbnailUrl =
-        typeof b.thumbnailUrl === "string" && b.thumbnailUrl.trim() ? b.thumbnailUrl.trim() : null
-    return {
-        title: b.title.trim(),
-        uri: b.uri.trim(),
-        author: b.author.trim() || "Unknown",
-        duration: Math.floor(b.duration),
-        thumbnailUrl,
-        addedAt: b.addedAt,
     }
 }
 
@@ -552,43 +516,16 @@ export async function playlistTrackMovePATCH(
             },
         }
     }
-    const newPositionRaw = (rawBody as { newPosition?: unknown }).newPosition
-    let newPosition: number
-    if (typeof newPositionRaw === "number") {
-        if (!Number.isInteger(newPositionRaw) || newPositionRaw < 1) {
-            return {
-                status: 400,
-                body: {
-                    ok: false,
-                    error: {
-                        error: "Bad request",
-                        details: "newPosition must be a positive integer.",
-                    },
-                },
-            }
-        }
-        newPosition = newPositionRaw
-    } else if (typeof newPositionRaw === "string") {
-        const parsed = parseStrictPositiveInt(newPositionRaw)
-        if (parsed === null) {
-            return {
-                status: 400,
-                body: {
-                    ok: false,
-                    error: {
-                        error: "Bad request",
-                        details: "newPosition must be a positive integer.",
-                    },
-                },
-            }
-        }
-        newPosition = parsed
-    } else {
+    const newPosition = parseNewPosition((rawBody as { newPosition?: unknown }).newPosition)
+    if (newPosition === null) {
         return {
             status: 400,
             body: {
                 ok: false,
-                error: { error: "Bad request", details: "newPosition must be a positive integer." },
+                error: {
+                    error: "Bad request",
+                    details: "newPosition must be a positive integer.",
+                },
             },
         }
     }

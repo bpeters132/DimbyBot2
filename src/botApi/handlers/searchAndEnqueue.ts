@@ -20,6 +20,7 @@ import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
 } from "../../util/sameVoiceChannel.js"
+import { isMemberFetchNotFound } from "../../util/discordMemberFetchError.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
 
@@ -41,21 +42,12 @@ export type SearchAndEnqueueResult = SearchAndEnqueueSuccess | SearchAndEnqueueF
 export type SearchAndEnqueueOptions = {
     /** Connect the player to the requester's VC without searching or enqueueing. */
     connectOnly?: boolean
-}
-
-function isMemberFetchNotFound(error: unknown): boolean {
-    if (!error || typeof error !== "object") return false
-    const maybe = error as {
-        status?: unknown
-        code?: unknown
-        name?: unknown
-    }
-    return (
-        maybe.status === 404 ||
-        maybe.code === 404 ||
-        maybe.code === 10007 ||
-        maybe.name === "UnknownMember"
-    )
+    /**
+     * Caller already holds {@link acquireGuildPlayerLifecycleReservation} for this guild.
+     * Skip acquire/release so connect + later resolve/enqueue can share one continuous lease
+     * (avoids a gap where deferred idle destroy can tear down the player and clear the session).
+     */
+    externalLifecycleReservation?: boolean
 }
 
 /**
@@ -147,7 +139,10 @@ export async function searchAndEnqueue(
 
     // Reserve before createPlayer so concurrent orphan/idle destroy cannot tear down a
     // freshly created player in the window between create and the old post-create acquire.
-    const lifecycleReservation = await acquireGuildPlayerLifecycleReservation(guildId)
+    // playlistPlay may pass externalLifecycleReservation so connect + resolve share one lease.
+    const ownLifecycleReservation = options?.externalLifecycleReservation
+        ? null
+        : await acquireGuildPlayerLifecycleReservation(guildId)
     try {
         let player = client.lavalink.getPlayer(guildId)
         let createdHere = false
@@ -193,6 +188,8 @@ export async function searchAndEnqueue(
                         client.lavalink.destroyPlayer(guildId)
                     )
                 },
+                // Keep this pending entry if alone/queueEnd later defers a naked destroy.
+                suppressSessionClear: true,
             })
         }
 
@@ -332,6 +329,6 @@ export async function searchAndEnqueue(
             }
         })
     } finally {
-        lifecycleReservation.release()
+        ownLifecycleReservation?.release()
     }
 }

@@ -6,13 +6,31 @@ const withGuildPlayerQueueChain = createGuildAsyncChain()
 const guildPlayerLifecycleReservations = new Map<string, number>()
 
 /** Orphan destroy deferred because other lifecycle reservations were still held. */
-type PendingOrphanDestroy = {
+export type PendingOrphanDestroy = {
     hasQueueContent: () => boolean
     destroyPlayer: () => Promise<void>
+    /**
+     * When true, teardown is ephemeral (create-fail / connect-fail) and must not wipe a
+     * prior persisted session. Idle/alone naked destroys must not replace this pending entry.
+     */
+    suppressSessionClear?: boolean
 }
 
 const pendingOrphanDestroyByGuild = new Map<string, PendingOrphanDestroy>()
 const pendingOrphanDestroyRunsByGuild = new Map<string, Promise<void>>()
+
+/**
+ * Whether a newly deferred orphan destroy may replace an existing pending entry.
+ * Suppress-protected ephemeral teardowns win over naked idle/alone destroys so a later
+ * queueEnd/alone timer cannot strip session-clear suppression and wipe a restorable queue.
+ */
+export function shouldReplacePendingOrphanDestroy(
+    existing: Pick<PendingOrphanDestroy, "suppressSessionClear"> | undefined,
+    incoming: Pick<PendingOrphanDestroy, "suppressSessionClear">
+): boolean {
+    if (existing?.suppressSessionClear && !incoming.suppressSessionClear) return false
+    return true
+}
 
 /** Runs `work` after prior guild queue mutations finish (completion order matches request order). */
 export function withGuildPlayerQueueLock<T>(guildId: string, work: () => Promise<T>): Promise<T> {
@@ -98,7 +116,19 @@ export async function tryDestroyOrphanGuildPlayer(
         }
         // Defer while other in-flight requests still need this player.
         if (getGuildPlayerLifecycleReservationCount(guildId) > selfReservations) {
+            const existing = pendingOrphanDestroyByGuild.get(guildId)
+            if (!shouldReplacePendingOrphanDestroy(existing, hooks)) {
+                return
+            }
             pendingOrphanDestroyByGuild.set(guildId, hooks)
+            return
+        }
+        const existing = pendingOrphanDestroyByGuild.get(guildId)
+        // Immediate path (count already 0): a naked idle/alone destroy must not discard a
+        // suppress-protected pending teardown racing with runPendingOrphanDestroy.
+        if (existing && !shouldReplacePendingOrphanDestroy(existing, hooks)) {
+            pendingOrphanDestroyByGuild.delete(guildId)
+            await existing.destroyPlayer()
             return
         }
         pendingOrphanDestroyByGuild.delete(guildId)
@@ -132,4 +162,12 @@ export function waitForPendingOrphanDestroyForTests(guildId: string): Promise<vo
 /** Test-only: whether a deferred orphan destroy is recorded for the guild. */
 export function hasPendingOrphanDestroyForTests(guildId: string): boolean {
     return pendingOrphanDestroyByGuild.has(guildId)
+}
+
+/** Test-only: seed a pending orphan destroy without going through reservation deferral. */
+export function setPendingOrphanDestroyForTests(
+    guildId: string,
+    hooks: PendingOrphanDestroy
+): void {
+    pendingOrphanDestroyByGuild.set(guildId, hooks)
 }

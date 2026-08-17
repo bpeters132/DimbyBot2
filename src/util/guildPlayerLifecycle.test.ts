@@ -4,6 +4,8 @@ import {
     acquireGuildPlayerLifecycleReservation,
     getGuildPlayerLifecycleReservationCount,
     hasPendingOrphanDestroyForTests,
+    setPendingOrphanDestroyForTests,
+    shouldReplacePendingOrphanDestroy,
     tryDestroyOrphanGuildPlayer,
     waitForPendingOrphanDestroyForTests,
     withGuildPlayerLifecycleReservation,
@@ -191,5 +193,203 @@ describe("deferred orphan player cleanup", () => {
         await waitForPendingOrphanDestroyForTests(guildId)
         assert.equal(destroyed, true)
         assert.equal(hasPendingOrphanDestroyForTests(guildId), false)
+    })
+
+    it("documents playlistPlay connectOnly gap: releasing before resolve lets deferred idle destroy run", async () => {
+        // Models the pre-fix playlistPlay path: searchAndEnqueue(connectOnly) released its
+        // lease, then a second acquire wrapped resolve. queueEnd idle destroy deferred during
+        // connectOnly and ran on that release — plain destroy cleared the player/session while
+        // playlistPlay still held a stale player reference.
+        const guildId = "guild-playlist-connect-gap"
+        let destroyed = false
+
+        const connectOnlyLease = await acquireGuildPlayerLifecycleReservation(guildId)
+        await tryDestroyOrphanGuildPlayer(
+            guildId,
+            {
+                hasQueueContent: () => false,
+                destroyPlayer: async () => {
+                    destroyed = true
+                },
+            },
+            0
+        )
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), true)
+
+        connectOnlyLease.release()
+        await waitForPendingOrphanDestroyForTests(guildId)
+        assert.equal(destroyed, true)
+
+        // Too late: resolve/enqueue would run against a destroyed player / wiped session.
+        const resolveLease = await acquireGuildPlayerLifecycleReservation(guildId)
+        assert.equal(getGuildPlayerLifecycleReservationCount(guildId), 1)
+        resolveLease.release()
+    })
+
+    it("keeps deferred idle destroy blocked for continuous connect+resolve lease (playlistPlay fix)", async () => {
+        const guildId = "guild-playlist-continuous-lease"
+        let destroyed = false
+
+        const continuousLease = await acquireGuildPlayerLifecycleReservation(guildId)
+
+        // Idle timer during connectOnly (externalLifecycleReservation shares this lease).
+        await tryDestroyOrphanGuildPlayer(
+            guildId,
+            {
+                hasQueueContent: () => false,
+                destroyPlayer: async () => {
+                    destroyed = true
+                },
+            },
+            0
+        )
+        assert.equal(destroyed, false)
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), true)
+
+        // Still resolving/enqueueing under the same lease — destroy must not run.
+        assert.equal(getGuildPlayerLifecycleReservationCount(guildId), 1)
+        await Promise.resolve()
+        assert.equal(destroyed, false)
+
+        continuousLease.release()
+        await waitForPendingOrphanDestroyForTests(guildId)
+        assert.equal(destroyed, true)
+    })
+
+    it("does not let naked idle destroy replace a suppress-protected pending teardown", async () => {
+        // Web create-fail defers suppress-wrapped destroy; alone/queueEnd must not strip it.
+        const guildId = "guild-orphan-suppress-wins"
+        let ranSuppress = false
+        let ranNaked = false
+
+        const discordPlay = await acquireGuildPlayerLifecycleReservation(guildId)
+        const webSearch = await acquireGuildPlayerLifecycleReservation(guildId)
+
+        await tryDestroyOrphanGuildPlayer(guildId, {
+            hasQueueContent: () => false,
+            destroyPlayer: async () => {
+                ranSuppress = true
+            },
+            suppressSessionClear: true,
+        })
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), true)
+
+        webSearch.release()
+        assert.equal(ranSuppress, false)
+
+        // Alone-in-VC / queueEnd idle path (reservedByCaller=0) tries to defer naked destroy.
+        await tryDestroyOrphanGuildPlayer(
+            guildId,
+            {
+                hasQueueContent: () => false,
+                destroyPlayer: async () => {
+                    ranNaked = true
+                },
+            },
+            0
+        )
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), true)
+
+        discordPlay.release()
+        await waitForPendingOrphanDestroyForTests(guildId)
+        assert.equal(ranSuppress, true)
+        assert.equal(ranNaked, false)
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), false)
+    })
+
+    it("allows suppress-protected teardown to replace a prior naked pending destroy", async () => {
+        const guildId = "guild-orphan-suppress-upgrades"
+        let ranSuppress = false
+        let ranNaked = false
+
+        const holder = await acquireGuildPlayerLifecycleReservation(guildId)
+
+        await tryDestroyOrphanGuildPlayer(
+            guildId,
+            {
+                hasQueueContent: () => false,
+                destroyPlayer: async () => {
+                    ranNaked = true
+                },
+            },
+            0
+        )
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), true)
+
+        await tryDestroyOrphanGuildPlayer(guildId, {
+            hasQueueContent: () => false,
+            destroyPlayer: async () => {
+                ranSuppress = true
+            },
+            suppressSessionClear: true,
+        })
+
+        holder.release()
+        await waitForPendingOrphanDestroyForTests(guildId)
+        assert.equal(ranSuppress, true)
+        assert.equal(ranNaked, false)
+    })
+
+    it("runs suppress pending when naked idle destroy races after reservations clear", async () => {
+        // Seed suppress pending with no reservations (simulates the window after the last
+        // release before runPendingOrphanDestroy acquires the guild lock).
+        const guildId = "guild-orphan-suppress-immediate-race"
+        let ranSuppress = false
+        let ranNaked = false
+
+        setPendingOrphanDestroyForTests(guildId, {
+            hasQueueContent: () => false,
+            destroyPlayer: async () => {
+                ranSuppress = true
+            },
+            suppressSessionClear: true,
+        })
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), true)
+        assert.equal(getGuildPlayerLifecycleReservationCount(guildId), 0)
+
+        await tryDestroyOrphanGuildPlayer(
+            guildId,
+            {
+                hasQueueContent: () => false,
+                destroyPlayer: async () => {
+                    ranNaked = true
+                },
+            },
+            0
+        )
+
+        assert.equal(ranSuppress, true)
+        assert.equal(ranNaked, false)
+        assert.equal(hasPendingOrphanDestroyForTests(guildId), false)
+    })
+})
+
+describe("shouldReplacePendingOrphanDestroy", () => {
+    it("keeps suppress pending when a naked destroy arrives", () => {
+        assert.equal(shouldReplacePendingOrphanDestroy({ suppressSessionClear: true }, {}), false)
+        assert.equal(
+            shouldReplacePendingOrphanDestroy(
+                { suppressSessionClear: true },
+                {
+                    suppressSessionClear: false,
+                }
+            ),
+            false
+        )
+    })
+
+    it("allows suppress to replace naked, and same-kind replacement", () => {
+        assert.equal(shouldReplacePendingOrphanDestroy(undefined, {}), true)
+        assert.equal(shouldReplacePendingOrphanDestroy({}, { suppressSessionClear: true }), true)
+        assert.equal(
+            shouldReplacePendingOrphanDestroy(
+                { suppressSessionClear: true },
+                {
+                    suppressSessionClear: true,
+                }
+            ),
+            true
+        )
+        assert.equal(shouldReplacePendingOrphanDestroy({}, {}), true)
     })
 })

@@ -22,77 +22,16 @@ import {
     orderSimilarByArtistVariety,
     orderLavalinkTracksForAutoplay,
 } from "../util/autoplayHistory.js"
+import {
+    isAllowedSearchLoadType,
+    resolveAutoplaySeed,
+    shouldStillInjectAutoplayTrack,
+} from "../util/autoplaySeed.js"
 import { updateControlMessage } from "../events/handlers/handleControlChannel.js"
 import { getGuildSettings } from "../util/saveControlChannel.js"
-import { isRRQActive, rebalancePlayerQueueRoundRobin } from "../util/rrqDisconnect.js"
+import { withGuildPlayerQueueLock } from "../util/guildPlayerQueueLock.js"
+import { isRRQActive, rebalancePlayerQueueRoundRobinAssumingLock } from "../util/rrqDisconnect.js"
 import type BotClient from "./BotClient.js"
-
-/** If title starts with artist then a separator (-–—:|), returns the rest; otherwise null (no dynamic RegExp from user data). */
-function titleAfterArtistPrefix(titleRaw: string, artistRaw: string): string | null {
-    const title = titleRaw.trim().replace(/\s+/g, " ")
-    const artist = artistRaw.trim().replace(/\s+/g, " ")
-    if (!artist.length || !title.length) return null
-    const tl = title.toLowerCase()
-    const al = artist.toLowerCase()
-    if (!tl.startsWith(al)) return null
-    let i = artist.length
-    while (i < title.length && title[i] === " ") i++
-    if (i >= title.length) return null
-    const sep = title[i]
-    if (sep === undefined || !"-–—:|".includes(sep)) return null
-    i++
-    while (i < title.length && title[i] === " ") i++
-    const rest = title.slice(i).trim()
-    return rest.length > 0 ? rest : null
-}
-
-function resolveAutoplaySeed(player: Player, endedTrack: Track | undefined) {
-    let artist = endedTrack?.info?.author?.trim()
-    let title = endedTrack?.info?.title?.trim()
-
-    if (title && (!artist || /^unknown$/i.test(artist))) {
-        const m = title.match(/^(.+?)\s*[-–—:|]\s*(.+)$/)
-        if (m) {
-            artist = m[1].trim()
-            title = m[2].trim()
-        }
-    }
-
-    if (title && artist && !/^unknown$/i.test(artist)) {
-        const afterDup = titleAfterArtistPrefix(title, artist)
-        if (afterDup) title = afterDup
-    }
-
-    if (!title) {
-        const prev = player.queue.previous?.[0]
-        artist = prev?.info?.author?.trim() || artist
-        title = prev?.info?.title?.trim()
-    }
-
-    const stored = player.get("lastTrack") as { title?: string; artist?: string } | undefined
-    if (stored && (!title || !artist)) {
-        if (!title && stored.title) title = stored.title.trim()
-        if (!artist) artist = (stored.artist || "").trim() || "Unknown Artist"
-    }
-
-    if (!title) return null
-    if (!artist) artist = "Unknown Artist"
-    return { artist, title }
-}
-
-function isAllowedSearchLoadType(
-    searchResult: UnresolvedSearchResult | SearchResult | null | undefined
-) {
-    const lt = searchResult?.loadType as string | undefined
-    return (
-        lt === "track" ||
-        lt === "TRACK_LOADED" ||
-        lt === "SEARCH_RESULT" ||
-        lt === "search" ||
-        lt === "playlist" ||
-        lt === "PLAYLIST_LOADED"
-    )
-}
 
 async function searchFirstPlayableTrack(
     player: Player,
@@ -165,14 +104,6 @@ async function searchFirstPlayableTrack(
         }
     }
     return null
-}
-
-function shouldStillInjectAutoplayTrack(player: Player) {
-    if (!player.get("autoplay")) return false
-    if ((player.queue?.tracks?.length ?? 0) > 0) return false
-    if (player.queue?.current) return false
-    if (player.playing) return false
-    return true
 }
 
 function sendAutoplayChannelMessage(client: BotClient, player: Player, line: string) {
@@ -272,10 +203,18 @@ async function tryQueueAndPlayAutoplay(
 
         if (!shouldStillInjectAutoplayTrack(player)) return false
 
-        player.queue.add(lavalinkTrack)
-        if (isRRQActive(player)) {
-            await rebalancePlayerQueueRoundRobin(player)
-        }
+        // Hold the guild queue lock for inject + RRQ so dashboard replaceUpcoming rollback
+        // (splice entire upcoming) cannot delete an unlocked autoplay enqueue mid-flight.
+        const injected = await withGuildPlayerQueueLock(player.guildId, async () => {
+            if (!shouldStillInjectAutoplayTrack(player)) return false
+            await player.queue.add(lavalinkTrack)
+            if (isRRQActive(player)) {
+                await rebalancePlayerQueueRoundRobinAssumingLock(player)
+            }
+            return true
+        })
+        if (!injected) return false
+
         try {
             await player.play()
         } catch (playErr: unknown) {
@@ -284,7 +223,9 @@ async function tryQueueAndPlayAutoplay(
                 `[LavalinkManager] Autoplay failed to start "${lavalinkTrack.info?.title}": ${pmsg}`
             )
             try {
-                await player.queue.remove(lavalinkTrack)
+                await withGuildPlayerQueueLock(player.guildId, async () => {
+                    await player.queue.remove(lavalinkTrack)
+                })
             } catch (removeErr: unknown) {
                 const rmsg = removeErr instanceof Error ? removeErr.message : String(removeErr)
                 client.debug(

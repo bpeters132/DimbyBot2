@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client"
 import { getPrismaClient } from "../lib/database.js"
+import { normalizeOptionalDiscordSnowflake } from "../shared/discord-snowflake.js"
 import type {
     DiscordLogLevelName,
     GuildDiscordLogSettings,
@@ -8,23 +9,6 @@ import type {
 } from "../types/index.js"
 
 const LOG_LEVELS: ReadonlySet<DiscordLogLevelName> = new Set(["debug", "info", "warn", "error"])
-
-const DISCORD_SNOWFLAKE_ID_RE = /^\d{1,20}$/
-const MAX_SNOWFLAKE = (1n << 64n) - 1n
-
-/** Trims and validates a Discord snowflake: must be a positive uint64 digit string. */
-function normalizeOptionalSnowflake(value: unknown): string | null {
-    if (typeof value !== "string") return null
-    const t = value.trim()
-    if (!DISCORD_SNOWFLAKE_ID_RE.test(t)) return null
-    try {
-        const n = BigInt(t)
-        if (n < 1n || n > MAX_SNOWFLAKE) return null
-    } catch {
-        return null
-    }
-    return t
-}
 
 /** Verifies a value roundtrips through JSON and is a plain object. */
 function toSafeJsonObject(candidate: unknown): Prisma.InputJsonValue | null {
@@ -147,8 +131,8 @@ export async function replaceGuildSettingsStoreInDatabase(
         for (const guildId of guildIds) {
             const settings = store[guildId]
             const payload = {
-                controlChannelId: normalizeOptionalSnowflake(settings?.controlChannelId),
-                controlMessageId: normalizeOptionalSnowflake(settings?.controlMessageId),
+                controlChannelId: normalizeOptionalDiscordSnowflake(settings?.controlChannelId),
+                controlMessageId: normalizeOptionalDiscordSnowflake(settings?.controlMessageId),
                 downloadsMaxMb:
                     typeof settings?.downloadsMaxMb === "number" ? settings.downloadsMaxMb : null,
                 discordLog: normalizeDiscordLogForDatabase(settings?.discordLog),
