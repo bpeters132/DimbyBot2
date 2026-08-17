@@ -18,6 +18,10 @@ import type {
     QueryPlayResult,
 } from "../types/index.js"
 import {
+    shouldClearSessionAfterFailedHandoffDestroy,
+    shouldDestroyLeftoverHandoffPlayer,
+} from "./localPlayHandoffLeftover.js"
+import {
     beginLocalPlaySessionHandoff,
     type LocalPlaySessionHandoff,
 } from "./localPlaySessionHandoff.js"
@@ -196,11 +200,12 @@ export async function playLocalFile(
                 `[LocalPlayer] Failed to join or get ready in voice channel ${voiceChannel.id} for guild ${guildId}:`,
                 error
             )
-            // Destroy-fail leaves an empty Lavalink player; tear it down under the suppress
-            // lease so queueEnd idle clear cannot wipe the flushed snapshot, then release.
-            if (sessionHandoff && !sessionHandoff.destroyedLavalink) {
+            // Destroy-fail may leave the original empty player in the map — tear it down
+            // under the suppress lease. Do not destroy a concurrent successor that filled
+            // the guild slot after destroy deleted the cache entry then rejected.
+            if (sessionHandoff && !sessionHandoff.destroyedLavalink && lavalinkPlayer) {
                 const leftover = client.lavalink.getPlayer(guildId)
-                if (leftover) {
+                if (leftover && shouldDestroyLeftoverHandoffPlayer(lavalinkPlayer, leftover)) {
                     try {
                         const destroyEventWait = waitForLavalinkPlayerDestroy(client, guildId, 2000)
                         await leftover.destroy()
@@ -216,6 +221,10 @@ export async function playLocalFile(
                             `[LocalPlayer] Leftover Lavalink destroy after join fail for guild ${guildId}: ${msg}`
                         )
                     }
+                } else if (leftover) {
+                    client.debug(
+                        `[LocalPlayer] Skipping leftover destroy after join fail for guild ${guildId}: live player is not the handoff instance.`
+                    )
                 }
             }
             // Keep the persisted Lavalink session (full queue flushed before stop/destroy).
@@ -232,10 +241,11 @@ export async function playLocalFile(
 
         try {
             // Same leftover path when handoff destroy threw but local Ready succeeded:
-            // remove the empty player under lease, then intentionally clear the snapshot.
-            if (sessionHandoff && !sessionHandoff.destroyedLavalink) {
+            // remove only the original empty player under lease, then clear the snapshot
+            // unless a successor already owns the guild (preserve its session).
+            if (sessionHandoff && !sessionHandoff.destroyedLavalink && lavalinkPlayer) {
                 const leftover = client.lavalink.getPlayer(guildId)
-                if (leftover) {
+                if (leftover && shouldDestroyLeftoverHandoffPlayer(lavalinkPlayer, leftover)) {
                     try {
                         const destroyEventWait = waitForLavalinkPlayerDestroy(client, guildId, 2000)
                         await leftover.destroy()
@@ -249,9 +259,23 @@ export async function playLocalFile(
                             `[LocalPlayer] Leftover Lavalink destroy after local Ready for guild ${guildId}: ${msg}`
                         )
                     }
+                } else if (leftover) {
+                    client.debug(
+                        `[LocalPlayer] Skipping leftover destroy after local Ready for guild ${guildId}: live player is not the handoff instance.`
+                    )
                 }
+                // Re-read after destroy: node.destroyPlayer await can admit a successor
+                // between cache delete and playerDestroy; do not wipe that session.
+                const liveAfter = client.lavalink.getPlayer(guildId)
+                if (shouldClearSessionAfterFailedHandoffDestroy(lavalinkPlayer, liveAfter)) {
+                    await sessionHandoff.clearSessionAfterLocalReady()
+                } else {
+                    // Successor owns the slot — drop our suppress lease without wiping its row.
+                    sessionHandoff.releaseLeftoverSuppressLease()
+                }
+            } else {
+                await sessionHandoff?.clearSessionAfterLocalReady()
             }
-            await sessionHandoff?.clearSessionAfterLocalReady()
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e)
             client.warn(
