@@ -1,10 +1,6 @@
 import fs from "fs"
 import path from "path"
-import type {
-    JsonMigrationOptions,
-    JsonMigrationResult,
-    LoggerInterface,
-} from "../types/index.js"
+import type { JsonMigrationOptions, JsonMigrationResult, LoggerInterface } from "../types/index.js"
 import {
     isGuildSettingsTableEmpty,
     replaceGuildSettingsStoreInDatabase,

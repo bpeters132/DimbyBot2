@@ -124,11 +124,7 @@ export async function playLocalFile(
                 // Lavalink-client already removed this guild from the manager cache before
                 // awaiting node.destroyPlayer. A successful Map.delete here would drop a
                 // concurrent createPlayer successor without destroying it.
-                if (
-                    shouldDeleteLavalinkPlayerAfterDestroy(
-                        client.lavalink.players.has(guildId)
-                    )
-                ) {
+                if (shouldDeleteLavalinkPlayerAfterDestroy(client.lavalink.players.has(guildId))) {
                     client.lavalink.players.delete(guildId)
                 }
             })

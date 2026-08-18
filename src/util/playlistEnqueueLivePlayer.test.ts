@@ -99,7 +99,10 @@ describe("playlist enqueue live-player re-resolve", () => {
 
     it("replaceUpcomingWithResolvedPlaylistTracks replaces on the live player only", async () => {
         const guildId = "guild-playlist-replace-live"
-        const staleDestroyed = mockMutablePlayer(guildId, [mockTrack("stale-a"), mockTrack("stale-b")])
+        const staleDestroyed = mockMutablePlayer(guildId, [
+            mockTrack("stale-a"),
+            mockTrack("stale-b"),
+        ])
         const live = mockMutablePlayer(guildId, [mockTrack("live-a")])
 
         const outcome = await replaceUpcomingWithResolvedPlaylistTracks(

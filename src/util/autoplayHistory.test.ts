@@ -123,14 +123,8 @@ describe("titlesLikelySameSong", () => {
     })
 
     it("rejects different works even when artists match", () => {
-        assert.equal(
-            titlesLikelySameSong("Someone Like You", "Hello", "Adele", "Adele"),
-            false
-        )
-        assert.equal(
-            titlesLikelySameSong("Creep", "Karma Police", "Radiohead", "Radiohead"),
-            false
-        )
+        assert.equal(titlesLikelySameSong("Someone Like You", "Hello", "Adele", "Adele"), false)
+        assert.equal(titlesLikelySameSong("Creep", "Karma Police", "Radiohead", "Radiohead"), false)
     })
 
     it("rejects similar short titles across incompatible artists", () => {
@@ -149,7 +143,10 @@ describe("titlesLikelySameSong", () => {
 
 describe("matchesCatalogCandidate", () => {
     it("fails closed on missing hit or blank catalog rows", () => {
-        assert.equal(matchesCatalogCandidate(undefined, "Adele", "Hello", "Adele", undefined), false)
+        assert.equal(
+            matchesCatalogCandidate(undefined, "Adele", "Hello", "Adele", undefined),
+            false
+        )
         assert.equal(matchesCatalogCandidate(info(), "", "Hello", "Adele", undefined), false)
         assert.equal(matchesCatalogCandidate(info(), "Adele", "  ", "Adele", undefined), false)
     })
