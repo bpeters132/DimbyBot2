@@ -22,7 +22,7 @@ export async function enqueuePlayNextTrackAssumingSearchDone(
     return withGuildPlayerQueueLock(guildId, async () => {
         const live = getLivePlayer()
         if (!live) return "no_player"
-        live.queue.add(track, 0)
+        await live.queue.add(track, 0)
         if (isRRQActive(live)) {
             await rebalancePlayerQueueRoundRobinAssumingLock(live)
         }

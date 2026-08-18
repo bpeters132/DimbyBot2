@@ -178,18 +178,22 @@ describe("matchesCatalogCandidate", () => {
     })
 
     it("matches via ended-track alternate spelling when catalog equals the seed work", () => {
+        const catalogArtist = "Adele"
+        const catalogTitle = "Hello There Friends Forever Zebra"
         const ended = info({
-            author: "The Beatles",
-            title: "Hey Jude (Remastered)",
+            author: "Adele",
+            title: "Hello There Friends Forever Yonder Remix Version Extra Words Here",
+        })
+        const candidate = info({
+            author: "Adele",
+            title: "Yonder Remix Version Extra Words Here",
         })
         assert.equal(
-            matchesCatalogCandidate(
-                info({ author: "The Beatles", title: "Hey Jude" }),
-                "The Beatles",
-                "Hey Jude",
-                "unused",
-                ended
-            ),
+            matchesCatalogCandidate(candidate, catalogArtist, catalogTitle, "unused", undefined),
+            false
+        )
+        assert.equal(
+            matchesCatalogCandidate(candidate, catalogArtist, catalogTitle, "unused", ended),
             true
         )
     })

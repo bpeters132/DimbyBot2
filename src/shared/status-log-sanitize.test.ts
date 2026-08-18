@@ -12,6 +12,8 @@ describe("stringLooksLikeHostOrDsn", () => {
         assert.equal(stringLooksLikeHostOrDsn("redis://10.0.0.1:6379"), true)
         assert.equal(stringLooksLikeHostOrDsn("10.0.0.1"), true)
         assert.equal(stringLooksLikeHostOrDsn("db.internal:5432"), true)
+        assert.equal(stringLooksLikeHostOrDsn("db.internal"), true)
+        assert.equal(stringLooksLikeHostOrDsn("localhost:5432"), true)
         assert.equal(stringLooksLikeHostOrDsn("plain status text"), false)
         assert.equal(stringLooksLikeHostOrDsn("Database unreachable"), false)
     })
@@ -34,6 +36,19 @@ describe("sanitizeParsedForLog", () => {
         const nested = out.nested as Record<string, unknown>
         assert.equal(nested.token, "[redacted]")
         assert.equal(nested.detail, "ok")
+    })
+
+    it("redacts structured API-key and cookie keys via shouldRedactKey", () => {
+        const out = sanitizeParsedForLog({
+            apiKey: "k-live",
+            api_key: "k-snake",
+            cookie: "sid=abc",
+            guildId: "guild-1",
+        }) as Record<string, unknown>
+        assert.equal(out.apiKey, "[redacted]")
+        assert.equal(out.api_key, "[redacted]")
+        assert.equal(out.cookie, "[redacted]")
+        assert.equal(out.guildId, "guild-1")
     })
 
     it("marks circular references and truncates deep trees", () => {
@@ -81,5 +96,15 @@ describe("sanitizeErrorForLog", () => {
         assert.equal(out.name, "Error")
         assert.match(out.message, /password=\[REDACTED]/)
         assert.doesNotMatch(out.message, /supersecret/)
+    })
+
+    it("redacts non-JSON messages that look like hosts or DSNs", () => {
+        const dotted = new Error("db.internal")
+        dotted.name = "Error"
+        assert.equal(sanitizeErrorForLog(dotted).message, "[redacted]")
+
+        const local = new Error("localhost:5432")
+        local.name = "Error"
+        assert.equal(sanitizeErrorForLog(local).message, "[redacted]")
     })
 })

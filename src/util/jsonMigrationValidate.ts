@@ -6,25 +6,80 @@ import type {
 } from "../types/index.js"
 import { downloadMetadataStoreKey } from "./downloadMetadataKeys.js"
 
+const DISCORD_LOG_LEVELS = new Set(["debug", "info", "warn", "error"])
+const DOWNLOAD_METADATA_KEYS = new Set(["guildId", "downloadDate", "originalUrl", "filePath"])
+
+function isDiscordLogShape(value: unknown): boolean {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+        return false
+    }
+    const log = value as Record<string, unknown>
+    if (log.allChannelId !== undefined && typeof log.allChannelId !== "string") {
+        return false
+    }
+    if (log.minLevel !== undefined) {
+        if (typeof log.minLevel !== "string" || !DISCORD_LOG_LEVELS.has(log.minLevel)) {
+            return false
+        }
+    }
+    if (log.byLevel !== undefined) {
+        if (log.byLevel === null || typeof log.byLevel !== "object" || Array.isArray(log.byLevel)) {
+            return false
+        }
+        for (const [level, channelId] of Object.entries(log.byLevel as Record<string, unknown>)) {
+            if (!DISCORD_LOG_LEVELS.has(level) || typeof channelId !== "string") {
+                return false
+            }
+        }
+    }
+    return true
+}
+
+/** True when a guild-settings row has the expected types for known persisted fields. Extra keys are allowed. */
+function isGuildSettingsEntryShape(settings: unknown): boolean {
+    if (settings === null || typeof settings !== "object" || Array.isArray(settings)) {
+        return false
+    }
+    const row = settings as Record<string, unknown>
+    if (row.controlChannelId !== undefined && typeof row.controlChannelId !== "string") {
+        return false
+    }
+    if (row.controlMessageId !== undefined && typeof row.controlMessageId !== "string") {
+        return false
+    }
+    if (row.downloadsMaxMb !== undefined && typeof row.downloadsMaxMb !== "number") {
+        return false
+    }
+    if (row.discordLog !== undefined && !isDiscordLogShape(row.discordLog)) {
+        return false
+    }
+    return true
+}
+
 /** True when `parsed` is a plain object map of guild id → settings object (not array/null entries). */
 export function isGuildSettingsStoreShape(parsed: unknown): parsed is GuildSettingsStore {
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
         return false
     }
     for (const [, settings] of Object.entries(parsed as Record<string, unknown>)) {
-        if (settings === null || typeof settings !== "object" || Array.isArray(settings)) {
+        if (!isGuildSettingsEntryShape(settings)) {
             return false
         }
     }
     return true
 }
 
-/** True when a download metadata entry has only optional fields of the expected types. */
+/** True when a download metadata entry has only the defined optional fields of the expected types. */
 export function isDownloadMetadataEntryShape(entry: unknown): entry is DownloadFileMetadata {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
         return false
     }
     const candidate = entry as Record<string, unknown>
+    for (const key of Object.keys(candidate)) {
+        if (!DOWNLOAD_METADATA_KEYS.has(key)) {
+            return false
+        }
+    }
     if (candidate.guildId !== undefined && typeof candidate.guildId !== "string") {
         return false
     }

@@ -29,6 +29,28 @@ describe("isGuildSettingsStoreShape", () => {
         assert.equal(isGuildSettingsStoreShape({ g1: "settings" }), false)
         assert.equal(isGuildSettingsStoreShape({ g1: 1 }), false)
     })
+
+    it("rejects mistyped known GuildSettings fields including nested discordLog", () => {
+        assert.equal(isGuildSettingsStoreShape({ g1: { downloadsMaxMb: "100" } }), false)
+        assert.equal(isGuildSettingsStoreShape({ g1: { controlChannelId: 12 } }), false)
+        assert.equal(isGuildSettingsStoreShape({ g1: { discordLog: { allChannelId: 99 } } }), false)
+        assert.equal(
+            isGuildSettingsStoreShape({ g1: { discordLog: { minLevel: "trace" } } }),
+            false
+        )
+        assert.equal(
+            isGuildSettingsStoreShape({
+                g1: { discordLog: { allChannelId: "c1", minLevel: "info" } },
+            }),
+            true
+        )
+        assert.equal(
+            isGuildSettingsStoreShape({
+                g1: { downloadsMaxMb: 100, extraLegacyKey: "keep-for-forward-compat" },
+            }),
+            true
+        )
+    })
 })
 
 describe("isDownloadMetadataEntryShape", () => {
@@ -54,6 +76,7 @@ describe("isDownloadMetadataEntryShape", () => {
         assert.equal(isDownloadMetadataEntryShape({ downloadDate: { when: 1 } }), false)
         assert.equal(isDownloadMetadataEntryShape({ originalUrl: null }), false)
         assert.equal(isDownloadMetadataEntryShape({ filePath: false }), false)
+        assert.equal(isDownloadMetadataEntryShape({ guildId: "g", unexpected: true }), false)
     })
 })
 

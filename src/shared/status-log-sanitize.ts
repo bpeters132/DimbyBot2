@@ -1,7 +1,13 @@
+import { shouldRedactKey } from "./bot-api-verbose-redact.js"
 import { sanitizeErrorText } from "./sanitize-log-text.js"
 
+/** Host / DSN / connection-ish keys that shouldRedactKey does not cover. */
 const SENSITIVE_KEY = /\b(?:password|secret|token|uri|connectionString|connection|host|headers)\b/i
 const SANITIZE_MAX_DEPTH = 10
+
+function shouldRedactStatusKey(key: string): boolean {
+    return shouldRedactKey(key) || SENSITIVE_KEY.test(key)
+}
 
 /** True when a string looks like a host, URL/DSN, or host:port (must not appear in status logs). */
 export function stringLooksLikeHostOrDsn(value: string): boolean {
@@ -12,6 +18,17 @@ export function stringLooksLikeHostOrDsn(value: string): boolean {
         return true
     }
     if (/[.][a-z0-9-]{2,}:\d{2,5}\b/i.test(value)) {
+        return true
+    }
+    // Bare dotted hostname (db.internal) and single-label host:port (localhost:5432).
+    if (
+        /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(
+            value.trim()
+        )
+    ) {
+        return true
+    }
+    if (/\blocalhost:\d{2,5}\b/i.test(value)) {
         return true
     }
     return false
@@ -44,7 +61,7 @@ export function sanitizeParsedForLog(
         visited.add(objectValue)
         const out: Record<string, unknown> = {}
         for (const [k, v] of Object.entries(objectValue)) {
-            if (SENSITIVE_KEY.test(k)) {
+            if (shouldRedactStatusKey(k)) {
                 out[k] = "[redacted]"
                 continue
             }
@@ -79,6 +96,9 @@ export function sanitizeErrorForLog(error: unknown): { name?: string; message: s
         const safeCopy = sanitizeParsedForLog(parsed) as Record<string, unknown>
         return { name: error.name, message: JSON.stringify(safeCopy) }
     } catch {
+        if (stringLooksLikeHostOrDsn(error.message)) {
+            return { name: error.name, message: "[redacted]" }
+        }
         return {
             name: error.name,
             message: sanitizeErrorText(error.message, 800),

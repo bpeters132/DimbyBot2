@@ -33,6 +33,12 @@ describe("sanitizeErrorText", () => {
         assert.doesNotMatch(out, /user:pass|tok"|"cs"|"k"|eyJhbGci/)
     })
 
+    it("redacts JSON secret values that contain escaped quotes", () => {
+        const out = sanitizeErrorText('{"token":"top\\"secret"} leftover', 2000)
+        assert.match(out, /"token":"\[REDACTED]"/)
+        assert.doesNotMatch(out, /secret/)
+    })
+
     it("truncates output to maxLen with an ellipsis", () => {
         const out = sanitizeErrorText("abcdefghij", 5)
         assert.equal(out, "abcde…")

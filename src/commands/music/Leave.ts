@@ -4,6 +4,7 @@ import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import { stopLocalPlayer, getLocalPlayerState } from "../../util/localPlayer.js"
 import { forceClearPlayerSession } from "../../util/playerSessionPersistence.js"
+import { shouldDisconnectOrphanVoice } from "../../util/leaveOrphanVoice.js"
 import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
@@ -90,6 +91,9 @@ export default {
                 try {
                     // May return undefined when no player exists — do not call .catch on it.
                     await client.lavalink.destroyPlayer(guild.id)
+                    if (shouldDisconnectOrphanVoice(false, Boolean(botVoiceState?.channel))) {
+                        await botVoiceState?.disconnect()
+                    }
                     await forceClearPlayerSession(guild.id)
                     await interaction.editReply({ content: "Left the voice channel." })
                     const msg = await interaction.fetchReply()

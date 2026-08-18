@@ -37,6 +37,7 @@ function mockMutablePlayer(guildId: string, initial: Track[] = []): Player {
                 } else {
                     tracks.push(...list)
                 }
+                return Promise.resolve()
             },
             async splice(start: number, deleteCount: number, ...insert: Track[]) {
                 return tracks.splice(start, deleteCount, ...insert.flat())

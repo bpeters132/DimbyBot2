@@ -198,7 +198,7 @@ export async function playerPlaylistPlayPOST(
                 }
             }
 
-            const livePlayer = client.lavalink.getPlayer(guildId) ?? player
+            const livePlayer = client.lavalink.getPlayer(guildId)
             const state = await toPlayerStateResponse(guildId, requester.requesterId, livePlayer)
 
             return {

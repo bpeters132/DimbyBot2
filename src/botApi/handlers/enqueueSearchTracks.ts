@@ -36,10 +36,11 @@ export async function enqueueSearchTracksAssumingSearchDone(
             live.queue.add(searchResult.tracks[0]!)
         }
 
+        const wasPlaying = live.playing
         try {
             await startPlaybackIfNeeded(live)
             schedulePlayerSessionSave(live)
-            return { status: "ok", player: live, playbackStarted: true }
+            return { status: "ok", player: live, playbackStarted: !wasPlaying }
         } catch (error: unknown) {
             const playbackError = error instanceof Error ? error.message : String(error)
             schedulePlayerSessionSave(live)

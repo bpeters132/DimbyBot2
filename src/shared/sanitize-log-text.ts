@@ -18,10 +18,22 @@ export function sanitizeErrorText(s: string, maxLen: number): string {
     out = out.replace(/\b(?:secret|client_secret)\b\s*[=:]\s*[^\s&;"']+/gi, "secret=[REDACTED]")
     for (const key of jsonSecretKeys) {
         const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-        out = out.replace(new RegExp(`"${escaped}"\\s*:\\s*"[^"]*"`, "gi"), `"${key}":"[REDACTED]"`)
-        out = out.replace(new RegExp(`"${escaped}"\\s*:\\s*'[^']*'`, "gi"), `"${key}":"[REDACTED]"`)
-        out = out.replace(new RegExp(`'${escaped}'\\s*:\\s*"[^"]*"`, "gi"), `'${key}':"[REDACTED]"`)
-        out = out.replace(new RegExp(`'${escaped}'\\s*:\\s*'[^']*'`, "gi"), `'${key}':'[REDACTED]'`)
+        out = out.replace(
+            new RegExp(`"${escaped}"\\s*:\\s*"(?:\\\\.|[^"\\\\])*"`, "gi"),
+            `"${key}":"[REDACTED]"`
+        )
+        out = out.replace(
+            new RegExp(`"${escaped}"\\s*:\\s*'(?:\\\\.|[^'\\\\])*'`, "gi"),
+            `"${key}":"[REDACTED]"`
+        )
+        out = out.replace(
+            new RegExp(`'${escaped}'\\s*:\\s*"(?:\\\\.|[^"\\\\])*"`, "gi"),
+            `'${key}':"[REDACTED]"`
+        )
+        out = out.replace(
+            new RegExp(`'${escaped}'\\s*:\\s*'(?:\\\\.|[^'\\\\])*'`, "gi"),
+            `'${key}':'[REDACTED]'`
+        )
     }
     out = out.replace(/postgres(?:ql)?:\/\/[^@\s/"']+@/gi, "postgres://[REDACTED]@")
     out = out.replace(/redis:\/\/[^@\s/"']+@/gi, "redis://[REDACTED]@")

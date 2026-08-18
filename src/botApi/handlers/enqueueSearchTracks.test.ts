@@ -59,6 +59,7 @@ describe("enqueueSearchTracksAssumingSearchDone", () => {
 
         assert.equal(outcome.status, "ok")
         if (outcome.status !== "ok") return
+        assert.equal(outcome.playbackStarted, false)
         assert.equal(live.queue.tracks.map((t) => t.info.title).join(","), "kept,web-add")
         assert.equal(staleDestroyed.queue.tracks.length, 1)
         assert.equal(staleDestroyed.queue.tracks[0]?.info.title, "old")
