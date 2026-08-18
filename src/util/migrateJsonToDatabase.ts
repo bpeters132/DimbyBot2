@@ -1,12 +1,6 @@
 import fs from "fs"
 import path from "path"
-import type {
-    DownloadsMetadataStore,
-    GuildSettingsStore,
-    JsonMigrationOptions,
-    JsonMigrationResult,
-    LoggerInterface,
-} from "../types/index.js"
+import type { JsonMigrationOptions, JsonMigrationResult, LoggerInterface } from "../types/index.js"
 import {
     isGuildSettingsTableEmpty,
     replaceGuildSettingsStoreInDatabase,
@@ -15,7 +9,11 @@ import {
     isDownloadMetadataTableEmpty,
     replaceDownloadMetadataStoreInDatabase,
 } from "../repositories/downloadMetadataRepository.js"
-import { downloadMetadataStoreKey } from "./downloadMetadataKeys.js"
+import {
+    collectValidDownloadMetadataEntries,
+    collectValidGuildSettingsEntries,
+    isGuildSettingsStoreShape,
+} from "./jsonMigrationValidate.js"
 import { loggerFromPartial } from "./loggerFromPartial.js"
 
 const __dirname = import.meta.dirname
@@ -38,42 +36,6 @@ function resolveGuildSettingsJsonPath(): string | null {
 
 function resolveDownloadMetadataJsonPath(): string | null {
     return resolveJsonPath("downloads/.metadata.json", "downloads/.metadata.json")
-}
-
-function isGuildSettingsStoreShape(parsed: unknown): parsed is GuildSettingsStore {
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-        return false
-    }
-    for (const [, settings] of Object.entries(parsed as Record<string, unknown>)) {
-        if (settings === null || typeof settings !== "object" || Array.isArray(settings)) {
-            return false
-        }
-    }
-    return true
-}
-
-function isDownloadMetadataEntryShape(entry: unknown): entry is DownloadsMetadataStore[string] {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-        return false
-    }
-    const candidate = entry as Record<string, unknown>
-    if (candidate.guildId !== undefined && typeof candidate.guildId !== "string") {
-        return false
-    }
-    if (
-        candidate.downloadDate !== undefined &&
-        typeof candidate.downloadDate !== "string" &&
-        typeof candidate.downloadDate !== "number"
-    ) {
-        return false
-    }
-    if (candidate.originalUrl !== undefined && typeof candidate.originalUrl !== "string") {
-        return false
-    }
-    if (candidate.filePath !== undefined && typeof candidate.filePath !== "string") {
-        return false
-    }
-    return true
 }
 
 function renameJsonAsMigrated(filePath: string, logger: LoggerInterface): void {
@@ -146,21 +108,17 @@ export async function migrateGuildSettings(
             return result
         }
         const parsed = parsedUnknown
-        const entries = Object.entries(parsed)
-        const validEntries: GuildSettingsStore = {}
-        const failedEntries: string[] = []
-
-        for (const [guildId, settings] of entries) {
-            if (!guildId || typeof settings !== "object" || settings === null) {
-                result.failedCount++
-                failedEntries.push(`guild:${String(guildId)}`)
-                logger.warn(
-                    `[JsonMigration] Skipping invalid guild settings entry for key "${guildId}".`
-                )
-                continue
-            }
-            validEntries[guildId] = settings
+        const { validEntries, failedEntries, failedCount } =
+            collectValidGuildSettingsEntries(parsed)
+        result.failedCount = failedCount
+        for (const guildId of Object.keys(validEntries)) {
             logger.debug(`[JsonMigration] Prepared guild settings entry ${guildId} for migration.`)
+        }
+        for (const failed of failedEntries) {
+            const guildId = failed.startsWith("guild:") ? failed.slice("guild:".length) : failed
+            logger.warn(
+                `[JsonMigration] Skipping invalid guild settings entry for key "${guildId}".`
+            )
         }
 
         if (result.failedCount > 0) {
@@ -266,31 +224,19 @@ export async function migrateDownloadMetadata(
             result.reason = "validation-failed"
             return result
         }
-        const parsed = parsedUnknown as DownloadsMetadataStore
-        const entries = Object.entries(parsed)
-        const validEntries: DownloadsMetadataStore = {}
-        const failedEntries: string[] = []
-
-        for (const [fileName, metadata] of entries) {
-            if (!fileName || !isDownloadMetadataEntryShape(metadata)) {
-                result.failedCount++
-                failedEntries.push(`file:${String(fileName)}`)
-                logger.warn(
-                    `[JsonMigration] Skipping invalid download metadata entry for key "${fileName}".`
-                )
-                continue
-            }
-            const gid =
-                typeof metadata.guildId === "string" && metadata.guildId.trim().length > 0
-                    ? metadata.guildId.trim()
-                    : "UNKNOWN"
-            const storeKey = downloadMetadataStoreKey(gid, fileName)
-            validEntries[storeKey] = {
-                ...metadata,
-                guildId: gid,
-            }
+        const parsed = parsedUnknown as Record<string, unknown>
+        const { validEntries, failedEntries, failedCount } =
+            collectValidDownloadMetadataEntries(parsed)
+        result.failedCount = failedCount
+        for (const storeKey of Object.keys(validEntries)) {
             logger.debug(
                 `[JsonMigration] Prepared download metadata entry "${storeKey}" for migration.`
+            )
+        }
+        for (const failed of failedEntries) {
+            const fileName = failed.startsWith("file:") ? failed.slice("file:".length) : failed
+            logger.warn(
+                `[JsonMigration] Skipping invalid download metadata entry for key "${fileName}".`
             )
         }
 

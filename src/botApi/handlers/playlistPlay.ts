@@ -8,7 +8,6 @@ import { toPlayerStateResponse } from "../../shared/player-state.js"
 import { getPlaylistById } from "../../repositories/playlistRepository.js"
 import { searchAndEnqueue } from "./searchAndEnqueue.js"
 import {
-    type EnqueuePlaylistResult,
     playerHasQueueContent,
     replaceUpcomingWithResolvedPlaylistTracks,
     resolveStoredPlaylistTracks,
@@ -178,14 +177,29 @@ export async function playerPlaylistPlayPOST(
 
             // Clear + enqueue must share one guild lock so a concurrent queue POST cannot
             // succeed then be wiped by clearUpcoming between unlocked clear and locked add.
-            const enqueue: EnqueuePlaylistResult = await replaceUpcomingWithResolvedPlaylistTracks(
-                player,
+            // Re-resolve under that lock: /stop (etc.) can destroy during resolve despite the
+            // reservation, and mutating the captured Player would resurrect the session.
+            const enqueue = await replaceUpcomingWithResolvedPlaylistTracks(
+                () => client.lavalink.getPlayer(guildId),
+                guildId,
                 resolved,
                 requester.requesterId,
                 shuffle
             )
+            if (enqueue === "no_player") {
+                return {
+                    status: 409,
+                    body: {
+                        ok: false,
+                        error: {
+                            error: "Player stopped before the playlist could be queued. Try again.",
+                        },
+                    },
+                }
+            }
 
-            const state = await toPlayerStateResponse(guildId, requester.requesterId, player)
+            const livePlayer = client.lavalink.getPlayer(guildId)
+            const state = await toPlayerStateResponse(guildId, requester.requesterId, livePlayer)
 
             return {
                 status: 200,

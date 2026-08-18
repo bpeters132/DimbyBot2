@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { authErrorMessage } from "../web/lib/auth-error-message.js"
 import { normalizeSearchParam } from "../web/lib/normalize-search-param.js"
-import { sanitizeErrorText } from "../web/lib/sanitize-log-text.js"
+import { sanitizeErrorText } from "../shared/sanitize-log-text.js"
 
 describe("sanitizeErrorText", () => {
     it("redacts bearer/basic auth, password, and token key=value forms", () => {
@@ -31,6 +31,12 @@ describe("sanitizeErrorText", () => {
         assert.match(out, /postgres:\/\/\[REDACTED]@/)
         assert.match(out, /\[REDACTED_JWT]/)
         assert.doesNotMatch(out, /user:pass|tok"|"cs"|"k"|eyJhbGci/)
+    })
+
+    it("redacts JSON secret values that contain escaped quotes", () => {
+        const out = sanitizeErrorText('{"token":"top\\"secret"} leftover', 2000)
+        assert.match(out, /"token":"\[REDACTED]"/)
+        assert.doesNotMatch(out, /secret/)
     })
 
     it("truncates output to maxLen with an ellipsis", () => {

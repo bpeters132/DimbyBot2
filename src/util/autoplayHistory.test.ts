@@ -10,11 +10,15 @@ import {
     isDuplicateAutoplayCandidate,
     isPlausibleAutoplayMusicTrack,
     isSamePrimaryArtist,
+    matchesCatalogCandidate,
+    normalizeAutoplayComparable,
     orderLavalinkTracksForAutoplay,
     orderSimilarByArtistVariety,
     primaryArtistKey,
     rememberAutoplayPlayed,
     songIdentityKey,
+    titlesLikelySameSong,
+    toggleAutoplay,
     youtubeVideoIdFromUri,
     canonicalSongCore,
     coreTrackTitle,
@@ -86,6 +90,147 @@ describe("title and artist normalization", () => {
         assert.equal(canonicalSongCore("Adele", "Adele - Hello (Lyrics)"), "hello")
         assert.equal(isSamePrimaryArtist("Adele ft. X", "Adele"), true)
         assert.equal(isSamePrimaryArtist("Adele", "Beyonce"), false)
+    })
+
+    it("normalizes diacritics, brackets, and punctuation for comparison", () => {
+        assert.equal(normalizeAutoplayComparable("Café (Live)"), "cafe")
+        assert.equal(normalizeAutoplayComparable("Song [Remix]!!!"), "song")
+        assert.equal(normalizeAutoplayComparable("  Multi   Space  "), "multi space")
+        assert.equal(normalizeAutoplayComparable(undefined), "")
+    })
+})
+
+describe("titlesLikelySameSong", () => {
+    it("matches long same-artist titles after promo noise is stripped", () => {
+        assert.equal(
+            titlesLikelySameSong(
+                "Someone Like You",
+                "Someone Like You (Official Music Video)",
+                "Adele",
+                "Adele"
+            ),
+            true
+        )
+        assert.equal(
+            titlesLikelySameSong(
+                "Rolling in the Deep",
+                "Adele - Rolling in the Deep Lyrics",
+                "Adele",
+                "Adele Topic"
+            ),
+            true
+        )
+    })
+
+    it("rejects different works even when artists match", () => {
+        assert.equal(titlesLikelySameSong("Someone Like You", "Hello", "Adele", "Adele"), false)
+        assert.equal(titlesLikelySameSong("Creep", "Karma Police", "Radiohead", "Radiohead"), false)
+    })
+
+    it("rejects similar short titles across incompatible artists", () => {
+        assert.equal(titlesLikelySameSong("Run", "Run", "Artist A", "Artist B"), false)
+        assert.equal(
+            titlesLikelySameSong(
+                "Totally Different Long Title Alpha",
+                "Completely Other Long Title Beta",
+                "Band One",
+                "Band Two"
+            ),
+            false
+        )
+    })
+})
+
+describe("matchesCatalogCandidate", () => {
+    it("fails closed on missing hit or blank catalog rows", () => {
+        assert.equal(
+            matchesCatalogCandidate(undefined, "Adele", "Hello", "Adele", undefined),
+            false
+        )
+        assert.equal(matchesCatalogCandidate(info(), "", "Hello", "Adele", undefined), false)
+        assert.equal(matchesCatalogCandidate(info(), "Adele", "  ", "Adele", undefined), false)
+    })
+
+    it("accepts Lavalink hits that match the catalog composition", () => {
+        assert.equal(
+            matchesCatalogCandidate(
+                info({ author: "Adele", title: "Hello (Lyrics)" }),
+                "Adele",
+                "Hello",
+                "seed-unused",
+                undefined
+            ),
+            true
+        )
+    })
+
+    it("rejects unrelated search top-hits for a catalog query", () => {
+        assert.equal(
+            matchesCatalogCandidate(
+                info({ author: "Random Channel", title: "Completely Unrelated Upload Name" }),
+                "Adele",
+                "Hello",
+                "Adele",
+                undefined
+            ),
+            false
+        )
+    })
+
+    it("matches via ended-track alternate spelling when catalog equals the seed work", () => {
+        const catalogArtist = "Adele"
+        const catalogTitle = "Hello There Friends Forever Zebra"
+        const ended = info({
+            author: "Adele",
+            title: "Hello There Friends Forever Yonder Remix Version Extra Words Here",
+        })
+        const candidate = info({
+            author: "Adele",
+            title: "Yonder Remix Version Extra Words Here",
+        })
+        assert.equal(
+            matchesCatalogCandidate(candidate, catalogArtist, catalogTitle, "unused", undefined),
+            false
+        )
+        assert.equal(
+            matchesCatalogCandidate(candidate, catalogArtist, catalogTitle, "unused", ended),
+            true
+        )
+    })
+})
+
+describe("toggleAutoplay", () => {
+    it("seeds recent history when enabling and clears it when disabling", () => {
+        const store = new Map<string, unknown>()
+        const player = {
+            get: (key: string) => store.get(key),
+            set: (key: string, value: unknown) => {
+                store.set(key, value)
+            },
+            queue: {
+                current: trackFromInfo(info({ author: "Seed", title: "Now Playing" })),
+                tracks: [],
+                previous: [trackFromInfo(info({ author: "Earlier", title: "Previous Track" }))],
+            },
+        } as unknown as Player
+
+        assert.equal(toggleAutoplay(player), true)
+        assert.equal(player.get("autoplay"), true)
+        assert.equal(
+            isAutoplayRecentlyPlayed(player, info({ author: "Seed", title: "Now Playing" })),
+            true
+        )
+        assert.equal(
+            isAutoplayRecentlyPlayed(player, info({ author: "Earlier", title: "Previous Track" })),
+            true
+        )
+
+        assert.equal(toggleAutoplay(player), false)
+        assert.equal(player.get("autoplay"), false)
+        assert.equal(
+            isAutoplayRecentlyPlayed(player, info({ author: "Seed", title: "Now Playing" })),
+            false
+        )
     })
 })
 
