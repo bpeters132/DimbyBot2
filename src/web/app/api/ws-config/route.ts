@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { resolvedBotApiPort } from "../../../../lib/botApiPortEnv.js"
+import { rewriteLocalDevPlayerWsUrl } from "@/shared/player-ws-url"
 
 /**
  * **Public by design:** `GET` returns only a non-sensitive WebSocket URL string (or null) so the
@@ -11,10 +12,11 @@ import { resolvedBotApiPort } from "../../../../lib/botApiPortEnv.js"
  * In `NODE_ENV=development`, when neither is set, uses `BOT_API_PORT` for `ws://localhost:{port}/ws`.
  */
 export function GET(): NextResponse {
+    const isDev = process.env.NODE_ENV === "development"
     const raw =
         process.env.WEBSOCKET_CLIENT_URL?.trim() || process.env.NEXT_PUBLIC_WS_URL?.trim() || ""
     if (!raw) {
-        if (process.env.NODE_ENV === "development") {
+        if (isDev) {
             const port = resolvedBotApiPort()
             return NextResponse.json({ wsUrl: `ws://localhost:${port}/ws` as string })
         }
@@ -25,13 +27,13 @@ export function GET(): NextResponse {
         if (u.protocol !== "ws:" && u.protocol !== "wss:") {
             return NextResponse.json({ wsUrl: null as string | null })
         }
-        if (u.protocol === "ws:" && process.env.NODE_ENV !== "development") {
+        if (u.protocol === "ws:" && !isDev) {
             return NextResponse.json({ wsUrl: null as string | null })
         }
         if (u.username || u.password) {
             return NextResponse.json({ wsUrl: null as string | null })
         }
-        return NextResponse.json({ wsUrl: u.toString() })
+        return NextResponse.json({ wsUrl: rewriteLocalDevPlayerWsUrl(u.toString(), isDev) })
     } catch {
         return NextResponse.json({ wsUrl: null as string | null })
     }
