@@ -7,3 +7,4 @@ Lavalink `http: true` is required for **Companion stream URL** playback. Allowli
 - Allow only the companion origin — rejected; it would break catalog URL play.
 - Leave user URLs unfiltered — rejected; a pasted `http://postgres-db:5432` could reach the compose network through Lavalink HTTP.
 - Allowlist known public music hosts only — rejected for this slice; public HTTP(S) URLs stay valid search input as long as the host is not private or Docker-internal.
+- Destination-IP pinning inside Lavalink (or an HTTP proxy that resolves, validates, and pins the dest IP) — out of scope; Lavalink’s HTTP source has no pin-IP hook, and bot-side DNS would be TOCTOU. Hostname denial at the user search boundary is the chosen control.

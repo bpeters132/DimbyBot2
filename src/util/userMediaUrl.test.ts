@@ -6,6 +6,7 @@ describe("isHttpUrlQuery", () => {
     it("detects http(s) prefixes", () => {
         assert.equal(isHttpUrlQuery("https://youtube.com/watch?v=dQw4w9WgXcQ"), true)
         assert.equal(isHttpUrlQuery("  http://open.spotify.com/track/abc  "), true)
+        assert.equal(isHttpUrlQuery("HTTP://127.0.0.1/"), true)
         assert.equal(isHttpUrlQuery("never gonna give you up"), false)
         assert.equal(isHttpUrlQuery("ytsearch:rick astley"), false)
     })
@@ -22,7 +23,11 @@ describe("isBlockedUserMediaUrl", () => {
 
     it("rejects loopback, RFC1918, and link-local addresses", () => {
         assert.equal(isBlockedUserMediaUrl("http://127.0.0.1:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://127.0.0.1/"), true)
+        assert.equal(isBlockedUserMediaUrl(" http://127.0.0.1:5432/"), true)
         assert.equal(isBlockedUserMediaUrl("http://localhost:3001/ws"), true)
+        assert.equal(isBlockedUserMediaUrl("http://localhost./"), true)
+        assert.equal(isBlockedUserMediaUrl("http://api.localhost./"), true)
         assert.equal(isBlockedUserMediaUrl("http://10.0.0.5/"), true)
         assert.equal(isBlockedUserMediaUrl("http://192.168.1.10/audio.mp3"), true)
         assert.equal(isBlockedUserMediaUrl("http://172.16.0.2/"), true)
@@ -30,6 +35,7 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://[::1]/"), true)
         assert.equal(isBlockedUserMediaUrl("http://[::ffff:127.0.0.1]/"), true)
         assert.equal(isBlockedUserMediaUrl("http://[fd12:3456:789a:1::1]/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://[fe90::1]/"), true)
     })
 
     it("rejects Docker-internal single-label hosts", () => {

@@ -29,7 +29,7 @@ import {
     resolveYoutubePlaybackTracks,
     companionPlaybackConfig,
 } from "./youtubeCompanionPlayback.js"
-import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "./userMediaUrl.js"
+import { isBlockedUserMediaUrl, isHttpUrlQuery, USER_MEDIA_URL_BLOCKED } from "./userMediaUrl.js"
 
 type SearchAttempt =
     | { source: string; success: true; loadType?: string }
@@ -189,12 +189,12 @@ export async function handleQueryAndPlay(
             )
         }
 
-        const isUrl = query.startsWith("http://") || query.startsWith("https://")
+        const isUrl = isHttpUrlQuery(query)
         let potentialUrlTrackInfo: Track | UnresolvedTrack | null = null
         let stringForLocalSearch = query
         let localMatchSourceIsUrlTitle = false
 
-        if (isUrl && isBlockedUserMediaUrl(query)) {
+        if (isBlockedUserMediaUrl(query)) {
             return {
                 success: false,
                 feedbackText: USER_MEDIA_URL_BLOCKED,

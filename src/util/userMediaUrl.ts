@@ -3,8 +3,7 @@ export const USER_MEDIA_URL_BLOCKED = "That URL isn't allowed."
 
 /** True when `query` looks like an HTTP(S) URL (user paste or dashboard play). */
 export function isHttpUrlQuery(query: string): boolean {
-    const trimmed = query.trim()
-    return trimmed.startsWith("http://") || trimmed.startsWith("https://")
+    return /^https?:\/\//i.test(query.trim())
 }
 
 /**
@@ -22,7 +21,10 @@ export function isBlockedUserMediaUrl(query: string): boolean {
 }
 
 function isBlockedUserMediaHost(hostname: string): boolean {
-    const host = hostname.replace(/^\[|\]$/g, "").toLowerCase()
+    const host = hostname
+        .replace(/^\[|\]$/g, "")
+        .toLowerCase()
+        .replace(/\.+$/, "")
     if (host === "localhost" || host.endsWith(".localhost")) return true
     if (isBlockedIpLiteral(host)) return true
     if (!host.includes(".") && !host.includes(":")) return true
@@ -33,8 +35,8 @@ function isBlockedIpLiteral(host: string): boolean {
     if (isBlockedIpv4(host)) return true
     if (!host.includes(":")) return false
     if (host === "::1" || host === "0:0:0:0:0:0:0:1") return true
-    if (host.startsWith("fe80:")) return true
     const firstHextet = Number.parseInt(host.split(":", 1)[0] ?? "", 16)
+    if (Number.isInteger(firstHextet) && (firstHextet & 0xffc0) === 0xfe80) return true
     if (Number.isInteger(firstHextet) && (firstHextet & 0xfe00) === 0xfc00) return true
     const mapped = mappedIpv4FromV6(host)
     return mapped != null && isBlockedIpv4(mapped)
