@@ -59,3 +59,11 @@ _Avoid_: Google login (unqualified), Discord OAuth, link YouTube account
 **Catalog track**:
 A Spotify (or similar) item that is title, artist, and URI only — it has no native audio stream.
 _Avoid_: Spotify stream, playable Spotify track
+
+**User media URL**:
+An HTTP(S) address a person types into `/play`, the dashboard, or playlist search to look up a track.
+_Avoid_: stream URL, companion URL, Lavalink HTTP source
+
+**Companion stream URL**:
+An HTTP address the bot mints from invidious-companion so Lavalink can play YouTube audio.
+_Avoid_: User media URL, youtube-source stream

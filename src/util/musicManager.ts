@@ -29,6 +29,7 @@ import {
     resolveYoutubePlaybackTracks,
     companionPlaybackConfig,
 } from "./youtubeCompanionPlayback.js"
+import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "./userMediaUrl.js"
 
 type SearchAttempt =
     | { source: string; success: true; loadType?: string }
@@ -192,6 +193,13 @@ export async function handleQueryAndPlay(
         let potentialUrlTrackInfo: Track | UnresolvedTrack | null = null
         let stringForLocalSearch = query
         let localMatchSourceIsUrlTitle = false
+
+        if (isUrl && isBlockedUserMediaUrl(query)) {
+            return {
+                success: false,
+                feedbackText: USER_MEDIA_URL_BLOCKED,
+            }
+        }
 
         if (isUrl) {
             try {
@@ -664,7 +672,7 @@ export async function handleQueryAndPlay(
                     if (isPlaylistEnqueue && playableTracks.length > 0) {
                         await player.queue.add(playableTracks)
                         client.debug(
-                            `[MusicManager] Enqueued playlist (${searchResult.tracks.length} tracks) for guild ${guildId}.`
+                            `[MusicManager] Enqueued playlist (${playableTracks.length} of ${searchResult.tracks.length} tracks) for guild ${guildId}.`
                         )
                     } else {
                         await player.queue.add(playableTracks[0]!)
@@ -681,7 +689,11 @@ export async function handleQueryAndPlay(
 
                     if (!feedbackText) {
                         if (isPlaylistEnqueue && searchResult.tracks.length > 0) {
-                            feedbackText = `Added playlist **${searchResult.playlist?.name ?? "Unknown Playlist"}** (${searchResult.tracks.length} songs) to the queue.`
+                            const skipped = searchResult.tracks.length - playableTracks.length
+                            feedbackText = `Added playlist **${searchResult.playlist?.name ?? "Unknown Playlist"}** (${playableTracks.length} songs) to the queue.`
+                            if (skipped > 0) {
+                                feedbackText += ` Skipped ${skipped} unplayable track(s).`
+                            }
                         } else {
                             feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`
                         }

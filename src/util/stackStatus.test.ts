@@ -13,5 +13,7 @@ describe("companionKeyLengthOk", () => {
         assert.equal(companionKeyLengthOk("short"), false)
         assert.equal(companionKeyLengthOk("changemechangemeX"), false)
         assert.equal(companionKeyLengthOk("changeme-changem"), false)
+        assert.equal(companionKeyLengthOk(" changemechangeme"), false)
+        assert.equal(companionKeyLengthOk("changemechangeme "), false)
     })
 })

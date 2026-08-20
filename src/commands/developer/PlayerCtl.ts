@@ -4,6 +4,7 @@ import type { ChatInputCommandInteraction } from "discord.js"
 
 import { formatDuration } from "../../util/formatDuration.js"
 import { ensurePlayerConnected } from "../../util/musicManager.js"
+import { isStaleSessionDiscordError } from "../../util/restorePlayerSessions.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -223,7 +224,18 @@ export default {
                         })
                         return
                     }
-                    const fetched = await client.channels.fetch(voiceChannelId).catch(() => null)
+                    let fetched
+                    try {
+                        fetched = await client.channels.fetch(voiceChannelId)
+                    } catch (err: unknown) {
+                        if (isStaleSessionDiscordError(err)) {
+                            await interaction.editReply({
+                                content: `❌ Voice channel ${voiceChannelId} is missing or not voice-based.`,
+                            })
+                            return
+                        }
+                        throw err
+                    }
                     if (!fetched || !fetched.isVoiceBased()) {
                         await interaction.editReply({
                             content: `❌ Voice channel ${voiceChannelId} is missing or not voice-based.`,

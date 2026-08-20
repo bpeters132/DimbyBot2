@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import type { PlayerStateResponse, QueueTrackSummary, WSMessage } from "@/types/web"
 import { sanitizeHttpUrl } from "@/lib/url-utils"
-import { playerWsFallbackProtocol, rewriteLocalDevPlayerWsUrl } from "@/shared/player-ws-url"
+import { playerWsFallbackProtocol, rewriteLocalDevPlayerWsUrl } from "@/shared/player-ws-url.js"
 
 const MAX_RECONNECT_ATTEMPTS = 12
 

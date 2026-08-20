@@ -16,7 +16,10 @@ import {
     schedulePlayerSessionSave,
 } from "./playerSessionPersistence.js"
 import { resolvePersistedTracks } from "./playerSessionTracks.js"
-import { resolveYoutubePlaybackTrack, companionPlaybackConfig } from "./youtubeCompanionPlayback.js"
+import {
+    resolveYoutubePlaybackTracks,
+    companionPlaybackConfig,
+} from "./youtubeCompanionPlayback.js"
 import {
     withGuildPlayerLifecycleReservation,
     withGuildPlayerQueueLock,
@@ -190,25 +193,12 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                 player,
                 tracksToRestore
             )
-            const playable: typeof resolved = []
-            let companionFailed = 0
-            for (const track of resolved) {
-                try {
-                    const next = await resolveYoutubePlaybackTrack(
-                        player,
-                        track,
-                        companionPlaybackConfig(client)
-                    )
-                    playable.push(next as (typeof resolved)[number])
-                } catch (companionErr: unknown) {
-                    companionFailed += 1
-                    const msg =
-                        companionErr instanceof Error ? companionErr.message : String(companionErr)
-                    client.warn(
-                        `[playerSession] restore companion resolve failed for ${guildId}: ${msg}`
-                    )
-                }
-            }
+            const playable = await resolveYoutubePlaybackTracks(
+                player,
+                resolved,
+                companionPlaybackConfig(client)
+            )
+            const companionFailed = resolved.length - playable.length
             const failedTotal = failed + companionFailed
             const transientTotal = transientFailures + companionFailed
             if (failedTotal > 0) {

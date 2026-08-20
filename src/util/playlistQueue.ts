@@ -14,6 +14,7 @@ import {
     companionPlaybackConfig,
     resolveYoutubePlaybackTracks,
 } from "./youtubeCompanionPlayback.js"
+import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "./userMediaUrl.js"
 
 /** True when the player has a current track or upcoming queue entries. */
 export function playerHasQueueContent(player: Player): boolean {
@@ -286,6 +287,9 @@ export async function searchTracksForPlaylist(
     const trimmed = query.trim()
     if (!trimmed) {
         return { ok: false, error: "Enter a search query or URL." }
+    }
+    if (isBlockedUserMediaUrl(trimmed)) {
+        return { ok: false, error: USER_MEDIA_URL_BLOCKED }
     }
     let res
     try {

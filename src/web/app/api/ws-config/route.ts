@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { resolvedBotApiPort } from "../../../../lib/botApiPortEnv.js"
-import { rewriteLocalDevPlayerWsUrl } from "@/shared/player-ws-url"
+import { rewriteLocalDevPlayerWsUrl } from "@/shared/player-ws-url.js"
 
 /**
  * **Public by design:** `GET` returns only a non-sensitive WebSocket URL string (or null) so the

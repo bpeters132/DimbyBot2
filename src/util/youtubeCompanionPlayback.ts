@@ -10,6 +10,8 @@ const LOG_PREFIX = "[YoutubeCompanion]"
 const YOUTUBE_VIDEO_ID_RE = /^[\w-]{11}$/
 const COMPANION_READY_RETRIES = 4
 const COMPANION_READY_RETRY_MS = 1500
+/** Per-attempt AbortSignal.timeout for companion HTTP (Node >= 24). */
+export const COMPANION_FETCH_TIMEOUT_MS = 10_000
 const DEFAULT_COMPANION_ORIGIN = "http://invidious-companion:8282"
 
 export type CompanionFetch = (
@@ -19,6 +21,7 @@ export type CompanionFetch = (
         headers?: Record<string, string>
         body?: string
         redirect?: "error" | "follow" | "manual"
+        signal?: AbortSignal
     }
 ) => Promise<Response>
 
@@ -28,6 +31,8 @@ export type CompanionPlaybackConfig = {
     fetchImpl?: CompanionFetch
     sleep?: (ms: number) => Promise<void>
     logger?: Partial<LoggerInterface>
+    /** Override {@link COMPANION_FETCH_TIMEOUT_MS} (tests). */
+    fetchTimeoutMs?: number
 }
 
 type FormatLike = {
@@ -306,6 +311,7 @@ async function companionFetchWithRetry(
         headers?: Record<string, string>
         body?: string
         redirect?: "error" | "follow" | "manual"
+        signal?: AbortSignal
     },
     config: CompanionPlaybackConfig,
     label: string
@@ -315,17 +321,34 @@ async function companionFetchWithRetry(
     const log = companionLogger(config)
     let last: Response | undefined
     for (let attempt = 0; attempt < COMPANION_READY_RETRIES; attempt++) {
-        const res = await fetchImpl(url, init)
-        last = res
-        if (res.status !== 503) return res
-        if (attempt < COMPANION_READY_RETRIES - 1) {
-            log.debug(
-                `${LOG_PREFIX} companion 503 retry ${attempt + 1}/${COMPANION_READY_RETRIES} for ${label}`
-            )
-            await sleep(COMPANION_READY_RETRY_MS * (attempt + 1))
+        const timeout = AbortSignal.timeout(config.fetchTimeoutMs ?? COMPANION_FETCH_TIMEOUT_MS)
+        const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout
+        try {
+            const res = await fetchImpl(url, { ...init, signal })
+            last = res
+            if (res.status !== 503) return res
+            if (attempt < COMPANION_READY_RETRIES - 1) {
+                log.debug(
+                    `${LOG_PREFIX} companion 503 retry ${attempt + 1}/${COMPANION_READY_RETRIES} for ${label}`
+                )
+                await sleep(COMPANION_READY_RETRY_MS * (attempt + 1))
+            }
+        } catch (err: unknown) {
+            if (isAbortError(err) && attempt < COMPANION_READY_RETRIES - 1) {
+                log.debug(
+                    `${LOG_PREFIX} companion timeout retry ${attempt + 1}/${COMPANION_READY_RETRIES} for ${label}`
+                )
+                await sleep(COMPANION_READY_RETRY_MS * (attempt + 1))
+                continue
+            }
+            throw err
         }
     }
     return last as Response
+}
+
+function isAbortError(err: unknown): boolean {
+    return err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError")
 }
 
 async function fetchCompanionPlayerJson(

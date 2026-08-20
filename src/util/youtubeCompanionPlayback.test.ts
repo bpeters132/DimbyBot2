@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import type { Player, Track } from "lavalink-client"
 import {
+    COMPANION_FETCH_TIMEOUT_MS,
     catalogYoutubeSearchQueries,
     companionLatestVersionPath,
     ensureCompanionOriginStreamUrl,
@@ -429,6 +430,44 @@ describe("resolveYoutubePlaybackTrack", () => {
             assert.equal(line.message.includes("Bearer"), false)
             assert.equal(line.message.includes("videoplayback"), false)
         }
+    })
+
+    it("retries companion fetches that abort on the per-attempt timeout", async () => {
+        let attempts = 0
+        const rec = recordingLogger()
+        const sleeps: number[] = []
+        const cfg = configWithFetch(
+            async (_url, init): Promise<Response> => {
+                attempts += 1
+                const signal = init?.signal
+                if (!signal) throw new Error("expected AbortSignal")
+                await new Promise<never>((_, reject) => {
+                    const fail = (): void => {
+                        const err = new Error("Aborted")
+                        err.name = "TimeoutError"
+                        reject(err)
+                    }
+                    if (signal.aborted) fail()
+                    else signal.addEventListener("abort", fail, { once: true })
+                })
+                throw new Error("expected abort")
+            },
+            sleeps,
+            rec.logger
+        )
+        cfg.fetchTimeoutMs = 20
+        await assert.rejects(
+            () => resolveYoutubePlaybackTrack(mockPlayer(), youtubeTrack(), cfg),
+            (err: unknown) => err instanceof Error && err.name === "TimeoutError"
+        )
+        assert.equal(COMPANION_FETCH_TIMEOUT_MS, 10_000)
+        assert.equal(attempts, 4)
+        assert.deepEqual(sleeps, [1500, 3000, 4500])
+        assert.ok(
+            rec.lines.some(
+                (line) => line.level === "debug" && line.message.includes("timeout retry")
+            )
+        )
     })
 
     it("does not re-resolve a track already proxied through companion", async () => {

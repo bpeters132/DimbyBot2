@@ -12,7 +12,7 @@ export type HttpProbeResult = {
 
 /** True when the companion secret is exactly 16 alphanumeric characters. */
 export function companionKeyLengthOk(key: string): boolean {
-    return /^[a-zA-Z0-9]{16}$/.test(key.trim())
+    return /^[a-zA-Z0-9]{16}$/.test(key)
 }
 
 /** HTTP GET with a short timeout. Any response (including 4xx) means the host is reachable. */

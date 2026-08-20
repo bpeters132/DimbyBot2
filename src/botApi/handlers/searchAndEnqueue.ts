@@ -17,6 +17,7 @@ import {
 } from "../../util/sameVoiceChannel.js"
 import { isMemberFetchNotFound } from "../../util/discordMemberFetchError.js"
 import { enqueueSearchTracksAssumingSearchDone } from "./enqueueSearchTracks.js"
+import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "../../util/userMediaUrl.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
 
@@ -59,6 +60,13 @@ export async function searchAndEnqueue(
     guard: SearchAndEnqueueGuard,
     options?: SearchAndEnqueueOptions
 ): Promise<SearchAndEnqueueResult> {
+    if (!options?.connectOnly && isBlockedUserMediaUrl(query)) {
+        return {
+            ok: false,
+            status: 400,
+            error: { error: USER_MEDIA_URL_BLOCKED },
+        }
+    }
     const guild = client.guilds.cache.get(guildId)
     if (!guild) {
         return {
