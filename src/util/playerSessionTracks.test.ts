@@ -118,4 +118,70 @@ describe("resolvePersistedTracks transient vs permanent failures", () => {
         assert.equal(result.failed, 1)
         assert.equal(result.transientFailures, 1)
     })
+
+    it("skips encoded decode for persisted YouTube URIs and searches the URI instead", async () => {
+        let decoded = false
+        const player = mockPlayer({
+            decode: async () => {
+                decoded = true
+                throw new Error("should not decode youtube encoded tracks")
+            },
+            search: async (uri) => ({
+                tracks: [
+                    {
+                        info: {
+                            title: "Song",
+                            uri,
+                            sourceName: "youtube",
+                            identifier: "dQw4w9WgXcQ",
+                        },
+                    },
+                ],
+            }),
+        })
+        const result = await resolvePersistedTracks(player, [
+            stored({
+                uri: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                encoded: "stale-youtube-or-http-encoded",
+            }),
+        ])
+        assert.equal(decoded, false)
+        assert.equal(result.resolved.length, 1)
+        assert.equal(result.failed, 0)
+        assert.equal(result.resolved[0]?.info.sourceName, "youtube")
+    })
+
+    it("skips encoded decode for persisted Spotify catalog URIs and searches the URI instead", async () => {
+        let decoded = false
+        const spotifyUri = "https://open.spotify.com/track/4hqIKGKzDVJXCnD80y2fyn"
+        const player = mockPlayer({
+            decode: async () => {
+                decoded = true
+                throw new Error("should not decode stale companion HTTP encodings")
+            },
+            search: async (uri) => ({
+                tracks: [
+                    {
+                        info: {
+                            title: "Song",
+                            uri,
+                            sourceName: "spotify",
+                            identifier: "4hqIKGKzDVJXCnD80y2fyn",
+                        },
+                    },
+                ],
+            }),
+        })
+        const result = await resolvePersistedTracks(player, [
+            stored({
+                uri: spotifyUri,
+                encoded: "stale-companion-http-encoded",
+            }),
+        ])
+        assert.equal(decoded, false)
+        assert.equal(result.resolved.length, 1)
+        assert.equal(result.failed, 0)
+        assert.equal(result.resolved[0]?.info.sourceName, "spotify")
+        assert.equal(result.resolved[0]?.info.uri, spotifyUri)
+    })
 })

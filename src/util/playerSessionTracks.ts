@@ -2,6 +2,7 @@ import type { Player, Track, UnresolvedTrack } from "lavalink-client"
 import type { PersistedQueueTrack } from "../types/index.js"
 import { getRequesterUserId, stampRequesterUserIdOnTracks } from "./rrqDisconnect.js"
 import { thumbnailFromLavalinkTrack } from "./trackThumbnail.js"
+import { isSpotifyCatalogUri, youtubeVideoIdFromUri } from "./youtubeCompanionPlayback.js"
 
 const RESOLVE_CONCURRENCY = 6
 
@@ -60,8 +61,12 @@ async function resolvePersistedTrackAtIndex(
 ): Promise<{ track: Track | null; transientFailure: boolean }> {
     const requester = stored.requesterId ?? "session-restore"
     let sawTransientFailure = false
+    const storedYoutubeId = youtubeVideoIdFromUri(stored.uri)
+    const storedSpotifyUri = isSpotifyCatalogUri(stored.uri)
 
-    if (stored.encoded) {
+    // Encoded YouTube/youtube-plugin tracks cannot play; HTTP companion encodings expire.
+    // Re-search persisted YouTube or Spotify catalog URIs so companion can mint a fresh stream.
+    if (stored.encoded && !storedYoutubeId && !storedSpotifyUri) {
         try {
             const decoded = await player.node.decode.singleTrack(stored.encoded, requester)
             if (isResolvedTrack(decoded)) {

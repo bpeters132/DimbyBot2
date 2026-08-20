@@ -5,6 +5,7 @@ import type { ChatInputCommandInteraction } from "discord.js"
 import fs from "fs"
 import path from "path"
 import { Buffer } from "node:buffer"
+import { lastMatchingLogLines } from "../../util/logReviewFilter.js"
 
 const DEFAULT_LINES = 50
 const MAX_LINES = 200
@@ -23,6 +24,12 @@ export default {
                 .setRequired(false)
                 .setMinValue(1)
                 .setMaxValue(MAX_LINES)
+        )
+        .addStringOption((option) =>
+            option
+                .setName("filter")
+                .setDescription("Only include lines containing this text (case-insensitive)")
+                .setRequired(false)
         ),
     /**
      * @param {import('../../lib/BotClient.js').default} client
@@ -54,6 +61,7 @@ export default {
         // --- End Developer Check ---
 
         const requestedLines = interaction.options.getInteger("lines") || DEFAULT_LINES
+        const filter = interaction.options.getString("filter")
         const logPath = client.logger?.getLogFilePath?.()
 
         if (!logPath) {
@@ -82,19 +90,22 @@ export default {
         }
 
         const lines = contents.trimEnd().split(/\r?\n/)
-        const sliceStart = Math.max(0, lines.length - requestedLines)
-        const recentLines = lines.slice(sliceStart)
+        const recentLines = lastMatchingLogLines(lines, filter, requestedLines)
         const recentText = recentLines.join("\n")
 
         if (!recentText) {
+            const hint = filter?.trim()
+                ? `No log lines matched filter \`${filter.trim()}\`.`
+                : "Log file is empty."
             return interaction.reply({
-                content: "Log file is empty.",
+                content: hint,
                 flags: [MessageFlags.Ephemeral],
             })
         }
 
         const fileName = path.basename(logPath)
-        const header = `Showing last ${recentLines.length} lines from ${fileName}.`
+        const filterNote = filter?.trim() ? ` matching \`${filter.trim()}\`` : ""
+        const header = `Showing last ${recentLines.length} lines${filterNote} from ${fileName}.`
 
         if (recentText.length > MAX_INLINE_LENGTH) {
             const buffer = Buffer.from(recentText, "utf8")

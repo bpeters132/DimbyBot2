@@ -304,12 +304,24 @@ export async function searchAndEnqueue(
         // during search despite the lifecycle reservation (reservations only defer orphan
         // idle teardown). Enqueueing onto the captured Player would mutate a zombie still
         // holding in-memory tracks and schedulePlayerSessionSave would resurrect the session.
-        const enqueued = await enqueueSearchTracksAssumingSearchDone(
-            () => client.lavalink.getPlayer(guildId),
-            guildId,
-            searchResult,
-            requesterId
-        )
+        let enqueued
+        try {
+            enqueued = await enqueueSearchTracksAssumingSearchDone(
+                () => client.lavalink.getPlayer(guildId),
+                guildId,
+                searchResult,
+                requesterId
+            )
+        } catch (err: unknown) {
+            await cleanupCreatedPlayer()
+            const message = err instanceof Error ? err.message : "YouTube playback resolve failed."
+            client.error("[searchAndEnqueue] companion resolve failed", { guildId, requesterId })
+            return {
+                ok: false,
+                status: 503,
+                error: { error: "Could not resolve YouTube playback.", details: message },
+            }
+        }
         if (enqueued.status === "no_player") {
             return {
                 ok: false,

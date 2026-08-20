@@ -16,6 +16,7 @@ import {
     schedulePlayerSessionSave,
 } from "./playerSessionPersistence.js"
 import { resolvePersistedTracks } from "./playerSessionTracks.js"
+import { resolveYoutubePlaybackTrack, companionPlaybackConfig } from "./youtubeCompanionPlayback.js"
 import {
     withGuildPlayerLifecycleReservation,
     withGuildPlayerQueueLock,
@@ -189,13 +190,34 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                 player,
                 tracksToRestore
             )
-            if (failed > 0) {
+            const playable: typeof resolved = []
+            let companionFailed = 0
+            for (const track of resolved) {
+                try {
+                    const next = await resolveYoutubePlaybackTrack(
+                        player,
+                        track,
+                        companionPlaybackConfig(client)
+                    )
+                    playable.push(next as (typeof resolved)[number])
+                } catch (companionErr: unknown) {
+                    companionFailed += 1
+                    const msg =
+                        companionErr instanceof Error ? companionErr.message : String(companionErr)
+                    client.warn(
+                        `[playerSession] restore companion resolve failed for ${guildId}: ${msg}`
+                    )
+                }
+            }
+            const failedTotal = failed + companionFailed
+            const transientTotal = transientFailures + companionFailed
+            if (failedTotal > 0) {
                 client.warn(
-                    `[playerSession] restore for ${guildId}: ${failed}/${tracksToRestore.length} tracks failed to resolve` +
-                        (transientFailures > 0 ? ` (${transientFailures} transient)` : "")
+                    `[playerSession] restore for ${guildId}: ${failedTotal}/${tracksToRestore.length} tracks failed to resolve` +
+                        (transientTotal > 0 ? ` (${transientTotal} transient)` : "")
                 )
             }
-            if (resolved.length === 0) {
+            if (playable.length === 0) {
                 // Concurrent /play (or web enqueue) may have filled this player while we resolved.
                 // Saves are blocked during restore-in-progress — destroying would drop that queue.
                 // Serialize check + destroy under the guild queue lock so an enqueue cannot land
@@ -216,7 +238,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                 }
                 // Lavalink/source blips that throw during decode/search must not wipe the snapshot.
                 // Deterministic no-match (search returned nothing usable) still deletes.
-                if (transientFailures > 0) {
+                if (transientTotal > 0) {
                     client.warn(
                         `[playerSession] restore for ${guildId}: no tracks resolved due to transient failures; preserving session`
                     )
@@ -234,7 +256,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                 if (shouldAbandonRestoreForConcurrentQueue(player)) {
                     return false
                 }
-                await player.queue.add(resolved)
+                await player.queue.add(playable)
                 return true
             })
 
@@ -261,7 +283,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
             }
 
             client.info(
-                `[playerSession] restored player for guild ${guildId} (${resolved.length} tracks, humans=${humans})`
+                `[playerSession] restored player for guild ${guildId} (${playable.length} tracks, humans=${humans})`
             )
 
             scheduleControlMessageUpdate(client, guildId)
@@ -271,13 +293,13 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
             // permanently drop those entries from the session snapshot. Mark preserve *before*
             // clearPlayerSessionRestoreInProgress so trackStart/trackEnd/shutdown/idle clear
             // cannot race and wipe the prior full row.
-            if (shouldPersistRestoredPlayerSession(transientFailures)) {
+            if (shouldPersistRestoredPlayerSession(transientTotal)) {
                 clearPlayerSessionPreservePriorSnapshot(guildId)
                 playerToPersist = player
             } else {
                 markPlayerSessionPreservePriorSnapshot(guildId)
                 client.warn(
-                    `[playerSession] restore for ${guildId}: skipping session save after ${transientFailures} transient failure(s); preserving prior snapshot`
+                    `[playerSession] restore for ${guildId}: skipping session save after ${transientTotal} transient failure(s); preserving prior snapshot`
                 )
             }
         })

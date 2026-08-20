@@ -6,6 +6,25 @@ echo "Lavalink Entrypoint: Starting..."
 # ==============================================================================
 # This uses environment variables passed into the container (e.g., from docker-compose)
 # to create the application.yml configuration file needed by Lavalink.
+#
+# After bumping youtube-plugin (or other plugin versions) below, recreate the
+# `lavalink-plugins` compose volume if Lavalink still loads the old JAR.
+
+YOUTUBE_OAUTH_YAML=""
+oauth_enabled=$(printf '%s' "${LAVALINK_YOUTUBE_OAUTH_ENABLED:-}" | tr '[:upper:]' '[:lower:]')
+if [ "$oauth_enabled" = "true" ] || [ "$oauth_enabled" = "1" ] || [ "$oauth_enabled" = "yes" ]; then
+    if [ -n "${LAVALINK_YOUTUBE_OAUTH_REFRESH_TOKEN:-}" ]; then
+        YOUTUBE_OAUTH_YAML=$(
+            cat << OAUTH
+    oauth:
+      enabled: true
+      refreshToken: "${LAVALINK_YOUTUBE_OAUTH_REFRESH_TOKEN}"
+OAUTH
+        )
+    else
+        echo "Lavalink Entrypoint: LAVALINK_YOUTUBE_OAUTH_ENABLED is set but refresh token is empty; skipping OAuth (would start a device-code flow)."
+    fi
+fi
 
 echo "Lavalink Entrypoint: Generating application.yml..."
 cat > application.yml << EOF
@@ -20,9 +39,15 @@ plugins:
       token: ${LAVALINK_YOUTUBE_POT_TOKEN}
       visitorData: ${LAVALINK_YOUTUBE_POT_VISITORDATA}
     clients:
+      - TVHTML5_SIMPLY
       - ANDROID_VR
       - WEB
       - WEBEMBEDDED
+    remoteCipher:
+      url: "${LAVALINK_YOUTUBE_CIPHER_URL:-http://yt-cipher:8001}"
+      password: "${LAVALINK_YOUTUBE_CIPHER_PASSWORD}"
+      userAgent: "dimbybot"
+${YOUTUBE_OAUTH_YAML}
   lavasrc:
     providers:
       - "ytsearch:\"%ISRC%\""
@@ -52,7 +77,7 @@ server:
   port: ${LAVALINK_PORT}
 lavalink:
   plugins:
-    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.0"
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
       repository: "https://maven.lavalink.dev/releases"
       snapshot: false
     - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.8.1"
@@ -68,7 +93,9 @@ lavalink:
       twitch: true
       vimeo: true
       nico: true
-      http: false # warning: keeping HTTP enabled without a proxy configured could expose your server's IP address.
+      # Enabled so Lavalink can play companion-proxied YouTube audio. The bot only enqueues
+      # URLs on the Docker network (http://invidious-companion:8282/...), never user-supplied HTTP.
+      http: true
       local: false
     filters: # All filters are enabled by default
       volume: true
@@ -93,6 +120,10 @@ lavalink:
     youtubeSearchEnabled: true
     soundcloudSearchEnabled: true
     gc-warnings: true
+    timeouts:
+      connectTimeoutMs: 10000
+      connectionRequestTimeoutMs: 10000
+      socketTimeoutMs: 10000
 
 EOF
 echo "Lavalink Entrypoint: application.yml generated successfully."
@@ -106,4 +137,4 @@ echo "Lavalink Entrypoint: application.yml generated successfully."
 # which is important for signal handling (like stopping the container).
 
 echo "Lavalink Entrypoint: Executing 'java -jar Lavalink.jar'..."
-exec java -jar Lavalink.jar 
+exec java -jar Lavalink.jar

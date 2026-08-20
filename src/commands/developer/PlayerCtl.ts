@@ -3,6 +3,7 @@ import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 
 import { formatDuration } from "../../util/formatDuration.js"
+import { ensurePlayerConnected } from "../../util/musicManager.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -51,6 +52,17 @@ export default {
                     option
                         .setName("guildid")
                         .setDescription("The ID of the guild to destroy the player for")
+                        .setRequired(true)
+                )
+        )
+        .addSubcommand((subcommand) =>
+            subcommand
+                .setName("reconnect")
+                .setDescription("Rejoin the current voice channel without changing the queue")
+                .addStringOption((option) =>
+                    option
+                        .setName("guildid")
+                        .setDescription("The ID of the guild to reconnect the player for")
                         .setRequired(true)
                 )
         ),
@@ -201,6 +213,28 @@ export default {
                         `✅ Destroyed player instance for Guild ID: ${guildId}`
                     )
                     client.debug(`[PlayerCtl] Destroyed player for guild ${guildId}`)
+                    break
+                }
+                case "reconnect": {
+                    const voiceChannelId = player.voiceChannelId
+                    if (!voiceChannelId) {
+                        await interaction.editReply({
+                            content: "❌ Player has no voice channel id; cannot reconnect.",
+                        })
+                        return
+                    }
+                    const fetched = await client.channels.fetch(voiceChannelId).catch(() => null)
+                    if (!fetched || !fetched.isVoiceBased()) {
+                        await interaction.editReply({
+                            content: `❌ Voice channel ${voiceChannelId} is missing or not voice-based.`,
+                        })
+                        return
+                    }
+                    await ensurePlayerConnected(client, player, fetched)
+                    await interaction.editReply(
+                        `✅ Rejoined voice channel for Guild ID: ${guildId} (queue unchanged).`
+                    )
+                    client.debug(`[PlayerCtl] Reconnected voice for guild ${guildId}`)
                     break
                 }
             }

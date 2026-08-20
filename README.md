@@ -47,10 +47,10 @@ Author is just a dude that can barely code but can figure things out.
 
 Dev splits **backend in Docker** from the **dashboard on the host**:
 
-| Piece                   | Where it runs                                            | How                                                                                             |
-| ----------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Bot, Lavalink, Postgres | Docker (`docker-compose.yml` + `docker-compose.dev.yml`) | `./dev-env.sh build` then `./dev-env.sh up` (or `yarn docker:dev:build` / `yarn docker:dev:up`) |
-| Next.js dashboard       | **Host** (not in the dev compose stack)                  | `yarn web:install` then `yarn dev:web`                                                          |
+| Piece                                         | Where it runs                                            | How                                                                                             |
+| --------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Bot, Lavalink, yt-cipher, companion, Postgres | Docker (`docker-compose.yml` + `docker-compose.dev.yml`) | `./dev-env.sh build` then `./dev-env.sh up` (or `yarn docker:dev:build` / `yarn docker:dev:up`) |
+| Next.js dashboard                             | **Host** (not in the dev compose stack)                  | `yarn web:install` then `yarn dev:web`                                                          |
 
 Production is different: the dashboard is the separate `dimbybot-web` container (`docker-compose.dashboard.yml` + `Dockerfile.web`). Do not expect `dimbybot-web` when using the dev compose files.
 
@@ -77,6 +77,10 @@ Production is different: the dashboard is the separate `dimbybot-web` container 
 5.  **Smoke-check before deploy:** Confirm containers are healthy (`docker compose … ps`, bot `GET /health` on `BOT_API_PORT`), then load the dashboard and sign in. Fix the Docker stack first; only then validate production images.
 
 `lavaNodesConfig.js` is optional in Docker dev—the entrypoint can generate it from compose env vars.
+
+## YouTube “sign in” errors
+
+Companion and yt-cipher do **not** silence Lavalink youtube-plugin login messages during YouTube search. Playback is a separate companion HTTP path. Follow [docs/youtube-playback-diagnosis.md](docs/youtube-playback-diagnosis.md) before enabling YouTube OAuth or adding a dashboard “link YouTube” flow.
 
 ## Usage
 

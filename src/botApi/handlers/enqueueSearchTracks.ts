@@ -3,6 +3,12 @@ import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { startPlaybackIfNeeded } from "../../util/musicManager.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
+import { tryGetBotClient } from "../../lib/botClientRegistry.js"
+import {
+    companionPlaybackConfig,
+    resolveYoutubePlaybackTrack,
+    resolveYoutubePlaybackTracks,
+} from "../../util/youtubeCompanionPlayback.js"
 
 export type EnqueueSearchTracksResult =
     | { status: "ok"; player: Player; playbackStarted: boolean; playbackError?: string }
@@ -24,16 +30,38 @@ export async function enqueueSearchTracksAssumingSearchDone(
     searchResult: SearchTracksEnqueuePayload,
     requesterId: string
 ): Promise<EnqueueSearchTracksResult> {
+    const liveForResolve = getLivePlayer()
+    if (!liveForResolve) return { status: "no_player" }
+
+    const tracksToEnqueue =
+        searchResult.loadType === "playlist" ? searchResult.tracks : [searchResult.tracks[0]!]
+    stampRequesterUserIdOnTracks(tracksToEnqueue, requesterId)
+    const isPlaylist = searchResult.loadType === "playlist"
+    const playableTracks = isPlaylist
+        ? await resolveYoutubePlaybackTracks(
+              liveForResolve,
+              tracksToEnqueue,
+              companionPlaybackConfig(tryGetBotClient() ?? undefined)
+          )
+        : [
+              await resolveYoutubePlaybackTrack(
+                  liveForResolve,
+                  tracksToEnqueue[0]!,
+                  companionPlaybackConfig(tryGetBotClient() ?? undefined)
+              ),
+          ]
+    if (playableTracks.length === 0) {
+        throw new Error("None of the playlist tracks could be prepared for playback.")
+    }
+
     return withGuildPlayerQueueLock(guildId, async () => {
         const live = getLivePlayer()
         if (!live) return { status: "no_player" }
 
-        if (searchResult.loadType === "playlist") {
-            stampRequesterUserIdOnTracks(searchResult.tracks, requesterId)
-            live.queue.add(searchResult.tracks)
+        if (isPlaylist) {
+            live.queue.add(playableTracks)
         } else {
-            stampRequesterUserIdOnTracks([searchResult.tracks[0]!], requesterId)
-            live.queue.add(searchResult.tracks[0]!)
+            live.queue.add(playableTracks[0]!)
         }
 
         const wasPlaying = live.playing

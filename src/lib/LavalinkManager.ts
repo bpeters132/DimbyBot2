@@ -31,6 +31,10 @@ import { updateControlMessage } from "../events/handlers/handleControlChannel.js
 import { getGuildSettings } from "../util/saveControlChannel.js"
 import { withGuildPlayerQueueLock } from "../util/guildPlayerQueueLock.js"
 import { isRRQActive, rebalancePlayerQueueRoundRobinAssumingLock } from "../util/rrqDisconnect.js"
+import {
+    resolveYoutubePlaybackTrack,
+    companionPlaybackConfig,
+} from "../util/youtubeCompanionPlayback.js"
 import type BotClient from "./BotClient.js"
 
 async function searchFirstPlayableTrack(
@@ -203,11 +207,26 @@ async function tryQueueAndPlayAutoplay(
 
         if (!shouldStillInjectAutoplayTrack(player)) return false
 
+        let playableTrack: Track | UnresolvedTrack
+        try {
+            playableTrack = await resolveYoutubePlaybackTrack(
+                player,
+                lavalinkTrack,
+                companionPlaybackConfig(client)
+            )
+        } catch (resolveErr: unknown) {
+            const rmsg = resolveErr instanceof Error ? resolveErr.message : String(resolveErr)
+            client.warn(
+                `[LavalinkManager] Autoplay companion resolve failed for "${lavalinkTrack.info?.title}": ${rmsg}`
+            )
+            return false
+        }
+
         // Hold the guild queue lock for inject + RRQ so dashboard replaceUpcoming rollback
         // (splice entire upcoming) cannot delete an unlocked autoplay enqueue mid-flight.
         const injected = await withGuildPlayerQueueLock(player.guildId, async () => {
             if (!shouldStillInjectAutoplayTrack(player)) return false
-            await player.queue.add(lavalinkTrack)
+            await player.queue.add(playableTrack)
             if (isRRQActive(player)) {
                 await rebalancePlayerQueueRoundRobinAssumingLock(player)
             }
@@ -224,7 +243,7 @@ async function tryQueueAndPlayAutoplay(
             )
             try {
                 await withGuildPlayerQueueLock(player.guildId, async () => {
-                    await player.queue.remove(lavalinkTrack)
+                    await player.queue.remove(playableTrack)
                 })
             } catch (removeErr: unknown) {
                 const rmsg = removeErr instanceof Error ? removeErr.message : String(removeErr)

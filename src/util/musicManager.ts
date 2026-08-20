@@ -24,6 +24,11 @@ import { getDownloadMetadataStore } from "./downloadMetadataStore.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
 import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
 import { memberMayJoinOccupiedVoice, resolveOccupiedVoiceChannelId } from "./sameVoiceChannel.js"
+import {
+    resolveYoutubePlaybackTrack,
+    resolveYoutubePlaybackTracks,
+    companionPlaybackConfig,
+} from "./youtubeCompanionPlayback.js"
 
 type SearchAttempt =
     | { source: string; success: true; loadType?: string }
@@ -630,19 +635,39 @@ export async function handleQueryAndPlay(
                 player.voiceChannelId = voiceChannel.id
                 previousVoiceChannelIdBeforeEnsure = null
 
+                const tracksToEnqueue =
+                    isPlaylistEnqueue && searchResult.tracks.length > 0
+                        ? searchResult.tracks
+                        : [trackToAdd]
+                stampRequesterUserIdOnTracks(tracksToEnqueue, requester.id)
+                const playableTracks = isPlaylistEnqueue
+                    ? await resolveYoutubePlaybackTracks(
+                          player,
+                          tracksToEnqueue,
+                          companionPlaybackConfig(client)
+                      )
+                    : [
+                          await resolveYoutubePlaybackTrack(
+                              player,
+                              tracksToEnqueue[0]!,
+                              companionPlaybackConfig(client)
+                          ),
+                      ]
+                if (playableTracks.length === 0) {
+                    throw new Error("None of the playlist tracks could be prepared for playback.")
+                }
+
                 // Serialize with dashboard clear/replace/reorder and RRQ splices. Unlocked
                 // queue.add raced replaceUpcoming rollback (splice(0, size) of the live
                 // queue), which deleted concurrent Discord /play enqueues.
                 await withGuildPlayerQueueLock(guildId, async () => {
-                    if (isPlaylistEnqueue && searchResult.tracks.length > 0) {
-                        stampRequesterUserIdOnTracks(searchResult.tracks, requester.id)
-                        await player.queue.add(searchResult.tracks)
+                    if (isPlaylistEnqueue && playableTracks.length > 0) {
+                        await player.queue.add(playableTracks)
                         client.debug(
                             `[MusicManager] Enqueued playlist (${searchResult.tracks.length} tracks) for guild ${guildId}.`
                         )
                     } else {
-                        stampRequesterUserIdOnTracks([trackToAdd], requester.id)
-                        await player.queue.add(trackToAdd)
+                        await player.queue.add(playableTracks[0]!)
                         client.debug(
                             `[MusicManager] Enqueued single track [${trackToAdd.info.title}].`
                         )

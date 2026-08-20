@@ -47,7 +47,7 @@ The current layout is intentional and supported: exclusion in `tsconfig.json` pl
 - `yarn dev` runs `tsc --watch` and `nodemon` together so `dist/` stays up to date.
 - Docker dev environment:
     - `./dev-env.sh build` builds images.
-    - `./dev-env.sh up` starts services (bot + Lavalink).
+    - `./dev-env.sh up` starts services (bot + Lavalink + yt-cipher + invidious-companion).
     - `make up` or `make down` provides the same via Makefile shortcuts.
 - Command deployment (after `yarn build`):
     - `yarn deployGlobal` / `yarn destroyGlobal`
