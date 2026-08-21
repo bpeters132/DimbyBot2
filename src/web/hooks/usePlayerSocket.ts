@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import type { PlayerStateResponse, QueueTrackSummary, WSMessage } from "@/types/web"
 import { sanitizeHttpUrl } from "@/lib/url-utils"
+import { playerWsFallbackProtocol, rewriteLocalDevPlayerWsUrl } from "@/shared/player-ws-url.js"
 
 const MAX_RECONNECT_ATTEMPTS = 12
 
@@ -91,15 +92,21 @@ export function usePlayerSocket(guildId: string, userId?: string): UsePlayerSock
             if (cancelled) return
 
             // Dev: bot WS on BOT_API_PORT (via /api/ws-config when fetch succeeds). Fallback uses NEXT_PUBLIC_BOT_API_PORT.
-            const protocol = window.location.protocol === "https:" ? "wss" : "ws"
+            const isDev = process.env.NODE_ENV === "development"
+            const protocol = playerWsFallbackProtocol({
+                isDev,
+                pageProtocol: window.location.protocol,
+                hostname: window.location.hostname,
+            })
             const devWsPort =
                 (typeof process !== "undefined" && process.env.NEXT_PUBLIC_BOT_API_PORT?.trim()) ||
                 "3001"
-            const base =
+            const rawBase =
                 serverWsUrl ||
-                (process.env.NODE_ENV === "development"
+                (isDev
                     ? `${protocol}://${window.location.hostname}:${devWsPort}/ws`
                     : `${protocol}://${window.location.host}/ws`)
+            const base = rewriteLocalDevPlayerWsUrl(rawBase, isDev)
 
             const url = new URL(base)
             if (ticket) {

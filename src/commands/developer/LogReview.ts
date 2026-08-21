@@ -5,10 +5,16 @@ import type { ChatInputCommandInteraction } from "discord.js"
 import fs from "fs"
 import path from "path"
 import { Buffer } from "node:buffer"
+import {
+    lastMatchingLogLines,
+    logReviewHeader,
+    logReviewInlineContent,
+    logReviewNoMatchContent,
+    MAX_INLINE_LOG_BODY,
+} from "../../util/logReviewFilter.js"
 
 const DEFAULT_LINES = 50
 const MAX_LINES = 200
-const MAX_INLINE_LENGTH = 1800
 
 export default {
     data: new SlashCommandBuilder()
@@ -23,6 +29,13 @@ export default {
                 .setRequired(false)
                 .setMinValue(1)
                 .setMaxValue(MAX_LINES)
+        )
+        .addStringOption((option) =>
+            option
+                .setName("filter")
+                .setDescription("Only include lines containing this text (case-insensitive)")
+                .setRequired(false)
+                .setMaxLength(256)
         ),
     /**
      * @param {import('../../lib/BotClient.js').default} client
@@ -54,6 +67,7 @@ export default {
         // --- End Developer Check ---
 
         const requestedLines = interaction.options.getInteger("lines") || DEFAULT_LINES
+        const filter = interaction.options.getString("filter")
         const logPath = client.logger?.getLogFilePath?.()
 
         if (!logPath) {
@@ -82,21 +96,20 @@ export default {
         }
 
         const lines = contents.trimEnd().split(/\r?\n/)
-        const sliceStart = Math.max(0, lines.length - requestedLines)
-        const recentLines = lines.slice(sliceStart)
+        const recentLines = lastMatchingLogLines(lines, filter, requestedLines)
         const recentText = recentLines.join("\n")
 
         if (!recentText) {
             return interaction.reply({
-                content: "Log file is empty.",
+                content: logReviewNoMatchContent(filter),
                 flags: [MessageFlags.Ephemeral],
             })
         }
 
         const fileName = path.basename(logPath)
-        const header = `Showing last ${recentLines.length} lines from ${fileName}.`
+        const header = logReviewHeader(recentLines.length, filter, fileName)
 
-        if (recentText.length > MAX_INLINE_LENGTH) {
+        if (recentText.length > MAX_INLINE_LOG_BODY) {
             const buffer = Buffer.from(recentText, "utf8")
             const attachment = new AttachmentBuilder(buffer, { name: "recent_logs.txt" })
             return interaction.reply({
@@ -107,7 +120,7 @@ export default {
         }
 
         return interaction.reply({
-            content: `${header}\n\n\`\`\`\n${recentText}\n\`\`\``,
+            content: logReviewInlineContent(header, recentText),
             flags: [MessageFlags.Ephemeral],
         })
     },

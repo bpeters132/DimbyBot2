@@ -17,6 +17,7 @@ import {
 } from "../../util/sameVoiceChannel.js"
 import { isMemberFetchNotFound } from "../../util/discordMemberFetchError.js"
 import { enqueueSearchTracksAssumingSearchDone } from "./enqueueSearchTracks.js"
+import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "../../util/userMediaUrl.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
 
@@ -59,6 +60,13 @@ export async function searchAndEnqueue(
     guard: SearchAndEnqueueGuard,
     options?: SearchAndEnqueueOptions
 ): Promise<SearchAndEnqueueResult> {
+    if (!options?.connectOnly && isBlockedUserMediaUrl(query)) {
+        return {
+            ok: false,
+            status: 400,
+            error: { error: USER_MEDIA_URL_BLOCKED },
+        }
+    }
     const guild = client.guilds.cache.get(guildId)
     if (!guild) {
         return {
@@ -304,12 +312,24 @@ export async function searchAndEnqueue(
         // during search despite the lifecycle reservation (reservations only defer orphan
         // idle teardown). Enqueueing onto the captured Player would mutate a zombie still
         // holding in-memory tracks and schedulePlayerSessionSave would resurrect the session.
-        const enqueued = await enqueueSearchTracksAssumingSearchDone(
-            () => client.lavalink.getPlayer(guildId),
-            guildId,
-            searchResult,
-            requesterId
-        )
+        let enqueued
+        try {
+            enqueued = await enqueueSearchTracksAssumingSearchDone(
+                () => client.lavalink.getPlayer(guildId),
+                guildId,
+                searchResult,
+                requesterId
+            )
+        } catch (err: unknown) {
+            await cleanupCreatedPlayer()
+            const message = err instanceof Error ? err.message : "YouTube playback resolve failed."
+            client.error("[searchAndEnqueue] companion resolve failed", { guildId, requesterId })
+            return {
+                ok: false,
+                status: 503,
+                error: { error: "Could not resolve YouTube playback.", details: message },
+            }
+        }
         if (enqueued.status === "no_player") {
             return {
                 ok: false,

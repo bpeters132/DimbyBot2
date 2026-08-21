@@ -13,6 +13,10 @@ services:
             - LAVALINK_PASSWORD=${LAVALINK_PASSWORD}
             - LAVALINK_YOUTUBE_POT_TOKEN=${LAVALINK_YOUTUBE_POT_TOKEN}
             - LAVALINK_YOUTUBE_POT_VISITORDATA=${LAVALINK_YOUTUBE_POT_VISITORDATA}
+            - LAVALINK_YOUTUBE_CIPHER_URL=${LAVALINK_YOUTUBE_CIPHER_URL:-http://yt-cipher:8001}
+            - LAVALINK_YOUTUBE_CIPHER_PASSWORD=${LAVALINK_YOUTUBE_CIPHER_PASSWORD:-dimbybot-dev-cipher}
+            - LAVALINK_YOUTUBE_OAUTH_ENABLED=${LAVALINK_YOUTUBE_OAUTH_ENABLED:-}
+            - LAVALINK_YOUTUBE_OAUTH_REFRESH_TOKEN=${LAVALINK_YOUTUBE_OAUTH_REFRESH_TOKEN:-}
             - LAVALINK_SPOTIFY_ENABLED=${LAVALINK_SPOTIFY_ENABLED}
             - LAVALINK_SPOTIFY_CLIENT_ID=${LAVALINK_SPOTIFY_CLIENT_ID}
             - LAVALINK_SPOTIFY_CLIENT_SECRET=${LAVALINK_SPOTIFY_CLIENT_SECRET}
@@ -35,6 +39,35 @@ services:
             - internal
         depends_on:
             - spotify-tokener
+            - yt-cipher
+            - invidious-companion
+
+    invidious-companion:
+        # Pinned multi-arch manifest digest — refresh with: docker buildx imagetools inspect quay.io/invidious/invidious-companion:latest --format "{{json .Manifest.Digest}}"
+        image: quay.io/invidious/invidious-companion@sha256:298cad3da121cc6ee290f00e6cc02a64feb36085097a3bba03d88eaa31d4dafd
+        container_name: invidious-companion
+        restart: unless-stopped
+        environment:
+            # Default bind is 127.0.0.1; other compose services cannot reach that.
+            - HOST=0.0.0.0
+            - PORT=8282
+            - SERVER_SECRET_KEY=${INVIDIOUS_COMPANION_KEY:-changemechangeme}
+            - SERVER_BASE_URL=${INVIDIOUS_COMPANION_URL:-http://invidious-companion:8282}
+        volumes:
+            - invidious-companion-cache:/var/tmp/youtubei.js
+        networks:
+            - internal
+
+    yt-cipher:
+        # Pinned multi-arch manifest digest (replaces a floating tag) — refresh with: docker buildx imagetools inspect ghcr.io/kikkia/yt-cipher:master --format "{{json .Manifest.Digest}}"
+        image: ghcr.io/kikkia/yt-cipher@sha256:4c5ec381ff57336cfc24822d2b526a5ad7cd0171f61065a1bbc87bb736842449
+        container_name: yt-cipher
+        restart: unless-stopped
+        environment:
+            - OVERRIDE_PLAYER_VARIANT=IAS
+            - API_TOKEN=${LAVALINK_YOUTUBE_CIPHER_PASSWORD:-dimbybot-dev-cipher}
+        networks:
+            - internal
 
     spotify-tokener:
         # Pinned multi-arch manifest digest (replaces a floating tag) — refresh with: docker buildx imagetools inspect ghcr.io/topi314/spotify-tokener:latest --format "{{json .Manifest.Digest}}"
@@ -71,6 +104,8 @@ services:
                 condition: service_healthy # Wait for lavalink to pass its health check
             postgres-db:
                 condition: service_healthy
+            invidious-companion:
+                condition: service_started
         environment:
             - NODE_ENV=production
             # These will be picked up by entrypoint.sh for lavaNodesConfig.js
@@ -108,6 +143,9 @@ services:
             - MUSICBRAINZ_CONTACT=${MUSICBRAINZ_CONTACT}
             - MUSICBRAINZ_CONTACT_URL=${MUSICBRAINZ_CONTACT_URL}
             - MUSICBRAINZ_SIMILAR=${MUSICBRAINZ_SIMILAR:-off}
+            # invidious-companion: YouTube stream URLs for Lavalink HTTP playback (search still uses youtube-source).
+            - INVIDIOUS_COMPANION_URL=${INVIDIOUS_COMPANION_URL:-http://invidious-companion:8282}
+            - INVIDIOUS_COMPANION_KEY=${INVIDIOUS_COMPANION_KEY:-changemechangeme}
             # Prefer DATABASE_URL from project .env (password URL-encoded). Fallback builds from POSTGRES_*.
             - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-db:5432/${POSTGRES_DB}}
         # Named volumes: persist across `compose up`/`down` (no -v). CI deploy uses this file only;
@@ -138,5 +176,8 @@ volumes:
     dimbybot-storage: {} # Define the new named volume for bot storage
     dimbybot-logs: {} # Define the new named volume for bot logs
     dimbybot-downloads: {} # Define the new named volume for downloaded music files
+    # After bumping plugin versions in Lavalink/entrypoint.sh, recreate this volume if the old JAR still loads:
+    # docker volume rm <compose-project>_lavalink-plugins
     lavalink-plugins: {} # Define the new named volume for lavalink plugins
+    invidious-companion-cache: {} # youtubei.js cache for invidious-companion
     postgres-data: {}

@@ -24,6 +24,16 @@ import { getDownloadMetadataStore } from "./downloadMetadataStore.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
 import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
 import { memberMayJoinOccupiedVoice, resolveOccupiedVoiceChannelId } from "./sameVoiceChannel.js"
+import {
+    resolveYoutubePlaybackTrack,
+    resolveYoutubePlaybackTracks,
+    companionPlaybackConfig,
+} from "./youtubeCompanionPlayback.js"
+import {
+    isBlockedUserMediaUrl,
+    trimmedHttpUrlQuery,
+    USER_MEDIA_URL_BLOCKED,
+} from "./userMediaUrl.js"
 
 type SearchAttempt =
     | { source: string; success: true; loadType?: string }
@@ -183,17 +193,25 @@ export async function handleQueryAndPlay(
             )
         }
 
-        const isUrl = query.startsWith("http://") || query.startsWith("https://")
+        const urlQuery = trimmedHttpUrlQuery(query)
+        const isUrl = urlQuery != null
         let potentialUrlTrackInfo: Track | UnresolvedTrack | null = null
         let stringForLocalSearch = query
         let localMatchSourceIsUrlTitle = false
 
+        if (isBlockedUserMediaUrl(query)) {
+            return {
+                success: false,
+                feedbackText: USER_MEDIA_URL_BLOCKED,
+            }
+        }
+
         if (isUrl) {
             try {
                 client.debug(
-                    `[MusicManager] Query is a URL. Probing Lavalink for title: "${query}"`
+                    `[MusicManager] Query is a URL. Probing Lavalink for title: "${urlQuery}"`
                 )
-                const probeResult = await player.search(query, requester)
+                const probeResult = await player.search(urlQuery, requester)
                 const plt = probeResult?.loadType as string | undefined
                 if (
                     probeResult &&
@@ -515,14 +533,14 @@ export async function handleQueryAndPlay(
                 }
             } else {
                 try {
-                    searchResult = await player.search(query, requester)
+                    searchResult = await player.search(urlQuery, requester)
                     mainSearchAttempts.push({
                         source: "direct-url",
                         success: true,
                         loadType: searchResult.loadType,
                     })
                     client.debug(
-                        `[MusicManager] Direct search (URL) completed. URL: "${query}", LoadType: ${searchResult.loadType}`
+                        `[MusicManager] Direct search (URL) completed. URL: "${urlQuery}", LoadType: ${searchResult.loadType}`
                     )
                 } catch (error: unknown) {
                     searchError = error instanceof Error ? error : new Error(String(error))
@@ -630,19 +648,39 @@ export async function handleQueryAndPlay(
                 player.voiceChannelId = voiceChannel.id
                 previousVoiceChannelIdBeforeEnsure = null
 
+                const tracksToEnqueue =
+                    isPlaylistEnqueue && searchResult.tracks.length > 0
+                        ? searchResult.tracks
+                        : [trackToAdd]
+                stampRequesterUserIdOnTracks(tracksToEnqueue, requester.id)
+                const playableTracks = isPlaylistEnqueue
+                    ? await resolveYoutubePlaybackTracks(
+                          player,
+                          tracksToEnqueue,
+                          companionPlaybackConfig(client)
+                      )
+                    : [
+                          await resolveYoutubePlaybackTrack(
+                              player,
+                              tracksToEnqueue[0]!,
+                              companionPlaybackConfig(client)
+                          ),
+                      ]
+                if (playableTracks.length === 0) {
+                    throw new Error("None of the playlist tracks could be prepared for playback.")
+                }
+
                 // Serialize with dashboard clear/replace/reorder and RRQ splices. Unlocked
                 // queue.add raced replaceUpcoming rollback (splice(0, size) of the live
                 // queue), which deleted concurrent Discord /play enqueues.
                 await withGuildPlayerQueueLock(guildId, async () => {
-                    if (isPlaylistEnqueue && searchResult.tracks.length > 0) {
-                        stampRequesterUserIdOnTracks(searchResult.tracks, requester.id)
-                        await player.queue.add(searchResult.tracks)
+                    if (isPlaylistEnqueue && playableTracks.length > 0) {
+                        await player.queue.add(playableTracks)
                         client.debug(
-                            `[MusicManager] Enqueued playlist (${searchResult.tracks.length} tracks) for guild ${guildId}.`
+                            `[MusicManager] Enqueued playlist (${playableTracks.length} of ${searchResult.tracks.length} tracks) for guild ${guildId}.`
                         )
                     } else {
-                        stampRequesterUserIdOnTracks([trackToAdd], requester.id)
-                        await player.queue.add(trackToAdd)
+                        await player.queue.add(playableTracks[0]!)
                         client.debug(
                             `[MusicManager] Enqueued single track [${trackToAdd.info.title}].`
                         )
@@ -656,7 +694,11 @@ export async function handleQueryAndPlay(
 
                     if (!feedbackText) {
                         if (isPlaylistEnqueue && searchResult.tracks.length > 0) {
-                            feedbackText = `Added playlist **${searchResult.playlist?.name ?? "Unknown Playlist"}** (${searchResult.tracks.length} songs) to the queue.`
+                            const skipped = searchResult.tracks.length - playableTracks.length
+                            feedbackText = `Added playlist **${searchResult.playlist?.name ?? "Unknown Playlist"}** (${playableTracks.length} songs) to the queue.`
+                            if (skipped > 0) {
+                                feedbackText += ` Skipped ${skipped} unplayable track(s).`
+                            }
                         } else {
                             feedbackText = `Added [${trackToAdd.info.title}](${trackToAdd.info.uri}) to the queue.`
                         }

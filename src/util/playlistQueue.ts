@@ -9,6 +9,12 @@ import {
 import { startPlaybackIfNeeded } from "./musicManager.js"
 import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
+import { tryGetBotClient } from "../lib/botClientRegistry.js"
+import {
+    companionPlaybackConfig,
+    resolveYoutubePlaybackTracks,
+} from "./youtubeCompanionPlayback.js"
+import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "./userMediaUrl.js"
 
 /** True when the player has a current track or upcoming queue entries. */
 export function playerHasQueueContent(player: Player): boolean {
@@ -157,10 +163,22 @@ export async function enqueueResolvedPlaylistTracks(
     if (tracks.length === 0) {
         return { queued: 0, failed: 0, playbackStarted: false }
     }
+    const liveForResolve = getLivePlayer()
+    if (!liveForResolve) return "no_player"
+    const playableTracks = (await resolveYoutubePlaybackTracks(
+        liveForResolve,
+        tracks,
+        companionPlaybackConfig(tryGetBotClient() ?? undefined)
+    )) as Track[]
+    const skipped = tracks.length - playableTracks.length
     return withGuildPlayerQueueLock(guildId, async () => {
         const live = getLivePlayer()
         if (!live) return "no_player"
-        return enqueueTracksUnderLock(live, tracks, requesterId, shuffle)
+        if (playableTracks.length === 0) {
+            return { queued: 0, failed: skipped, playbackStarted: false }
+        }
+        const result = await enqueueTracksUnderLock(live, playableTracks, requesterId, shuffle)
+        return { ...result, failed: skipped }
     })
 }
 
@@ -181,6 +199,17 @@ export async function replaceUpcomingWithResolvedPlaylistTracks(
     if (tracks.length === 0) {
         return { queued: 0, failed: 0, playbackStarted: false }
     }
+    const liveForResolve = getLivePlayer()
+    if (!liveForResolve) return "no_player"
+    const playableTracks = (await resolveYoutubePlaybackTracks(
+        liveForResolve,
+        tracks,
+        companionPlaybackConfig(tryGetBotClient() ?? undefined)
+    )) as Track[]
+    const skipped = tracks.length - playableTracks.length
+    if (playableTracks.length === 0) {
+        return { queued: 0, failed: skipped, playbackStarted: false }
+    }
     return withGuildPlayerQueueLock(guildId, async () => {
         const live = getLivePlayer()
         if (!live) return "no_player"
@@ -190,7 +219,8 @@ export async function replaceUpcomingWithResolvedPlaylistTracks(
             if (size > 0) {
                 await live.queue.splice(0, size)
             }
-            return await enqueueTracksUnderLock(live, tracks, requesterId, shuffle)
+            const result = await enqueueTracksUnderLock(live, playableTracks, requesterId, shuffle)
+            return { ...result, failed: skipped }
         } catch (enqueueErr: unknown) {
             try {
                 const size = live.queue.tracks.length
@@ -257,6 +287,9 @@ export async function searchTracksForPlaylist(
     const trimmed = query.trim()
     if (!trimmed) {
         return { ok: false, error: "Enter a search query or URL." }
+    }
+    if (isBlockedUserMediaUrl(trimmed)) {
+        return { ok: false, error: USER_MEDIA_URL_BLOCKED }
     }
     let res
     try {
