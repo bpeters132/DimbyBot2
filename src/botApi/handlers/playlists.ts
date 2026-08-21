@@ -31,6 +31,7 @@ import {
     pickPlayerForPlaylistSearch,
     searchTracksForPlaylist,
 } from "../../util/playlistQueue.js"
+import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "../../util/userMediaUrl.js"
 import {
     parseNewPosition,
     parsePlaylistId,
@@ -336,6 +337,19 @@ export async function playlistTracksPOST(
                 error: {
                     error: "Bad request",
                     details: "Invalid track body (title, uri, author, duration, addedAt).",
+                },
+            },
+        }
+    }
+
+    if (isBlockedUserMediaUrl(body.uri)) {
+        return {
+            status: 400,
+            body: {
+                ok: false,
+                error: {
+                    error: "Bad request",
+                    details: USER_MEDIA_URL_BLOCKED,
                 },
             },
         }

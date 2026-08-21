@@ -2,6 +2,7 @@ import type { Player, Track, UnresolvedTrack } from "lavalink-client"
 import type { PersistedQueueTrack } from "../types/index.js"
 import { getRequesterUserId, stampRequesterUserIdOnTracks } from "./rrqDisconnect.js"
 import { thumbnailFromLavalinkTrack } from "./trackThumbnail.js"
+import { isBlockedUserMediaUrl } from "./userMediaUrl.js"
 import { isSpotifyCatalogUri, youtubeVideoIdFromUri } from "./youtubeCompanionPlayback.js"
 
 const RESOLVE_CONCURRENCY = 6
@@ -61,6 +62,9 @@ async function resolvePersistedTrackAtIndex(
 ): Promise<{ track: Track | null; transientFailure: boolean }> {
     const requester = stored.requesterId ?? "session-restore"
     let sawTransientFailure = false
+    if (isBlockedUserMediaUrl(stored.uri)) {
+        return { track: null, transientFailure: false }
+    }
     const storedYoutubeId = youtubeVideoIdFromUri(stored.uri)
     const storedSpotifyUri = isSpotifyCatalogUri(stored.uri)
 

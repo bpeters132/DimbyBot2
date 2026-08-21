@@ -16,6 +16,18 @@ let countdownCache: CountdownStore = {}
 let initialized = false
 let saveCountdownChain: Promise<void> = Promise.resolve()
 
+type CountdownStoreDb = {
+    getAllCountdownsFromDatabase: typeof getAllCountdownsFromDatabase
+    createCountdown: typeof createCountdownInDatabase
+    deleteCountdown: typeof deleteCountdownInDatabase
+}
+
+let countdownStoreDb: CountdownStoreDb = {
+    getAllCountdownsFromDatabase,
+    createCountdown: createCountdownInDatabase,
+    deleteCountdown: deleteCountdownInDatabase,
+}
+
 /**
  * Deep-clones the countdown store. `structuredClone` is required here (not the JSON fallback)
  * because entries carry `Date` fields that JSON round-tripping would corrupt; Node 24+ always
@@ -29,6 +41,30 @@ function cloneEntry(entry: CountdownEntry): CountdownEntry {
     return structuredClone(entry)
 }
 
+/** Test-only: replace DB adapters (pass `null` to restore defaults). */
+export function setCountdownStoreDbForTests(next: Partial<CountdownStoreDb> | null): void {
+    countdownStoreDb = next
+        ? {
+              getAllCountdownsFromDatabase:
+                  next.getAllCountdownsFromDatabase ??
+                  countdownStoreDb.getAllCountdownsFromDatabase,
+              createCountdown: next.createCountdown ?? countdownStoreDb.createCountdown,
+              deleteCountdown: next.deleteCountdown ?? countdownStoreDb.deleteCountdown,
+          }
+        : {
+              getAllCountdownsFromDatabase,
+              createCountdown: createCountdownInDatabase,
+              deleteCountdown: deleteCountdownInDatabase,
+          }
+}
+
+/** Test-only: clear cache, init flag, and save lock chain. */
+export function resetCountdownStoreForTests(): void {
+    countdownCache = {}
+    initialized = false
+    saveCountdownChain = Promise.resolve()
+}
+
 /** Returns whether {@link initializeCountdownStore} has finished loading from the database. */
 export function isCountdownStoreInitialized(): boolean {
     return initialized
@@ -40,7 +76,7 @@ export async function initializeCountdownStore(
 ): Promise<void> {
     const logger = loggerFromPartial(loggerInstance)
     try {
-        const loaded = await getAllCountdownsFromDatabase()
+        const loaded = await countdownStoreDb.getAllCountdownsFromDatabase()
         countdownCache = cloneStore(loaded)
         initialized = true
         logger.info(
@@ -100,7 +136,7 @@ export function getCountdownsForGuild(guildId: string): CountdownEntry[] {
 export async function addCountdown(input: CountdownInput): Promise<CountdownEntry> {
     assertInitialized()
     return withCountdownSaveLock(async () => {
-        const created = await createCountdownInDatabase(input)
+        const created = await countdownStoreDb.createCountdown(input)
         countdownCache[created.id] = cloneEntry(created)
         return cloneEntry(created)
     })
@@ -110,7 +146,7 @@ export async function addCountdown(input: CountdownInput): Promise<CountdownEntr
 export async function removeCountdown(id: number): Promise<void> {
     assertInitialized()
     await withCountdownSaveLock(async () => {
-        await deleteCountdownInDatabase(id)
+        await countdownStoreDb.deleteCountdown(id)
         delete countdownCache[id]
     })
 }

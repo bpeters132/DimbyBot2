@@ -7,9 +7,12 @@ import type {
 } from "../types/index.js"
 import {
     downloadMetadataStoreKey,
-    effectiveDownloadMetadataGuildId,
     parseDownloadMetadataStoreKey,
 } from "../util/downloadMetadataKeys.js"
+import {
+    deleteConditionsForStoreKeys,
+    normalizedRowsFromStore,
+} from "../util/downloadMetadataNormalize.js"
 
 function toDownloadMetadataEntry(row: {
     guildId: string
@@ -31,76 +34,7 @@ function toDownloadMetadataEntry(row: {
     return entry
 }
 
-function storeKeyIsComposite(storeKey: string): boolean {
-    const parsed = parseDownloadMetadataStoreKey(storeKey)
-    return parsed.guildId !== null && parsed.guildId.length > 0
-}
-
 export type SkippedDownloadMetadataEntry = DownloadMetadataStoreSkippedEntry
-
-type NormalizedDownloadMetadataRow = {
-    fileName: string
-    guildId: string
-    downloadDate: Date | null
-    originalUrl: string | null
-    filePath: string | null
-}
-
-function normalizedRowsFromStore(store: DownloadsMetadataStore): {
-    rows: NormalizedDownloadMetadataRow[]
-    skippedEntries: SkippedDownloadMetadataEntry[]
-} {
-    const skippedEntries: SkippedDownloadMetadataEntry[] = []
-    const byGuildFile = new Map<
-        string,
-        {
-            row: NormalizedDownloadMetadataRow
-            sourceKey: string
-        }
-    >()
-
-    for (const [key, metadata] of Object.entries(store)) {
-        if (!metadata || typeof metadata !== "object") continue
-        const parsed = parseDownloadMetadataStoreKey(key)
-        const fileName = parsed.fileName
-        const guildId = effectiveDownloadMetadataGuildId(key, metadata)
-        if (guildId === null) {
-            console.debug("[downloadMetadata] skipping store row (no resolvable guildId)", {
-                key,
-                fileName: parsed.fileName,
-                downloadDate: metadata.downloadDate,
-            })
-            skippedEntries.push({ key, reason: "unresolvable-guild-id", fileName })
-            continue
-        }
-        const parsedDownloadDate =
-            metadata.downloadDate == null ? null : new Date(metadata.downloadDate)
-        const downloadDate =
-            parsedDownloadDate && Number.isFinite(parsedDownloadDate.getTime())
-                ? parsedDownloadDate
-                : null
-        const row: NormalizedDownloadMetadataRow = {
-            fileName,
-            guildId,
-            downloadDate,
-            originalUrl: metadata.originalUrl ?? null,
-            filePath: metadata.filePath ?? null,
-        }
-        const dedupeKey = `${guildId}|${fileName}`
-        const nextComposite = storeKeyIsComposite(key)
-        const prev = byGuildFile.get(dedupeKey)
-        if (!prev) {
-            byGuildFile.set(dedupeKey, { row, sourceKey: key })
-            continue
-        }
-        const prevComposite = storeKeyIsComposite(prev.sourceKey)
-        if (nextComposite && !prevComposite) {
-            byGuildFile.set(dedupeKey, { row, sourceKey: key })
-        }
-    }
-
-    return { rows: Array.from(byGuildFile.values()).map((e) => e.row), skippedEntries }
-}
 
 /** Reads all download metadata rows and returns the legacy map shape keyed by composite store key. */
 export async function getDownloadMetadataStoreFromDatabase(): Promise<DownloadsMetadataStore> {
@@ -137,32 +71,6 @@ export type ReplaceDownloadMetadataStoreOptions = {
     deleteStoreKeys?: string[]
 }
 
-function deleteConditionsForStoreKeys(
-    deleteStoreKeys: string[]
-): Prisma.DownloadMetadataWhereInput[] {
-    const conditions: Prisma.DownloadMetadataWhereInput[] = []
-    const seen = new Set<string>()
-    for (const storeKey of deleteStoreKeys) {
-        if (typeof storeKey !== "string" || !storeKey.trim()) continue
-        const parsed = parseDownloadMetadataStoreKey(storeKey)
-        const dedupe =
-            parsed.guildId !== null && parsed.guildId.length > 0
-                ? `${parsed.guildId}|${parsed.fileName}`
-                : `|${parsed.fileName}`
-        if (seen.has(dedupe)) continue
-        seen.add(dedupe)
-        // Only delete by composite `(guildId, fileName)`. A filename-only key (parsed.guildId null/empty)
-        // would translate to `{ fileName }`, matching that fileName across EVERY guild and wiping
-        // unrelated guilds' rows. DB rows always carry a guildId (NULL legacy rows were migrated to the
-        // UNKNOWN sentinel), so callers' keys from downloadMetadataKeysForFile are composite — the
-        // filename-only branch targets no real row precisely and is intentionally skipped here.
-        if (parsed.guildId !== null && parsed.guildId.length > 0) {
-            conditions.push({ guildId: parsed.guildId, fileName: parsed.fileName })
-        }
-    }
-    return conditions
-}
-
 export async function replaceDownloadMetadataStoreInDatabase(
     store: DownloadsMetadataStore,
     options?: ReplaceDownloadMetadataStoreOptions
@@ -196,7 +104,8 @@ export async function replaceDownloadMetadataStoreInDatabase(
             : rows.filter((row) => !deletedGuildFileKeys.has(`${row.guildId}|${row.fileName}`))
 
     await prisma.$transaction(async (tx) => {
-        const deleteConditions = deleteConditionsForStoreKeys(deleteStoreKeys)
+        const deleteConditions: Prisma.DownloadMetadataWhereInput[] =
+            deleteConditionsForStoreKeys(deleteStoreKeys)
         if (deleteConditions.length > 0) {
             const deleted = await tx.downloadMetadata.deleteMany({
                 where: { OR: deleteConditions },

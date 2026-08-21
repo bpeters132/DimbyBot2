@@ -12,6 +12,23 @@ describe("parseEventDateTime", () => {
         assert.equal(result.epochSeconds, Date.UTC(2026, 0, 16, 0, 30) / 1000)
     })
 
+    it("applies CDT (summer) offset for America/Chicago", () => {
+        const result = parseEventDateTime("2026-07-15", "18:30", "America/Chicago")
+        assert.equal(result.ok, true)
+        if (!result.ok) return
+        // 2026-07-15 18:30 CDT = 2026-07-15 23:30 UTC
+        assert.equal(result.epochSeconds, Date.UTC(2026, 6, 15, 23, 30) / 1000)
+    })
+
+    it("accepts leap-day 2024-02-29 and rejects 2025-02-29", () => {
+        const leap = parseEventDateTime("2024-02-29", "12:00", "UTC")
+        assert.equal(leap.ok, true)
+        if (leap.ok) {
+            assert.equal(leap.epochSeconds, Date.UTC(2024, 1, 29, 12, 0) / 1000)
+        }
+        assert.equal(parseEventDateTime("2025-02-29", "12:00", "UTC").ok, false)
+    })
+
     it("rejects bad formats, unknown zones, and impossible calendar dates", () => {
         assert.equal(parseEventDateTime("15-01-2026", "18:30", "UTC").ok, false)
         assert.equal(parseEventDateTime("2026-01-15", "25:00", "UTC").ok, false)
