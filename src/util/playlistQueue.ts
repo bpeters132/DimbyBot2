@@ -49,6 +49,11 @@ async function resolveStoredTrackAtIndex(
     uri: string,
     requester: unknown
 ): Promise<Track | null> {
+    // Defense in depth: skip private/Docker-internal hosts even if older rows bypassed
+    // playlistTracksPOST (Lavalink http:true would otherwise fetch the compose network).
+    if (isBlockedUserMediaUrl(uri)) {
+        return null
+    }
     try {
         const res = await player.search(uri, requester)
         const first = res?.tracks?.[0]

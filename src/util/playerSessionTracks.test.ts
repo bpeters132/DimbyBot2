@@ -39,6 +39,24 @@ function mockPlayer(hooks: {
 }
 
 describe("resolvePersistedTracks transient vs permanent failures", () => {
+    it("skips private/Docker-internal URIs without calling Lavalink search", async () => {
+        let searched = false
+        const player = mockPlayer({
+            search: async () => {
+                searched = true
+                return { tracks: [] }
+            },
+        })
+        const result = await resolvePersistedTracks(player, [
+            stored({ uri: "http://invidious-companion:8282/secret" }),
+            stored({ uri: "http://192.168.1.10/track.mp3", title: "Lan" }),
+        ])
+        assert.equal(searched, false)
+        assert.equal(result.resolved.length, 0)
+        assert.equal(result.failed, 2)
+        assert.equal(result.transientFailures, 0)
+    })
+
     it("reports transientFailures when URI search throws", async () => {
         const player = mockPlayer({
             search: async () => {
