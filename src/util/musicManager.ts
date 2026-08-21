@@ -661,80 +661,94 @@ export async function handleQueryAndPlay(
                         success = false
                         errorResult = new Error("Player destroyed during connect")
                     } else {
-                        if (liveAfterConnect !== liveBeforeConnect) {
-                            await ensurePlayerConnected(client, liveAfterConnect, voiceChannel)
+                        // Replacement connect can lose to /stop the same way the first wait can.
+                        // Re-resolve after that wait; reconnect once more if identity changed again.
+                        let liveForPlayback: Player | undefined = liveAfterConnect
+                        if (liveForPlayback !== liveBeforeConnect) {
+                            await ensurePlayerConnected(client, liveForPlayback, voiceChannel)
+                            liveForPlayback = client.lavalink.getPlayer(guildId)
                         }
-                        player = liveAfterConnect
-                        player.voiceChannelId = voiceChannel.id
-                        previousVoiceChannelIdBeforeEnsure = null
-
-                        const tracksToEnqueue =
-                            isPlaylistEnqueue && searchResult.tracks.length > 0
-                                ? searchResult.tracks
-                                : [trackToAdd]
-                        stampRequesterUserIdOnTracks(tracksToEnqueue, requester.id)
-                        const playableTracks = isPlaylistEnqueue
-                            ? await resolveYoutubePlaybackTracks(
-                                  player,
-                                  tracksToEnqueue,
-                                  companionPlaybackConfig(client)
-                              )
-                            : [
-                                  await resolveYoutubePlaybackTrack(
-                                      player,
-                                      tracksToEnqueue[0]!,
-                                      companionPlaybackConfig(client)
-                                  ),
-                              ]
-                        if (playableTracks.length === 0) {
-                            throw new Error(
-                                "None of the playlist tracks could be prepared for playback."
-                            )
+                        if (liveForPlayback && liveForPlayback !== liveAfterConnect) {
+                            await ensurePlayerConnected(client, liveForPlayback, voiceChannel)
+                            liveForPlayback = client.lavalink.getPlayer(guildId)
                         }
-
-                        const enqueued = await enqueueMusicManagerTracksAssumingSearchDone(
-                            () => client.lavalink.getPlayer(guildId),
-                            guildId,
-                            {
-                                isPlaylist: isPlaylistEnqueue,
-                                tracks: playableTracks,
-                                playlistName: searchResult.playlist?.name,
-                            },
-                            requester.id
-                        )
-                        if (enqueued.status === "no_player") {
+                        if (!liveForPlayback) {
                             feedbackText = `${requester}, The player stopped before the track could be queued. Try again.`
                             success = false
-                            errorResult = new Error("Player destroyed before enqueue")
+                            errorResult = new Error("Player destroyed during connect")
                         } else {
-                            player = enqueued.player
-                            if (!feedbackText) {
-                                feedbackText = enqueued.feedbackText
-                                if (isPlaylistEnqueue && searchResult.tracks.length > 0) {
-                                    const skipped =
-                                        searchResult.tracks.length - playableTracks.length
-                                    if (skipped > 0) {
-                                        feedbackText += ` Skipped ${skipped} unplayable track(s).`
+                            player = liveForPlayback
+                            player.voiceChannelId = voiceChannel.id
+                            previousVoiceChannelIdBeforeEnsure = null
+
+                            const tracksToEnqueue =
+                                isPlaylistEnqueue && searchResult.tracks.length > 0
+                                    ? searchResult.tracks
+                                    : [trackToAdd]
+                            stampRequesterUserIdOnTracks(tracksToEnqueue, requester.id)
+                            const playableTracks = isPlaylistEnqueue
+                                ? await resolveYoutubePlaybackTracks(
+                                      player,
+                                      tracksToEnqueue,
+                                      companionPlaybackConfig(client)
+                                  )
+                                : [
+                                      await resolveYoutubePlaybackTrack(
+                                          player,
+                                          tracksToEnqueue[0]!,
+                                          companionPlaybackConfig(client)
+                                      ),
+                                  ]
+                            if (playableTracks.length === 0) {
+                                throw new Error(
+                                    "None of the playlist tracks could be prepared for playback."
+                                )
+                            }
+
+                            const enqueued = await enqueueMusicManagerTracksAssumingSearchDone(
+                                () => client.lavalink.getPlayer(guildId),
+                                guildId,
+                                {
+                                    isPlaylist: isPlaylistEnqueue,
+                                    tracks: playableTracks,
+                                    playlistName: searchResult.playlist?.name,
+                                },
+                                requester.id
+                            )
+                            if (enqueued.status === "no_player") {
+                                feedbackText = `${requester}, The player stopped before the track could be queued. Try again.`
+                                success = false
+                                errorResult = new Error("Player destroyed before enqueue")
+                            } else {
+                                player = enqueued.player
+                                if (!feedbackText) {
+                                    feedbackText = enqueued.feedbackText
+                                    if (isPlaylistEnqueue && searchResult.tracks.length > 0) {
+                                        const skipped =
+                                            searchResult.tracks.length - playableTracks.length
+                                        if (skipped > 0) {
+                                            feedbackText += ` Skipped ${skipped} unplayable track(s).`
+                                        }
                                     }
                                 }
-                            }
-                            client.debug(
-                                `[MusicManager] Enqueued via live player for guild ${guildId}.`
-                            )
+                                client.debug(
+                                    `[MusicManager] Enqueued via live player for guild ${guildId}.`
+                                )
 
-                            // Play outside the queue lock so trackError → safeIdlePlayerDestroy cannot
-                            // nest on the same non-reentrant guild chain.
-                            client.debug(
-                                `[MusicManager] Before play check: player.playing=${player.playing}, player.queue.tracks.length=${player.queue.tracks.length}`
-                            )
-                            await startPlaybackIfNeeded(player)
-                            scheduleSaveIfPlayerStillLive(
-                                () => client.lavalink.getPlayer(guildId),
-                                player
-                            )
-                            client.debug(
-                                `[MusicManager] Lavalink player started playing [${player.queue.current?.info?.title || "track from queue"}].`
-                            )
+                                // Play outside the queue lock so trackError → safeIdlePlayerDestroy cannot
+                                // nest on the same non-reentrant guild chain.
+                                client.debug(
+                                    `[MusicManager] Before play check: player.playing=${player.playing}, player.queue.tracks.length=${player.queue.tracks.length}`
+                                )
+                                await startPlaybackIfNeeded(player)
+                                scheduleSaveIfPlayerStillLive(
+                                    () => client.lavalink.getPlayer(guildId),
+                                    player
+                                )
+                                client.debug(
+                                    `[MusicManager] Lavalink player started playing [${player.queue.current?.info?.title || "track from queue"}].`
+                                )
+                            }
                         }
                     }
                 } catch (playError: unknown) {
