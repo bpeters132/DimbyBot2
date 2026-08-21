@@ -57,6 +57,38 @@ describe("resolvePersistedTracks transient vs permanent failures", () => {
         assert.equal(result.transientFailures, 0)
     })
 
+    it("skips blocked URIs even when encoded decode would succeed", async () => {
+        let decoded = false
+        let searched = false
+        const player = mockPlayer({
+            decode: async () => {
+                decoded = true
+                return {
+                    info: {
+                        title: "Lan",
+                        uri: "http://192.168.1.10/track.mp3",
+                    },
+                }
+            },
+            search: async () => {
+                searched = true
+                return { tracks: [] }
+            },
+        })
+        const result = await resolvePersistedTracks(player, [
+            stored({
+                uri: "http://192.168.1.10/track.mp3",
+                title: "Lan",
+                encoded: "blocked-http-encoded",
+            }),
+        ])
+        assert.equal(decoded, false)
+        assert.equal(searched, false)
+        assert.equal(result.resolved.length, 0)
+        assert.equal(result.failed, 1)
+        assert.equal(result.transientFailures, 0)
+    })
+
     it("reports transientFailures when URI search throws", async () => {
         const player = mockPlayer({
             search: async () => {

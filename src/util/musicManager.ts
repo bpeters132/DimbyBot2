@@ -661,6 +661,9 @@ export async function handleQueryAndPlay(
                         success = false
                         errorResult = new Error("Player destroyed during connect")
                     } else {
+                        if (liveAfterConnect !== liveBeforeConnect) {
+                            await ensurePlayerConnected(client, liveAfterConnect, voiceChannel)
+                        }
                         player = liveAfterConnect
                         player.voiceChannelId = voiceChannel.id
                         previousVoiceChannelIdBeforeEnsure = null

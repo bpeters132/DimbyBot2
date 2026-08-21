@@ -62,6 +62,9 @@ async function resolvePersistedTrackAtIndex(
 ): Promise<{ track: Track | null; transientFailure: boolean }> {
     const requester = stored.requesterId ?? "session-restore"
     let sawTransientFailure = false
+    if (isBlockedUserMediaUrl(stored.uri)) {
+        return { track: null, transientFailure: false }
+    }
     const storedYoutubeId = youtubeVideoIdFromUri(stored.uri)
     const storedSpotifyUri = isSpotifyCatalogUri(stored.uri)
 
@@ -83,9 +86,6 @@ async function resolvePersistedTrackAtIndex(
     }
 
     if (stored.uri) {
-        if (isBlockedUserMediaUrl(stored.uri)) {
-            return { track: null, transientFailure: false }
-        }
         try {
             const res = await player.search(stored.uri, requester)
             const first = res?.tracks?.[0]
