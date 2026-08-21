@@ -4,6 +4,7 @@ import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import { enqueuePlayNextTrackAssumingSearchDone } from "../../util/playNextEnqueue.js"
 import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
+import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "../../util/userMediaUrl.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -31,6 +32,13 @@ export default {
         }
 
         const query = interaction.options.getString("query", true)
+
+        if (isBlockedUserMediaUrl(query)) {
+            return interaction.reply({
+                content: USER_MEDIA_URL_BLOCKED,
+                ephemeral: true,
+            })
+        }
 
         const player = client.lavalink.getPlayer(guild.id)
 
