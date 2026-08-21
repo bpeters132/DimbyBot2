@@ -29,7 +29,11 @@ import {
     resolveYoutubePlaybackTracks,
     companionPlaybackConfig,
 } from "./youtubeCompanionPlayback.js"
-import { isBlockedUserMediaUrl, isHttpUrlQuery, USER_MEDIA_URL_BLOCKED } from "./userMediaUrl.js"
+import {
+    isBlockedUserMediaUrl,
+    trimmedHttpUrlQuery,
+    USER_MEDIA_URL_BLOCKED,
+} from "./userMediaUrl.js"
 
 type SearchAttempt =
     | { source: string; success: true; loadType?: string }
@@ -189,7 +193,8 @@ export async function handleQueryAndPlay(
             )
         }
 
-        const isUrl = isHttpUrlQuery(query)
+        const urlQuery = trimmedHttpUrlQuery(query)
+        const isUrl = urlQuery != null
         let potentialUrlTrackInfo: Track | UnresolvedTrack | null = null
         let stringForLocalSearch = query
         let localMatchSourceIsUrlTitle = false
@@ -204,9 +209,9 @@ export async function handleQueryAndPlay(
         if (isUrl) {
             try {
                 client.debug(
-                    `[MusicManager] Query is a URL. Probing Lavalink for title: "${query}"`
+                    `[MusicManager] Query is a URL. Probing Lavalink for title: "${urlQuery}"`
                 )
-                const probeResult = await player.search(query, requester)
+                const probeResult = await player.search(urlQuery, requester)
                 const plt = probeResult?.loadType as string | undefined
                 if (
                     probeResult &&
@@ -528,14 +533,14 @@ export async function handleQueryAndPlay(
                 }
             } else {
                 try {
-                    searchResult = await player.search(query, requester)
+                    searchResult = await player.search(urlQuery, requester)
                     mainSearchAttempts.push({
                         source: "direct-url",
                         success: true,
                         loadType: searchResult.loadType,
                     })
                     client.debug(
-                        `[MusicManager] Direct search (URL) completed. URL: "${query}", LoadType: ${searchResult.loadType}`
+                        `[MusicManager] Direct search (URL) completed. URL: "${urlQuery}", LoadType: ${searchResult.loadType}`
                     )
                 } catch (error: unknown) {
                     searchError = error instanceof Error ? error : new Error(String(error))

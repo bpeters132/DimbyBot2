@@ -6,6 +6,12 @@ export function isHttpUrlQuery(query: string): boolean {
     return /^https?:\/\//i.test(query.trim())
 }
 
+/** Trimmed HTTP(S) string for Lavalink `player.search`, or `null` when `query` is not an HTTP URL. */
+export function trimmedHttpUrlQuery(query: string): string | null {
+    if (!isHttpUrlQuery(query)) return null
+    return query.trim()
+}
+
 /**
  * True when a User media URL must not be sent to Lavalink: loopback, RFC1918,
  * link-local, or a single-label Docker DNS name. Non-URLs (ytsearch text) are allowed.
@@ -34,7 +40,7 @@ function isBlockedUserMediaHost(hostname: string): boolean {
 function isBlockedIpLiteral(host: string): boolean {
     if (isBlockedIpv4(host)) return true
     if (!host.includes(":")) return false
-    if (host === "::1" || host === "0:0:0:0:0:0:0:1") return true
+    if (host === "::" || host === "::1" || host === "0:0:0:0:0:0:0:1") return true
     const firstHextet = Number.parseInt(host.split(":", 1)[0] ?? "", 16)
     if (Number.isInteger(firstHextet) && (firstHextet & 0xffc0) === 0xfe80) return true
     if (Number.isInteger(firstHextet) && (firstHextet & 0xfe00) === 0xfc00) return true

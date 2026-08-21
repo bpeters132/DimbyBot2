@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { isBlockedUserMediaUrl, isHttpUrlQuery } from "./userMediaUrl.js"
+import { isBlockedUserMediaUrl, isHttpUrlQuery, trimmedHttpUrlQuery } from "./userMediaUrl.js"
 
 describe("isHttpUrlQuery", () => {
     it("detects http(s) prefixes", () => {
@@ -9,6 +9,16 @@ describe("isHttpUrlQuery", () => {
         assert.equal(isHttpUrlQuery("HTTP://127.0.0.1/"), true)
         assert.equal(isHttpUrlQuery("never gonna give you up"), false)
         assert.equal(isHttpUrlQuery("ytsearch:rick astley"), false)
+    })
+})
+
+describe("trimmedHttpUrlQuery", () => {
+    it("returns the trimmed URL for whitespace-padded public catalog URLs", () => {
+        assert.equal(
+            trimmedHttpUrlQuery("  https://www.youtube.com/watch?v=dQw4w9WgXcQ  "),
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        )
+        assert.equal(trimmedHttpUrlQuery("never gonna give you up"), null)
     })
 })
 
@@ -32,6 +42,7 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://192.168.1.10/audio.mp3"), true)
         assert.equal(isBlockedUserMediaUrl("http://172.16.0.2/"), true)
         assert.equal(isBlockedUserMediaUrl("http://169.254.1.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://[::]/"), true)
         assert.equal(isBlockedUserMediaUrl("http://[::1]/"), true)
         assert.equal(isBlockedUserMediaUrl("http://[::ffff:127.0.0.1]/"), true)
         assert.equal(isBlockedUserMediaUrl("http://[fd12:3456:789a:1::1]/"), true)
