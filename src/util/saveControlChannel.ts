@@ -18,9 +18,43 @@ let guildSettingsCache: GuildSettingsStore = {}
 let guildSettingsInitialized = false
 let saveGuildSettingsChain: Promise<void> = Promise.resolve()
 
+type GuildSettingsStoreDb = {
+    getGuildSettingsStoreFromDatabase: typeof getGuildSettingsStoreFromDatabase
+    replaceGuildSettingsStoreInDatabase: typeof replaceGuildSettingsStoreInDatabase
+}
+
+let guildSettingsStoreDb: GuildSettingsStoreDb = {
+    getGuildSettingsStoreFromDatabase,
+    replaceGuildSettingsStoreInDatabase,
+}
+
 /** Returns whether {@link initializeGuildSettingsStore} has finished loading settings from the database. */
 export function isGuildSettingsInitialized(): boolean {
     return guildSettingsInitialized
+}
+
+/** Test-only: replace DB adapters (pass `null` to restore defaults). */
+export function setGuildSettingsStoreDbForTests(next: Partial<GuildSettingsStoreDb> | null): void {
+    guildSettingsStoreDb = next
+        ? {
+              getGuildSettingsStoreFromDatabase:
+                  next.getGuildSettingsStoreFromDatabase ??
+                  guildSettingsStoreDb.getGuildSettingsStoreFromDatabase,
+              replaceGuildSettingsStoreInDatabase:
+                  next.replaceGuildSettingsStoreInDatabase ??
+                  guildSettingsStoreDb.replaceGuildSettingsStoreInDatabase,
+          }
+        : {
+              getGuildSettingsStoreFromDatabase,
+              replaceGuildSettingsStoreInDatabase,
+          }
+}
+
+/** Test-only: clear cache, init flag, and save lock chain. */
+export function resetGuildSettingsStoreForTests(): void {
+    guildSettingsCache = {}
+    guildSettingsInitialized = false
+    saveGuildSettingsChain = Promise.resolve()
 }
 
 function cloneGuildSettingsStore(store: GuildSettingsStore): GuildSettingsStore {
@@ -53,7 +87,7 @@ async function readGuildSettingsFromDatabase(
     const logger = loggerFromPartial(loggerInstance)
     logger.debug("[guildSettings] Attempting to load settings from database.")
     try {
-        const store = await getGuildSettingsStoreFromDatabase()
+        const store = await guildSettingsStoreDb.getGuildSettingsStoreFromDatabase()
         logger.debug(
             `[guildSettings] Successfully loaded ${Object.keys(store).length} guild settings rows.`
         )
@@ -185,7 +219,7 @@ export async function saveGuildSettings(
             for (const guildId of effectiveDeleteGuildIds) {
                 delete merged[guildId]
             }
-            const result = await replaceGuildSettingsStoreInDatabase(merged, {
+            const result = await guildSettingsStoreDb.replaceGuildSettingsStoreInDatabase(merged, {
                 deleteGuildIds: effectiveDeleteGuildIds,
             })
             const reloaded = await readGuildSettingsFromDatabase(logger)
