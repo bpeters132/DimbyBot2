@@ -1,4 +1,8 @@
-import type { DownloadsMetadataStore, LoggerInterface } from "../types/index.js"
+import type {
+    DownloadsMetadataStore,
+    LoggerInterface,
+    ReplaceDownloadMetadataStoreFn,
+} from "../types/index.js"
 import {
     getDownloadMetadataStoreFromDatabase,
     replaceDownloadMetadataStoreInDatabase,
@@ -10,10 +14,46 @@ let downloadMetadataCache: DownloadsMetadataStore = {}
 let initialized = false
 let saveDownloadMetadataChain: Promise<void> = Promise.resolve()
 
+type DownloadMetadataStoreDb = {
+    getDownloadMetadataStoreFromDatabase: typeof getDownloadMetadataStoreFromDatabase
+    replaceDownloadMetadataStoreInDatabase: ReplaceDownloadMetadataStoreFn
+}
+
+let downloadMetadataStoreDb: DownloadMetadataStoreDb = {
+    getDownloadMetadataStoreFromDatabase,
+    replaceDownloadMetadataStoreInDatabase,
+}
+
 function cloneStore(store: DownloadsMetadataStore): DownloadsMetadataStore {
     return typeof structuredClone === "function"
         ? structuredClone(store)
         : (JSON.parse(JSON.stringify(store)) as DownloadsMetadataStore)
+}
+
+/** Test-only: replace DB adapters (pass `null` to restore defaults). */
+export function setDownloadMetadataStoreDbForTests(
+    next: Partial<DownloadMetadataStoreDb> | null
+): void {
+    downloadMetadataStoreDb = next
+        ? {
+              getDownloadMetadataStoreFromDatabase:
+                  next.getDownloadMetadataStoreFromDatabase ??
+                  downloadMetadataStoreDb.getDownloadMetadataStoreFromDatabase,
+              replaceDownloadMetadataStoreInDatabase:
+                  next.replaceDownloadMetadataStoreInDatabase ??
+                  downloadMetadataStoreDb.replaceDownloadMetadataStoreInDatabase,
+          }
+        : {
+              getDownloadMetadataStoreFromDatabase,
+              replaceDownloadMetadataStoreInDatabase,
+          }
+}
+
+/** Test-only: clear cache, init flag, and save lock chain. */
+export function resetDownloadMetadataStoreForTests(): void {
+    downloadMetadataCache = {}
+    initialized = false
+    saveDownloadMetadataChain = Promise.resolve()
 }
 
 /** Loads download metadata from the database into the in-memory cache. */
@@ -22,7 +62,7 @@ export async function initializeDownloadMetadataStore(
 ): Promise<void> {
     const logger = loggerFromPartial(loggerInstance)
     try {
-        const loaded = await getDownloadMetadataStoreFromDatabase()
+        const loaded = await downloadMetadataStoreDb.getDownloadMetadataStoreFromDatabase()
         downloadMetadataCache = loaded
         initialized = true
         logger.info(
@@ -84,17 +124,21 @@ export async function saveDownloadMetadataStore(
     return withDownloadMetadataSaveLock(async () => {
         const logger = loggerFromPartial(loggerInstance)
         try {
-            const dbStore = await getDownloadMetadataStoreFromDatabase()
+            const dbStore = await downloadMetadataStoreDb.getDownloadMetadataStoreFromDatabase()
             // Strip deleteStoreKeys from the upsert map so delete-then-upsert cannot resurrect rows.
             const merged = mergeDownloadMetadataForSave(dbStore, nextCache, {
                 deleteStoreKeys,
                 touchedStoreKeys: hasTouchedOption ? touchedStoreKeys : undefined,
             })
-            const result = await replaceDownloadMetadataStoreInDatabase(merged, {
-                deleteStoreKeys,
-            })
+            const result = await downloadMetadataStoreDb.replaceDownloadMetadataStoreInDatabase(
+                merged,
+                {
+                    deleteStoreKeys,
+                }
+            )
             try {
-                const persistedCache = await getDownloadMetadataStoreFromDatabase()
+                const persistedCache =
+                    await downloadMetadataStoreDb.getDownloadMetadataStoreFromDatabase()
                 downloadMetadataCache = cloneStore(persistedCache)
                 initialized = true
             } catch (reloadErr: unknown) {
