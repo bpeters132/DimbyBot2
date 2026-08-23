@@ -5,7 +5,7 @@ import {
     stampRequesterUserIdOnTracks,
 } from "./rrqDisconnect.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
-import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
+export { scheduleSaveIfPlayerStillLive } from "./playerSessionPersistence.js"
 
 export type MusicManagerEnqueuePayload = {
     isPlaylist: boolean
@@ -62,17 +62,6 @@ export async function enqueueMusicManagerTracksAssumingSearchDone(
 
         return { status: "ok", player: live, feedbackText }
     })
-}
-
-/** Persist only when the guild still has this live player (never a post-destroy zombie). */
-export function scheduleSaveIfPlayerStillLive(
-    getLivePlayer: () => Player | undefined,
-    expected: Player
-): void {
-    const live = getLivePlayer()
-    if (live && live === expected) {
-        schedulePlayerSessionSave(live)
-    }
 }
 
 /**

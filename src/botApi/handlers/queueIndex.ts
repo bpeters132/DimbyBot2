@@ -5,7 +5,7 @@ import { requirePermissions } from "../../shared/api-auth.js"
 import { getBotClient, tryGetBotClient } from "../../lib/botClientRegistry.js"
 import { toQueueResponse } from "../../shared/player-state.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
-import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
+import { scheduleSaveIfPlayerStillLive } from "../../util/playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { parseQueueIndex } from "../parseBotApiParams.js"
 
@@ -34,35 +34,39 @@ export async function queueIndexDELETE(
             }
         }
 
-        const player = getBotClient().lavalink.getPlayer(guildId)
-        if (!player) {
-            return {
-                status: 404,
-                body: { ok: false, error: { error: "No active player for this guild." } },
-            }
-        }
-
+        const client = getBotClient()
         const removeResult = await withGuildPlayerQueueLock(guildId, async () => {
-            if (queueIndex >= player.queue.tracks.length) {
-                return { ok: false as const }
+            // Re-resolve: concurrent /stop leaves a zombie; splicing+saving it resurrects the session.
+            const live = client.lavalink.getPlayer(guildId)
+            if (!live) return { ok: false as const, reason: "no_player" as const }
+            if (queueIndex >= live.queue.tracks.length) {
+                return { ok: false as const, reason: "out_of_range" as const }
             }
-            await player.queue.splice(queueIndex, 1)
-            schedulePlayerSessionSave(player)
-            return { ok: true as const }
+            await live.queue.splice(queueIndex, 1)
+            scheduleSaveIfPlayerStillLive(() => client.lavalink.getPlayer(guildId), live)
+            return { ok: true as const, player: live }
         })
         if (!removeResult.ok) {
             return {
                 status: 404,
-                body: { ok: false, error: { error: "Queue index out of range." } },
+                body: {
+                    ok: false,
+                    error: {
+                        error:
+                            removeResult.reason === "no_player"
+                                ? "No active player for this guild."
+                                : "Queue index out of range.",
+                    },
+                },
             }
         }
 
-        playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
+        playerBroadcaster.broadcastPlayerEvent(guildId, removeResult.player, "queueUpdate")
         return {
             status: 200,
             body: {
                 ok: true,
-                data: await toQueueResponse(guildId, player),
+                data: await toQueueResponse(guildId, removeResult.player),
             },
         }
     } catch (err: unknown) {
@@ -117,38 +121,35 @@ export async function queueIndexPATCH(
             }
         }
 
-        const player = getBotClient().lavalink.getPlayer(guildId)
-        if (!player) {
-            return {
-                status: 404,
-                body: { ok: false, error: { error: "No active player for this guild." } },
-            }
-        }
-
+        const client = getBotClient()
         const reorderResult = await withGuildPlayerQueueLock(guildId, async () => {
-            const trackCount = player.queue.tracks.length
+            const live = client.lavalink.getPlayer(guildId)
+            if (!live) {
+                return { ok: false as const, error: "No active player for this guild." }
+            }
+            const trackCount = live.queue.tracks.length
             if (sourceIndex >= trackCount || destinationIndex >= trackCount) {
                 return { ok: false as const, error: "Queue index out of range." }
             }
 
-            const [track] = await player.queue.splice(sourceIndex, 1)
+            const [track] = await live.queue.splice(sourceIndex, 1)
             if (!track) {
                 return { ok: false as const, error: "Queue index out of range." }
             }
             const insertIndexRaw = destinationIndex
-            const lenAfterRemove = player.queue.tracks.length
+            const lenAfterRemove = live.queue.tracks.length
             const insertIndex = Math.min(Math.max(insertIndexRaw, 0), lenAfterRemove)
             try {
-                await player.queue.splice(insertIndex, 0, track)
+                await live.queue.splice(insertIndex, 0, track)
             } catch (insertErr: unknown) {
                 try {
-                    await player.queue.splice(sourceIndex, 0, track)
+                    await live.queue.splice(sourceIndex, 0, track)
                 } catch (restoreErr: unknown) {
                     const restoreMessage =
                         restoreErr instanceof Error ? restoreErr.message : String(restoreErr)
-                    const client = tryGetBotClient()
-                    if (client) {
-                        client.error(
+                    const bot = tryGetBotClient()
+                    if (bot) {
+                        bot.error(
                             "[queueIndexPATCH] failed to restore track after reorder error",
                             {
                                 guildId,
@@ -171,8 +172,8 @@ export async function queueIndexPATCH(
                 }
                 throw insertErr
             }
-            schedulePlayerSessionSave(player)
-            return { ok: true as const }
+            scheduleSaveIfPlayerStillLive(() => client.lavalink.getPlayer(guildId), live)
+            return { ok: true as const, player: live }
         })
 
         if (!reorderResult.ok) {
@@ -182,13 +183,13 @@ export async function queueIndexPATCH(
             }
         }
 
-        playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
+        playerBroadcaster.broadcastPlayerEvent(guildId, reorderResult.player, "queueUpdate")
 
         return {
             status: 200,
             body: {
                 ok: true,
-                data: await toQueueResponse(guildId, player),
+                data: await toQueueResponse(guildId, reorderResult.player),
             },
         }
     } catch (err: unknown) {

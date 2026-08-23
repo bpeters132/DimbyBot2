@@ -2,8 +2,7 @@ import { SlashCommandBuilder } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
-import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
-import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
+import { clearUpcomingOnLivePlayer } from "../../util/livePlayerQueueMutations.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -82,16 +81,12 @@ export default {
         }
 
         try {
-            const cleared = await withGuildPlayerQueueLock(guild.id, async () => {
-                const queueSize = player.queue.tracks.length
-                if (queueSize === 0) return 0
-                client.debug(
-                    `[ClearQueue] Clearing queue for guild ${guild.id}. Current size: ${queueSize}`
-                )
-                await player.queue.splice(0, queueSize)
-                schedulePlayerSessionSave(player)
-                return queueSize
-            })
+            // Re-resolve under the lock: /stop during fetchMe / lock wait leaves a zombie whose
+            // schedulePlayerSessionSave would resurrect the cleared session (current track remains).
+            const cleared = await clearUpcomingOnLivePlayer(
+                () => client.lavalink.getPlayer(guild.id),
+                guild.id
+            )
 
             if (cleared === 0) {
                 return interaction.reply({

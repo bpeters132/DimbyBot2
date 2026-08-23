@@ -2,7 +2,7 @@ import type { Player, Track, UnresolvedTrack } from "lavalink-client"
 import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { startPlaybackIfNeeded } from "../../util/musicManager.js"
-import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
+import { scheduleSaveIfPlayerStillLive } from "../../util/playerSessionPersistence.js"
 import { tryGetBotClient } from "../../lib/botClientRegistry.js"
 import {
     companionPlaybackConfig,
@@ -67,11 +67,12 @@ export async function enqueueSearchTracksAssumingSearchDone(
         const wasPlaying = live.playing
         try {
             await startPlaybackIfNeeded(live)
-            schedulePlayerSessionSave(live)
+            // /stop can destroy during play() even while we hold the queue lock.
+            scheduleSaveIfPlayerStillLive(getLivePlayer, live)
             return { status: "ok", player: live, playbackStarted: !wasPlaying }
         } catch (error: unknown) {
             const playbackError = error instanceof Error ? error.message : String(error)
-            schedulePlayerSessionSave(live)
+            scheduleSaveIfPlayerStillLive(getLivePlayer, live)
             return {
                 status: "ok",
                 player: live,
