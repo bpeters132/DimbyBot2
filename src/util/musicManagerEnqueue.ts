@@ -74,3 +74,27 @@ export function scheduleSaveIfPlayerStillLive(
         schedulePlayerSessionSave(live)
     }
 }
+
+/**
+ * After the first connect wait, a replacement player may still lose to /stop (or Leave /
+ * control stop) during its own `ensurePlayerConnected` wait. Re-resolve after that wait;
+ * if identity changed again, reconnect once more and re-resolve. Returns `undefined` when
+ * the guild has no live player — callers must not enqueue onto the pre-wait reference.
+ */
+export async function resolveLivePlayerAfterReplacementConnectWaits(
+    liveBeforeConnect: Player,
+    liveAfterConnect: Player,
+    getLivePlayer: () => Player | undefined,
+    ensureConnected: (player: Player) => Promise<void>
+): Promise<Player | undefined> {
+    let liveForPlayback: Player | undefined = liveAfterConnect
+    if (liveForPlayback !== liveBeforeConnect) {
+        await ensureConnected(liveForPlayback)
+        liveForPlayback = getLivePlayer()
+    }
+    if (liveForPlayback && liveForPlayback !== liveAfterConnect) {
+        await ensureConnected(liveForPlayback)
+        liveForPlayback = getLivePlayer()
+    }
+    return liveForPlayback
+}

@@ -18,6 +18,7 @@ import { downloadMetadataFileBelongsToGuild } from "./downloadMetadataKeys.js"
 import { getDownloadMetadataStore } from "./downloadMetadataStore.js"
 import {
     enqueueMusicManagerTracksAssumingSearchDone,
+    resolveLivePlayerAfterReplacementConnectWaits,
     scheduleSaveIfPlayerStillLive,
 } from "./musicManagerEnqueue.js"
 import { stampRequesterUserIdOnTracks } from "./rrqDisconnect.js"
@@ -663,15 +664,12 @@ export async function handleQueryAndPlay(
                     } else {
                         // Replacement connect can lose to /stop the same way the first wait can.
                         // Re-resolve after that wait; reconnect once more if identity changed again.
-                        let liveForPlayback: Player | undefined = liveAfterConnect
-                        if (liveForPlayback !== liveBeforeConnect) {
-                            await ensurePlayerConnected(client, liveForPlayback, voiceChannel)
-                            liveForPlayback = client.lavalink.getPlayer(guildId)
-                        }
-                        if (liveForPlayback && liveForPlayback !== liveAfterConnect) {
-                            await ensurePlayerConnected(client, liveForPlayback, voiceChannel)
-                            liveForPlayback = client.lavalink.getPlayer(guildId)
-                        }
+                        const liveForPlayback = await resolveLivePlayerAfterReplacementConnectWaits(
+                            liveBeforeConnect,
+                            liveAfterConnect,
+                            () => client.lavalink.getPlayer(guildId),
+                            (p) => ensurePlayerConnected(client, p, voiceChannel)
+                        )
                         if (!liveForPlayback) {
                             feedbackText = `${requester}, The player stopped before the track could be queued. Try again.`
                             success = false
