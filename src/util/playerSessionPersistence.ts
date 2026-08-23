@@ -374,6 +374,17 @@ export function schedulePlayerSessionSave(player: Player): void {
     if (typeof timer.unref === "function") timer.unref()
 }
 
+/** Persist only when the guild still has this live player (never a post-destroy zombie). */
+export function scheduleSaveIfPlayerStillLive(
+    getLivePlayer: () => Player | undefined,
+    expected: Player
+): void {
+    const live = getLivePlayer()
+    if (live && live === expected) {
+        schedulePlayerSessionSave(live)
+    }
+}
+
 /** Immediately persists the latest snapshot for one guild. */
 export async function flushPlayerSessionSave(guildId: string): Promise<void> {
     const timer = pendingSaveTimers.get(guildId)

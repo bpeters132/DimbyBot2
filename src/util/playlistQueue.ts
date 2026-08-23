@@ -7,7 +7,7 @@ import {
     stampRequesterUserIdOnTracks,
 } from "./rrqDisconnect.js"
 import { startPlaybackIfNeeded } from "./musicManager.js"
-import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
+import { scheduleSaveIfPlayerStillLive } from "./playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
 import { tryGetBotClient } from "../lib/botClientRegistry.js"
 import {
@@ -126,6 +126,7 @@ export async function clearUpcomingQueue(player: Player): Promise<void> {
 }
 
 async function enqueueTracksUnderLock(
+    getLivePlayer: () => Player | undefined,
     player: Player,
     tracks: Track[],
     requesterId: string,
@@ -148,7 +149,8 @@ async function enqueueTracksUnderLock(
             playbackError = error instanceof Error ? error.message : String(error)
         }
     }
-    schedulePlayerSessionSave(player)
+    // /stop can destroy during play() even under the queue lock — never save a zombie.
+    scheduleSaveIfPlayerStillLive(getLivePlayer, player)
     return {
         queued: toQueue.length,
         failed: 0,
@@ -182,7 +184,13 @@ export async function enqueueResolvedPlaylistTracks(
         if (playableTracks.length === 0) {
             return { queued: 0, failed: skipped, playbackStarted: false }
         }
-        const result = await enqueueTracksUnderLock(live, playableTracks, requesterId, shuffle)
+        const result = await enqueueTracksUnderLock(
+            getLivePlayer,
+            live,
+            playableTracks,
+            requesterId,
+            shuffle
+        )
         return { ...result, failed: skipped }
     })
 }
@@ -224,7 +232,13 @@ export async function replaceUpcomingWithResolvedPlaylistTracks(
             if (size > 0) {
                 await live.queue.splice(0, size)
             }
-            const result = await enqueueTracksUnderLock(live, playableTracks, requesterId, shuffle)
+            const result = await enqueueTracksUnderLock(
+                getLivePlayer,
+                live,
+                playableTracks,
+                requesterId,
+                shuffle
+            )
             return { ...result, failed: skipped }
         } catch (enqueueErr: unknown) {
             try {
@@ -235,7 +249,7 @@ export async function replaceUpcomingWithResolvedPlaylistTracks(
                 if (savedUpcoming.length > 0) {
                     await live.queue.splice(0, 0, savedUpcoming)
                 }
-                schedulePlayerSessionSave(live)
+                scheduleSaveIfPlayerStillLive(getLivePlayer, live)
             } catch (restoreErr: unknown) {
                 const restoreMessage =
                     restoreErr instanceof Error ? restoreErr.message : String(restoreErr)

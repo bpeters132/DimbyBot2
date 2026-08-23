@@ -7,7 +7,7 @@ import { toPlayerStateResponse } from "../../shared/player-state.js"
 import { webPlayerDebug } from "../../shared/web-player-debug-log.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
-import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
+import { shuffleUpcomingOnLivePlayer } from "../../util/livePlayerQueueMutations.js"
 import { parsePlayerAction } from "../parseBotApiParams.js"
 
 export async function playerGET(
@@ -128,13 +128,14 @@ export async function playerPOST(
             case "shuffle":
                 // Serialize with dashboard clear/reorder and Discord RRQ mutations so shuffle
                 // cannot interleave between a locked remove+insert (lost / duplicated tracks).
-                await withGuildPlayerQueueLock(guildId, async () => {
-                    if (player.queue.tracks.length < 2) return
-                    await player.queue.shuffle()
-                })
+                // Re-resolve under the lock so a concurrent stop cannot shuffle a zombie.
+                await shuffleUpcomingOnLivePlayer(() => client.lavalink.getPlayer(guildId), guildId)
                 break
             case "autoplay":
-                player.set("autoplay", !player.get("autoplay"))
+                {
+                    const live = client.lavalink.getPlayer(guildId)
+                    if (live) live.set("autoplay", !live.get("autoplay"))
+                }
                 break
         }
 
