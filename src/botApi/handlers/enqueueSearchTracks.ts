@@ -2,7 +2,7 @@ import type { Player, Track, UnresolvedTrack } from "lavalink-client"
 import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { startPlaybackIfNeeded } from "../../util/musicManager.js"
-import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
+import { scheduleSaveIfPlayerStillLive } from "../../util/playerSessionPersistence.js"
 import { isPlaylistLoadType, schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 
 export type EnqueueSearchTracksResult =
@@ -55,7 +55,7 @@ export async function enqueueSearchTracksAssumingSearchDone(
     try {
         const started = await startPlaybackIfNeeded(liveAfter)
         schedulePrefetchWindow(getLivePlayer, guildId)
-        schedulePlayerSessionSave(liveAfter)
+        scheduleSaveIfPlayerStillLive(getLivePlayer, liveAfter)
         return {
             status: "ok",
             player: liveAfter,
@@ -63,7 +63,7 @@ export async function enqueueSearchTracksAssumingSearchDone(
         }
     } catch (error: unknown) {
         const playbackError = error instanceof Error ? error.message : String(error)
-        schedulePlayerSessionSave(liveAfter)
+        scheduleSaveIfPlayerStillLive(getLivePlayer, liveAfter)
         return {
             status: "ok",
             player: liveAfter,

@@ -7,8 +7,7 @@ import { getBotClient } from "../../lib/botClientRegistry.js"
 import { toQueueResponse } from "../../shared/player-state.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { searchAndEnqueue } from "./searchAndEnqueue.js"
-import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
-import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
+import { clearUpcomingOnLivePlayer } from "../../util/livePlayerQueueMutations.js"
 import { parseQueueQueryNumber } from "../parseBotApiParams.js"
 
 const MAX_QUEUE_PAGE_LIMIT = 100
@@ -111,25 +110,20 @@ export async function queueDELETE(
         }
     }
 
-    const player = getBotClient().lavalink.getPlayer(guildId)
+    const client = getBotClient()
     try {
-        if (player) {
-            // Serialize with searchAndEnqueue / playlist replace / reorder so clear cannot
-            // interleave with a remove+insert reorder (resurrecting a cleared track).
-            await withGuildPlayerQueueLock(guildId, async () => {
-                const size = player.queue.tracks.length
-                if (size > 0) {
-                    await player.queue.splice(0, size)
-                }
-                schedulePlayerSessionSave(player)
-            })
-            playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
+        // Re-resolve under the lock: concurrent stop destroys the captured player; splicing and
+        // saving that zombie would resurrect the session after clearPlayerSession.
+        await clearUpcomingOnLivePlayer(() => client.lavalink.getPlayer(guildId), guildId)
+        const live = client.lavalink.getPlayer(guildId)
+        if (live) {
+            playerBroadcaster.broadcastPlayerEvent(guildId, live, "queueUpdate")
         }
         return {
             status: 200,
             body: {
                 ok: true,
-                data: await toQueueResponse(guildId, player ?? null),
+                data: await toQueueResponse(guildId, live ?? null),
             },
         }
     } catch (err: unknown) {

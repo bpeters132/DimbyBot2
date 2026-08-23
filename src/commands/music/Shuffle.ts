@@ -2,8 +2,7 @@ import { SlashCommandBuilder } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
-import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
-import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
+import { shuffleUpcomingOnLivePlayer } from "../../util/livePlayerQueueMutations.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 
 export default {
@@ -50,12 +49,11 @@ export default {
             })
         }
 
-        const shuffled = await withGuildPlayerQueueLock(guild.id, async () => {
-            if (player.queue.tracks.length < 2) return false
-            await player.queue.shuffle()
-            schedulePlayerSessionSave(player)
-            return true
-        })
+        // Re-resolve under the lock so /stop during the wait cannot shuffle+save a zombie.
+        const shuffled = await shuffleUpcomingOnLivePlayer(
+            () => client.lavalink.getPlayer(guild.id),
+            guild.id
+        )
         if (!shuffled) {
             return await interaction.reply({
                 content: "Not enough songs in the queue to shuffle.",

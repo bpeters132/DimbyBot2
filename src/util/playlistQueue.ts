@@ -7,7 +7,7 @@ import {
     stampRequesterUserIdOnTracks,
 } from "./rrqDisconnect.js"
 import { startPlaybackIfNeeded } from "./musicManager.js"
-import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
+import { scheduleSaveIfPlayerStillLive } from "./playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
 import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "./userMediaUrl.js"
 import {
@@ -111,6 +111,7 @@ export async function clearUpcomingQueue(player: Player): Promise<void> {
 }
 
 async function enqueueTracksUnderLock(
+    getLivePlayer: () => Player | undefined,
     player: Player,
     tracks: Track[],
     requesterId: string,
@@ -123,7 +124,8 @@ async function enqueueTracksUnderLock(
         // Already holding the guild queue lock -- do not re-enter via rebalancePlayerQueueRoundRobin.
         await rebalancePlayerQueueRoundRobinAssumingLock(player)
     }
-    schedulePlayerSessionSave(player)
+    // /stop can destroy during play() even under the queue lock — never save a zombie.
+    scheduleSaveIfPlayerStillLive(getLivePlayer, player)
     return {
         queued: toQueue.length,
         failed: 0,
@@ -178,7 +180,7 @@ async function finishPlaylistEnqueue(
         const live = getLivePlayer()
         if (!live) return "no_player" as const
         if (!replaceUpcoming) {
-            return enqueueTracksUnderLock(live, tracks, requesterId, shuffle)
+            return enqueueTracksUnderLock(getLivePlayer, live, tracks, requesterId, shuffle)
         }
         const savedUpcoming = snapshotUpcomingQueue(live)
         try {
@@ -186,7 +188,7 @@ async function finishPlaylistEnqueue(
             if (size > 0) {
                 await live.queue.splice(0, size)
             }
-            return await enqueueTracksUnderLock(live, tracks, requesterId, shuffle)
+            return await enqueueTracksUnderLock(getLivePlayer, live, tracks, requesterId, shuffle)
         } catch (enqueueErr: unknown) {
             try {
                 const size = live.queue.tracks.length
@@ -196,7 +198,7 @@ async function finishPlaylistEnqueue(
                 if (savedUpcoming.length > 0) {
                     await live.queue.splice(0, 0, savedUpcoming)
                 }
-                schedulePlayerSessionSave(live)
+                scheduleSaveIfPlayerStillLive(getLivePlayer, live)
             } catch (restoreErr: unknown) {
                 const restoreMessage =
                     restoreErr instanceof Error ? restoreErr.message : String(restoreErr)

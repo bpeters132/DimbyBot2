@@ -7,8 +7,8 @@ import { toPlayerStateResponse } from "../../shared/player-state.js"
 import { webPlayerDebug } from "../../shared/web-player-debug-log.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
-import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
+import { shuffleUpcomingOnLivePlayer } from "../../util/livePlayerQueueMutations.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 import { parsePlayerAction } from "../parseBotApiParams.js"
 
@@ -143,19 +143,22 @@ export async function playerPOST(
             case "shuffle":
                 // Serialize with dashboard clear/reorder and Discord RRQ mutations so shuffle
                 // cannot interleave between a locked remove+insert (lost / duplicated tracks).
+                // Re-resolve under the lock so a concurrent stop cannot shuffle a zombie.
                 {
-                    const shuffled = await withGuildPlayerQueueLock(guildId, async () => {
-                        if (player.queue.tracks.length < 2) return false
-                        await player.queue.shuffle()
-                        return true
-                    })
+                    const shuffled = await shuffleUpcomingOnLivePlayer(
+                        () => client.lavalink.getPlayer(guildId),
+                        guildId
+                    )
                     if (shuffled) {
                         schedulePrefetchWindow(() => client.lavalink.getPlayer(guildId), guildId)
                     }
                 }
                 break
             case "autoplay":
-                player.set("autoplay", !player.get("autoplay"))
+                {
+                    const live = client.lavalink.getPlayer(guildId)
+                    if (live) live.set("autoplay", !live.get("autoplay"))
+                }
                 break
         }
 

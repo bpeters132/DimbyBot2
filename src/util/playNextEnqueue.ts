@@ -5,7 +5,7 @@ import {
     stampRequesterUserIdOnTracks,
 } from "./rrqDisconnect.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
-import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
+import { scheduleSaveIfPlayerStillLive } from "./playerSessionPersistence.js"
 import { tryGetBotClient } from "../lib/botClientRegistry.js"
 import { companionPlaybackConfig, resolveYoutubePlaybackTrack } from "./youtubeCompanionPlayback.js"
 
@@ -35,7 +35,7 @@ export async function enqueuePlayNextTrackAssumingSearchDone(
         if (isRRQActive(live)) {
             await rebalancePlayerQueueRoundRobinAssumingLock(live)
         }
-        schedulePlayerSessionSave(live)
+        scheduleSaveIfPlayerStillLive(getLivePlayer, live)
         return "ok"
     })
 }

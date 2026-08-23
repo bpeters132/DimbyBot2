@@ -1,5 +1,6 @@
 import type { Player, Track, UnresolvedTrack } from "lavalink-client"
 import type { RRQDisconnectedUsersMap } from "../types/index.js"
+import { tryGetBotClient } from "../lib/botClientRegistry.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
 import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
 
@@ -238,28 +239,41 @@ export async function removeAndRebalanceRrqAfterDisconnect(
     hooks?: RemoveAndRebalanceRrqHooks
 ): Promise<number> {
     return withGuildPlayerQueueLock(player.guildId, async () => {
+        const client = tryGetBotClient()
+        // When the bot client is registered, refuse zombie refs after concurrent /stop/Leave.
+        // Unit tests call without a registry — operate on the provided player.
+        if (client) {
+            const liveFromManager = client.lavalink.getPlayer(player.guildId)
+            if (!liveFromManager || liveFromManager !== player) return 0
+        }
+        const live = player
+
         let removedCount = 0
         let removeFailed = false
         try {
-            removedCount = await removeUserTracksFromQueue(player, userId)
+            removedCount = await removeUserTracksFromQueue(live, userId)
         } catch (err: unknown) {
             removeFailed = true
             hooks?.onRemoveError?.(err)
         } finally {
-            clearDisconnectedUser(player, userId)
+            clearDisconnectedUser(live, userId)
         }
 
-        if (removedCount > 0 && isRRQActive(player)) {
+        if (removedCount > 0 && isRRQActive(live)) {
             try {
-                await rebalancePlayerQueueRoundRobinAssumingLock(player)
+                await rebalancePlayerQueueRoundRobinAssumingLock(live)
             } catch (rebalErr: unknown) {
                 hooks?.onRebalanceError?.(rebalErr)
             }
         }
 
         // Persist even when remove threw mid-loop (partial mutation, removedCount still 0).
+        // Re-check identity after awaits so a concurrent destroy cannot resurrect the session.
         if (removedCount > 0 || removeFailed) {
-            schedulePlayerSessionSave(player)
+            const stillLive = client ? client.lavalink.getPlayer(player.guildId) : player
+            if (stillLive && stillLive === live) {
+                schedulePlayerSessionSave(stillLive)
+            }
         }
 
         return removedCount
