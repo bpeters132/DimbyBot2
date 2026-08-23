@@ -1,7 +1,10 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import type { Player, Track } from "lavalink-client"
-import { clearUpcomingOnLivePlayer, shuffleUpcomingOnLivePlayer } from "./livePlayerQueueMutations.js"
+import {
+    clearUpcomingOnLivePlayer,
+    shuffleUpcomingOnLivePlayer,
+} from "./livePlayerQueueMutations.js"
 
 function mockTrack(id: string): Track {
     return {
