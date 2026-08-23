@@ -151,15 +151,12 @@ export async function queueIndexPATCH(
                         restoreErr instanceof Error ? restoreErr.message : String(restoreErr)
                     const bot = tryGetBotClient()
                     if (bot) {
-                        bot.error(
-                            "[queueIndexPATCH] failed to restore track after reorder error",
-                            {
-                                guildId,
-                                sourceIndex,
-                                restoreMessage,
-                                insertErr,
-                            }
-                        )
+                        bot.error("[queueIndexPATCH] failed to restore track after reorder error", {
+                            guildId,
+                            sourceIndex,
+                            restoreMessage,
+                            insertErr,
+                        })
                     } else {
                         console.error(
                             "[queueIndexPATCH] failed to restore track after reorder error",
