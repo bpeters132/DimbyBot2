@@ -382,7 +382,20 @@ export async function handleControlButtonInteraction(
                         () => client.lavalink.getPlayer(guildId),
                         guildId
                     )
-                    if (!shuffled) break
+                    if (!shuffled) {
+                        try {
+                            await interaction.followUp({
+                                content: "The queue changed before it could be shuffled.",
+                                ephemeral: true,
+                            })
+                        } catch (followErr: unknown) {
+                            client.error(
+                                `[ControlButtonHandler] followUp failed after shuffle skipped for ${customId}:`,
+                                followErr
+                            )
+                        }
+                        break
+                    }
                     actionTaken = true
                     client.debug("[ControlButtonHandler] Queue shuffled.")
                     try {
