@@ -45,7 +45,7 @@ export async function queueIndexDELETE(
             }
             await live.queue.splice(queueIndex, 1)
             scheduleSaveIfPlayerStillLive(() => client.lavalink.getPlayer(guildId), live)
-            return { ok: true as const, player: live }
+            return { ok: true as const }
         })
         if (!removeResult.ok) {
             return {
@@ -62,13 +62,17 @@ export async function queueIndexDELETE(
             }
         }
 
-        schedulePrefetchWindow(() => getBotClient().lavalink.getPlayer(guildId), guildId)
-        playerBroadcaster.broadcastPlayerEvent(guildId, removeResult.player, "queueUpdate")
+        // splice() yields; /stop can drop `live` from the manager. Re-resolve like queueDELETE.
+        const current = client.lavalink.getPlayer(guildId)
+        if (current) {
+            schedulePrefetchWindow(() => client.lavalink.getPlayer(guildId), guildId)
+            playerBroadcaster.broadcastPlayerEvent(guildId, current, "queueUpdate")
+        }
         return {
             status: 200,
             body: {
                 ok: true,
-                data: await toQueueResponse(guildId, removeResult.player),
+                data: await toQueueResponse(guildId, current ?? null),
             },
         }
     } catch (err: unknown) {
@@ -172,7 +176,7 @@ export async function queueIndexPATCH(
                 throw insertErr
             }
             scheduleSaveIfPlayerStillLive(() => client.lavalink.getPlayer(guildId), live)
-            return { ok: true as const, player: live }
+            return { ok: true as const }
         })
 
         if (!reorderResult.ok) {
@@ -182,14 +186,17 @@ export async function queueIndexPATCH(
             }
         }
 
-        schedulePrefetchWindow(() => getBotClient().lavalink.getPlayer(guildId), guildId)
-        playerBroadcaster.broadcastPlayerEvent(guildId, reorderResult.player, "queueUpdate")
+        const current = client.lavalink.getPlayer(guildId)
+        if (current) {
+            schedulePrefetchWindow(() => client.lavalink.getPlayer(guildId), guildId)
+            playerBroadcaster.broadcastPlayerEvent(guildId, current, "queueUpdate")
+        }
 
         return {
             status: 200,
             body: {
                 ok: true,
-                data: await toQueueResponse(guildId, reorderResult.player),
+                data: await toQueueResponse(guildId, current ?? null),
             },
         }
     } catch (err: unknown) {
