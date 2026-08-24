@@ -3,7 +3,7 @@ import type BotClient from "../../lib/BotClient.js"
 import { getGuildSettings, isGuildSettingsInitialized } from "../../util/saveControlChannel.js"
 import { toggleAutoplay } from "../../util/autoplayHistory.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
-import { startPlaybackIfNeeded } from "../../util/musicManager.js"
+import { startPlaybackIfNeeded } from "../../util/startPlaybackIfNeeded.js"
 import { updateControlMessage } from "./handleControlChannel.js"
 
 export async function handleControlButtonInteraction(

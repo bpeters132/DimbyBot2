@@ -1,7 +1,7 @@
 import type { Player, Track, UnresolvedTrack } from "lavalink-client"
 import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
-import { startPlaybackIfNeeded } from "../../util/musicManager.js"
+import { startPlaybackIfNeeded } from "../../util/startPlaybackIfNeeded.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 import { tryGetBotClient } from "../../lib/botClientRegistry.js"
 import {

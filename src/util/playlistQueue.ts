@@ -6,7 +6,7 @@ import {
     rebalancePlayerQueueRoundRobinAssumingLock,
     stampRequesterUserIdOnTracks,
 } from "./rrqDisconnect.js"
-import { startPlaybackIfNeeded } from "./musicManager.js"
+import { startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
 import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
 import { tryGetBotClient } from "../lib/botClientRegistry.js"
