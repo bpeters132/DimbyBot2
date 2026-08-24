@@ -655,6 +655,7 @@ export async function handleQueryAndPlay(
                                     : [trackToAdd]
                             stampRequesterUserIdOnTracks(tracksToEnqueue, requester.id)
 
+                            const expectedForEnqueue = player
                             const enqueued = await enqueueMusicManagerTracksAssumingSearchDone(
                                 () => client.lavalink.getPlayer(guildId),
                                 guildId,
@@ -663,7 +664,8 @@ export async function handleQueryAndPlay(
                                     tracks: tracksToEnqueue,
                                     playlistName: searchResult.playlist?.name,
                                 },
-                                requester.id
+                                requester.id,
+                                expectedForEnqueue
                             )
                             if (enqueued.status === "no_player") {
                                 feedbackText = `${requester}, The player stopped before the track could be queued. Try again.`

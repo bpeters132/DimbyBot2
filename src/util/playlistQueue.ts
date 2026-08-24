@@ -175,10 +175,12 @@ async function finishPlaylistEnqueue(
     shuffle: boolean,
     replaceUpcoming: boolean
 ): Promise<EnqueuePlaylistResult | "no_player"> {
-    if (!getLivePlayer()) return "no_player"
+    const liveForResolve = getLivePlayer()
+    if (!liveForResolve) return "no_player"
     const locked = await withGuildPlayerQueueLock(guildId, async () => {
+        // Companion resolve can outlive /stop + successor createPlayer — refuse identity change.
         const live = getLivePlayer()
-        if (!live) return "no_player" as const
+        if (!live || live !== liveForResolve) return "no_player" as const
         if (!replaceUpcoming) {
             return enqueueTracksUnderLock(getLivePlayer, live, tracks, requesterId, shuffle)
         }

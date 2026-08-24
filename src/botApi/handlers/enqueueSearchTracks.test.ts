@@ -90,4 +90,26 @@ describe("enqueueSearchTracksAssumingSearchDone", () => {
         assert.equal(outcome.status, "ok")
         assert.equal(live.queue.tracks.map((t) => t.info.title).join(","), "p1,p2")
     })
+
+    it("returns no_player when a successor replaced the resolve-time player", async () => {
+        const guildId = "guild-search-enqueue-successor"
+        const resolvePlayer = mockMutablePlayer(guildId, [mockTrack("old")])
+        const successor = mockMutablePlayer(guildId, [mockTrack("kept")])
+        let calls = 0
+
+        const outcome = await enqueueSearchTracksAssumingSearchDone(
+            () => {
+                calls += 1
+                // First call: companion resolve. Later calls (under lock): successor only.
+                return calls === 1 ? resolvePlayer : successor
+            },
+            guildId,
+            { loadType: "track", tracks: [mockTrack("pollution")] },
+            "user-1"
+        )
+
+        assert.equal(outcome.status, "no_player")
+        assert.equal(successor.queue.tracks.map((t) => t.info.title).join(","), "kept")
+        assert.equal(resolvePlayer.queue.tracks.map((t) => t.info.title).join(","), "old")
+    })
 })

@@ -13,6 +13,7 @@ import { companionPlaybackConfig, resolveYoutubePlaybackTrack } from "./youtubeC
  * Enqueues a track at the front of the *live* guild player under the shared queue lock.
  * Callers must re-resolve via `getLivePlayer` so a destroy during an earlier search cannot
  * append onto a stale Player that is no longer in the Lavalink manager map.
+ * After companion resolve, also requires the same Player identity (not merely a successor).
  */
 export async function enqueuePlayNextTrackAssumingSearchDone(
     getLivePlayer: () => Player | undefined,
@@ -29,8 +30,9 @@ export async function enqueuePlayNextTrackAssumingSearchDone(
         companionPlaybackConfig(tryGetBotClient() ?? undefined)
     )
     return withGuildPlayerQueueLock(guildId, async () => {
+        // Companion resolve can outlive /stop + successor createPlayer — refuse identity change.
         const live = getLivePlayer()
-        if (!live) return "no_player"
+        if (!live || live !== liveForResolve) return "no_player"
         await live.queue.add(playableTrack, 0)
         if (isRRQActive(live)) {
             await rebalancePlayerQueueRoundRobinAssumingLock(live)
