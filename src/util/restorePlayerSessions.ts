@@ -7,7 +7,8 @@ import { updateControlMessage } from "../events/handlers/handleControlChannel.js
 import { playerBroadcaster } from "../shared/websocket/PlayerBroadcaster.js"
 import { getDiscordErrorCode } from "./discordErrorDetails.js"
 import { getGuildSettings } from "./saveControlChannel.js"
-import { ensurePlayerConnected, startPlaybackIfNeeded } from "./musicManager.js"
+import { ensurePlayerConnected } from "./musicManager.js"
+import { startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
 import {
     clearPlayerSessionPreservePriorSnapshot,
     clearPlayerSessionRestoreInProgress,
