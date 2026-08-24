@@ -133,7 +133,9 @@ async function enqueueTracksUnderLock(
     }
 }
 
-/** Adds resolved tracks to the *live* guild player under the shared queue lock. */
+/** Adds resolved tracks to the *live* guild player under the shared queue lock.
+ * After companion resolve, refuses enqueue if a successor replaced the resolve-time Player.
+ */
 export async function enqueueResolvedPlaylistTracks(
     getLivePlayer: () => Player | undefined,
     guildId: string,
