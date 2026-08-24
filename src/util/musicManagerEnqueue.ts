@@ -27,6 +27,10 @@ export type MusicManagerEnqueueResult =
  * search/connect (/stop, Leave, control/web stop) cannot mutate a stale Player and
  * resurrect its session via schedulePlayerSessionSave.
  *
+ * When `expectedPlayer` is set (the Player used for companion resolve), refuse enqueue if
+ * a successor replaced it during the await — existence-only re-resolve would pollute the
+ * new session's queue and persisted snapshot.
+ *
  * Playback start stays with the caller (outside this lock) so trackError → idle destroy
  * cannot nest on the non-reentrant guild chain.
  */
@@ -34,14 +38,17 @@ export async function enqueueMusicManagerTracksAssumingSearchDone(
     getLivePlayer: () => Player | undefined,
     guildId: string,
     payload: MusicManagerEnqueuePayload,
-    requesterId: string
+    requesterId: string,
+    expectedPlayer?: Player
 ): Promise<MusicManagerEnqueueResult> {
     const primary = payload.tracks[0]
     if (!primary) return { status: "no_player" }
 
     return withGuildPlayerQueueLock(guildId, async () => {
         const live = getLivePlayer()
-        if (!live) return { status: "no_player" }
+        if (!live || (expectedPlayer !== undefined && live !== expectedPlayer)) {
+            return { status: "no_player" }
+        }
 
         if (payload.isPlaylist && payload.tracks.length > 0) {
             stampRequesterUserIdOnTracks(payload.tracks, requesterId)

@@ -177,8 +177,9 @@ export async function enqueueResolvedPlaylistTracks(
     )) as Track[]
     const skipped = tracks.length - playableTracks.length
     return withGuildPlayerQueueLock(guildId, async () => {
+        // Companion resolve can outlive /stop + successor createPlayer — refuse identity change.
         const live = getLivePlayer()
-        if (!live) return "no_player"
+        if (!live || live !== liveForResolve) return "no_player"
         if (playableTracks.length === 0) {
             return { queued: 0, failed: skipped, playbackStarted: false }
         }
@@ -216,8 +217,9 @@ export async function replaceUpcomingWithResolvedPlaylistTracks(
         return { queued: 0, failed: skipped, playbackStarted: false }
     }
     return withGuildPlayerQueueLock(guildId, async () => {
+        // Companion resolve can outlive /stop + successor createPlayer — refuse identity change.
         const live = getLivePlayer()
-        if (!live) return "no_player"
+        if (!live || live !== liveForResolve) return "no_player"
         const savedUpcoming = snapshotUpcomingQueue(live)
         try {
             const size = live.queue.tracks.length

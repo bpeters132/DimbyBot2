@@ -23,6 +23,7 @@ export type SearchTracksEnqueuePayload = {
  * Enqueues search results onto the *live* guild player under the shared queue lock.
  * Callers must re-resolve via `getLivePlayer` so a destroy during an earlier search
  * (/stop, Leave, control/web stop) cannot mutate a stale Player and resurrect its session.
+ * After companion resolve, also requires the same Player identity (not merely a successor).
  */
 export async function enqueueSearchTracksAssumingSearchDone(
     getLivePlayer: () => Player | undefined,
@@ -55,8 +56,10 @@ export async function enqueueSearchTracksAssumingSearchDone(
     }
 
     return withGuildPlayerQueueLock(guildId, async () => {
+        // Companion resolve can outlive /stop + a successor createPlayer. Existence-only
+        // re-resolve would enqueue onto the new session and pollute its queue/snapshot.
         const live = getLivePlayer()
-        if (!live) return { status: "no_player" }
+        if (!live || live !== liveForResolve) return { status: "no_player" }
 
         if (isPlaylist) {
             live.queue.add(playableTracks)

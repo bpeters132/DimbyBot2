@@ -149,10 +149,21 @@ export default {
             })
         }
 
-        const { player, result } = playOutcome
+        const { result } = playOutcome
         if (result.success) {
-            player.set("autoplay", true)
-            seedAutoplayHistoryFromPlayer(player)
+            // handleQueryAndPlay may have re-resolved onto a successor after companion resolve;
+            // never set autoplay on the reservation-captured (possibly destroyed) Player.
+            const live = client.lavalink.getPlayer(guild.id)
+            if (!live) {
+                return interaction.editReply({
+                    content:
+                        result.feedbackText ||
+                        "The player stopped before autoplay could be enabled. Try again.",
+                    ...noMentions,
+                })
+            }
+            live.set("autoplay", true)
+            seedAutoplayHistoryFromPlayer(live)
             await interaction.editReply({
                 content: `Autoplay enabled for **${genreName}**. ${result.feedbackText ?? "Queued."}`,
                 ...noMentions,

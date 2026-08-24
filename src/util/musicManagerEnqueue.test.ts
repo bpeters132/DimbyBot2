@@ -104,6 +104,24 @@ describe("enqueueMusicManagerTracksAssumingSearchDone", () => {
         assert.equal(staleDestroyed.queue.tracks.length, 1)
     })
 
+    it("returns no_player when expectedPlayer differs from the live successor", async () => {
+        const guildId = "guild-mm-enqueue-successor"
+        const resolvePlayer = mockMutablePlayer(guildId, [mockTrack("old")])
+        const successor = mockMutablePlayer(guildId, [mockTrack("kept")])
+
+        const outcome = await enqueueMusicManagerTracksAssumingSearchDone(
+            () => successor,
+            guildId,
+            { isPlaylist: false, tracks: [mockTrack("pollution")] },
+            "user-1",
+            resolvePlayer
+        )
+
+        assert.equal(outcome.status, "no_player")
+        assert.equal(successor.queue.tracks.map((t) => t.info.title).join(","), "kept")
+        assert.equal(resolvePlayer.queue.tracks.map((t) => t.info.title).join(","), "old")
+    })
+
     it("scheduleSaveIfPlayerStillLive ignores a destroyed zombie reference", async () => {
         const guildId = "guild-mm-save-zombie"
         const zombie = mockMutablePlayer(guildId, [mockTrack("stopped-queue")])
