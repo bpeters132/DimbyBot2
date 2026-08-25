@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
+    isRestoreHydratePlayerStillLive,
     isStaleSessionDiscordError,
     shouldAbandonRestoreForConcurrentQueue,
     shouldPersistRestoredPlayerSession,
@@ -67,5 +68,25 @@ describe("shouldAbandonRestoreForConcurrentQueue", () => {
             }),
             false
         )
+    })
+})
+
+describe("isRestoreHydratePlayerStillLive", () => {
+    it("is true only for the same Player instance still in the manager", () => {
+        const restore = { id: "restore" }
+        const successor = { id: "successor" }
+
+        assert.equal(isRestoreHydratePlayerStillLive(restore, restore), true)
+        assert.equal(isRestoreHydratePlayerStillLive(restore, successor), false)
+        assert.equal(isRestoreHydratePlayerStillLive(restore, null), false)
+        assert.equal(isRestoreHydratePlayerStillLive(restore, undefined), false)
+    })
+
+    it("rejects empty-queue concurrent check alone as insufficient for successor races", () => {
+        // /stop+/play during resolve: zombie restore Player has empty queue, so
+        // shouldAbandonRestoreForConcurrentQueue is false — identity gate is required.
+        const zombie = { queue: { current: null, tracks: [] as unknown[] } }
+        assert.equal(shouldAbandonRestoreForConcurrentQueue(zombie), false)
+        assert.equal(isRestoreHydratePlayerStillLive(zombie, { id: "successor" }), false)
     })
 })
