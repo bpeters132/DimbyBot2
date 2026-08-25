@@ -5,6 +5,8 @@ import {
     COMPANION_FETCH_TIMEOUT_MS,
     catalogYoutubeSearchQueries,
     companionLatestVersionPath,
+    companionPlaybackConfig,
+    companionPlaybackConfigFromEnv,
     ensureCompanionOriginStreamUrl,
     overlayCatalogIdentity,
     overlayYoutubeMetadata,
@@ -155,6 +157,73 @@ function recordingLogger(): {
         },
     }
 }
+
+describe("companionPlaybackConfigFromEnv / companionPlaybackConfig", () => {
+    const prevUrl = process.env.INVIDIOUS_COMPANION_URL
+    const prevKey = process.env.INVIDIOUS_COMPANION_KEY
+
+    function restoreEnv(): void {
+        if (prevUrl === undefined) delete process.env.INVIDIOUS_COMPANION_URL
+        else process.env.INVIDIOUS_COMPANION_URL = prevUrl
+        if (prevKey === undefined) delete process.env.INVIDIOUS_COMPANION_KEY
+        else process.env.INVIDIOUS_COMPANION_KEY = prevKey
+    }
+
+    it("returns null from env when the companion secret is missing", () => {
+        try {
+            delete process.env.INVIDIOUS_COMPANION_URL
+            delete process.env.INVIDIOUS_COMPANION_KEY
+            assert.equal(companionPlaybackConfigFromEnv(), null)
+
+            process.env.INVIDIOUS_COMPANION_URL = "http://companion:8282"
+            process.env.INVIDIOUS_COMPANION_KEY = "   "
+            assert.equal(companionPlaybackConfigFromEnv(), null)
+        } finally {
+            restoreEnv()
+        }
+    })
+
+    it("reads origin + secret and strips trailing slashes", () => {
+        try {
+            process.env.INVIDIOUS_COMPANION_URL = "http://companion:8282///"
+            process.env.INVIDIOUS_COMPANION_KEY = "  abcdefghijklmnop  "
+            assert.deepEqual(companionPlaybackConfigFromEnv(), {
+                origin: "http://companion:8282",
+                secretKey: "abcdefghijklmnop",
+            })
+        } finally {
+            restoreEnv()
+        }
+    })
+
+    it("defaults origin to the compose service when only the key is set", () => {
+        try {
+            delete process.env.INVIDIOUS_COMPANION_URL
+            process.env.INVIDIOUS_COMPANION_KEY = "abcdefghijklmnop"
+            assert.deepEqual(companionPlaybackConfigFromEnv(), {
+                origin: "http://invidious-companion:8282",
+                secretKey: "abcdefghijklmnop",
+            })
+        } finally {
+            restoreEnv()
+        }
+    })
+
+    it("returns a warn-ready empty-secret config when env is unset", () => {
+        try {
+            delete process.env.INVIDIOUS_COMPANION_URL
+            delete process.env.INVIDIOUS_COMPANION_KEY
+            const { logger } = recordingLogger()
+            assert.deepEqual(companionPlaybackConfig(logger), {
+                origin: "http://invidious-companion:8282",
+                secretKey: "",
+                logger,
+            })
+        } finally {
+            restoreEnv()
+        }
+    })
+})
 
 describe("youtube companion itag + URL helpers", () => {
     it("prefers Opus 251 then AAC 140", () => {
