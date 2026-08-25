@@ -46,6 +46,19 @@ export function shouldAbandonRestoreForConcurrentQueue(player: {
     return Boolean(player.queue.current) || player.queue.tracks.length > 0
 }
 
+/**
+ * True when the hydrate Player is still the guild's live manager entry.
+ * Intentional `/stop` + `/play` during companion/decode resolve can destroy the
+ * restore-created Player and install a successor; mutating the zombie or calling
+ * `deletePlayerSession` would corrupt or wipe that live session.
+ */
+export function isRestoreHydratePlayerStillLive(
+    restorePlayer: object,
+    livePlayer: object | null | undefined
+): boolean {
+    return livePlayer != null && livePlayer === restorePlayer
+}
+
 let discordReady = false
 let restoreInFlight = false
 
@@ -169,6 +182,8 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
     markPlayerSessionRestoreInProgress(guildId)
 
     let playerToPersist: Player | null = null
+    /** Restore-created Player; used for identity gates after destroy/successor races. */
+    let restorePlayer: Player | null = null
     try {
         await withGuildPlayerLifecycleReservation(guildId, async () => {
             // Re-check under the reservation: a concurrent create may have won the race.
@@ -186,6 +201,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                 selfDeaf: true,
                 volume: snapshot.volume,
             })
+            restorePlayer = player
 
             await ensurePlayerConnected(client, player, voiceChannel)
 
@@ -212,12 +228,26 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                 // Saves are blocked during restore-in-progress — destroying would drop that queue.
                 // Serialize check + destroy under the guild queue lock so an enqueue cannot land
                 // between shouldAbandonRestoreForConcurrentQueue and player.destroy().
-                const abandoned = await withGuildPlayerQueueLock(guildId, async () => {
-                    if (shouldAbandonRestoreForConcurrentQueue(player)) return true
+                // Also identity-gate: /stop+/play during resolve installs a successor — never
+                // destroy/delete against the zombie restore Player (would wipe the new session).
+                const zeroResolve = await withGuildPlayerQueueLock(guildId, async () => {
+                    const live = client.lavalink.getPlayer(guildId)
+                    if (!isRestoreHydratePlayerStillLive(player, live)) {
+                        return "successor" as const
+                    }
+                    if (shouldAbandonRestoreForConcurrentQueue(player)) {
+                        return "concurrent" as const
+                    }
                     await player.destroy()
-                    return false
+                    return "destroyed" as const
                 })
-                if (abandoned) {
+                if (zeroResolve === "successor") {
+                    client.warn(
+                        `[playerSession] restore for ${guildId}: no tracks resolved but live player changed; leaving successor alone`
+                    )
+                    return
+                }
+                if (zeroResolve === "concurrent") {
                     client.warn(
                         `[playerSession] restore for ${guildId}: no tracks resolved but live queue has content; keeping player`
                     )
@@ -242,15 +272,27 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
             }
 
             const hydrated = await withGuildPlayerQueueLock(guildId, async () => {
-                // User won the race: keep their queue instead of appending the old session.
+                const live = client.lavalink.getPlayer(guildId)
+                // Successor owns the guild — do not queue.add / save on the zombie restore Player.
+                if (!isRestoreHydratePlayerStillLive(player, live)) {
+                    return "successor" as const
+                }
+                // User won the race on this same player: keep their queue instead of appending.
                 if (shouldAbandonRestoreForConcurrentQueue(player)) {
-                    return false
+                    return "concurrent" as const
                 }
                 await player.queue.add(playable)
-                return true
+                return "hydrated" as const
             })
 
-            if (!hydrated) {
+            if (hydrated === "successor") {
+                client.warn(
+                    `[playerSession] restore for ${guildId}: skipped hydrate; live player changed during resolve`
+                )
+                return
+            }
+
+            if (hydrated === "concurrent") {
                 client.warn(
                     `[playerSession] restore for ${guildId}: skipped hydrate; concurrent queue content present`
                 )
@@ -261,6 +303,14 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                 return
             }
 
+            // Re-check after releasing the queue lock: /stop may have replaced the player.
+            if (!isRestoreHydratePlayerStillLive(player, client.lavalink.getPlayer(guildId))) {
+                client.warn(
+                    `[playerSession] restore for ${guildId}: live player changed after hydrate; skipping playback setup`
+                )
+                return
+            }
+
             if (snapshot.repeatMode !== "off") {
                 await player.setRepeatMode(snapshot.repeatMode)
             }
@@ -268,8 +318,19 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
             player.set("rrqEnabled", snapshot.rrqEnabled)
 
             await startPlaybackIfNeeded(player)
-            if (snapshot.paused && player.playing) {
+            if (
+                snapshot.paused &&
+                player.playing &&
+                isRestoreHydratePlayerStillLive(player, client.lavalink.getPlayer(guildId))
+            ) {
                 await player.pause()
+            }
+
+            if (!isRestoreHydratePlayerStillLive(player, client.lavalink.getPlayer(guildId))) {
+                client.warn(
+                    `[playerSession] restore for ${guildId}: live player changed during playback setup; not persisting restore player`
+                )
+                return
             }
 
             client.info(
@@ -296,24 +357,38 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         client.error(`[playerSession] restore failed for guild ${guildId}: ${msg}`)
-        const orphan = client.lavalink.getPlayer(guildId)
-        if (orphan) {
-            // Same concurrent-enqueue race as the zero-resolve path: do not destroy live content.
+        // Compare against the restore-created Player. getPlayer alone is not enough: a
+        // successor would look like a live orphan and must not be destroyed here.
+        const liveNow = client.lavalink.getPlayer(guildId)
+        if (
+            restorePlayer &&
+            liveNow &&
+            isRestoreHydratePlayerStillLive(restorePlayer, liveNow)
+        ) {
             const abandoned = await withGuildPlayerQueueLock(guildId, async () => {
-                if (shouldAbandonRestoreForConcurrentQueue(orphan)) return true
-                await orphan.destroy().catch(() => undefined)
-                return false
+                const live = client.lavalink.getPlayer(guildId)
+                if (!isRestoreHydratePlayerStillLive(restorePlayer, live)) {
+                    return "successor" as const
+                }
+                if (shouldAbandonRestoreForConcurrentQueue(liveNow)) return "concurrent" as const
+                await liveNow.destroy().catch(() => undefined)
+                return "destroyed" as const
             })
-            if (abandoned) {
+            if (abandoned === "concurrent") {
                 client.warn(
                     `[playerSession] restore for ${guildId}: error after concurrent enqueue; keeping player`
                 )
                 clearPlayerSessionPreservePriorSnapshot(guildId)
-                playerToPersist = orphan
+                playerToPersist = liveNow
             } else {
                 playerToPersist = null
             }
         } else {
+            if (liveNow && restorePlayer && liveNow !== restorePlayer) {
+                client.warn(
+                    `[playerSession] restore for ${guildId}: error after live player changed; leaving successor alone`
+                )
+            }
             playerToPersist = null
         }
         // Transient failures (Lavalink/Discord blips) must not wipe the persisted snapshot.
@@ -322,7 +397,10 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
     }
 
     if (playerToPersist) {
-        schedulePlayerSessionSave(playerToPersist)
+        // Final identity gate: never persist a zombie after /stop+/play during restore.
+        if (isRestoreHydratePlayerStillLive(playerToPersist, client.lavalink.getPlayer(guildId))) {
+            schedulePlayerSessionSave(playerToPersist)
+        }
     }
 }
 

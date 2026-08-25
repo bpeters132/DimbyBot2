@@ -18,12 +18,24 @@ export function shouldDestroyLeftoverHandoffPlayer(
 }
 
 /**
- * On local Ready after a failed handoff destroy, only clear the flushed Lavalink
- * session when no different live player owns the guild slot.
+ * On local Ready after Lavalink handoff (destroy succeeded *or* failed), only clear
+ * the flushed Lavalink session when no different live player owns the guild slot.
+ *
+ * Successful destroy still leaves a window (joinVoiceChannel Ready, up to 30s) where
+ * `/play` can create a successor and persist its queue — unconditional clear would
+ * wipe that row.
  */
-export function shouldClearSessionAfterFailedHandoffDestroy(
+export function shouldClearSessionAfterLocalHandoffReady(
     handoffPlayer: object,
     livePlayer: object | null | undefined
 ): boolean {
     return livePlayer == null || livePlayer === handoffPlayer
+}
+
+/** @deprecated Use {@link shouldClearSessionAfterLocalHandoffReady} (same semantics). */
+export function shouldClearSessionAfterFailedHandoffDestroy(
+    handoffPlayer: object,
+    livePlayer: object | null | undefined
+): boolean {
+    return shouldClearSessionAfterLocalHandoffReady(handoffPlayer, livePlayer)
 }
