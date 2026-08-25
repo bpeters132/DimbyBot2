@@ -6,6 +6,7 @@ import { shuffleUpcomingOnLivePlayer } from "../../util/livePlayerQueueMutations
 import { startPlaybackIfNeeded } from "../../util/startPlaybackIfNeeded.js"
 import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
+import { forceClearPlayerSession } from "../../util/playerSessionPersistence.js"
 import { updateControlMessage } from "./handleControlChannel.js"
 
 export async function handleControlButtonInteraction(
@@ -311,6 +312,9 @@ export async function handleControlButtonInteraction(
             case "control_stop": {
                 try {
                     await player.destroy()
+                    // playerDestroy → clearPlayerSession is skipped while restore-in-progress;
+                    // force-clear so an intentional stop cannot resurrect on reconnect.
+                    await forceClearPlayerSession(guildId)
                     actionTaken = true
                     client.debug("[ControlButtonHandler] Player stopped")
                     try {

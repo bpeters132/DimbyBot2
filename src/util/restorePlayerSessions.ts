@@ -354,11 +354,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
         // Compare against the restore-created Player. getPlayer alone is not enough: a
         // successor would look like a live orphan and must not be destroyed here.
         const liveNow = client.lavalink.getPlayer(guildId)
-        if (
-            restorePlayer &&
-            liveNow &&
-            isRestoreHydratePlayerStillLive(restorePlayer, liveNow)
-        ) {
+        if (restorePlayer && liveNow && isRestoreHydratePlayerStillLive(restorePlayer, liveNow)) {
             const abandoned = await withGuildPlayerQueueLock(guildId, async () => {
                 const live = client.lavalink.getPlayer(guildId)
                 if (!isRestoreHydratePlayerStillLive(restorePlayer, live)) {
