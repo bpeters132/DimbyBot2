@@ -42,11 +42,17 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://192.168.1.10/audio.mp3"), true)
         assert.equal(isBlockedUserMediaUrl("http://172.16.0.2/"), true)
         assert.equal(isBlockedUserMediaUrl("http://169.254.1.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://0.0.0.0/"), true)
         assert.equal(isBlockedUserMediaUrl("http://[::]/"), true)
         assert.equal(isBlockedUserMediaUrl("http://[::1]/"), true)
         assert.equal(isBlockedUserMediaUrl("http://[::ffff:127.0.0.1]/"), true)
+        // Hex-form IPv4-mapped addresses (::ffff:AABB:CCDD) are a common SSRF bypass shape.
+        assert.equal(isBlockedUserMediaUrl("http://[::ffff:7f00:1]/"), true) // 127.0.0.1
+        assert.equal(isBlockedUserMediaUrl("http://[::ffff:0a00:1]/"), true) // 10.0.0.1
+        assert.equal(isBlockedUserMediaUrl("http://[::ffff:c0a8:1]/"), true) // 192.168.0.1
         assert.equal(isBlockedUserMediaUrl("http://[fd12:3456:789a:1::1]/"), true)
         assert.equal(isBlockedUserMediaUrl("http://[fe90::1]/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://[febf::1]/"), true) // still fe80::/10
     })
 
     it("rejects Docker-internal single-label hosts", () => {
