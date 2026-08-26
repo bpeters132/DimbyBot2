@@ -11,6 +11,7 @@ import { handleQueryAndPlay } from "../../util/musicManager.js"
 import { seedAutoplayHistoryFromPlayer } from "../../util/autoplayHistory.js"
 import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
 import { playerHasQueueContent } from "../../util/playlistQueue.js"
+import { isSameLivePlayer } from "../../util/livePlayerIdentity.js"
 import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
@@ -119,12 +120,16 @@ export default {
             // Match web searchAndEnqueue: failed genre search after create must not leave an
             // orphan whose later alone-in-VC destroy wipes a prior persisted session.
             if (createdHere && !result.success) {
+                const createdPlayer = player
                 await tryDestroyOrphanGuildPlayer(guild.id, {
                     hasQueueContent: () => {
-                        const live = client.lavalink.getPlayer(guild.id) ?? player
+                        const live = client.lavalink.getPlayer(guild.id)
+                        if (!isSameLivePlayer(live, createdPlayer)) return true
                         return playerHasQueueContent(live)
                     },
                     destroyPlayer: async () => {
+                        const live = client.lavalink.getPlayer(guild.id)
+                        if (!isSameLivePlayer(live, createdPlayer)) return
                         await destroyPlayerSuppressingSessionClear(guild.id, () =>
                             client.lavalink.destroyPlayer(guild.id)
                         )
@@ -151,8 +156,17 @@ export default {
 
         const { player, result } = playOutcome
         if (result.success) {
-            player.set("autoplay", true)
-            seedAutoplayHistoryFromPlayer(player)
+            // handleQueryAndPlay may outlive /stop+/play — never set autoplay on a destroyed ref.
+            const live = client.lavalink.getPlayer(guild.id)
+            if (!isSameLivePlayer(live, player)) {
+                return interaction.editReply({
+                    content:
+                        "The player stopped before autoplay could be enabled. Try again.",
+                    ...noMentions,
+                })
+            }
+            live.set("autoplay", true)
+            seedAutoplayHistoryFromPlayer(live)
             await interaction.editReply({
                 content: `Autoplay enabled for **${genreName}**. ${result.feedbackText ?? "Queued."}`,
                 ...noMentions,

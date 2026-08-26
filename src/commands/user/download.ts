@@ -12,6 +12,7 @@ import {
 import { handleQueryAndPlay } from "../../util/musicManager.js"
 import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
 import { playerHasQueueContent } from "../../util/playlistQueue.js"
+import { isSameLivePlayer } from "../../util/livePlayerIdentity.js"
 import { getGuildSettings } from "../../util/saveControlChannel.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import {
@@ -796,12 +797,16 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                             // must not leave an orphan whose later alone-in-VC destroy wipes a
                             // prior persisted session.
                             if (createdHere && !result.success) {
+                                const createdPlayer = player
                                 await tryDestroyOrphanGuildPlayer(guildId, {
                                     hasQueueContent: () => {
-                                        const live = client.lavalink.getPlayer(guildId) ?? player
+                                        const live = client.lavalink.getPlayer(guildId)
+                                        if (!isSameLivePlayer(live, createdPlayer)) return true
                                         return playerHasQueueContent(live)
                                     },
                                     destroyPlayer: async () => {
+                                        const live = client.lavalink.getPlayer(guildId)
+                                        if (!isSameLivePlayer(live, createdPlayer)) return
                                         await destroyPlayerSuppressingSessionClear(guildId, () =>
                                             client.lavalink.destroyPlayer(guildId)
                                         )

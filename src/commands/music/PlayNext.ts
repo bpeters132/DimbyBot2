@@ -5,6 +5,7 @@ import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import { enqueuePlayNextTrackAssumingSearchDone } from "../../util/playNextEnqueue.js"
 import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
 import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "../../util/userMediaUrl.js"
+import { isSameLivePlayer } from "../../util/livePlayerIdentity.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -93,8 +94,12 @@ export default {
             }
 
             const track = res.tracks[0]
+            const searchPlayerRef = searchPlayer
             const outcome = await enqueuePlayNextTrackAssumingSearchDone(
-                () => client.lavalink.getPlayer(guild.id),
+                () => {
+                    const live = client.lavalink.getPlayer(guild.id)
+                    return isSameLivePlayer(live, searchPlayerRef) ? live : undefined
+                },
                 guild.id,
                 track,
                 interaction.user.id
