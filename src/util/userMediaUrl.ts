@@ -14,7 +14,9 @@ export function trimmedHttpUrlQuery(query: string): string | null {
 
 /**
  * True when a User media URL must not be sent to Lavalink: loopback, RFC1918,
- * link-local, or a single-label Docker DNS name. Non-URLs (ytsearch text) are allowed.
+ * link-local, single-label Docker DNS names, DNS-bounce hosts that encode a private
+ * IP in the name (e.g. `10.0.0.1.nip.io`), or known bounce-service suffixes.
+ * Non-URLs (ytsearch text) are allowed.
  */
 export function isBlockedUserMediaUrl(query: string): boolean {
     if (!isHttpUrlQuery(query)) return false
@@ -26,6 +28,20 @@ export function isBlockedUserMediaUrl(query: string): boolean {
     }
 }
 
+/**
+ * Public DNS services that resolve `{ip}.service` (or the bare apex) to that IP /
+ * loopback. Hostname-string denylists alone miss these; Lavalink `http:true` would
+ * still fetch the private destination. Full resolve-and-pin is out of scope (ADR 0004).
+ */
+const DNS_BOUNCE_SUFFIXES = [
+    "nip.io",
+    "sslip.io",
+    "xip.io",
+    "localtest.me",
+    "lvh.me",
+    "vcap.me",
+] as const
+
 function isBlockedUserMediaHost(hostname: string): boolean {
     const host = hostname
         .replace(/^\[|\]$/g, "")
@@ -34,6 +50,25 @@ function isBlockedUserMediaHost(hostname: string): boolean {
     if (host === "localhost" || host.endsWith(".localhost")) return true
     if (isBlockedIpLiteral(host)) return true
     if (!host.includes(".") && !host.includes(":")) return true
+    if (isDnsBounceHost(host)) return true
+    if (hostnameEmbedsBlockedIpv4(host)) return true
+    return false
+}
+
+function isDnsBounceHost(host: string): boolean {
+    for (const suffix of DNS_BOUNCE_SUFFIXES) {
+        if (host === suffix || host.endsWith(`.${suffix}`)) return true
+    }
+    return false
+}
+
+/** `10.0.0.1.evil.example` style: four consecutive decimal labels forming a blocked IPv4. */
+function hostnameEmbedsBlockedIpv4(host: string): boolean {
+    const labels = host.split(".")
+    for (let i = 0; i + 3 < labels.length; i++) {
+        const candidate = `${labels[i]}.${labels[i + 1]}.${labels[i + 2]}.${labels[i + 3]}`
+        if (isBlockedIpv4(candidate)) return true
+    }
     return false
 }
 

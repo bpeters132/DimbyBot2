@@ -56,6 +56,20 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://yt-cipher:8001/"), true)
     })
 
+    it("rejects DNS-bounce hosts that resolve to private or loopback IPs", () => {
+        assert.equal(isBlockedUserMediaUrl("http://10.0.0.1.nip.io/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://192.168.1.1.sslip.io/audio.mp3"), true)
+        assert.equal(isBlockedUserMediaUrl("http://127.0.0.1.nip.io:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://169.254.169.254.nip.io/latest/meta-data/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://localtest.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.localtest.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://lvh.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://vcap.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://10.0.0.5.NIP.IO/"), true)
+        // Embedded blocked IPv4 labels even under an unfamiliar suffix
+        assert.equal(isBlockedUserMediaUrl("http://172.16.0.2.attacker.example/"), true)
+    })
+
     it("fails closed on unparseable http(s) strings", () => {
         assert.equal(isBlockedUserMediaUrl("http://"), true)
     })
