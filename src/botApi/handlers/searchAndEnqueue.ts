@@ -18,6 +18,7 @@ import {
 import { isMemberFetchNotFound } from "../../util/discordMemberFetchError.js"
 import { enqueueSearchTracksAssumingSearchDone } from "./enqueueSearchTracks.js"
 import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "../../util/userMediaUrl.js"
+import { isSameLivePlayer } from "../../util/livePlayerIdentity.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
 
@@ -182,12 +183,17 @@ export async function searchAndEnqueue(
         const cleanupCreatedPlayer = async (): Promise<void> => {
             if (!createdHere) return
             // Destroy now if idle; if other requests still reserve the player, defer until count is 0.
+            // Identity-gate destroy: never tear down a successor installed by /stop+/play.
+            const createdPlayer = player
             await tryDestroyOrphanGuildPlayer(guildId, {
                 hasQueueContent: () => {
-                    const live = client.lavalink.getPlayer(guildId) ?? player
+                    const live = client.lavalink.getPlayer(guildId)
+                    if (!isSameLivePlayer(live, createdPlayer)) return true
                     return playerHasQueueContent(live)
                 },
                 destroyPlayer: async () => {
+                    const live = client.lavalink.getPlayer(guildId)
+                    if (!isSameLivePlayer(live, createdPlayer)) return
                     await destroyPlayerSuppressingSessionClear(guildId, () =>
                         client.lavalink.destroyPlayer(guildId)
                     )
@@ -230,6 +236,16 @@ export async function searchAndEnqueue(
 
         try {
             await ensurePlayerConnected(client, player, voiceChannel)
+            if (!isSameLivePlayer(client.lavalink.getPlayer(guildId), player)) {
+                await cleanupCreatedPlayer()
+                return {
+                    ok: false,
+                    status: 409,
+                    error: {
+                        error: "Player stopped before the track could be queued. Try again.",
+                    },
+                }
+            }
             if (createdHere) {
                 let refreshedMember = null
                 try {
@@ -273,6 +289,16 @@ export async function searchAndEnqueue(
         }
 
         if (options?.connectOnly) {
+            if (!isSameLivePlayer(client.lavalink.getPlayer(guildId), player)) {
+                await cleanupCreatedPlayer()
+                return {
+                    ok: false,
+                    status: 409,
+                    error: {
+                        error: "Player stopped before the track could be queued. Try again.",
+                    },
+                }
+            }
             return { ok: true, player, playbackStarted: false }
         }
 
@@ -308,14 +334,32 @@ export async function searchAndEnqueue(
             }
         }
 
+        // Same Player that searched must still own the guild slot — a successor from /stop+/play
+        // during search must not receive this request's tracks (existence-only getPlayer is unsafe).
+        if (!isSameLivePlayer(client.lavalink.getPlayer(guildId), player)) {
+            return {
+                ok: false,
+                status: 409,
+                error: {
+                    error: "Player stopped before the track could be queued. Try again.",
+                },
+            }
+        }
+
         // Re-resolve under the lock: /stop, Leave, control stop, or web stop can destroy
         // during search despite the lifecycle reservation (reservations only defer orphan
         // idle teardown). Enqueueing onto the captured Player would mutate a zombie still
         // holding in-memory tracks and schedulePlayerSessionSave would resurrect the session.
+        // getLivePlayer returns undefined for a successor so companion-resolve races cannot
+        // pollute the new session (existence-only getPlayer is unsafe after long awaits).
+        const searchPlayer = player
         let enqueued
         try {
             enqueued = await enqueueSearchTracksAssumingSearchDone(
-                () => client.lavalink.getPlayer(guildId),
+                () => {
+                    const live = client.lavalink.getPlayer(guildId)
+                    return isSameLivePlayer(live, searchPlayer) ? live : undefined
+                },
                 guildId,
                 searchResult,
                 requesterId
@@ -330,7 +374,10 @@ export async function searchAndEnqueue(
                 error: { error: "Could not resolve YouTube playback.", details: message },
             }
         }
-        if (enqueued.status === "no_player") {
+        if (
+            enqueued.status === "no_player" ||
+            (enqueued.status === "ok" && !isSameLivePlayer(enqueued.player, searchPlayer))
+        ) {
             return {
                 ok: false,
                 status: 409,

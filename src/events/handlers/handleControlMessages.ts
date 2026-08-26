@@ -13,6 +13,7 @@ import {
 import { handleQueryAndPlay } from "../../util/musicManager.js"
 import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
 import { playerHasQueueContent } from "../../util/playlistQueue.js"
+import { isSameLivePlayer } from "../../util/livePlayerIdentity.js"
 import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
@@ -132,12 +133,16 @@ export default async function handleControlMessages(client: BotClient, message: 
                 if (!createdHere) return
                 // Match web search/enqueue teardown: ephemeral destroy must not wipe a prior
                 // persisted session still awaiting restore.
+                const createdPlayer = player
                 await tryDestroyOrphanGuildPlayer(guildId, {
                     hasQueueContent: () => {
-                        const live = client.lavalink?.getPlayer(guildId) ?? player
-                        return live ? playerHasQueueContent(live) : false
+                        const live = client.lavalink?.getPlayer(guildId)
+                        if (!isSameLivePlayer(live, createdPlayer)) return true
+                        return playerHasQueueContent(live)
                     },
                     destroyPlayer: async () => {
+                        const live = client.lavalink?.getPlayer(guildId)
+                        if (!isSameLivePlayer(live, createdPlayer)) return
                         await destroyPlayerSuppressingSessionClear(guildId, () =>
                             client.lavalink?.destroyPlayer(guildId)
                         )

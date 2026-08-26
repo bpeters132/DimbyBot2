@@ -17,6 +17,7 @@ import {
     tryDestroyOrphanGuildPlayer,
 } from "../../util/guildPlayerQueueLock.js"
 import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
+import { isSameLivePlayer } from "../../util/livePlayerIdentity.js"
 
 export async function playerPlaylistPlayPOST(
     headers: Headers,
@@ -152,10 +153,13 @@ export async function playerPlaylistPlayPOST(
             if (resolved.length === 0) {
                 await tryDestroyOrphanGuildPlayer(guildId, {
                     hasQueueContent: () => {
-                        const live = client.lavalink.getPlayer(guildId) ?? player
+                        const live = client.lavalink.getPlayer(guildId)
+                        if (!isSameLivePlayer(live, player)) return true
                         return playerHasQueueContent(live)
                     },
                     destroyPlayer: async () => {
+                        const live = client.lavalink.getPlayer(guildId)
+                        if (!isSameLivePlayer(live, player)) return
                         await destroyPlayerSuppressingSessionClear(guildId, () =>
                             client.lavalink.destroyPlayer(guildId)
                         )
@@ -177,8 +181,24 @@ export async function playerPlaylistPlayPOST(
 
             // Append (same as Discord /playlist play). Re-resolve the live player so
             // /stop during hydrate cannot mutate a stale Player and resurrect its session.
+            // Identity-gate: /stop+/play during resolve installs a successor — never add
+            // on that new session (existence-only getPlayer would return it).
+            if (!isSameLivePlayer(client.lavalink.getPlayer(guildId), player)) {
+                return {
+                    status: 409,
+                    body: {
+                        ok: false,
+                        error: {
+                            error: "Player stopped before the playlist could be queued. Try again.",
+                        },
+                    },
+                }
+            }
             const enqueue = await enqueueResolvedPlaylistTracks(
-                () => client.lavalink.getPlayer(guildId),
+                () => {
+                    const live = client.lavalink.getPlayer(guildId)
+                    return isSameLivePlayer(live, player) ? live : undefined
+                },
                 guildId,
                 resolved,
                 requester.requesterId,
@@ -197,7 +217,11 @@ export async function playerPlaylistPlayPOST(
             }
 
             const livePlayer = client.lavalink.getPlayer(guildId)
-            const state = await toPlayerStateResponse(guildId, requester.requesterId, livePlayer)
+            const state = await toPlayerStateResponse(
+                guildId,
+                requester.requesterId,
+                isSameLivePlayer(livePlayer, player) ? livePlayer : null
+            )
 
             return {
                 status: 200,
