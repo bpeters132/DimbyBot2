@@ -33,6 +33,7 @@ import {
     trimmedHttpUrlQuery,
     USER_MEDIA_URL_BLOCKED,
 } from "./userMediaUrl.js"
+import { isSameLivePlayer } from "./livePlayerIdentity.js"
 
 export { startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
 export type { PlaybackStartResult } from "./startPlaybackIfNeeded.js"
@@ -71,14 +72,16 @@ export async function ensurePlayerConnected(
                 _oldChannelId: string | null,
                 newChannelId: string | null
             ) => {
-                if (movedPlayer.guildId === player.guildId && newChannelId === voiceChannel.id) {
+                // Identity-gate: a successor's connect/move for the same guild must not
+                // complete this wait — that would let a cancelled request continue onto it.
+                if (movedPlayer === player && newChannelId === voiceChannel.id) {
                     disposeMoveWait?.()
                     resolve()
                 }
             }
             const onPlayerUpdate = (_oldPlayerJson: PlayerJson, updatedPlayer: Player) => {
                 if (
-                    updatedPlayer.guildId === player.guildId &&
+                    updatedPlayer === player &&
                     updatedPlayer.connected &&
                     updatedPlayer.voiceChannelId === voiceChannel.id
                 ) {
@@ -614,20 +617,20 @@ export async function handleQueryAndPlay(
             )
             // Lifecycle reservations only defer orphan idle destroy. Intentional /stop, Leave,
             // or control/web stop during search can remove the captured Player from the manager.
-            // Re-resolve before connect/enqueue so we never reconnect or schedulePlayerSessionSave
-            // on a zombie (in-memory queue survives queue.utils.destroy → session resurrection).
+            // Refuse successors: existence-only getPlayer() after /stop+/play returns the new
+            // session — adopting it would enqueue this request's tracks onto that queue.
+            const expectedPlayer = player
             const liveBeforeConnect = client.lavalink.getPlayer(guildId)
-            if (!liveBeforeConnect) {
+            if (!isSameLivePlayer(liveBeforeConnect, expectedPlayer)) {
                 feedbackText = `${requester}, The player stopped before the track could be queued. Try again.`
                 success = false
                 errorResult = new Error("Player destroyed during search")
             } else {
-                player = liveBeforeConnect
                 try {
-                    await ensurePlayerConnected(client, player, voiceChannel)
-                    // /stop can still win during the connect wait — refuse the captured ref.
+                    await ensurePlayerConnected(client, expectedPlayer, voiceChannel)
+                    // /stop + successor during connect must abort — never follow the new Player.
                     const liveAfterConnect = client.lavalink.getPlayer(guildId)
-                    if (!liveAfterConnect) {
+                    if (!isSameLivePlayer(liveAfterConnect, expectedPlayer)) {
                         feedbackText = `${requester}, The player stopped before the track could be queued. Try again.`
                         success = false
                         errorResult = new Error("Player destroyed during connect")
@@ -640,12 +643,13 @@ export async function handleQueryAndPlay(
                             () => client.lavalink.getPlayer(guildId),
                             (p) => ensurePlayerConnected(client, p, voiceChannel)
                         )
-                        if (!liveForPlayback) {
+                        // Refuse successors: /stop+/play during the wait must not adopt the new session.
+                        if (!isSameLivePlayer(liveForPlayback, expectedPlayer)) {
                             feedbackText = `${requester}, The player stopped before the track could be queued. Try again.`
                             success = false
-                            errorResult = new Error("Player destroyed during connect")
+                            errorResult = new Error("Player destroyed before enqueue")
                         } else {
-                            player = liveForPlayback
+                            player = expectedPlayer
                             player.voiceChannelId = voiceChannel.id
                             previousVoiceChannelIdBeforeEnsure = null
 
@@ -655,9 +659,13 @@ export async function handleQueryAndPlay(
                                     : [trackToAdd]
                             stampRequesterUserIdOnTracks(tracksToEnqueue, requester.id)
 
-                            const expectedForEnqueue = player
                             const enqueued = await enqueueMusicManagerTracksAssumingSearchDone(
-                                () => client.lavalink.getPlayer(guildId),
+                                () => {
+                                    const live = client.lavalink.getPlayer(guildId)
+                                    return isSameLivePlayer(live, expectedPlayer)
+                                        ? live
+                                        : undefined
+                                },
                                 guildId,
                                 {
                                     isPlaylist: isPlaylistEnqueue,
@@ -665,9 +673,13 @@ export async function handleQueryAndPlay(
                                     playlistName: searchResult.playlist?.name,
                                 },
                                 requester.id,
-                                expectedForEnqueue
+                                expectedPlayer
                             )
-                            if (enqueued.status === "no_player") {
+                            if (
+                                enqueued.status === "no_player" ||
+                                (enqueued.status === "ok" &&
+                                    !isSameLivePlayer(enqueued.player, expectedPlayer))
+                            ) {
                                 feedbackText = `${requester}, The player stopped before the track could be queued. Try again.`
                                 success = false
                                 errorResult = new Error("Player destroyed before enqueue")
@@ -710,7 +722,10 @@ export async function handleQueryAndPlay(
                     const liveForError = client.lavalink.getPlayer(guildId)
                     if (pem.includes("No supported audio streams available")) {
                         feedbackText = `${requester}, I couldn't play [${trackToAdd.info.title}](${trackToAdd.info.uri}) because it has no supported audio streams (age/region lock, private, etc.).`
-                        if (liveForError && liveForError.queue.tracks.length > 0) {
+                        if (
+                            isSameLivePlayer(liveForError, expectedPlayer) &&
+                            liveForError.queue.tracks.length > 0
+                        ) {
                             try {
                                 await liveForError.skip()
                             } catch (skipError) {
@@ -727,8 +742,8 @@ export async function handleQueryAndPlay(
                     if (originalFeedback.startsWith("Added")) {
                         feedbackText = `${originalFeedback}\nHowever, ${feedbackText.substring(feedbackText.indexOf(",") + 1).trim()}`
                     }
-                    // Never persist a post-destroy zombie — that resurrects the cleared session.
-                    if (liveForError) {
+                    // Never persist a post-destroy zombie or a successor from this request.
+                    if (isSameLivePlayer(liveForError, expectedPlayer)) {
                         scheduleSaveIfPlayerStillLive(
                             () => client.lavalink.getPlayer(guildId),
                             liveForError
