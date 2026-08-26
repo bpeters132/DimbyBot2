@@ -6,6 +6,9 @@ import {
     catalogYoutubeSearchQueries,
     companionLatestVersionPath,
     ensureCompanionOriginStreamUrl,
+    isSpotifyCatalogTrack,
+    isSpotifyCatalogUri,
+    isYoutubeSourceTrack,
     overlayCatalogIdentity,
     overlayYoutubeMetadata,
     pickPreferredAudioItag,
@@ -186,6 +189,12 @@ describe("youtube companion itag + URL helpers", () => {
         assert.equal(youtubeVideoIdFromUri(`https://youtu.be/${VIDEO_ID}`), VIDEO_ID)
         assert.equal(youtubeVideoIdFromUri(`https://www.youtube.com/embed/${VIDEO_ID}`), VIDEO_ID)
         assert.equal(youtubeVideoIdFromUri(`https://www.youtube.com/shorts/${VIDEO_ID}`), VIDEO_ID)
+        assert.equal(
+            youtubeVideoIdFromUri(`https://music.youtube.com/watch?v=${VIDEO_ID}`),
+            VIDEO_ID
+        )
+        assert.equal(youtubeVideoIdFromUri(`https://m.youtube.com/watch?v=${VIDEO_ID}`), VIDEO_ID)
+        assert.equal(youtubeVideoIdFromUri(`https://www.youtube.com/live/${VIDEO_ID}`), VIDEO_ID)
         assert.equal(youtubeVideoIdFromUri("https://example.com/watch?v=dQw4w9WgXcQ"), null)
         assert.equal(
             youtubeVideoIdFromTrack({
@@ -198,6 +207,52 @@ describe("youtube companion itag + URL helpers", () => {
             } as Track),
             null
         )
+    })
+
+    it("classifies Spotify catalog URIs and YouTube sources used by restore/enqueue", () => {
+        assert.equal(isSpotifyCatalogUri("https://open.spotify.com/track/abc"), true)
+        assert.equal(isSpotifyCatalogUri("https://play.spotify.com/track/abc"), true)
+        assert.equal(isSpotifyCatalogUri("https://www.open.spotify.com/track/abc"), true)
+        assert.equal(isSpotifyCatalogUri("spotify:track:4hqIKGKzDVJXCnD80y2fyn"), true)
+        assert.equal(isSpotifyCatalogUri("spotify:album:abc"), false)
+        assert.equal(isSpotifyCatalogUri(""), false)
+        assert.equal(isSpotifyCatalogUri("https://example.com/track"), false)
+
+        assert.equal(isSpotifyCatalogTrack(spotifyTrack()), true)
+        assert.equal(
+            isSpotifyCatalogTrack({
+                ...youtubeTrack(),
+                info: {
+                    ...youtubeTrack().info,
+                    sourceName: undefined,
+                    uri: "https://open.spotify.com/track/abc",
+                    identifier: "abc",
+                },
+            } as Track),
+            true
+        )
+        assert.equal(isSpotifyCatalogTrack(youtubeTrack()), false)
+
+        assert.equal(isYoutubeSourceTrack(youtubeTrack()), true)
+        assert.equal(
+            isYoutubeSourceTrack(
+                youtubeTrack({ sourceName: "youtubemusic", identifier: VIDEO_ID })
+            ),
+            true
+        )
+        assert.equal(
+            isYoutubeSourceTrack({
+                ...youtubeTrack(),
+                info: {
+                    ...youtubeTrack().info,
+                    sourceName: undefined,
+                    uri: `https://music.youtube.com/watch?v=${VIDEO_ID}`,
+                },
+            } as Track),
+            true
+        )
+        assert.equal(isYoutubeSourceTrack(spotifyTrack()), false)
+        assert.equal(isYoutubeSourceTrack(soundcloudTrack()), false)
     })
 
     it("rewrites relative and localhost companion redirects onto the companion origin", () => {

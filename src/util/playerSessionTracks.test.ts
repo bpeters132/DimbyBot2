@@ -234,4 +234,76 @@ describe("resolvePersistedTracks transient vs permanent failures", () => {
         assert.equal(result.resolved[0]?.info.sourceName, "spotify")
         assert.equal(result.resolved[0]?.info.uri, spotifyUri)
     })
+
+    it("skips encoded decode for spotify:track and play.spotify.com catalog forms", async () => {
+        for (const spotifyUri of [
+            "spotify:track:4hqIKGKzDVJXCnD80y2fyn",
+            "https://play.spotify.com/track/4hqIKGKzDVJXCnD80y2fyn",
+        ]) {
+            let decoded = false
+            const player = mockPlayer({
+                decode: async () => {
+                    decoded = true
+                    throw new Error("should not decode stale companion HTTP encodings")
+                },
+                search: async (uri) => ({
+                    tracks: [
+                        {
+                            info: {
+                                title: "Song",
+                                uri,
+                                sourceName: "spotify",
+                                identifier: "4hqIKGKzDVJXCnD80y2fyn",
+                            },
+                        },
+                    ],
+                }),
+            })
+            const result = await resolvePersistedTracks(player, [
+                stored({
+                    uri: spotifyUri,
+                    encoded: "stale-companion-http-encoded",
+                }),
+            ])
+            assert.equal(decoded, false, spotifyUri)
+            assert.equal(result.resolved.length, 1, spotifyUri)
+            assert.equal(result.resolved[0]?.info.uri, spotifyUri)
+        }
+    })
+
+    it("skips encoded decode for music.youtube.com and live YouTube URIs", async () => {
+        for (const youtubeUri of [
+            "https://music.youtube.com/watch?v=dQw4w9WgXcQ",
+            "https://www.youtube.com/live/dQw4w9WgXcQ",
+        ]) {
+            let decoded = false
+            const player = mockPlayer({
+                decode: async () => {
+                    decoded = true
+                    throw new Error("should not decode youtube encoded tracks")
+                },
+                search: async (uri) => ({
+                    tracks: [
+                        {
+                            info: {
+                                title: "Song",
+                                uri,
+                                sourceName: "youtube",
+                                identifier: "dQw4w9WgXcQ",
+                            },
+                        },
+                    ],
+                }),
+            })
+            const result = await resolvePersistedTracks(player, [
+                stored({
+                    uri: youtubeUri,
+                    encoded: "stale-youtube-or-http-encoded",
+                }),
+            ])
+            assert.equal(decoded, false, youtubeUri)
+            assert.equal(result.resolved.length, 1, youtubeUri)
+            assert.equal(result.resolved[0]?.info.sourceName, "youtube")
+        }
+    })
 })
