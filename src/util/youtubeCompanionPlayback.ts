@@ -124,15 +124,17 @@ export function isYoutubeSourceTrack(track: Track | UnresolvedTrack): boolean {
     return Boolean(youtubeVideoIdFromUri(track.info?.uri?.trim() ?? ""))
 }
 
-/** True for open.spotify.com / play.spotify.com catalog URIs (no native audio). */
+/** True for open.spotify.com / play.spotify.com / spotify:track: catalog URIs (no native audio). */
 export function isSpotifyCatalogUri(uri: string): boolean {
     if (!uri) return false
+    // URL() accepts `spotify:track:…` (protocol "spotify:") without throwing, so check first.
+    if (uri.startsWith("spotify:track:")) return true
     try {
         const url = new URL(uri)
         const host = url.hostname.replace(/^www\./, "")
         return host === "open.spotify.com" || host === "play.spotify.com"
     } catch {
-        return uri.startsWith("spotify:track:")
+        return false
     }
 }
 
