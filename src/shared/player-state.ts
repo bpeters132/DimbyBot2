@@ -279,7 +279,7 @@ function trackToPlayerTrackSummary(
  * `queue.current` is sometimes rehydrated from Lavalink without `requester`; we stamp who
  * requested the track on `trackStart` (see {@link DASHBOARD_REQUESTER_KEY}).
  */
-function applyDashboardRequesterFallback(
+export function applyDashboardRequesterFallback(
     player: Player | null,
     summary: PlayerTrackSummary | null
 ): PlayerTrackSummary | null {

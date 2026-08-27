@@ -7,6 +7,7 @@ import {
     hasTrackedDisconnect,
     isDisconnectTimeoutCurrent,
     isRRQActive,
+    removeUserTracksFromQueue,
     roundRobinReorderTracks,
     stampRequesterUserIdOnTracks,
     toggleRRQ,
@@ -40,6 +41,28 @@ function mockPlayer(tracks: Track[] = []): Player {
         queue: {
             current: null,
             tracks,
+        },
+        get: (key: string) => store.get(key),
+        set: (key: string, value: unknown) => {
+            store.set(key, value)
+        },
+    } as unknown as Player
+}
+
+function mockMutableQueuePlayer(opts: {
+    current?: Track | null
+    tracks?: Track[]
+}): Player {
+    const tracks = [...(opts.tracks ?? [])]
+    const store = new Map<string, unknown>()
+    return {
+        guildId: "guild-rrq-remove",
+        queue: {
+            current: opts.current ?? null,
+            tracks,
+            async splice(start: number, deleteCount: number, ...insert: Track[]) {
+                return tracks.splice(start, deleteCount, ...insert.flat())
+            },
         },
         get: (key: string) => store.get(key),
         set: (key: string, value: unknown) => {
@@ -179,5 +202,36 @@ describe("RRQ disconnect tracking", () => {
         const player = mockPlayer([mockTrack("u1", "q1"), mockTrack("u2", "q2")])
         assert.equal(userHasQueuedTracks(player, "u1"), true)
         assert.equal(userHasQueuedTracks(player, "u3"), false)
+    })
+})
+
+describe("removeUserTracksFromQueue", () => {
+    it("removes matching upcoming tracks without touching queue.current", async () => {
+        const current = mockTrack("u1", "now-playing")
+        const keep = mockTrack("u2", "keep")
+        const dropA = mockTrack("u1", "drop-a")
+        const dropB = mockTrack({ id: "u1" }, "drop-b")
+        const player = mockMutableQueuePlayer({
+            current,
+            tracks: [dropA, keep, dropB],
+        })
+
+        const removed = await removeUserTracksFromQueue(player, "u1")
+        assert.equal(removed, 2)
+        assert.equal(player.queue.current, current)
+        assert.deepEqual(
+            player.queue.tracks.map((t) => t.info.title),
+            ["keep"]
+        )
+    })
+
+    it("returns 0 when the user has no upcoming tracks", async () => {
+        const player = mockMutableQueuePlayer({
+            current: mockTrack("u1", "now"),
+            tracks: [mockTrack("u2", "other")],
+        })
+        assert.equal(await removeUserTracksFromQueue(player, "u1"), 0)
+        assert.equal(player.queue.tracks.length, 1)
+        assert.equal(player.queue.current?.info.title, "now")
     })
 })
