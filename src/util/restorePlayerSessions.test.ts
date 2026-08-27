@@ -3,6 +3,7 @@ import { describe, it } from "node:test"
 import {
     isStaleSessionDiscordError,
     shouldAbandonRestoreForConcurrentQueue,
+    shouldDeleteStaleRestoredSession,
     shouldPersistRestoredPlayerSession,
 } from "./restorePlayerSessions.js"
 
@@ -64,6 +65,60 @@ describe("shouldAbandonRestoreForConcurrentQueue", () => {
         assert.equal(
             shouldAbandonRestoreForConcurrentQueue({
                 queue: { tracks: [] },
+            }),
+            false
+        )
+    })
+})
+
+describe("shouldDeleteStaleRestoredSession", () => {
+    const evaluated = {
+        voiceChannelId: "vc-old",
+        updatedAt: new Date("2026-08-01T00:00:00.000Z"),
+    }
+
+    it("deletes when the DB row is still the evaluated stale session", () => {
+        assert.equal(
+            shouldDeleteStaleRestoredSession({
+                evaluated,
+                latest: { ...evaluated },
+                livePlayerExists: false,
+            }),
+            true
+        )
+    })
+
+    it("skips delete when a live player already owns the guild", () => {
+        assert.equal(
+            shouldDeleteStaleRestoredSession({
+                evaluated,
+                latest: { ...evaluated },
+                livePlayerExists: true,
+            }),
+            false
+        )
+    })
+
+    it("skips delete when a successor session replaced the row during fetch", () => {
+        assert.equal(
+            shouldDeleteStaleRestoredSession({
+                evaluated,
+                latest: {
+                    voiceChannelId: "vc-new",
+                    updatedAt: new Date("2026-08-01T00:01:00.000Z"),
+                },
+                livePlayerExists: false,
+            }),
+            false
+        )
+    })
+
+    it("skips delete when the row was already cleared", () => {
+        assert.equal(
+            shouldDeleteStaleRestoredSession({
+                evaluated,
+                latest: null,
+                livePlayerExists: false,
             }),
             false
         )

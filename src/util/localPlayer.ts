@@ -92,18 +92,61 @@ export async function playLocalFile(
     }
     pendingLocalPlayGuildIds.add(guildId)
 
-    let postLavalinkHandoff: Promise<void> = new Promise((r) => queueMicrotask(r))
-    let sessionHandoff: LocalPlaySessionHandoff | null = null
+    // Handoff (flush/destroy) can throw before the join try — keep the pending clear in
+    // finally so a DB blip cannot permanently poison local play for this guild.
+    try {
+        let postLavalinkHandoff: Promise<void> = new Promise((r) => queueMicrotask(r))
+        let sessionHandoff: LocalPlaySessionHandoff | null = null
 
-    if (lavalinkPlayer) {
-        client.debug(
-            `[LocalPlayer] Checking Lavalink player state for guild ${guildId}. Connected: ${lavalinkPlayer.connected}, Playing: ${lavalinkPlayer.playing}`
-        )
-        if (client.lavalink.players.has(guildId)) {
-            // Flush the full queue *before* stopPlaying(true) clears upcoming tracks, then
-            // suppress clearPlayerSession across destroy so a failed local join can restore.
-            let destroyEventWait: Promise<boolean> = Promise.resolve(false)
-            sessionHandoff = await beginLocalPlaySessionHandoff(lavalinkPlayer, async () => {
+        if (lavalinkPlayer) {
+            client.debug(
+                `[LocalPlayer] Checking Lavalink player state for guild ${guildId}. Connected: ${lavalinkPlayer.connected}, Playing: ${lavalinkPlayer.playing}`
+            )
+            if (client.lavalink.players.has(guildId)) {
+                // Flush the full queue *before* stopPlaying(true) clears upcoming tracks, then
+                // suppress clearPlayerSession across destroy so a failed local join can restore.
+                let destroyEventWait: Promise<boolean> = Promise.resolve(false)
+                sessionHandoff = await beginLocalPlaySessionHandoff(lavalinkPlayer, async () => {
+                    if (lavalinkPlayer.playing) {
+                        try {
+                            await lavalinkPlayer.stopPlaying(true, false)
+                            client.debug(
+                                `[LocalPlayer] Stopped Lavalink player in guild ${guildId}.`
+                            )
+                        } catch (e: unknown) {
+                            const msg = e instanceof Error ? e.message : String(e)
+                            client.warn(
+                                `[LocalPlayer] Failed to stop Lavalink player in guild ${guildId}: ${msg}`
+                            )
+                        }
+                    }
+                    destroyEventWait = waitForLavalinkPlayerDestroy(client, guildId, 2000)
+                    client.debug(
+                        `[LocalPlayer] Attempting to destroy existing Lavalink player for guild ${guildId}.`
+                    )
+                    await lavalinkPlayer.destroy()
+                    client.debug(`[LocalPlayer] Destroyed Lavalink player for guild ${guildId}.`)
+                    // Lavalink-client already removed this guild from the manager cache before
+                    // awaiting node.destroyPlayer. A successful Map.delete here would drop a
+                    // concurrent createPlayer successor without destroying it.
+                    if (
+                        shouldDeleteLavalinkPlayerAfterDestroy(client.lavalink.players.has(guildId))
+                    ) {
+                        client.lavalink.players.delete(guildId)
+                    }
+                })
+                if (!sessionHandoff.destroyedLavalink) {
+                    client.warn(
+                        `[LocalPlayer] Failed to destroy Lavalink player in guild ${guildId}. Proceeding with @discordjs/voice connection attempt.`
+                    )
+                }
+                postLavalinkHandoff = destroyEventWait.then((eventSeen) => {
+                    if (eventSeen) sessionHandoff?.markDestroyEventSeen()
+                })
+            } else {
+                client.debug(
+                    `[LocalPlayer] No Lavalink player found in manager for guild ${guildId} prior to local play.`
+                )
                 if (lavalinkPlayer.playing) {
                     try {
                         await lavalinkPlayer.stopPlaying(true, false)
@@ -115,46 +158,9 @@ export async function playLocalFile(
                         )
                     }
                 }
-                destroyEventWait = waitForLavalinkPlayerDestroy(client, guildId, 2000)
-                client.debug(
-                    `[LocalPlayer] Attempting to destroy existing Lavalink player for guild ${guildId}.`
-                )
-                await lavalinkPlayer.destroy()
-                client.debug(`[LocalPlayer] Destroyed Lavalink player for guild ${guildId}.`)
-                // Lavalink-client already removed this guild from the manager cache before
-                // awaiting node.destroyPlayer. A successful Map.delete here would drop a
-                // concurrent createPlayer successor without destroying it.
-                if (shouldDeleteLavalinkPlayerAfterDestroy(client.lavalink.players.has(guildId))) {
-                    client.lavalink.players.delete(guildId)
-                }
-            })
-            if (!sessionHandoff.destroyedLavalink) {
-                client.warn(
-                    `[LocalPlayer] Failed to destroy Lavalink player in guild ${guildId}. Proceeding with @discordjs/voice connection attempt.`
-                )
-            }
-            postLavalinkHandoff = destroyEventWait.then((eventSeen) => {
-                if (eventSeen) sessionHandoff?.markDestroyEventSeen()
-            })
-        } else {
-            client.debug(
-                `[LocalPlayer] No Lavalink player found in manager for guild ${guildId} prior to local play.`
-            )
-            if (lavalinkPlayer.playing) {
-                try {
-                    await lavalinkPlayer.stopPlaying(true, false)
-                    client.debug(`[LocalPlayer] Stopped Lavalink player in guild ${guildId}.`)
-                } catch (e: unknown) {
-                    const msg = e instanceof Error ? e.message : String(e)
-                    client.warn(
-                        `[LocalPlayer] Failed to stop Lavalink player in guild ${guildId}: ${msg}`
-                    )
-                }
             }
         }
-    }
 
-    try {
         await postLavalinkHandoff
 
         if (activeLocalPlayers.has(guildId)) {

@@ -2,7 +2,11 @@ import type { VoiceBasedChannel } from "discord.js"
 import type { Player } from "lavalink-client"
 import type BotClient from "../lib/BotClient.js"
 import type { PlayerSessionData } from "../types/index.js"
-import { deletePlayerSession, listPlayerSessions } from "../repositories/playerSessionRepository.js"
+import {
+    deletePlayerSession,
+    getPlayerSession,
+    listPlayerSessions,
+} from "../repositories/playerSessionRepository.js"
 import { updateControlMessage } from "../events/handlers/handleControlChannel.js"
 import { playerBroadcaster } from "../shared/websocket/PlayerBroadcaster.js"
 import { getDiscordErrorCode } from "./discordErrorDetails.js"
@@ -44,6 +48,24 @@ export function shouldAbandonRestoreForConcurrentQueue(player: {
     queue: { current?: unknown; tracks: { length: number } }
 }): boolean {
     return Boolean(player.queue.current) || player.queue.tracks.length > 0
+}
+
+/**
+ * True when restore may delete the DB row after deciding a session is stale.
+ * Concurrent `/play` can upsert a successor session (or create a live player) during
+ * voice-channel fetch — never delete by guildId alone.
+ */
+export function shouldDeleteStaleRestoredSession(args: {
+    evaluated: Pick<PlayerSessionData, "voiceChannelId" | "updatedAt">
+    latest: Pick<PlayerSessionData, "voiceChannelId" | "updatedAt"> | null
+    livePlayerExists: boolean
+}): boolean {
+    if (args.livePlayerExists) return false
+    if (!args.latest) return false
+    return (
+        args.latest.voiceChannelId === args.evaluated.voiceChannelId &&
+        args.latest.updatedAt.getTime() === args.evaluated.updatedAt.getTime()
+    )
 }
 
 let discordReady = false
@@ -115,6 +137,27 @@ async function fetchVoiceChannel(
     }
 }
 
+/** Deletes the evaluated session only when no live player exists and the DB row is unchanged. */
+async function deleteStaleSessionIfUnchanged(
+    client: BotClient,
+    session: PlayerSessionData
+): Promise<void> {
+    const latest = await getPlayerSession(session.guildId)
+    if (
+        !shouldDeleteStaleRestoredSession({
+            evaluated: session,
+            latest,
+            livePlayerExists: Boolean(client.lavalink.getPlayer(session.guildId)),
+        })
+    ) {
+        client.debug(
+            `[playerSession] skip stale delete for ${session.guildId}: live player or successor session present`
+        )
+        return
+    }
+    await deletePlayerSession(session.guildId)
+}
+
 function resolveTextChannelId(session: PlayerSessionData): string | null {
     if (session.textChannelId) return session.textChannelId
     const settings = getGuildSettings()[session.guildId]
@@ -141,7 +184,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
             `[playerSession] stale session removed for ${guildId}: voice channel ${voiceChannelId} not found`
         )
         try {
-            await deletePlayerSession(guildId)
+            await deleteStaleSessionIfUnchanged(client, session)
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err)
             client.info(`[playerSession] stale session delete failed for ${guildId}: ${msg}`)
@@ -155,13 +198,13 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
         client.info(
             `[playerSession] stale session removed for ${guildId}: no humans in VC ${voiceChannelId}`
         )
-        await deletePlayerSession(guildId)
+        await deleteStaleSessionIfUnchanged(client, session)
         return
     }
 
     const tracksToRestore = [...(snapshot.current ? [snapshot.current] : []), ...snapshot.queue]
     if (tracksToRestore.length === 0) {
-        await deletePlayerSession(guildId)
+        await deleteStaleSessionIfUnchanged(client, session)
         return
     }
 
