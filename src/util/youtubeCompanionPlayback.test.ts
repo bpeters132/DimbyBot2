@@ -4,6 +4,7 @@ import type { Player, Track } from "lavalink-client"
 import {
     COMPANION_FETCH_TIMEOUT_MS,
     catalogYoutubeSearchQueries,
+    collectPlayerFormats,
     companionLatestVersionPath,
     companionPlaybackConfig,
     companionPlaybackConfigFromEnv,
@@ -340,6 +341,29 @@ describe("youtube companion itag + URL helpers", () => {
             COMPANION_ORIGIN
         )
         assert.equal(local, `${COMPANION_ORIGIN}/companion/videoplayback?id=${VIDEO_ID}`)
+        const localhost = resolveCompanionRedirectUrl(
+            `http://localhost:8282/companion/videoplayback?id=${VIDEO_ID}`,
+            COMPANION_ORIGIN
+        )
+        assert.equal(localhost, `${COMPANION_ORIGIN}/companion/videoplayback?id=${VIDEO_ID}`)
+    })
+
+    it("merges camelCase and snake_case companion player format lists", () => {
+        const formats = collectPlayerFormats({
+            streamingData: {
+                formats: [{ itag: 18, mimeType: "video/mp4" }],
+                adaptiveFormats: [{ itag: 140, mimeType: "audio/mp4" }],
+            },
+            streaming_data: {
+                formats: [{ itag: 22, mime_type: "video/mp4" }],
+                adaptive_formats: [{ itag: 251, mime_type: "audio/webm" }],
+            },
+        })
+        assert.deepEqual(
+            formats.map((f) => f.itag),
+            [18, 140, 22, 251]
+        )
+        assert.equal(pickPreferredAudioItag(formats), 251)
     })
 
     it("rewrites googlevideo URLs onto companion videoplayback", () => {
@@ -448,6 +472,19 @@ describe("youtube companion itag + URL helpers", () => {
         })
         assert.equal(httpYoutube.info.duration, 213000)
         assert.equal(httpYoutube.info.isStream, false)
+    })
+
+    it("pins invidiousCompanionResolved true even when catalog userData sets it false", () => {
+        const catalog = spotifyTrack()
+        ;(catalog as { userData?: unknown }).userData = {
+            invidiousCompanionResolved: false,
+            catalogTag: "keep",
+        }
+        const http = overlayCatalogIdentity(httpTrackFromSearch(), catalog)
+        const userData = (http as { userData?: Record<string, unknown> }).userData
+        assert.equal(userData?.invidiousCompanionResolved, true)
+        assert.equal(userData?.catalogTag, "keep")
+        assert.equal(http.info.sourceName, "spotify")
     })
 
     it("builds LavaSrc-style catalog YouTube search queries", () => {

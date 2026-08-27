@@ -1,7 +1,6 @@
 import { Prisma } from "@prisma/client"
 import { getPrismaClient } from "../lib/database.js"
 import type {
-    DownloadFileMetadata,
     DownloadMetadataStoreSkippedEntry,
     DownloadsMetadataStore,
 } from "../types/index.js"
@@ -12,27 +11,8 @@ import {
 import {
     deleteConditionsForStoreKeys,
     normalizedRowsFromStore,
+    toDownloadMetadataEntry,
 } from "../util/downloadMetadataNormalize.js"
-
-function toDownloadMetadataEntry(row: {
-    guildId: string
-    downloadDate: Date | string | null
-    originalUrl: string | null
-    filePath: string | null
-}): DownloadFileMetadata {
-    const entry: DownloadFileMetadata = {}
-    if (row.guildId) entry.guildId = row.guildId
-    if (row.downloadDate) {
-        const parsedDate =
-            row.downloadDate instanceof Date ? row.downloadDate : new Date(row.downloadDate)
-        if (Number.isFinite(parsedDate.getTime())) {
-            entry.downloadDate = parsedDate.toISOString()
-        }
-    }
-    if (row.originalUrl) entry.originalUrl = row.originalUrl
-    if (row.filePath) entry.filePath = row.filePath
-    return entry
-}
 
 export type SkippedDownloadMetadataEntry = DownloadMetadataStoreSkippedEntry
 

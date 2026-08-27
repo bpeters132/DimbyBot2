@@ -1,4 +1,5 @@
 import type {
+    DownloadFileMetadata,
     DownloadMetadataStoreSkippedEntry,
     DownloadsMetadataStore,
 } from "../types/index.js"
@@ -21,6 +22,30 @@ export type NormalizedDownloadMetadataRow = {
 export type DownloadMetadataDeleteCondition = {
     guildId: string
     fileName: string
+}
+
+/**
+ * Maps a DB download-metadata row into the legacy in-memory entry shape.
+ * Invalid / non-finite `downloadDate` values are omitted (never `"Invalid Date"`).
+ */
+export function toDownloadMetadataEntry(row: {
+    guildId: string
+    downloadDate: Date | string | null
+    originalUrl: string | null
+    filePath: string | null
+}): DownloadFileMetadata {
+    const entry: DownloadFileMetadata = {}
+    if (row.guildId) entry.guildId = row.guildId
+    if (row.downloadDate) {
+        const parsedDate =
+            row.downloadDate instanceof Date ? row.downloadDate : new Date(row.downloadDate)
+        if (Number.isFinite(parsedDate.getTime())) {
+            entry.downloadDate = parsedDate.toISOString()
+        }
+    }
+    if (row.originalUrl) entry.originalUrl = row.originalUrl
+    if (row.filePath) entry.filePath = row.filePath
+    return entry
 }
 
 function storeKeyIsComposite(storeKey: string): boolean {
