@@ -14,6 +14,7 @@ import {
     collectValidGuildSettingsEntries,
     isGuildSettingsStoreShape,
 } from "./jsonMigrationValidate.js"
+import { shouldRenameDownloadMetadataJsonAfterWrite } from "./downloadMetadataMigrationOutcome.js"
 import { loggerFromPartial } from "./loggerFromPartial.js"
 
 const __dirname = import.meta.dirname
@@ -273,16 +274,32 @@ export async function migrateDownloadMetadata(
 
         if (writeResult.skippedEntries.length > 0) {
             result.partial = true
-            result.failedCount += writeResult.skippedEntries.length
             result.downloadMetadataWriteSkipped = writeResult.skippedEntries
+            // Unresolvable guild ids (UNKNOWN sentinel) are skipped by design during normalize.
+            // Do not bump failedCount — BotClient aborts startup when failedCount > 0, which
+            // permanently bricks boots when the JSON only contains those rows (table stays empty).
             if (allowPartial) {
                 result.reason = "partial-write-skips"
             }
+        }
+
+        if (
+            shouldRenameDownloadMetadataJsonAfterWrite({
+                rowsWritten: writeResult.rowsWritten,
+                skippedEntries: writeResult.skippedEntries.length,
+            })
+        ) {
+            if (writeResult.skippedEntries.length > 0) {
+                logger.warn(
+                    `[JsonMigration] Renaming JSON to .migrated with 0 rows written (${writeResult.skippedEntries.length} unresolvable guild id skip(s)).`
+                )
+                result.reason = "no-migratable-guild-ids"
+            }
+            renameJsonAsMigrated(downloadMetadataJsonPath, logger)
+        } else if (writeResult.skippedEntries.length > 0) {
             logger.warn(
                 `[JsonMigration] Not renaming JSON to .migrated (${writeResult.skippedEntries.length} row(s) skipped without resolvable guild id).`
             )
-        } else {
-            renameJsonAsMigrated(downloadMetadataJsonPath, logger)
         }
 
         logger.info(
