@@ -1,6 +1,7 @@
 import type { ButtonInteraction } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import { getGuildSettings, isGuildSettingsInitialized } from "../../util/saveControlChannel.js"
+import { destroyLavalinkPlayerForStop } from "../../util/stopLavalinkPlayer.js"
 import { toggleAutoplay } from "../../util/autoplayHistory.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { startPlaybackIfNeeded } from "../../util/musicManager.js"
@@ -308,7 +309,9 @@ export async function handleControlButtonInteraction(
             }
             case "control_stop": {
                 try {
-                    await player.destroy()
+                    await destroyLavalinkPlayerForStop(player, () =>
+                        client.lavalink?.getPlayer(guildId)
+                    )
                     actionTaken = true
                     client.debug("[ControlButtonHandler] Player stopped")
                     try {

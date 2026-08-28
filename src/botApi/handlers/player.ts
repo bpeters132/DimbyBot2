@@ -9,6 +9,7 @@ import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { parsePlayerAction } from "../parseBotApiParams.js"
+import { destroyLavalinkPlayerForStop } from "../../util/stopLavalinkPlayer.js"
 
 export async function playerGET(
     headers: Headers,
@@ -101,7 +102,9 @@ export async function playerPOST(
                 else await player.skip(0, false)
                 break
             case "stop":
-                await player.destroy()
+                await destroyLavalinkPlayerForStop(player, () =>
+                    client.lavalink.getPlayer(guildId)
+                )
                 break
             case "seek":
                 if (
