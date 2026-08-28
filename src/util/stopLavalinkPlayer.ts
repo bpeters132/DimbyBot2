@@ -1,6 +1,4 @@
-import {
-    forceClearPlayerSessionAfterDestroyIfSafe,
-} from "./playerSessionPersistence.js"
+import { forceClearPlayerSessionAfterDestroyIfSafe } from "./playerSessionPersistence.js"
 
 /**
  * Destroys a Lavalink player from `/stop` (and control/web stop), awaiting completion so
