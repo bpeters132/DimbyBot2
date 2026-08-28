@@ -95,20 +95,31 @@ export default {
             const botVoiceState = guild.members.me?.voice
             if (stoppedLocal || botVoiceState?.channel) {
                 try {
-                    // Re-read: concurrent /play can install a successor after the null check.
-                    const liveNow = client.lavalink.getPlayer(guild.id)
-                    if (shouldTearDownAbsentLavalinkOnLeave(liveNow)) {
-                        // May return undefined when no player exists — do not call .catch on it.
-                        await client.lavalink.destroyPlayer(guild.id)
-                        if (shouldDisconnectOrphanVoice(false, Boolean(botVoiceState?.channel))) {
-                            await botVoiceState?.disconnect()
-                        }
-                        // No live player — safe to drop any leftover local-handoff session row.
-                        await forceClearPlayerSession(guild.id)
-                    } else {
+                    // Re-read before each destructive step: concurrent /play can install a
+                    // successor after the initial null check (and between awaits below).
+                    const liveStillAbsent = () =>
+                        shouldTearDownAbsentLavalinkOnLeave(client.lavalink.getPlayer(guild.id))
+                    if (!liveStillAbsent()) {
                         client.debug(
                             `Leave: skipping Lavalink teardown for guild ${guild.id}; successor player already live`
                         )
+                    } else {
+                        // Do not destroyPlayer(guildId) here — null means nothing to destroy;
+                        // a racing createPlayer would be torn down incorrectly.
+                        if (
+                            liveStillAbsent() &&
+                            shouldDisconnectOrphanVoice(false, Boolean(botVoiceState?.channel))
+                        ) {
+                            await botVoiceState?.disconnect()
+                        }
+                        // Drop leftover local-handoff session only if still no live player.
+                        if (liveStillAbsent()) {
+                            await forceClearPlayerSession(guild.id)
+                        } else {
+                            client.debug(
+                                `Leave: skipping force-clear for guild ${guild.id}; successor player already live`
+                            )
+                        }
                     }
                     await interaction.editReply({ content: "Left the voice channel." })
                     const msg = await interaction.fetchReply()
