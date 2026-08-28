@@ -167,8 +167,12 @@ export interface ResolveUserPermissionsOptions {
  */
 const DISCORD_SNOWFLAKE_RE = /^\d{17,19}$/
 
-function parseEnvBotOwnerId(): string | undefined {
-    const raw = process.env.OWNER_ID?.trim()
+/**
+ * Parses `OWNER_ID` from the environment. Accepts Discord snowflakes of 17–19 digits
+ * (stricter than `isDiscordSnowflake`). Invalid/blank values disable env bot-owner privileges.
+ */
+export function parseEnvBotOwnerId(env: NodeJS.ProcessEnv = process.env): string | undefined {
+    const raw = env.OWNER_ID?.trim()
     if (!raw) return undefined
     if (!DISCORD_SNOWFLAKE_RE.test(raw)) {
         console.warn(
@@ -179,7 +183,7 @@ function parseEnvBotOwnerId(): string | undefined {
     return raw
 }
 
-const CACHED_OWNER_ID = parseEnvBotOwnerId()
+const CACHED_OWNER_ID = parseEnvBotOwnerId(process.env)
 
 /** Parsed `OWNER_ID` snowflake from env (undefined when unset or invalid). */
 export function getCachedOwnerId(): string | undefined {
