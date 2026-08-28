@@ -6,14 +6,12 @@ import { getBotClient } from "../../lib/botClientRegistry.js"
 import { toPlayerStateResponse } from "../../shared/player-state.js"
 import { webPlayerDebug } from "../../shared/web-player-debug-log.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
-import {
-    schedulePlayerSessionSave,
-    forceClearPlayerSession,
-} from "../../util/playerSessionPersistence.js"
+import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
 import { shuffleUpcomingOnLivePlayer } from "../../util/livePlayerQueueMutations.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 import { parsePlayerAction } from "../parseBotApiParams.js"
+import { destroyLavalinkPlayerForStop } from "../../util/stopLavalinkPlayer.js"
 
 export async function playerGET(
     headers: Headers,
@@ -119,10 +117,9 @@ export async function playerPOST(
                 break
             }
             case "stop":
-                await player.destroy()
-                // playerDestroy → clearPlayerSession is skipped while restore-in-progress;
-                // force-clear so an intentional web stop cannot resurrect on reconnect.
-                await forceClearPlayerSession(guildId)
+                await destroyLavalinkPlayerForStop(player, () =>
+                    client.lavalink.getPlayer(guildId)
+                )
                 break
             case "seek":
                 if (

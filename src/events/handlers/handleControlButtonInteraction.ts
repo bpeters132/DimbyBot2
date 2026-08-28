@@ -1,12 +1,12 @@
 import type { ButtonInteraction } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import { getGuildSettings, isGuildSettingsInitialized } from "../../util/saveControlChannel.js"
+import { destroyLavalinkPlayerForStop } from "../../util/stopLavalinkPlayer.js"
 import { toggleAutoplay } from "../../util/autoplayHistory.js"
 import { shuffleUpcomingOnLivePlayer } from "../../util/livePlayerQueueMutations.js"
 import { startPlaybackIfNeeded } from "../../util/startPlaybackIfNeeded.js"
 import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
-import { forceClearPlayerSession } from "../../util/playerSessionPersistence.js"
 import { updateControlMessage } from "./handleControlChannel.js"
 
 export async function handleControlButtonInteraction(
@@ -311,10 +311,9 @@ export async function handleControlButtonInteraction(
             }
             case "control_stop": {
                 try {
-                    await player.destroy()
-                    // playerDestroy → clearPlayerSession is skipped while restore-in-progress;
-                    // force-clear so an intentional stop cannot resurrect on reconnect.
-                    await forceClearPlayerSession(guildId)
+                    await destroyLavalinkPlayerForStop(player, () =>
+                        client.lavalink?.getPlayer(guildId)
+                    )
                     actionTaken = true
                     client.debug("[ControlButtonHandler] Player stopped")
                     try {

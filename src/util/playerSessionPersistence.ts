@@ -471,6 +471,19 @@ export function resolvePlayerDestroySessionClearAction(
 }
 
 /**
+ * After an intentional destroy (`/leave`, `/stop`, control/web stop), whether to
+ * {@link forceClearPlayerSession}. `playerDestroy` → {@link clearPlayerSession} already
+ * skips when a successor owns the guild; force-clear must use the same identity rule or
+ * it wipes that successor's persisted snapshot (and invalidates its pending save).
+ */
+export function shouldForceClearPlayerSessionAfterDestroy(
+    destroyedPlayer: object,
+    livePlayer: object | null | undefined
+): boolean {
+    return livePlayer == null || livePlayer === destroyedPlayer
+}
+
+/**
  * Consumes one suppress lease without deleting the DB row.
  * Used when destroy completed but a successor player already owns the guild slot.
  */
@@ -562,4 +575,17 @@ export async function forceClearPlayerSession(guildId: string): Promise<void> {
         clearPlayerSessionPreservePriorSnapshot(guildId)
     }
     await deletePlayerSessionRow(guildId)
+}
+
+/**
+ * Force-clears only when {@link shouldForceClearPlayerSessionAfterDestroy} is true.
+ * Call after `await player.destroy()` with a fresh `getPlayer(guildId)` read.
+ */
+export async function forceClearPlayerSessionAfterDestroyIfSafe(
+    guildId: string,
+    destroyedPlayer: object,
+    livePlayer: object | null | undefined
+): Promise<void> {
+    if (!shouldForceClearPlayerSessionAfterDestroy(destroyedPlayer, livePlayer)) return
+    await forceClearPlayerSession(guildId)
 }

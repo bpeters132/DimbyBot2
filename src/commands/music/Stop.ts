@@ -76,7 +76,9 @@ export default {
             // Also ensures playerDestroy → clearPlayerSession bumps the session epoch before this
             // command continues (Leave/web stop already await).
             try {
-                await destroyLavalinkPlayerForStop(lavalinkPlayer)
+                await destroyLavalinkPlayerForStop(lavalinkPlayer, () =>
+                    client.lavalink.getPlayer(guild.id)
+                )
                 if (hadContent) {
                     client.debug(`[StopCmd] Destroyed Lavalink player for guild ${guild.id}`)
                     stoppedLavalink = true
