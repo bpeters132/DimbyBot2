@@ -153,7 +153,33 @@ export async function createPlaylist(userId: string, name: string): Promise<Play
     }
 }
 
-/** Deletes a playlist and cascades to its tracks. */
+/**
+ * Prisma `where` for deleting a playlist owned by `userId`.
+ * Must include `id` (not only `name`) so a concurrent same-name recreate is not deleted.
+ */
+export function ownedPlaylistDeleteWhere(
+    userId: string,
+    playlistId: number
+): { id: number; userId: string } {
+    return { id: playlistId, userId }
+}
+
+/**
+ * Deletes a playlist by stable id when owned by `userId` (cascades tracks).
+ * Prefer this over {@link deletePlaylist} after an id-based ownership check: deleting by
+ * name alone can remove a *newer* same-name playlist created between check and delete.
+ */
+export async function deletePlaylistById(userId: string, playlistId: number): Promise<void> {
+    const prisma = getPrismaClient()
+    const result = await prisma.playlist.deleteMany({
+        where: ownedPlaylistDeleteWhere(userId, playlistId),
+    })
+    if (result.count === 0) {
+        throw new PlaylistNotFoundError()
+    }
+}
+
+/** Deletes a playlist by user + name and cascades to its tracks. */
 export async function deletePlaylist(userId: string, name: string): Promise<void> {
     const prisma = getPrismaClient()
     const result = await prisma.playlist.deleteMany({

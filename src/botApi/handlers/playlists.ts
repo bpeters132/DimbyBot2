@@ -15,11 +15,12 @@ import type {
 } from "../../types/web.js"
 import {
     PlaylistDuplicateNameError,
+    PlaylistNotFoundError,
     PlaylistTrackNotFoundError,
     addTrackToPlaylist,
     addTracksToPlaylist,
     createPlaylist,
-    deletePlaylist,
+    deletePlaylistById,
     getPlaylistById,
     getUserPlaylists,
     movePlaylistTrack,
@@ -291,12 +292,23 @@ export async function playlistsDELETE(
     }
 
     try {
-        await deletePlaylist(auth.discordUserId, owned.playlist.name)
+        // Delete by id (not name): a concurrent delete+recreate of the same name must not
+        // remove the successor playlist that reused the name under this userId.
+        await deletePlaylistById(auth.discordUserId, playlistId)
         return {
             status: 200,
             body: { ok: true, data: { deleted: true } },
         }
     } catch (error: unknown) {
+        if (error instanceof PlaylistNotFoundError) {
+            return {
+                status: 404,
+                body: {
+                    ok: false,
+                    error: { error: "Not found", details: "Playlist not found." },
+                },
+            }
+        }
         logPlaylistsHandlerError("playlistsDELETE", error)
         return { status: 500, body: internalErrorBody() }
     }

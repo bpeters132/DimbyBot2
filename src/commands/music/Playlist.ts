@@ -14,7 +14,7 @@ import { formatDuration } from "../../util/formatDuration.js"
 import {
     addTracksToPlaylist,
     createPlaylist,
-    deletePlaylist,
+    deletePlaylistById,
     getPlaylist,
     getUserPlaylists,
     removeTrackFromPlaylistById,
@@ -156,7 +156,8 @@ export default {
                         ephemeral: true,
                     })
                 }
-                await deletePlaylist(userId, name)
+                // Delete by id so a concurrent recreate of the same name is not wiped.
+                await deletePlaylistById(userId, existing.id)
                 return interaction.reply({
                     content: `Deleted playlist **${name}**.`,
                     ephemeral: true,
