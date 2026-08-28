@@ -4,6 +4,7 @@ import {
     WebPermission,
     hasRequiredPermissions,
     invalidatePermissionCache,
+    parseEnvBotOwnerId,
     resolveOauthGuildPermissionFallback,
     resolveUserPermissions,
 } from "./permissions.js"
@@ -69,6 +70,30 @@ function mockPermissionClient(opts: {
 
 afterEach(() => {
     invalidatePermissionCache()
+})
+
+describe("parseEnvBotOwnerId", () => {
+    it("returns undefined for blank or missing OWNER_ID", () => {
+        assert.equal(parseEnvBotOwnerId({}), undefined)
+        assert.equal(parseEnvBotOwnerId({ OWNER_ID: "" }), undefined)
+        assert.equal(parseEnvBotOwnerId({ OWNER_ID: "   " }), undefined)
+    })
+
+    it("accepts trimmed 17–19 digit snowflakes", () => {
+        assert.equal(parseEnvBotOwnerId({ OWNER_ID: "12345678901234567" }), "12345678901234567")
+        assert.equal(parseEnvBotOwnerId({ OWNER_ID: " 123456789012345678 " }), "123456789012345678")
+        assert.equal(
+            parseEnvBotOwnerId({ OWNER_ID: "1234567890123456789" }),
+            "1234567890123456789"
+        )
+    })
+
+    it("rejects non-digit and out-of-range lengths so env owner privileges stay disabled", () => {
+        assert.equal(parseEnvBotOwnerId({ OWNER_ID: "not-a-snowflake" }), undefined)
+        assert.equal(parseEnvBotOwnerId({ OWNER_ID: "1234567890123456" }), undefined) // 16
+        assert.equal(parseEnvBotOwnerId({ OWNER_ID: "12345678901234567890" }), undefined) // 20
+        assert.equal(parseEnvBotOwnerId({ OWNER_ID: "12345678901234567a" }), undefined)
+    })
 })
 
 describe("hasRequiredPermissions", () => {
