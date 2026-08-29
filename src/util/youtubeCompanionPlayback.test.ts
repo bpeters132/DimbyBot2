@@ -392,6 +392,36 @@ describe("youtube companion itag + URL helpers", () => {
         )
     })
 
+    it("accepts companion-relative stream paths and refuses host-confusion shapes", () => {
+        // Relative Location values from companion resolve onto the companion origin (intentional).
+        assert.equal(
+            ensureCompanionOriginStreamUrl(
+                `/companion/videoplayback?id=${VIDEO_ID}`,
+                COMPANION_ORIGIN
+            ),
+            `${COMPANION_ORIGIN}/companion/videoplayback?id=${VIDEO_ID}`
+        )
+
+        // resolveCompanionRedirectUrl can pass through protocol-relative / userinfo hosts;
+        // ensureCompanionOriginStreamUrl is the hard refuse gate before Lavalink HTTP search.
+        assert.equal(
+            resolveCompanionRedirectUrl("//evil.example/audio.mp3", COMPANION_ORIGIN),
+            "http://evil.example/audio.mp3"
+        )
+        assert.throws(
+            () => ensureCompanionOriginStreamUrl("//evil.example/audio.mp3", COMPANION_ORIGIN),
+            { message: /Refusing to play non-companion HTTP URL/ }
+        )
+        assert.throws(
+            () =>
+                ensureCompanionOriginStreamUrl(
+                    `http://invidious-companion:8282@evil.example/audio.mp3`,
+                    COMPANION_ORIGIN
+                ),
+            { message: /Refusing to play non-companion HTTP URL/ }
+        )
+    })
+
     it("copies YouTube metadata onto the HTTP track without replacing Playback duration", () => {
         const yt = youtubeTrack({ duration: 213000 })
         const http = httpTrackFromSearch()
