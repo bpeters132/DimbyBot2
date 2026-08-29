@@ -26,10 +26,40 @@ function timeZoneOffsetMs(timeZone: string, instant: Date): number {
     return tzDate.getTime() - utcDate.getTime()
 }
 
+/** Wall-clock Y/M/D/H/M components of `instant` in `timeZone` (24h). */
+function wallClockParts(
+    timeZone: string,
+    instant: Date
+): { year: number; month: number; day: number; hour: number; minute: number } | null {
+    try {
+        const parts = new Intl.DateTimeFormat("en-US", {
+            timeZone,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            hourCycle: "h23",
+        }).formatToParts(instant)
+        const get = (type: Intl.DateTimeFormatPartTypes): string | undefined =>
+            parts.find((p) => p.type === type)?.value
+        const year = Number(get("year"))
+        const month = Number(get("month"))
+        const day = Number(get("day"))
+        const hour = Number(get("hour"))
+        const minute = Number(get("minute"))
+        if (![year, month, day, hour, minute].every((n) => Number.isFinite(n))) return null
+        return { year, month, day, hour, minute }
+    } catch {
+        return null
+    }
+}
+
 /**
  * Converts a wall-clock `date` (`YYYY-MM-DD`) and `time` (`HH:MM`, 24h) interpreted in
  * `timeZone` (IANA name) to a Unix timestamp in seconds. Validates formats, calendar validity,
- * and the time zone. The offset is resolved at the target instant so DST is accounted for.
+ * and the time zone. Offset is iterated at the candidate instant so DST transitions are correct;
+ * nonexistent spring-forward gap times are rejected.
  */
 export function parseEventDateTime(
     date: string,
@@ -64,7 +94,31 @@ export function parseEventDateTime(
         return { ok: false, error: "That date does not exist on the calendar." }
     }
 
-    const offset = timeZoneOffsetMs(timeZone, new Date(asUtc))
-    const epochMs = asUtc - offset
+    // Iterate: a single offset sampled at `asUtc` is wrong near DST transitions (e.g. Chicago
+    // spring-forward mornings), because that UTC instant still sits in the previous offset.
+    let epochMs = asUtc
+    for (let i = 0; i < 5; i++) {
+        const offset = timeZoneOffsetMs(timeZone, new Date(epochMs))
+        const next = asUtc - offset
+        if (next === epochMs) break
+        epochMs = next
+    }
+
+    const wall = wallClockParts(timeZone, new Date(epochMs))
+    if (
+        !wall ||
+        wall.year !== year ||
+        wall.month !== month ||
+        wall.day !== day ||
+        wall.hour !== hour ||
+        wall.minute !== minute
+    ) {
+        // Spring-forward gap (e.g. 02:30 on the day clocks jump) has no unique local instant.
+        return {
+            ok: false,
+            error: "That local time does not exist on that date (DST transition gap).",
+        }
+    }
+
     return { ok: true, epochSeconds: Math.floor(epochMs / 1000) }
 }

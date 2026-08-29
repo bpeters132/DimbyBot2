@@ -35,6 +35,30 @@ describe("parseEventDateTime", () => {
         assert.equal(parseEventDateTime("2026-01-15", "18:30", "Not/AZone").ok, false)
         assert.equal(parseEventDateTime("2026-02-30", "12:00", "UTC").ok, false)
     })
+
+    it("resolves post-spring-forward morning times with the CDT offset (not asUtc CST)", () => {
+        // 2026-03-08 America/Chicago: clocks jump 02:00 → 03:00. 03:30 CDT = 08:30 UTC.
+        // A single offset sampled at Date.UTC(…, 3, 30) still sees CST and was one hour late.
+        const result = parseEventDateTime("2026-03-08", "03:30", "America/Chicago")
+        assert.equal(result.ok, true)
+        if (!result.ok) return
+        assert.equal(result.epochSeconds, Date.UTC(2026, 2, 8, 8, 30) / 1000)
+    })
+
+    it("rejects nonexistent spring-forward gap times", () => {
+        const gap = parseEventDateTime("2026-03-08", "02:30", "America/Chicago")
+        assert.equal(gap.ok, false)
+        if (gap.ok) return
+        assert.match(gap.error, /DST transition gap/)
+    })
+
+    it("keeps a unique fall-back ambiguous hour (first occurrence)", () => {
+        // 2026-11-01 America/Chicago: 01:30 happens twice; prefer the CDT (UTC-5) occurrence.
+        const result = parseEventDateTime("2026-11-01", "01:30", "America/Chicago")
+        assert.equal(result.ok, true)
+        if (!result.ok) return
+        assert.equal(result.epochSeconds, Date.UTC(2026, 10, 1, 6, 30) / 1000)
+    })
 })
 
 describe("formatDuration", () => {
