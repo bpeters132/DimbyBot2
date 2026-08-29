@@ -2,7 +2,7 @@ import type { Message, SendableChannels, TextBasedChannel } from "discord.js"
 import type BotClient from "../lib/BotClient.js"
 import type { CountdownEntry } from "../types/index.js"
 import { buildCountdownEmbed, buildCountdownFinishEmbed } from "./countdownEmbed.js"
-import { getAllCountdowns, getCountdown, removeCountdown } from "./countdownStore.js"
+import { getAllCountdowns, removeCountdown } from "./countdownStore.js"
 
 /**
  * Discord API error codes that mean the countdown target no longer exists.
@@ -14,6 +14,14 @@ const UNRECOVERABLE_CODES = new Set([
     10008, // Unknown Message
 ])
 
+/** Serializes updater passes so a slow Discord sweep cannot overlap the next minute tick. */
+let countdownUpdateChain: Promise<void> = Promise.resolve()
+
+/** Test-only: reset the updater serialization chain. */
+export function resetCountdownUpdaterForTests(): void {
+    countdownUpdateChain = Promise.resolve()
+}
+
 /**
  * True when a Discord fetch/edit failure should delete the countdown row.
  * Permission and transient errors must return false so the next interval can retry.
@@ -24,6 +32,14 @@ export function isUnrecoverableCountdownDiscordError(error: unknown): boolean {
         return typeof code === "number" && UNRECOVERABLE_CODES.has(code)
     }
     return false
+}
+
+/**
+ * Whether the finish announcement should run after {@link removeCountdown}.
+ * Only the caller that claimed the row may post (prevents double role pings).
+ */
+export function shouldAnnounceCountdownFinish(claimedRemoval: boolean): boolean {
+    return claimedRemoval
 }
 
 /**
@@ -56,8 +72,25 @@ async function postFinishMessage(
  * Refreshes every countdown message once. Edits each embed with the latest remaining time,
  * removes countdowns whose channel/message is gone, and removes
  * expired countdowns after writing their final "Event started!" state.
+ *
+ * Concurrent calls are serialized: `setInterval` in onReady does not await the previous pass, so
+ * without this chain two sweeps can expire the same row and double-post finish role pings.
  */
 export async function updateAllCountdowns(client: BotClient): Promise<void> {
+    let release: () => void = () => {}
+    const previous = countdownUpdateChain
+    countdownUpdateChain = new Promise<void>((resolve) => {
+        release = resolve
+    })
+    await previous
+    try {
+        await updateAllCountdownsUnlocked(client)
+    } finally {
+        release()
+    }
+}
+
+async function updateAllCountdownsUnlocked(client: BotClient): Promise<void> {
     const countdowns = Object.values(getAllCountdowns())
     if (countdowns.length === 0) return
 
@@ -107,12 +140,11 @@ export async function updateAllCountdowns(client: BotClient): Promise<void> {
             await message.edit({ content: null, embeds: [buildCountdownEmbed(entry, now)] })
 
             if (entry.targetTime.getTime() <= now) {
-                // Another interval pass may have already cleared this countdown (stale snapshot).
-                if (!getCountdown(entry.id)) {
+                // Claim under the store lock before posting so a concurrent updater cannot re-ping.
+                const claimed = await removeCountdown(entry.id)
+                if (!shouldAnnounceCountdownFinish(claimed)) {
                     continue
                 }
-                // Remove before posting so a failed DB delete cannot re-ping every interval.
-                await removeCountdown(entry.id)
                 if (channel.isSendable()) {
                     await postFinishMessage(client, channel, entry)
                 }
