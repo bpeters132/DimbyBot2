@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
+    shouldAbortLocalPlayForLivePlayerConflict,
     shouldClearSessionAfterFailedHandoffDestroy,
     shouldClearSessionAfterLocalHandoffReady,
     shouldDestroyLeftoverHandoffPlayer,
@@ -40,5 +41,21 @@ describe("localPlayHandoffLeftover", () => {
             shouldClearSessionAfterFailedHandoffDestroy(handoff, successor),
             shouldClearSessionAfterLocalHandoffReady(handoff, successor)
         )
+    })
+
+    it("aborts local play when a different live player owns the guild", () => {
+        const handoff = { id: "handoff" }
+        const successor = { id: "successor" }
+
+        // Empty slot — safe to start local (no flush/steal).
+        assert.equal(shouldAbortLocalPlayForLivePlayerConflict(handoff, null), false)
+        assert.equal(shouldAbortLocalPlayForLivePlayerConflict(null, null), false)
+        // Same instance — proceed with handoff destroy.
+        assert.equal(shouldAbortLocalPlayForLivePlayerConflict(handoff, handoff), false)
+        // Stale confirmation after /stop+/play — must not flush zombie over successor.
+        assert.equal(shouldAbortLocalPlayForLivePlayerConflict(handoff, successor), true)
+        // Live player with no handoff target — would steal voice without teardown.
+        assert.equal(shouldAbortLocalPlayForLivePlayerConflict(null, successor), true)
+        assert.equal(shouldAbortLocalPlayForLivePlayerConflict(undefined, successor), true)
     })
 })

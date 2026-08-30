@@ -2,7 +2,11 @@ import { SlashCommandBuilder, type Message } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
-import { stopLocalPlayer, getLocalPlayerState } from "../../util/localPlayer.js"
+import {
+    stopLocalPlayer,
+    getLocalPlayerState,
+    cancelPendingLocalPlay,
+} from "../../util/localPlayer.js"
 import {
     forceClearPlayerSession,
     forceClearPlayerSessionAfterDestroyIfSafe,
@@ -80,6 +84,8 @@ export default {
         await interaction.deferReply()
 
         let stoppedLocal = false
+        // Cancel in-flight local join so Ready after handoff cannot resume after leave.
+        cancelPendingLocalPlay(guild.id)
         const localState = getLocalPlayerState(guild.id)
         if (localState != null) {
             if (stopLocalPlayer(client, guild.id)) {
