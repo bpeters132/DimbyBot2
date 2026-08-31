@@ -65,6 +65,72 @@ export function safeJsonSnippet(value: unknown, maxLen = SAFE_ERROR_SNIPPET_MAX)
     return redacted.length > maxLen ? `${redacted.slice(0, maxLen)}…` : redacted
 }
 
+/** Tokens returned to Better Auth after a successful Discord OAuth refresh. */
+export type DiscordOAuthRefreshTokens = {
+    accessToken: string
+    accessTokenExpiresAt: Date
+    refreshToken: string
+}
+
+export type ParseDiscordOAuthRefreshFailureReason =
+    | "non_object"
+    | "missing_access_token"
+    | "missing_expires_in"
+    | "invalid_expires_at"
+
+export type ParseDiscordOAuthRefreshResult =
+    | { ok: true; tokens: DiscordOAuthRefreshTokens }
+    | {
+          ok: false
+          reason: ParseDiscordOAuthRefreshFailureReason
+          /** Value safe to pass through {@link safeJsonSnippet} for audit logs. */
+          errorSnippet: unknown
+      }
+
+/**
+ * Parses Discord's OAuth2 token refresh JSON into Better Auth token fields.
+ * When Discord omits (or blanks) `refresh_token`, keeps `previousRefreshToken` so
+ * subsequent guild fetches do not lose the stored refresh credential.
+ */
+export function parseDiscordOAuthRefreshPayload(
+    parsed: unknown,
+    previousRefreshToken: string,
+    nowMs: number = Date.now()
+): ParseDiscordOAuthRefreshResult {
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return { ok: false, reason: "non_object", errorSnippet: parsed }
+    }
+    const data = parsed as Record<string, unknown>
+    const accessRaw = typeof data.access_token === "string" ? data.access_token.trim() : ""
+    if (!accessRaw) {
+        return { ok: false, reason: "missing_access_token", errorSnippet: parsed }
+    }
+    if (
+        typeof data.expires_in !== "number" ||
+        !Number.isFinite(data.expires_in) ||
+        data.expires_in <= 0
+    ) {
+        return { ok: false, reason: "missing_expires_in", errorSnippet: parsed }
+    }
+    const expiresAtMs = nowMs + data.expires_in * 1000
+    if (!Number.isFinite(expiresAtMs)) {
+        return { ok: false, reason: "invalid_expires_at", errorSnippet: parsed }
+    }
+    const accessTokenExpiresAt = new Date(expiresAtMs)
+    if (Number.isNaN(accessTokenExpiresAt.getTime())) {
+        return { ok: false, reason: "invalid_expires_at", errorSnippet: parsed }
+    }
+    const nextRefresh = typeof data.refresh_token === "string" ? data.refresh_token.trim() : ""
+    return {
+        ok: true,
+        tokens: {
+            accessToken: accessRaw,
+            accessTokenExpiresAt,
+            refreshToken: nextRefresh.length > 0 ? nextRefresh : previousRefreshToken,
+        },
+    }
+}
+
 /**
  * Better Auth options shared by Next and the bot. Call this when constructing `betterAuth(...)`, not at module load,
  * so `next build` can import route modules without real `BETTER_AUTH_*` / Discord env (values are read on first use).
@@ -156,53 +222,28 @@ export function getBetterAuthBaseConfig() {
                                 `Discord OAuth refresh returned invalid JSON (${tokenResponse.status})`
                             )
                         }
-                        if (!parsed || typeof parsed !== "object") {
+                        const parsedTokens = parseDiscordOAuthRefreshPayload(parsed, refreshToken)
+                        if (parsedTokens.ok === false) {
+                            const messageByReason: Record<
+                                ParseDiscordOAuthRefreshFailureReason,
+                                string
+                            > = {
+                                non_object: "Discord OAuth refresh returned non-object JSON",
+                                missing_access_token: "Discord OAuth refresh missing access_token",
+                                missing_expires_in: "Discord OAuth refresh missing expires_in",
+                                invalid_expires_at: "Discord OAuth refresh invalid expires_in",
+                            }
+                            const message = messageByReason[parsedTokens.reason]
                             logRefreshFailure({
-                                message: "Discord OAuth refresh returned non-object JSON",
+                                message,
                                 httpStatus: tokenResponse.status,
-                                errorSnippet: parsed,
+                                errorSnippet: parsedTokens.errorSnippet,
                             })
                             throw new Error(
-                                `Discord OAuth refresh returned non-object JSON (${tokenResponse.status}): ${safeJsonSnippet(parsed)}`
+                                `${message} (${tokenResponse.status}): ${safeJsonSnippet(parsedTokens.errorSnippet)}`
                             )
                         }
-                        const data = parsed as Record<string, unknown>
-                        if (
-                            typeof data.access_token !== "string" ||
-                            data.access_token.length === 0
-                        ) {
-                            logRefreshFailure({
-                                message: "Discord OAuth refresh missing access_token",
-                                httpStatus: tokenResponse.status,
-                                errorSnippet: parsed,
-                            })
-                            throw new Error(
-                                `Discord OAuth refresh missing access_token (${tokenResponse.status}): ${safeJsonSnippet(parsed)}`
-                            )
-                        }
-                        if (
-                            typeof data.expires_in !== "number" ||
-                            !Number.isFinite(data.expires_in) ||
-                            data.expires_in <= 0
-                        ) {
-                            logRefreshFailure({
-                                message: "Discord OAuth refresh missing expires_in",
-                                httpStatus: tokenResponse.status,
-                                errorSnippet: parsed,
-                            })
-                            throw new Error(
-                                `Discord OAuth refresh missing expires_in (${tokenResponse.status}): ${safeJsonSnippet(parsed)}`
-                            )
-                        }
-                        return {
-                            accessToken: data.access_token,
-                            accessTokenExpiresAt: new Date(Date.now() + data.expires_in * 1000),
-                            refreshToken:
-                                typeof data.refresh_token === "string" &&
-                                data.refresh_token.length > 0
-                                    ? data.refresh_token
-                                    : refreshToken,
-                        }
+                        return parsedTokens.tokens
                     } catch (error: unknown) {
                         if (error instanceof Error && error.name === "AbortError") {
                             writeAuditLog(

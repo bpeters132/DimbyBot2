@@ -5,6 +5,10 @@ import { getBotClient, tryGetBotClient } from "../../lib/botClientRegistry.js"
 import type { ApiResponse } from "../../types/index.js"
 import type { VoiceContextResponse } from "../../types/web.js"
 import { discordGuildIconUrl } from "../../util/discordGuildIconUrl.js"
+import {
+    selectBestVoiceContextCandidate,
+    type VoiceContextCandidate,
+} from "../voiceContextCandidate.js"
 
 /** Guild where the viewer shares a VC with the bot and the bot has an active player session. */
 export async function voiceContextGET(
@@ -49,16 +53,7 @@ export async function voiceContextGET(
         }
     }
 
-    type Candidate = {
-        guildId: string
-        guildName: string
-        guildIconUrl: string | null
-        status: "playing" | "paused" | "idle"
-        currentTrackTitle: string | null
-        priority: number
-    }
-
-    const candidates: Candidate[] = []
+    const candidates: VoiceContextCandidate[] = []
     const bot = getBotClient()
 
     for (const player of bot.lavalink.players.values()) {
@@ -70,7 +65,6 @@ export async function voiceContextGET(
 
         const guild = client.guilds.cache.get(guildId)
         const status = player.playing ? "playing" : player.paused ? "paused" : "idle"
-        const priority = status === "playing" ? 0 : status === "paused" ? 1 : 2
         const current = player.queue?.current ?? null
         const currentTrackTitle =
             current && typeof current.info?.title === "string" ? current.info.title : null
@@ -81,27 +75,15 @@ export async function voiceContextGET(
             guildIconUrl: discordGuildIconUrl(guildId, guild?.icon ?? null),
             status,
             currentTrackTitle,
-            priority,
         })
     }
-
-    candidates.sort((a, b) => a.priority - b.priority)
-    const best = candidates[0] ?? null
 
     return {
         status: 200,
         body: {
             ok: true,
             data: {
-                activeGuild: best
-                    ? {
-                          guildId: best.guildId,
-                          guildName: best.guildName,
-                          guildIconUrl: best.guildIconUrl,
-                          status: best.status,
-                          currentTrackTitle: best.currentTrackTitle,
-                      }
-                    : null,
+                activeGuild: selectBestVoiceContextCandidate(candidates),
             },
         },
     }
