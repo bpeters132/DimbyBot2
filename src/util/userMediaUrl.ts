@@ -1,6 +1,109 @@
 /** User-facing copy when a User media URL targets a private or Docker-internal host. */
 export const USER_MEDIA_URL_BLOCKED = "That URL isn't allowed."
 
+/**
+ * Search-source prefixes that `lavalink-client` (DefaultSources) may strip before the
+ * remainder is tested as an HTTP(S) `/loadtracks` identifier. `http` / `https` are
+ * omitted: those tokens are the URL scheme, not wrappers to peel.
+ *
+ * Longest keys first so `ytsearch:` wins over `yt:` (stricter than the client's
+ * Object.keys order, which can leave a non-URL remainder for some long forms).
+ */
+const LAVALINK_SOURCE_PREFIXES = [
+    "youtube music",
+    "music youtube",
+    "apple music",
+    "music apple",
+    "spotify.com",
+    "yandex music",
+    "vk music",
+    "pandora music",
+    "flowery.tts",
+    "tidal music",
+    "youtubemusic",
+    "musicyoutube",
+    "ytmsearch",
+    "applemusic",
+    "amsearch",
+    "musicapple",
+    "soundcloud",
+    "scsearch",
+    "spsearch",
+    "spotifycom",
+    "spsuggestion",
+    "dzsearch",
+    "yandexmusic",
+    "ymsearch",
+    "vksearch",
+    "vkmusic",
+    "qbsearch",
+    "pdsearch",
+    "pandoramusic",
+    "flowerytts",
+    "bandcamp",
+    "bcsearch",
+    "phsearch",
+    "pornhub",
+    "tdsearch",
+    "jiosaavn",
+    "jssearch",
+    "ytsearch",
+    "youtube",
+    "spotify",
+    "deezer",
+    "yandex",
+    "pandora",
+    "flowery",
+    "tidal",
+    "local",
+    "link",
+    "uri",
+    "speak",
+    "sprec",
+    "dzisrc",
+    "dzrec",
+    "ymrec",
+    "vkrec",
+    "qobuz",
+    "qbisrc",
+    "qbrec",
+    "pdisrc",
+    "pdrec",
+    "ftts",
+    "tdrec",
+    "jsrec",
+    "ytm",
+    "tts",
+    "porn",
+    "yt",
+    "sc",
+    "am",
+    "sp",
+    "dz",
+    "vk",
+    "qb",
+    "pd",
+    "bc",
+    "td",
+    "js",
+].sort((a, b) => b.length - a.length)
+
+/**
+ * Strip one leading lavalink-client search-source prefix (`yt:`, `link:`, `local:`, …).
+ * Returns the remainder, or `null` when no prefix matched.
+ */
+export function unwrapLavalinkSourcePrefix(query: string): string | null {
+    const trimmed = query.trim()
+    const lower = trimmed.toLowerCase()
+    for (const prefix of LAVALINK_SOURCE_PREFIXES) {
+        const token = `${prefix}:`
+        if (lower.startsWith(token)) {
+            return trimmed.slice(token.length)
+        }
+    }
+    return null
+}
+
 /** True when `query` looks like an HTTP(S) URL (user paste or dashboard play). */
 export function isHttpUrlQuery(query: string): boolean {
     return /^https?:\/\//i.test(query.trim())
@@ -15,15 +118,26 @@ export function trimmedHttpUrlQuery(query: string): string | null {
 /**
  * True when a User media URL must not be sent to Lavalink: loopback, RFC1918,
  * link-local, or a single-label Docker DNS name. Non-URLs (ytsearch text) are allowed.
+ *
+ * Also rejects `link:` / `uri:` / `yt:` / `sc:` / `local:` / … wrappers that
+ * lavalink-client strips before treating the remainder as a raw HTTP identifier.
  */
 export function isBlockedUserMediaUrl(query: string): boolean {
-    if (!isHttpUrlQuery(query)) return false
-    try {
-        const hostname = new URL(query.trim()).hostname
-        return isBlockedUserMediaHost(hostname)
-    } catch {
-        return true
+    const trimmed = query.trim()
+    const candidates = [trimmed]
+    const unwrapped = unwrapLavalinkSourcePrefix(trimmed)
+    if (unwrapped != null) candidates.push(unwrapped)
+
+    for (const candidate of candidates) {
+        if (!isHttpUrlQuery(candidate)) continue
+        try {
+            const hostname = new URL(candidate.trim()).hostname
+            if (isBlockedUserMediaHost(hostname)) return true
+        } catch {
+            return true
+        }
     }
+    return false
 }
 
 function isBlockedUserMediaHost(hostname: string): boolean {
