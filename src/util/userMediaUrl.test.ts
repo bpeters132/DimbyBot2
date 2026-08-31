@@ -1,6 +1,11 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { isBlockedUserMediaUrl, isHttpUrlQuery, trimmedHttpUrlQuery } from "./userMediaUrl.js"
+import {
+    isBlockedUserMediaUrl,
+    isHttpUrlQuery,
+    trimmedHttpUrlQuery,
+    unwrapDirectLinkSourcePrefix,
+} from "./userMediaUrl.js"
 
 describe("isHttpUrlQuery", () => {
     it("detects http(s) prefixes", () => {
@@ -58,5 +63,31 @@ describe("isBlockedUserMediaUrl", () => {
 
     it("fails closed on unparseable http(s) strings", () => {
         assert.equal(isBlockedUserMediaUrl("http://"), true)
+    })
+
+    it("rejects link:/uri: wrappers around private or Docker-internal HTTP targets", () => {
+        // lavalink-client strips link:/uri: and sends the remainder as /loadtracks identifier
+        assert.equal(isBlockedUserMediaUrl("link:http://127.0.0.1:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("uri:http://postgres-db:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("LINK:http://10.0.0.5/audio.mp3"), true)
+        assert.equal(isBlockedUserMediaUrl("  uri:HTTP://localhost:3001/ws  "), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://192.168.1.10/track.mp3"), true)
+        assert.equal(isBlockedUserMediaUrl("uri:http://[::1]/"), true)
+        assert.equal(
+            isBlockedUserMediaUrl("link:https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
+            false
+        )
+        assert.equal(isBlockedUserMediaUrl("uri:https://soundcloud.com/artist/track"), false)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://127.0.0.1/"), false)
+    })
+})
+
+describe("unwrapDirectLinkSourcePrefix", () => {
+    it("strips link:/uri: once and leaves other queries unchanged", () => {
+        assert.equal(unwrapDirectLinkSourcePrefix("link:http://127.0.0.1/"), "http://127.0.0.1/")
+        assert.equal(unwrapDirectLinkSourcePrefix("URI:https://example.com/a"), "https://example.com/a")
+        assert.equal(unwrapDirectLinkSourcePrefix("  link: http://x/ "), "http://x/")
+        assert.equal(unwrapDirectLinkSourcePrefix("http://127.0.0.1/"), "http://127.0.0.1/")
+        assert.equal(unwrapDirectLinkSourcePrefix("ytsearch:rick"), "ytsearch:rick")
     })
 })

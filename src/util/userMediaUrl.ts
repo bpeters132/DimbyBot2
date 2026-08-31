@@ -6,6 +6,18 @@ export function isHttpUrlQuery(query: string): boolean {
     return /^https?:\/\//i.test(query.trim())
 }
 
+/**
+ * Strip lavalink-client direct-link source prefixes (`link:`, `uri:`).
+ * Those prefixes make `player.search` send the remainder as a raw `/loadtracks`
+ * identifier; SSRF checks must inspect the underlying HTTP(S) URL.
+ */
+export function unwrapDirectLinkSourcePrefix(query: string): string {
+    const trimmed = query.trim()
+    const match = /^(?:link|uri):/i.exec(trimmed)
+    if (!match) return trimmed
+    return trimmed.slice(match[0].length).trim()
+}
+
 /** Trimmed HTTP(S) string for Lavalink `player.search`, or `null` when `query` is not an HTTP URL. */
 export function trimmedHttpUrlQuery(query: string): string | null {
     if (!isHttpUrlQuery(query)) return null
@@ -15,11 +27,13 @@ export function trimmedHttpUrlQuery(query: string): string | null {
 /**
  * True when a User media URL must not be sent to Lavalink: loopback, RFC1918,
  * link-local, or a single-label Docker DNS name. Non-URLs (ytsearch text) are allowed.
+ * Also denies `link:` / `uri:` wrappers around blocked HTTP(S) targets.
  */
 export function isBlockedUserMediaUrl(query: string): boolean {
-    if (!isHttpUrlQuery(query)) return false
+    const unwrapped = unwrapDirectLinkSourcePrefix(query)
+    if (!isHttpUrlQuery(unwrapped)) return false
     try {
-        const hostname = new URL(query.trim()).hostname
+        const hostname = new URL(unwrapped).hostname
         return isBlockedUserMediaHost(hostname)
     } catch {
         return true
