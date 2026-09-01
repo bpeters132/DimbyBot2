@@ -42,8 +42,11 @@ function normalizeUriForCompare(uri: string): string {
     return uri.trim().toLowerCase().replace(/\/+$/, "")
 }
 
-/** True when a resolved Lavalink track matches what we persisted (guards bad search hits). */
-function trackMatchesStored(track: Track, stored: PersistedQueueTrack): boolean {
+/**
+ * True when a resolved Lavalink track matches what we persisted (guards bad search hits).
+ * Prefer URI equality (case/trailing-slash insensitive); otherwise require a non-blank title match.
+ */
+export function trackMatchesStored(track: Track, stored: PersistedQueueTrack): boolean {
     const resolvedUri = track.info.uri?.trim()
     const storedUri = stored.uri.trim()
     if (resolvedUri && storedUri) {

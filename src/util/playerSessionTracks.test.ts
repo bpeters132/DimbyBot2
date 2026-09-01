@@ -1,8 +1,12 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import type { Player } from "lavalink-client"
+import type { Player, Track } from "lavalink-client"
 import type { PersistedQueueTrack } from "../types/index.js"
-import { resolvePersistedTracks } from "./playerSessionTracks.js"
+import {
+    persistedTrackFromLavalink,
+    resolvePersistedTracks,
+    trackMatchesStored,
+} from "./playerSessionTracks.js"
 
 function stored(overrides: Partial<PersistedQueueTrack> = {}): PersistedQueueTrack {
     return {
@@ -16,6 +20,24 @@ function stored(overrides: Partial<PersistedQueueTrack> = {}): PersistedQueueTra
         isStream: false,
         ...overrides,
     }
+}
+
+function mockTrack(info: Partial<Track["info"]> & { uri?: string; title?: string }): Track {
+    return {
+        info: {
+            title: info.title ?? "Song",
+            author: "Artist",
+            uri: info.uri ?? "https://example.com/track",
+            duration: 1000,
+            isStream: false,
+            isSeekable: true,
+            identifier: info.identifier ?? "id",
+            artworkUrl: info.artworkUrl ?? null,
+            isrc: null,
+            sourceName: info.sourceName ?? "http",
+            ...info,
+        },
+    } as Track
 }
 
 function mockPlayer(hooks: {
@@ -37,6 +59,129 @@ function mockPlayer(hooks: {
         },
     } as unknown as Player
 }
+
+describe("trackMatchesStored", () => {
+    it("matches URI case-insensitively and ignores trailing slashes", () => {
+        assert.equal(
+            trackMatchesStored(
+                mockTrack({ uri: "HTTPS://Example.com/Track/" }),
+                stored({ uri: "https://example.com/track" })
+            ),
+            true
+        )
+        assert.equal(
+            trackMatchesStored(
+                mockTrack({ uri: "https://example.com/track///" }),
+                stored({ uri: "https://example.com/track/" })
+            ),
+            true
+        )
+    })
+
+    it("falls back to trimmed case-insensitive title when URIs differ", () => {
+        assert.equal(
+            trackMatchesStored(
+                mockTrack({ title: "  Hello World  ", uri: "https://cdn.example/a" }),
+                stored({ title: "hello world", uri: "https://cdn.example/b" })
+            ),
+            true
+        )
+    })
+
+    it("rejects blank titles and non-matching URI+title pairs", () => {
+        assert.equal(
+            trackMatchesStored(
+                mockTrack({ title: "   ", uri: "https://cdn.example/a" }),
+                stored({ title: "   ", uri: "https://cdn.example/b" })
+            ),
+            false
+        )
+        assert.equal(
+            trackMatchesStored(
+                mockTrack({ title: "A", uri: "https://cdn.example/a" }),
+                stored({ title: "B", uri: "https://cdn.example/b" })
+            ),
+            false
+        )
+    })
+
+    it("does not treat empty resolved URI as a URI match", () => {
+        // Empty resolved URI skips the URI branch; title must still match.
+        assert.equal(
+            trackMatchesStored(
+                mockTrack({ title: "Song", uri: "   " }),
+                stored({ title: "Other", uri: "https://example.com/track" })
+            ),
+            false
+        )
+        assert.equal(
+            trackMatchesStored(
+                mockTrack({ title: "Song", uri: "   " }),
+                stored({ title: "Song", uri: "https://example.com/track" })
+            ),
+            true
+        )
+    })
+})
+
+describe("persistedTrackFromLavalink", () => {
+    it("returns null when URI is missing or blank", () => {
+        assert.equal(persistedTrackFromLavalink(mockTrack({ uri: "" })), null)
+        assert.equal(persistedTrackFromLavalink(mockTrack({ uri: "   " })), null)
+        const unresolved = {
+            info: { title: "X", author: "Y", uri: undefined, duration: 1 },
+        } as unknown as Track
+        assert.equal(persistedTrackFromLavalink(unresolved), null)
+    })
+
+    it("serializes defaults, requester, encoded, and stream flag", () => {
+        const track = {
+            info: {
+                title: "  ",
+                author: "",
+                uri: " https://example.com/a ",
+                duration: undefined,
+                isStream: 1,
+                isSeekable: true,
+                identifier: "id",
+                artworkUrl: null,
+                isrc: null,
+                sourceName: "http",
+            },
+            encoded: "enc-1",
+            requester: { id: "99" },
+        } as unknown as Track
+        assert.deepEqual(persistedTrackFromLavalink(track), {
+            title: "Unknown",
+            author: "Unknown",
+            uri: "https://example.com/a",
+            duration: 0,
+            encoded: "enc-1",
+            requesterId: "99",
+            thumbnailUrl: null,
+            isStream: true,
+        })
+    })
+
+    it("omits thumbnail for unresolved tracks without artwork", () => {
+        const unresolved = {
+            info: {
+                title: "T",
+                author: "A",
+                uri: "https://example.com/u",
+                duration: 5,
+                isStream: false,
+            },
+            // no `encoded` / not a resolved Track shape for isResolvedTrack
+        } as unknown as Track
+        const out = persistedTrackFromLavalink(unresolved)
+        assert.ok(out)
+        assert.equal(out.thumbnailUrl, null)
+        assert.equal(out.title, "T")
+        assert.equal(out.author, "A")
+        assert.equal(out.encoded, null)
+    })
+})
 
 describe("resolvePersistedTracks transient vs permanent failures", () => {
     it("skips private/Docker-internal URIs without calling Lavalink search", async () => {
