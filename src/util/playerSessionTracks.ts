@@ -36,6 +36,27 @@ export function persistedTrackFromLavalink(
     }
 }
 
+function normalizeUriForCompare(uri: string): string {
+    return uri.trim().toLowerCase().replace(/\/+$/, "")
+}
+
+/**
+ * True when a resolved Lavalink track matches what we persisted (guards bad search hits).
+ * Prefer URI equality (case/trailing-slash insensitive); otherwise require a non-blank title match.
+ */
+export function trackMatchesStored(track: Track, stored: PersistedQueueTrack): boolean {
+    const resolvedUri = track.info.uri?.trim()
+    const storedUri = stored.uri.trim()
+    if (resolvedUri && storedUri) {
+        if (normalizeUriForCompare(resolvedUri) === normalizeUriForCompare(storedUri)) {
+            return true
+        }
+    }
+    const resolvedTitle = track.info.title?.trim().toLowerCase()
+    const storedTitle = stored.title.trim().toLowerCase()
+    return Boolean(resolvedTitle && storedTitle && resolvedTitle === storedTitle)
+}
+
 /**
  * Hydrates persisted session rows as Queue metadata (no Lavalink search or decode).
  * Blocked User media URLs are omitted. YouTube playback is prepared in the prefetch window.
