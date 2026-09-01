@@ -3,6 +3,8 @@ import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import { discordDeleteErrorDetails } from "../../util/discordErrorDetails.js"
+import { getLivePlayerIfUnchanged } from "../../util/livePlayerIdentity.js"
+import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
 
 export default {
     data: new SlashCommandBuilder().setName("skip").setDescription("Skip the song"),
@@ -53,14 +55,23 @@ export default {
 
         await interaction.deferReply()
 
+        // deferReply can outlive /stop+/play; Player.skip is guild-keyed on the node, so a
+        // zombie reference would skip the successor's track. Refuse when identity changed.
+        const live = getLivePlayerIfUnchanged(() => client.lavalink.getPlayer(guild.id), player)
+        if (!live) {
+            return interaction.editReply({
+                content: "The player stopped before the skip finished. Try again.",
+            })
+        }
+
+        const liveHasCurrent = !!live.queue.current
+        const liveHasQueued = live.queue.tracks.length > 0
+        if (!liveHasCurrent && !liveHasQueued) {
+            return interaction.editReply({ content: "Nothing is playing." })
+        }
+
         try {
-            if (hasQueued) {
-                await player.skip()
-            } else {
-                // Only the current track (e.g. autoplay with an empty upcoming queue).
-                // Default skip() throws when queue.tracks is empty — use throwError: false.
-                await player.skip(0, false)
-            }
+            await skipCurrentTrack(live)
         } catch (e) {
             client.error("[SkipCmd] skip failed:", e)
             return interaction.editReply({

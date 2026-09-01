@@ -3,8 +3,10 @@ import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 
 import { formatDuration } from "../../util/formatDuration.js"
+import { getLivePlayerIfUnchanged } from "../../util/livePlayerIdentity.js"
 import { ensurePlayerConnected } from "../../util/musicManager.js"
 import { isStaleSessionDiscordError } from "../../util/restorePlayerSessions.js"
+import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -109,15 +111,21 @@ export default {
             flags: [MessageFlags.Ephemeral],
         })
 
+        // Mutating subcommands use guild-keyed Lavalink APIs; refuse if /stop+/play replaced
+        // the player during deferReply (or a later await).
+        const resolveLive = () =>
+            getLivePlayerIfUnchanged(() => client.lavalink.players.get(guildId), player)
+
         try {
             switch (subcommand) {
                 case "view": {
+                    const viewPlayer = client.lavalink.players.get(guildId) ?? player
                     const guild = client.guilds.cache.get(guildId)
-                    const track = player.queue.current
-                    const queueSize = player.queue.tracks.length
+                    const track = viewPlayer.queue.current
+                    const queueSize = viewPlayer.queue.tracks.length
                     const voiceCh =
-                        player.voiceChannelId != null
-                            ? client.channels.cache.get(player.voiceChannelId)
+                        viewPlayer.voiceChannelId != null
+                            ? client.channels.cache.get(viewPlayer.voiceChannelId)
                             : undefined
                     const voiceName =
                         voiceCh &&
@@ -132,29 +140,37 @@ export default {
                         .addFields(
                             {
                                 name: "Connected",
-                                value: player.connected ? "Yes" : "No",
+                                value: viewPlayer.connected ? "Yes" : "No",
                                 inline: true,
                             },
-                            { name: "Playing", value: player.playing ? "Yes" : "No", inline: true },
+                            {
+                                name: "Playing",
+                                value: viewPlayer.playing ? "Yes" : "No",
+                                inline: true,
+                            },
                             {
                                 name: "Volume",
-                                value: player.volume?.toString() || "N/A",
+                                value: viewPlayer.volume?.toString() || "N/A",
                                 inline: true,
                             },
-                            { name: "Paused", value: player.paused ? "Yes" : "No", inline: true },
-                            { name: "Repeat", value: player.repeatMode, inline: true },
-                            { name: "Node", value: player.node?.id || "N/A", inline: true },
+                            {
+                                name: "Paused",
+                                value: viewPlayer.paused ? "Yes" : "No",
+                                inline: true,
+                            },
+                            { name: "Repeat", value: viewPlayer.repeatMode, inline: true },
+                            { name: "Node", value: viewPlayer.node?.id || "N/A", inline: true },
                             {
                                 name: "Voice Channel",
-                                value: `${voiceName} (${player.voiceChannelId ?? "N/A"})`,
+                                value: `${voiceName} (${viewPlayer.voiceChannelId ?? "N/A"})`,
                             },
-                            { name: "Text Channel", value: player.textChannelId || "N/A" },
+                            { name: "Text Channel", value: viewPlayer.textChannelId || "N/A" },
                             { name: "Queue Size", value: queueSize.toString(), inline: true }
                         )
                         .setTimestamp()
 
                     if (track) {
-                        const position = formatDuration(player.position)
+                        const position = formatDuration(viewPlayer.position)
                         const duration = formatDuration(track.info.duration)
                         embed.addFields(
                             {
@@ -189,19 +205,33 @@ export default {
                     break
                 }
                 case "skip": {
-                    if (!player.queue.current) {
+                    const live = resolveLive()
+                    if (!live) {
+                        await interaction.editReply({
+                            content: `❌ Player for Guild ID ${guildId} stopped or was replaced before skip finished.`,
+                        })
+                        return
+                    }
+                    if (!live.queue.current && live.queue.tracks.length === 0) {
                         await interaction.editReply({
                             content: "❌ Nothing is currently playing in that guild.",
                         })
                         return
                     }
-                    await player.skip()
+                    await skipCurrentTrack(live)
                     await interaction.editReply(`✅ Force-skipped track in Guild ID: ${guildId}`)
                     client.debug(`[PlayerCtl] Force-skipped track for guild ${guildId}`)
                     break
                 }
                 case "stop": {
-                    await player.stopPlaying()
+                    const live = resolveLive()
+                    if (!live) {
+                        await interaction.editReply({
+                            content: `❌ Player for Guild ID ${guildId} stopped or was replaced before stop finished.`,
+                        })
+                        return
+                    }
+                    await live.stopPlaying()
                     await interaction.editReply(
                         `✅ Stopped player and cleared queue in Guild ID: ${guildId}`
                     )
@@ -209,7 +239,14 @@ export default {
                     break
                 }
                 case "destroy": {
-                    await player.destroy()
+                    const live = resolveLive()
+                    if (!live) {
+                        await interaction.editReply({
+                            content: `❌ Player for Guild ID ${guildId} stopped or was replaced before destroy finished.`,
+                        })
+                        return
+                    }
+                    await live.destroy()
                     await interaction.editReply(
                         `✅ Destroyed player instance for Guild ID: ${guildId}`
                     )
@@ -217,7 +254,14 @@ export default {
                     break
                 }
                 case "reconnect": {
-                    const voiceChannelId = player.voiceChannelId
+                    const live = resolveLive()
+                    if (!live) {
+                        await interaction.editReply({
+                            content: `❌ Player for Guild ID ${guildId} stopped or was replaced before reconnect finished.`,
+                        })
+                        return
+                    }
+                    const voiceChannelId = live.voiceChannelId
                     if (!voiceChannelId) {
                         await interaction.editReply({
                             content: "❌ Player has no voice channel id; cannot reconnect.",
@@ -242,7 +286,14 @@ export default {
                         })
                         return
                     }
-                    await ensurePlayerConnected(client, player, fetched)
+                    const liveAfterFetch = resolveLive()
+                    if (!liveAfterFetch) {
+                        await interaction.editReply({
+                            content: `❌ Player for Guild ID ${guildId} stopped or was replaced before reconnect finished.`,
+                        })
+                        return
+                    }
+                    await ensurePlayerConnected(client, liveAfterFetch, fetched)
                     await interaction.editReply(
                         `✅ Rejoined voice channel for Guild ID: ${guildId} (queue unchanged).`
                     )
