@@ -3,6 +3,7 @@ import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import { discordDeleteErrorDetails } from "../../util/discordErrorDetails.js"
+import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
 
 export default {
     data: new SlashCommandBuilder().setName("skip").setDescription("Skip the song"),
@@ -54,12 +55,12 @@ export default {
         await interaction.deferReply()
 
         try {
-            if (hasQueued) {
-                await player.skip()
-            } else {
-                // Only the current track (e.g. autoplay with an empty upcoming queue).
-                // Default skip() throws when queue.tracks is empty — use throwError: false.
-                await player.skip(0, false)
+            const skipped = await skipCurrentTrack(player)
+            if (skipped === "deferred") {
+                return interaction.editReply({
+                    content:
+                        "Could not skip right now. The next track is still preparing. Try again in a moment.",
+                })
             }
         } catch (e) {
             client.error("[SkipCmd] skip failed:", e)

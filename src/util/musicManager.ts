@@ -23,10 +23,10 @@ import {
 import { stampRequesterUserIdOnTracks } from "./rrqDisconnect.js"
 import { memberMayJoinOccupiedVoice, resolveOccupiedVoiceChannelId } from "./sameVoiceChannel.js"
 import {
-    resolveYoutubePlaybackTrack,
-    resolveYoutubePlaybackTracks,
-    companionPlaybackConfig,
-} from "./youtubeCompanionPlayback.js"
+    ensureCurrentPlayable,
+    isPlaylistLoadType,
+    schedulePrefetchWindow,
+} from "./youtubePlaybackWindow.js"
 import {
     isBlockedUserMediaUrl,
     trimmedHttpUrlQuery,
@@ -38,12 +38,16 @@ type SearchAttempt =
     | { source: string; success: false; error?: string }
 
 type PlayerSearchResult = Awaited<ReturnType<Player["search"]>>
-const playerStartLocks = new WeakMap<Player, Promise<void>>()
+
+/** Outcome of {@link startPlaybackIfNeeded}; `deferred` means play was not started. */
+export type PlaybackStartResult = "ok" | "deferred" | "empty" | "no_player"
+
+const playerStartLocks = new WeakMap<Player, Promise<PlaybackStartResult>>()
 
 /**
  * Prevents concurrent check-then-play races by serializing start attempts per player.
  */
-export async function startPlaybackIfNeeded(player: Player): Promise<void> {
+export async function startPlaybackIfNeeded(player: Player): Promise<PlaybackStartResult> {
     // After waiting on another caller’s lock, re-check: that run may have left playback idle while
     // new tracks were enqueued, so we must not return without attempting start under our own lock.
     for (;;) {
@@ -53,21 +57,23 @@ export async function startPlaybackIfNeeded(player: Player): Promise<void> {
             continue
         }
 
-        const startPromise = (async () => {
+        const startPromise = (async (): Promise<PlaybackStartResult> => {
+            const prepared = await ensureCurrentPlayable(() => player, player.guildId)
+            if (prepared !== "ok") return prepared
             if (!player.playing && (player.queue.current || player.queue.tracks.length > 0)) {
                 await player.play()
             }
+            return "ok"
         })()
 
         playerStartLocks.set(player, startPromise)
         try {
-            await startPromise
+            return await startPromise
         } finally {
             if (playerStartLocks.get(player) === startPromise) {
                 playerStartLocks.delete(player)
             }
         }
-        return
     }
 }
 
@@ -222,7 +228,7 @@ export async function handleQueryAndPlay(
                     client.debug(
                         `[MusicManager] URL Probe Success. Using title for local search: "${stringForLocalSearch}"`
                     )
-                } else if (probeResult && (plt === "PLAYLIST_LOADED" || plt === "playlist")) {
+                } else if (probeResult && isPlaylistLoadType(plt)) {
                     client.debug(
                         `[MusicManager] URL probe returned playlist. Skipping local match and queueing playlist.`
                     )
@@ -255,7 +261,7 @@ export async function handleQueryAndPlay(
                     loadType: preSearchResult?.loadType,
                 })
                 const preLt = preSearchResult?.loadType as string | undefined
-                if (preSearchResult && (preLt === "PLAYLIST_LOADED" || preLt === "playlist")) {
+                if (preSearchResult && isPlaylistLoadType(preLt)) {
                     client.debug(
                         `[MusicManager] Pre-search returned playlist. Skipping local match and queueing playlist.`
                     )
@@ -636,7 +642,7 @@ export async function handleQueryAndPlay(
             `[MusicManager] Search result handling complete. Success: ${success}, Track added: ${!!trackToAdd}. Feedback: "${feedbackText}"`
         )
 
-        const isPlaylistEnqueue = loadT === "PLAYLIST_LOADED" || loadT === "playlist"
+        const isPlaylistEnqueue = isPlaylistLoadType(loadT)
         if (success && trackToAdd) {
             client.debug(
                 `[MusicManager] Lavalink track [${trackToAdd.info.title}] to be played. Ensuring player is connected, enqueueing, then starting playback.`
@@ -686,31 +692,13 @@ export async function handleQueryAndPlay(
                                     ? searchResult.tracks
                                     : [trackToAdd]
                             stampRequesterUserIdOnTracks(tracksToEnqueue, requester.id)
-                            const playableTracks = isPlaylistEnqueue
-                                ? await resolveYoutubePlaybackTracks(
-                                      player,
-                                      tracksToEnqueue,
-                                      companionPlaybackConfig(client)
-                                  )
-                                : [
-                                      await resolveYoutubePlaybackTrack(
-                                          player,
-                                          tracksToEnqueue[0]!,
-                                          companionPlaybackConfig(client)
-                                      ),
-                                  ]
-                            if (playableTracks.length === 0) {
-                                throw new Error(
-                                    "None of the playlist tracks could be prepared for playback."
-                                )
-                            }
 
                             const enqueued = await enqueueMusicManagerTracksAssumingSearchDone(
                                 () => client.lavalink.getPlayer(guildId),
                                 guildId,
                                 {
                                     isPlaylist: isPlaylistEnqueue,
-                                    tracks: playableTracks,
+                                    tracks: tracksToEnqueue,
                                     playlistName: searchResult.playlist?.name,
                                 },
                                 requester.id
@@ -723,13 +711,6 @@ export async function handleQueryAndPlay(
                                 player = enqueued.player
                                 if (!feedbackText) {
                                     feedbackText = enqueued.feedbackText
-                                    if (isPlaylistEnqueue && searchResult.tracks.length > 0) {
-                                        const skipped =
-                                            searchResult.tracks.length - playableTracks.length
-                                        if (skipped > 0) {
-                                            feedbackText += ` Skipped ${skipped} unplayable track(s).`
-                                        }
-                                    }
                                 }
                                 client.debug(
                                     `[MusicManager] Enqueued via live player for guild ${guildId}.`
@@ -741,6 +722,10 @@ export async function handleQueryAndPlay(
                                     `[MusicManager] Before play check: player.playing=${player.playing}, player.queue.tracks.length=${player.queue.tracks.length}`
                                 )
                                 await startPlaybackIfNeeded(player)
+                                schedulePrefetchWindow(
+                                    () => client.lavalink.getPlayer(guildId),
+                                    guildId
+                                )
                                 scheduleSaveIfPlayerStillLive(
                                     () => client.lavalink.getPlayer(guildId),
                                     player
@@ -796,7 +781,7 @@ export async function handleQueryAndPlay(
             )
         }
 
-        if (trackToAdd || loadT === "PLAYLIST_LOADED" || loadT === "playlist") {
+        if (trackToAdd || isPlaylistLoadType(loadT)) {
             client.debug(`[MusicManager] Triggering control message update for guild ${guildId}.`)
             try {
                 await updateControlMessage(client, guildId)

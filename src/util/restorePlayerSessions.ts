@@ -16,10 +16,7 @@ import {
     schedulePlayerSessionSave,
 } from "./playerSessionPersistence.js"
 import { resolvePersistedTracks } from "./playerSessionTracks.js"
-import {
-    resolveYoutubePlaybackTracks,
-    companionPlaybackConfig,
-} from "./youtubeCompanionPlayback.js"
+import { schedulePrefetchWindow } from "./youtubePlaybackWindow.js"
 import {
     withGuildPlayerLifecycleReservation,
     withGuildPlayerQueueLock,
@@ -193,14 +190,9 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                 player,
                 tracksToRestore
             )
-            const playable = await resolveYoutubePlaybackTracks(
-                player,
-                resolved,
-                companionPlaybackConfig(client)
-            )
-            const companionFailed = resolved.length - playable.length
-            const failedTotal = failed + companionFailed
-            const transientTotal = transientFailures + companionFailed
+            const playable = resolved
+            const failedTotal = failed
+            const transientTotal = transientFailures
             if (failedTotal > 0) {
                 client.warn(
                     `[playerSession] restore for ${guildId}: ${failedTotal}/${tracksToRestore.length} tracks failed to resolve` +
@@ -268,6 +260,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
             player.set("rrqEnabled", snapshot.rrqEnabled)
 
             await startPlaybackIfNeeded(player)
+            schedulePrefetchWindow(() => client.lavalink.getPlayer(guildId), guildId)
             if (snapshot.paused && player.playing) {
                 await player.pause()
             }

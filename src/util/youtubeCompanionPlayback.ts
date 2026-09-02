@@ -46,6 +46,8 @@ type PlayerJsonLike = {
     playability_status?: { status?: string; reason?: string }
     streamingData?: { formats?: FormatLike[]; adaptiveFormats?: FormatLike[] }
     streaming_data?: { formats?: FormatLike[]; adaptive_formats?: FormatLike[] }
+    videoDetails?: { lengthSeconds?: string | number }
+    video_details?: { length_seconds?: string | number }
 }
 
 function defaultSleep(ms: number): Promise<void> {
@@ -156,7 +158,8 @@ export function catalogYoutubeSearchQueries(track: Track | UnresolvedTrack): str
 
 const COMPANION_RESOLVED_FLAG = "invidiousCompanionResolved"
 
-function isCompanionResolvedTrack(track: Track | UnresolvedTrack): boolean {
+/** True when this queue item already has a Companion stream URL minted. */
+export function isCompanionResolvedTrack(track: Track | UnresolvedTrack): boolean {
     const userData = (track as { userData?: unknown }).userData
     return (
         typeof userData === "object" &&
@@ -236,6 +239,46 @@ export function ensureCompanionOriginStreamUrl(streamUrl: string, companionOrigi
     throw new Error(`Refusing to play non-companion HTTP URL (host ${parsed.host}).`)
 }
 
+/** Companion player JSON video length in ms, or null when missing/invalid. */
+export function companionLengthMsFromPlayerJson(playerJson: {
+    videoDetails?: { lengthSeconds?: string | number }
+    video_details?: { length_seconds?: string | number }
+}): number | null {
+    const raw = playerJson.videoDetails?.lengthSeconds ?? playerJson.video_details?.length_seconds
+    const seconds = typeof raw === "string" ? Number(raw) : raw
+    if (!Number.isFinite(seconds) || seconds <= 0) return null
+    return Math.floor(seconds * 1000)
+}
+
+/**
+ * Stamps Playback duration: Lavalink HTTP if > 0, else companion length, else YouTube search.
+ * A finite stamp also clears `isStream` so the UIs do not show LIVE.
+ */
+export function applyPlaybackDuration(
+    httpTrack: Track,
+    fallbacks: {
+        companionLengthMs?: number | null
+        youtubeSearchDurationMs?: number | null
+    }
+): Track {
+    const httpMs = httpTrack.info.duration
+    const companionMs = fallbacks.companionLengthMs
+    const youtubeMs = fallbacks.youtubeSearchDurationMs
+    const stamped =
+        typeof httpMs === "number" && httpMs > 0
+            ? httpMs
+            : typeof companionMs === "number" && companionMs > 0
+              ? companionMs
+              : typeof youtubeMs === "number" && youtubeMs > 0
+                ? youtubeMs
+                : null
+    if (stamped != null) {
+        httpTrack.info.duration = stamped
+        httpTrack.info.isStream = false
+    }
+    return httpTrack
+}
+
 export function overlayYoutubeMetadata(
     httpTrack: Track,
     youtubeTrack: Track | UnresolvedTrack
@@ -247,7 +290,6 @@ export function overlayYoutubeMetadata(
     if (src.uri) info.uri = src.uri
     if (src.identifier) info.identifier = src.identifier
     if (src.artworkUrl) info.artworkUrl = src.artworkUrl
-    if (src.duration != null) info.duration = src.duration
     info.sourceName = "youtube"
     info.isSeekable = src.isSeekable ?? info.isSeekable
     info.isStream = src.isStream ?? info.isStream
@@ -263,8 +305,9 @@ export function overlayYoutubeMetadata(
 }
 
 /**
- * Copies catalog (Spotify) identity onto a companion HTTP track so the queue still
- * shows the Spotify URI, while audio stays companion-proxied.
+ * Copies catalog (Spotify) title/artist/ISRC onto a companion HTTP track.
+ * Leaves `info.uri` as the YouTube watch URL from YouTube search so now-playing
+ * and the dashboard link to what is actually streaming.
  */
 export function overlayCatalogIdentity(
     httpTrack: Track,
@@ -274,10 +317,8 @@ export function overlayCatalogIdentity(
     const src = catalogTrack.info
     if (src.title) info.title = src.title
     if (src.author) info.author = src.author
-    if (src.uri) info.uri = src.uri
     if (src.identifier) info.identifier = src.identifier
     if (src.artworkUrl) info.artworkUrl = src.artworkUrl
-    if (src.duration != null) info.duration = src.duration
     if (src.isrc) info.isrc = src.isrc
     info.sourceName = src.sourceName || "spotify"
     info.isSeekable = src.isSeekable ?? info.isSeekable
@@ -454,16 +495,18 @@ async function resolveSpotifyCatalogPlaybackTrack(
 
 /**
  * Prepares a track for queue.add: YouTube → companion HTTP; Spotify catalog → YouTube
- * search then companion HTTP (Spotify identity kept). Other sources unchanged.
+ * search then companion HTTP (Spotify title/artist kept; Playback URL is the YouTube
+ * watch URL). Other sources unchanged.
  * Throws if companion is missing, the video is unplayable, or catalog YouTube search misses.
  */
 export async function resolveYoutubePlaybackTrack(
     player: Player,
     track: Track | UnresolvedTrack,
-    config: CompanionPlaybackConfig | null = companionPlaybackConfigFromEnv()
+    config: CompanionPlaybackConfig | null = companionPlaybackConfigFromEnv(),
+    options?: { force?: boolean }
 ): Promise<Track | UnresolvedTrack> {
     const log = companionLogger(config)
-    if (isCompanionResolvedTrack(track)) return track
+    if (!options?.force && isCompanionResolvedTrack(track)) return track
     if (isSpotifyCatalogTrack(track)) {
         return resolveSpotifyCatalogPlaybackTrack(player, track, config)
     }
@@ -503,7 +546,11 @@ export async function resolveYoutubePlaybackTrack(
         throw new Error(`Lavalink HTTP search returned no track for companion stream ${videoId}.`)
     }
     log.debug(`${LOG_PREFIX} resolved ${videoId}`)
-    return overlayYoutubeMetadata(httpTrack as Track, track)
+    const overlaid = overlayYoutubeMetadata(httpTrack as Track, track)
+    return applyPlaybackDuration(overlaid, {
+        companionLengthMs: companionLengthMsFromPlayerJson(playerJson),
+        youtubeSearchDurationMs: track.info?.duration,
+    })
 }
 
 const RESOLVE_CONCURRENCY = 6

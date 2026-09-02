@@ -28,15 +28,40 @@ describe("resolveStoredPlaylistTracks user-media deny", () => {
         const result = await resolveStoredPlaylistTracks(
             player,
             [
-                { uri: "http://postgres-db:5432/" },
-                { uri: "http://127.0.0.1:3001/health" },
-                { uri: "http://10.0.0.5/audio.mp3" },
-                { uri: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
+                {
+                    uri: "http://postgres-db:5432/",
+                    title: "A",
+                    author: "B",
+                    duration: 1,
+                    thumbnailUrl: null,
+                },
+                {
+                    uri: "http://127.0.0.1:3001/health",
+                    title: "A",
+                    author: "B",
+                    duration: 1,
+                    thumbnailUrl: null,
+                },
+                {
+                    uri: "http://10.0.0.5/audio.mp3",
+                    title: "A",
+                    author: "B",
+                    duration: 1,
+                    thumbnailUrl: null,
+                },
+                {
+                    uri: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                    title: "Rick",
+                    author: "Astley",
+                    duration: 213000,
+                    thumbnailUrl: null,
+                },
             ],
             { id: "user-1" }
         )
-        assert.deepEqual(searched, ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"])
+        assert.deepEqual(searched, [])
         assert.equal(result.resolved.length, 1)
+        assert.equal(result.resolved[0]?.info.uri, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
         assert.equal(result.failed, 3)
     })
 })

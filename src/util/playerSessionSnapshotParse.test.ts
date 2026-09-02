@@ -44,6 +44,7 @@ describe("parsePersistedQueueTrack", () => {
             title: "Song",
             author: "Artist",
             uri: "https://example.com/track",
+            isrc: null,
         })
     })
 
@@ -74,6 +75,14 @@ describe("parsePersistedQueueTrack", () => {
         assert.equal(parsePersistedQueueTrack({ ...validTrack, encoded: 1 }), null)
         assert.equal(parsePersistedQueueTrack({ ...validTrack, requesterId: 9 }), null)
         assert.equal(parsePersistedQueueTrack({ ...validTrack, thumbnailUrl: false }), null)
+        assert.equal(parsePersistedQueueTrack({ ...validTrack, isrc: 1 }), null)
+    })
+
+    it("accepts a missing ISRC and a trimmed ISRC string", () => {
+        const without = parsePersistedQueueTrack(validTrack)
+        assert.equal(without?.isrc, null)
+        const withIsrc = parsePersistedQueueTrack({ ...validTrack, isrc: "  USRC17600001  " })
+        assert.equal(withIsrc?.isrc, "USRC17600001")
     })
 })
 

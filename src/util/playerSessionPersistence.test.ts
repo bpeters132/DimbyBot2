@@ -94,6 +94,7 @@ describe("persistedTrackFromLavalink", () => {
         assert.equal(persisted.uri, "https://example.com/t")
         assert.equal(persisted.requesterId, "user-1")
         assert.equal(persisted.encoded, "enc")
+        assert.equal(persisted.isrc, null)
     })
 
     it("returns null when uri is missing (nothing restorable)", () => {

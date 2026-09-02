@@ -25,6 +25,11 @@ export function parsePersistedQueueTrack(value: unknown): PersistedQueueTrack | 
         if (typeof raw.thumbnailUrl !== "string") return null
         thumbnailUrl = raw.thumbnailUrl
     }
+    let isrc: string | null = null
+    if (raw.isrc !== null && raw.isrc !== undefined) {
+        if (typeof raw.isrc !== "string") return null
+        isrc = raw.isrc.trim() || null
+    }
 
     return {
         title: raw.title.trim(),
@@ -35,6 +40,7 @@ export function parsePersistedQueueTrack(value: unknown): PersistedQueueTrack | 
         requesterId,
         thumbnailUrl,
         isStream: raw.isStream,
+        isrc,
     }
 }
 

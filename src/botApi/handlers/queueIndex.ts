@@ -7,6 +7,7 @@ import { toQueueResponse } from "../../shared/player-state.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
+import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 import { parseQueueIndex } from "../parseBotApiParams.js"
 
 export async function queueIndexDELETE(
@@ -57,6 +58,7 @@ export async function queueIndexDELETE(
             }
         }
 
+        schedulePrefetchWindow(() => getBotClient().lavalink.getPlayer(guildId), guildId)
         playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
         return {
             status: 200,
@@ -182,6 +184,7 @@ export async function queueIndexPATCH(
             }
         }
 
+        schedulePrefetchWindow(() => getBotClient().lavalink.getPlayer(guildId), guildId)
         playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
 
         return {

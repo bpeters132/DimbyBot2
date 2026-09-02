@@ -8,6 +8,8 @@ import { webPlayerDebug } from "../../shared/web-player-debug-log.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
+import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
+import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 import { parsePlayerAction } from "../parseBotApiParams.js"
 
 export async function playerGET(
@@ -96,10 +98,23 @@ export async function playerPOST(
                 if (player.playing) await player.pause()
                 else if (player.paused) await player.resume()
                 break
-            case "skip":
-                if (player.queue.tracks.length > 0) await player.skip()
-                else await player.skip(0, false)
+            case "skip": {
+                const skipped = await skipCurrentTrack(player)
+                if (skipped === "deferred") {
+                    return {
+                        status: 409,
+                        body: {
+                            ok: false,
+                            error: {
+                                error: "next_track_not_ready",
+                                details:
+                                    "The next track is still preparing. Try skip again in a moment.",
+                            },
+                        },
+                    }
+                }
                 break
+            }
             case "stop":
                 await player.destroy()
                 break
@@ -128,10 +143,16 @@ export async function playerPOST(
             case "shuffle":
                 // Serialize with dashboard clear/reorder and Discord RRQ mutations so shuffle
                 // cannot interleave between a locked remove+insert (lost / duplicated tracks).
-                await withGuildPlayerQueueLock(guildId, async () => {
-                    if (player.queue.tracks.length < 2) return
-                    await player.queue.shuffle()
-                })
+                {
+                    const shuffled = await withGuildPlayerQueueLock(guildId, async () => {
+                        if (player.queue.tracks.length < 2) return false
+                        await player.queue.shuffle()
+                        return true
+                    })
+                    if (shuffled) {
+                        schedulePrefetchWindow(() => client.lavalink.getPlayer(guildId), guildId)
+                    }
+                }
                 break
             case "autoplay":
                 player.set("autoplay", !player.get("autoplay"))

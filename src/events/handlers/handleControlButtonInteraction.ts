@@ -4,6 +4,8 @@ import { getGuildSettings, isGuildSettingsInitialized } from "../../util/saveCon
 import { toggleAutoplay } from "../../util/autoplayHistory.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { startPlaybackIfNeeded } from "../../util/musicManager.js"
+import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
+import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 import { updateControlMessage } from "./handleControlChannel.js"
 
 export async function handleControlButtonInteraction(
@@ -337,14 +339,15 @@ export async function handleControlButtonInteraction(
                 }
 
                 try {
-                    if (player.queue.tracks.length > 0) {
-                        client.debug("[ControlButtonHandler] player.skip() (queued tracks exist).")
-                        await player.skip()
-                    } else {
-                        client.debug(
-                            "[ControlButtonHandler] player.skip(0, false) — only current track (e.g. autoplay)."
-                        )
-                        await player.skip(0, false)
+                    client.debug("[ControlButtonHandler] skipCurrentTrack.")
+                    const skipped = await skipCurrentTrack(player)
+                    if (skipped === "deferred") {
+                        await interaction.followUp({
+                            content:
+                                "Could not skip right now. The next track is still preparing. Try again in a moment.",
+                            ephemeral: true,
+                        })
+                        break
                     }
                     actionTaken = true
                     try {
@@ -383,6 +386,7 @@ export async function handleControlButtonInteraction(
                         return true
                     })
                     if (!shuffled) break
+                    schedulePrefetchWindow(() => client.lavalink.getPlayer(guildId), guildId)
                     actionTaken = true
                     client.debug("[ControlButtonHandler] Queue shuffled.")
                     try {

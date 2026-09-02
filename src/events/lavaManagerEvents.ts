@@ -46,6 +46,11 @@ import { tryDestroyOrphanGuildPlayer } from "../util/guildPlayerQueueLock.js"
 import { countHumanMembers } from "../util/voiceChannelMembers.js"
 import { playerHasQueueContent } from "../util/playlistQueue.js"
 import { skipCurrentTrack } from "../util/skipCurrentTrack.js"
+import { stretchedPlaybackDurationMs } from "../util/playbackDuration.js"
+import {
+    retryCompanionPlaybackOnce,
+    schedulePrefetchWindow,
+} from "../util/youtubePlaybackWindow.js"
 import { shouldApplicationSkipOnTrackStuck } from "../util/trackStuckAdvance.js"
 import { endCurrentTrackForAutoplay } from "../util/endCurrentTrackForAutoplay.js"
 import { safeIdlePlayerDestroy } from "../util/safeIdlePlayerDestroy.js"
@@ -208,6 +213,7 @@ export default async (client: BotClient) => {
                 rememberAutoplayPlayed(player, track.info)
             }
             schedulePlayerSessionSave(player)
+            schedulePrefetchWindow(() => client.lavalink.getPlayer(player.guildId), player.guildId)
 
             const textId = player.textChannelId
             const channel = textId ? client.channels.cache.get(textId) : undefined
@@ -384,6 +390,14 @@ export default async (client: BotClient) => {
                 client.debug(
                     `[LavaMgrEvents] Attempting to skip track after error in guild ${player.guildId}.`
                 )
+                const retried = await retryCompanionPlaybackOnce(
+                    () => client.lavalink.getPlayer(player.guildId),
+                    player.guildId,
+                    track
+                )
+                if (retried === "retried") {
+                    return
+                }
                 if (player.queue.tracks.length > 0) {
                     try {
                         await skipCurrentTrack(player)
@@ -722,6 +736,22 @@ export default async (client: BotClient) => {
             )
         })
         .on("playerUpdate", (oldPlayerJson: PlayerJson, newPlayer: Player) => {
+            const current = newPlayer.queue?.current
+            if (current?.info) {
+                const stretched = stretchedPlaybackDurationMs(
+                    current.info.duration ?? 0,
+                    newPlayer.position ?? 0
+                )
+                if (stretched != null) {
+                    current.info.duration = stretched
+                    current.info.isStream = false
+                    scheduleControlMessageUpdate(
+                        client,
+                        newPlayer.guildId,
+                        "playbackDurationStretch"
+                    )
+                }
+            }
             const oldPaused = Boolean(oldPlayerJson.paused)
             if (oldPaused !== newPlayer.paused) {
                 schedulePlayerSessionSave(newPlayer)

@@ -21,21 +21,7 @@ describe("sanitizeHttpUrl", () => {
 })
 
 describe("playlistPlayTimeoutMs", () => {
-    it("uses a one-track baseline for non-positive or non-finite counts", () => {
-        assert.equal(playlistPlayTimeoutMs(1), 32_500)
-        assert.equal(playlistPlayTimeoutMs(0), 32_500)
-        assert.equal(playlistPlayTimeoutMs(-3), 32_500)
-        assert.equal(playlistPlayTimeoutMs(Number.NaN), 32_500)
-    })
-
-    it("scales with track count and floors fractional counts", () => {
-        assert.equal(playlistPlayTimeoutMs(2), 35_000)
-        assert.equal(playlistPlayTimeoutMs(2.9), 35_000)
-        assert.equal(playlistPlayTimeoutMs(10), 55_000)
-    })
-
-    it("caps at five minutes for very large playlists", () => {
-        assert.equal(playlistPlayTimeoutMs(200), 300_000)
-        assert.equal(playlistPlayTimeoutMs(10_000), 300_000)
+    it("uses a fixed short timeout regardless of playlist size", () => {
+        assert.equal(playlistPlayTimeoutMs(), 30_000)
     })
 })

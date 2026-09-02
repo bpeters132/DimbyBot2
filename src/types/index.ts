@@ -274,6 +274,7 @@ export interface PersistedQueueTrack {
     requesterId: string | null
     thumbnailUrl: string | null
     isStream: boolean
+    isrc?: string | null
 }
 
 /** Versioned Lavalink player snapshot stored in `PlayerSession.snapshot`. */
