@@ -16,6 +16,7 @@ import {
     orderSimilarByArtistVariety,
     primaryArtistKey,
     rememberAutoplayPlayed,
+    seedAutoplayHistoryFromPlayer,
     songIdentityKey,
     titlesLikelySameSong,
     toggleAutoplay,
@@ -231,6 +232,130 @@ describe("toggleAutoplay", () => {
             isAutoplayRecentlyPlayed(player, info({ author: "Seed", title: "Now Playing" })),
             false
         )
+    })
+})
+
+describe("seedAutoplayHistoryFromPlayer", () => {
+    it("seeds previous[0] as most-recent prior, then current on top; drops oldest when over cap", () => {
+        const store = new Map<string, unknown>()
+        const player = {
+            get: (key: string) => store.get(key),
+            set: (key: string, value: unknown) => {
+                store.set(key, value)
+            },
+            queue: {
+                // Lavalink: previous[0] is the track that just ended (most recent prior).
+                previous: [
+                    trackFromInfo(info({ author: "B", title: "Just Ended", identifier: "id-mid" })),
+                    trackFromInfo(info({ author: "A", title: "Older", identifier: "id-old" })),
+                ],
+                current: trackFromInfo(
+                    info({ author: "C", title: "Current", identifier: "id-cur" })
+                ),
+                tracks: [],
+            },
+        } as unknown as Player
+
+        seedAutoplayHistoryFromPlayer(player)
+
+        assert.equal(
+            isAutoplayRecentlyPlayed(player, info({ author: "A", title: "Older" })),
+            true
+        )
+        assert.equal(
+            isAutoplayRecentlyPlayed(player, info({ author: "B", title: "Just Ended" })),
+            true
+        )
+        assert.equal(
+            isAutoplayRecentlyPlayed(player, info({ author: "C", title: "Current" })),
+            true
+        )
+
+        // Cap+current: reverse-walk previous then unshift current so oldest prior is evicted.
+        const overflowPrev = Array.from({ length: AUTOPLAY_RECENT_SONG_CAP }, (_, i) =>
+            trackFromInfo(
+                info({
+                    author: `Prev${i}`,
+                    title: `Track${i}`,
+                    identifier: `id${String(i).padStart(9, "0")}`,
+                    uri: `https://www.youtube.com/watch?v=${String(i).padStart(11, "0")}`,
+                })
+            )
+        )
+        store.clear()
+        const capped = {
+            get: (key: string) => store.get(key),
+            set: (key: string, value: unknown) => {
+                store.set(key, value)
+            },
+            queue: {
+                previous: overflowPrev,
+                current: trackFromInfo(
+                    info({
+                        author: "Keep",
+                        title: "Now",
+                        identifier: "keepnow0000",
+                        uri: "https://www.youtube.com/watch?v=keepnow0000",
+                    })
+                ),
+                tracks: [],
+            },
+        } as unknown as Player
+        seedAutoplayHistoryFromPlayer(capped)
+
+        assert.equal(
+            isAutoplayRecentlyPlayed(
+                capped,
+                info({
+                    author: "Keep",
+                    title: "Now",
+                    identifier: "keepnow0000",
+                    uri: "https://www.youtube.com/watch?v=keepnow0000",
+                })
+            ),
+            true
+        )
+        // previous[0] (most recent prior) survives under the cap.
+        assert.equal(
+            isAutoplayRecentlyPlayed(
+                capped,
+                info({
+                    author: "Prev0",
+                    title: "Track0",
+                    identifier: "id000000000",
+                    uri: "https://www.youtube.com/watch?v=00000000000",
+                })
+            ),
+            true
+        )
+        // previous[CAP-1] (oldest prior) is evicted when current pushes over the cap.
+        const last = AUTOPLAY_RECENT_SONG_CAP - 1
+        assert.equal(
+            isAutoplayRecentlyPlayed(
+                capped,
+                info({
+                    author: `Prev${last}`,
+                    title: `Track${last}`,
+                    identifier: `id${String(last).padStart(9, "0")}`,
+                    uri: `https://www.youtube.com/watch?v=${String(last).padStart(11, "0")}`,
+                })
+            ),
+            false
+        )
+    })
+
+    it("tolerates missing previous/current without writing history", () => {
+        const store = new Map<string, unknown>()
+        const player = {
+            get: (key: string) => store.get(key),
+            set: (key: string, value: unknown) => {
+                store.set(key, value)
+            },
+            queue: { previous: [], current: null, tracks: [] },
+        } as unknown as Player
+
+        seedAutoplayHistoryFromPlayer(player)
+        assert.deepEqual(player.get("autoplayRecentSongs") ?? [], [])
     })
 })
 
