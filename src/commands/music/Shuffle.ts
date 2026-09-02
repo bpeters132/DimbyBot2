@@ -4,6 +4,7 @@ import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
+import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 
 export default {
     data: new SlashCommandBuilder().setName("shuffle").setDescription("Shuffle the current queue"),
@@ -49,11 +50,15 @@ export default {
             })
         }
 
-        await withGuildPlayerQueueLock(guild.id, async () => {
-            if (player.queue.tracks.length < 2) return
+        const shuffled = await withGuildPlayerQueueLock(guild.id, async () => {
+            if (player.queue.tracks.length < 2) return false
             await player.queue.shuffle()
             schedulePlayerSessionSave(player)
+            return true
         })
+        if (shuffled) {
+            schedulePrefetchWindow(() => client.lavalink.getPlayer(guild.id), guild.id)
+        }
         await interaction.reply("Queue shuffled.")
     },
 }

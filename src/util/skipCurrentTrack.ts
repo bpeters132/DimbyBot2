@@ -1,4 +1,5 @@
 import type { Player } from "lavalink-client"
+import type { CompanionPlaybackConfig } from "./youtubeCompanionPlayback.js"
 import { ensureUpcomingHeadPlayable } from "./youtubePlaybackWindow.js"
 
 type SkipPlayer = {
@@ -12,9 +13,16 @@ type SkipPlayer = {
  * upcoming queue is empty (lavalink-client). Matches `/skip`, control buttons, and web player.
  * When `guildId` is present, prepares upcoming[0] for YouTube playback first.
  */
-export async function skipCurrentTrack(player: SkipPlayer): Promise<void> {
+export async function skipCurrentTrack(
+    player: SkipPlayer,
+    config?: CompanionPlaybackConfig | null
+): Promise<void> {
     if (typeof player.guildId === "string") {
-        const prepared = await ensureUpcomingHeadPlayable(() => player as Player, player.guildId)
+        const prepared = await ensureUpcomingHeadPlayable(
+            () => player as Player,
+            player.guildId,
+            config
+        )
         if (prepared === "deferred") return
     }
     if (player.queue.tracks.length > 0) {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import type { Player, Track } from "lavalink-client"
 import type { CompanionFetch, CompanionPlaybackConfig } from "./youtubeCompanionPlayback.js"
+import { skipCurrentTrack } from "./skipCurrentTrack.js"
 import {
     ensureCurrentPlayable,
     ensurePrefetchWindow,
@@ -298,6 +299,40 @@ describe("skip upcoming + companion retry", () => {
         )
         assert.equal(result, "ok")
         assert.equal(isCompanionResolvedTrack(player.queue.tracks[0] as Track), true)
+    })
+
+    it("skipCurrentTrack prepares a YouTube metadata head before skip()", async () => {
+        const skipCalls: number[] = []
+        const player = mockWindowPlayer("g-skip-gate", [youtubeTrack(VIDEO_A)])
+        const skipPlayer = {
+            ...player,
+            skip: async () => {
+                skipCalls.push(1)
+            },
+        }
+        await skipCurrentTrack(skipPlayer, configWithFetch(companionOkFetch()))
+        assert.equal(isCompanionResolvedTrack(player.queue.tracks[0] as Track), true)
+        assert.deepEqual(skipCalls, [1])
+    })
+
+    it("refills the prefetch window after upcoming tracks are reordered", async () => {
+        const player = mockWindowPlayer(
+            "g-shuffle",
+            [youtubeTrack(VIDEO_B), youtubeTrack(VIDEO_C), youtubeTrack(VIDEO_D)],
+            youtubeTrack(VIDEO_A)
+        )
+        const config = configWithFetch(companionOkFetch())
+        const first = await ensurePrefetchWindow(() => player, "g-shuffle", config)
+        assert.equal(first, "ok")
+        assert.equal(isCompanionResolvedTrack(player.queue.tracks[2] as Track), false)
+
+        const [moved] = player.queue.tracks.splice(2, 1)
+        player.queue.tracks.unshift(moved as Track)
+
+        const afterShuffle = await ensurePrefetchWindow(() => player, "g-shuffle", config)
+        assert.equal(afterShuffle, "ok")
+        assert.equal(isCompanionResolvedTrack(player.queue.tracks[0] as Track), true)
+        assert.equal(player.queue.tracks[0]?.info.identifier, VIDEO_D)
     })
 
     it("retries a companion HTTP track once then skips", async () => {
