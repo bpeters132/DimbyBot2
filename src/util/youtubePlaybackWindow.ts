@@ -72,6 +72,7 @@ export type QueueMetadataFields = {
     requesterId?: string | null
     thumbnailUrl?: string | null
     isStream?: boolean
+    isrc?: string | null
 }
 
 /**
@@ -97,7 +98,7 @@ export function queueMetadataTrackFromFields(fields: QueueMetadataFields): Track
             artworkUrl: fields.thumbnailUrl ?? null,
             isSeekable: true,
             isStream: Boolean(fields.isStream),
-            isrc: null,
+            isrc: fields.isrc?.trim() || null,
         },
         requester: fields.requesterId ?? undefined,
         userData: { queueMetadata: true },

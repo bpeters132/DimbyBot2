@@ -98,9 +98,23 @@ export async function playerPOST(
                 if (player.playing) await player.pause()
                 else if (player.paused) await player.resume()
                 break
-            case "skip":
-                await skipCurrentTrack(player)
+            case "skip": {
+                const skipped = await skipCurrentTrack(player)
+                if (skipped === "deferred") {
+                    return {
+                        status: 409,
+                        body: {
+                            ok: false,
+                            error: {
+                                error: "next_track_not_ready",
+                                details:
+                                    "The next track is still preparing. Try skip again in a moment.",
+                            },
+                        },
+                    }
+                }
                 break
+            }
             case "stop":
                 await player.destroy()
                 break

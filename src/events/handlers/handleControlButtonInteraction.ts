@@ -340,7 +340,15 @@ export async function handleControlButtonInteraction(
 
                 try {
                     client.debug("[ControlButtonHandler] skipCurrentTrack.")
-                    await skipCurrentTrack(player)
+                    const skipped = await skipCurrentTrack(player)
+                    if (skipped === "deferred") {
+                        await interaction.followUp({
+                            content:
+                                "Could not skip right now. The next track is still preparing. Try again in a moment.",
+                            ephemeral: true,
+                        })
+                        break
+                    }
                     actionTaken = true
                     try {
                         await interaction.followUp({ content: "Skipped.", ephemeral: true })

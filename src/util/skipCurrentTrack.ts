@@ -8,26 +8,30 @@ type SkipPlayer = {
     skip: (skipTo?: number, throwError?: boolean) => Promise<unknown>
 }
 
+export type SkipCurrentTrackResult = "skipped" | "deferred"
+
 /**
  * Advances past the current track without using default `skip()`, which throws when the
  * upcoming queue is empty (lavalink-client). Matches `/skip`, control buttons, and web player.
  * When `guildId` is present, prepares upcoming[0] for YouTube playback first.
+ * Returns `deferred` when that prepare is transient so callers do not report a successful skip.
  */
 export async function skipCurrentTrack(
     player: SkipPlayer,
     config?: CompanionPlaybackConfig | null
-): Promise<void> {
+): Promise<SkipCurrentTrackResult> {
     if (typeof player.guildId === "string") {
         const prepared = await ensureUpcomingHeadPlayable(
             () => player as Player,
             player.guildId,
             config
         )
-        if (prepared === "deferred") return
+        if (prepared === "deferred") return "deferred"
     }
     if (player.queue.tracks.length > 0) {
         await player.skip()
-        return
+        return "skipped"
     }
     await player.skip(0, false)
+    return "skipped"
 }

@@ -55,7 +55,13 @@ export default {
         await interaction.deferReply()
 
         try {
-            await skipCurrentTrack(player)
+            const skipped = await skipCurrentTrack(player)
+            if (skipped === "deferred") {
+                return interaction.editReply({
+                    content:
+                        "Could not skip right now. The next track is still preparing. Try again in a moment.",
+                })
+            }
         } catch (e) {
             client.error("[SkipCmd] skip failed:", e)
             return interaction.editReply({

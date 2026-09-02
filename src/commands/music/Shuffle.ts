@@ -56,9 +56,13 @@ export default {
             schedulePlayerSessionSave(player)
             return true
         })
-        if (shuffled) {
-            schedulePrefetchWindow(() => client.lavalink.getPlayer(guild.id), guild.id)
+        if (!shuffled) {
+            return await interaction.reply({
+                content: "Not enough songs in the queue to shuffle.",
+                ephemeral: true,
+            })
         }
+        schedulePrefetchWindow(() => client.lavalink.getPlayer(guild.id), guild.id)
         await interaction.reply("Queue shuffled.")
     },
 }

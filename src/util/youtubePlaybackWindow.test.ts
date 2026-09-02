@@ -188,7 +188,16 @@ describe("playlist load type + metadata helpers", () => {
         })
         assert.ok(yt)
         assert.equal(yt.info.sourceName, "youtube")
+        assert.equal(yt.info.isrc, null)
         assert.equal(isYoutubePlaybackReady(yt), false)
+        const withIsrc = queueMetadataTrackFromFields({
+            title: "Worth it",
+            author: "Outr3ach",
+            uri: "https://open.spotify.com/track/4hqIKGKzDVJXCnD80y2fyn",
+            duration: 259000,
+            isrc: "USRC17600001",
+        })
+        assert.equal(withIsrc?.info.isrc, "USRC17600001")
         assert.equal(
             queueMetadataTrackFromFields({
                 title: "x",

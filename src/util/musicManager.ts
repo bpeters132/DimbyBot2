@@ -38,12 +38,16 @@ type SearchAttempt =
     | { source: string; success: false; error?: string }
 
 type PlayerSearchResult = Awaited<ReturnType<Player["search"]>>
-const playerStartLocks = new WeakMap<Player, Promise<void>>()
+
+/** Outcome of {@link startPlaybackIfNeeded}; `deferred` means play was not started. */
+export type PlaybackStartResult = "ok" | "deferred" | "empty" | "no_player"
+
+const playerStartLocks = new WeakMap<Player, Promise<PlaybackStartResult>>()
 
 /**
  * Prevents concurrent check-then-play races by serializing start attempts per player.
  */
-export async function startPlaybackIfNeeded(player: Player): Promise<void> {
+export async function startPlaybackIfNeeded(player: Player): Promise<PlaybackStartResult> {
     // After waiting on another caller’s lock, re-check: that run may have left playback idle while
     // new tracks were enqueued, so we must not return without attempting start under our own lock.
     for (;;) {
@@ -53,23 +57,23 @@ export async function startPlaybackIfNeeded(player: Player): Promise<void> {
             continue
         }
 
-        const startPromise = (async () => {
+        const startPromise = (async (): Promise<PlaybackStartResult> => {
             const prepared = await ensureCurrentPlayable(() => player, player.guildId)
-            if (prepared !== "ok") return
+            if (prepared !== "ok") return prepared
             if (!player.playing && (player.queue.current || player.queue.tracks.length > 0)) {
                 await player.play()
             }
+            return "ok"
         })()
 
         playerStartLocks.set(player, startPromise)
         try {
-            await startPromise
+            return await startPromise
         } finally {
             if (playerStartLocks.get(player) === startPromise) {
                 playerStartLocks.delete(player)
             }
         }
-        return
     }
 }
 

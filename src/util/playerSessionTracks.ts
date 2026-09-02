@@ -32,6 +32,7 @@ export function persistedTrackFromLavalink(
         requesterId: getRequesterUserId(track.requester),
         thumbnailUrl: isResolvedTrack(track) ? thumbnailFromLavalinkTrack(track) : null,
         isStream: Boolean(track.info.isStream),
+        isrc: track.info.isrc?.trim() || null,
     }
 }
 
@@ -58,6 +59,7 @@ export async function resolvePersistedTracks(
             requesterId: stored.requesterId,
             thumbnailUrl: stored.thumbnailUrl,
             isStream: stored.isStream,
+            isrc: stored.isrc,
         })
         if (track) resolved.push(track)
         else failed += 1

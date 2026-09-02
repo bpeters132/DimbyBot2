@@ -53,13 +53,13 @@ export async function enqueueSearchTracksAssumingSearchDone(
     if (!liveAfter) return { status: "no_player" }
 
     try {
-        await startPlaybackIfNeeded(liveAfter)
+        const started = await startPlaybackIfNeeded(liveAfter)
         schedulePrefetchWindow(getLivePlayer, guildId)
         schedulePlayerSessionSave(liveAfter)
         return {
             status: "ok",
             player: liveAfter,
-            playbackStarted: !locked.wasPlaying,
+            playbackStarted: !locked.wasPlaying && (liveAfter.playing || started === "ok"),
         }
     } catch (error: unknown) {
         const playbackError = error instanceof Error ? error.message : String(error)

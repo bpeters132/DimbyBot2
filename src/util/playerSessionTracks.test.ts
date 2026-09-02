@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import type { PersistedQueueTrack } from "../types/index.js"
-import { resolvePersistedTracks } from "./playerSessionTracks.js"
+import { persistedTrackFromLavalink, resolvePersistedTracks } from "./playerSessionTracks.js"
 
 function stored(overrides: Partial<PersistedQueueTrack> = {}): PersistedQueueTrack {
     return {
@@ -54,6 +54,34 @@ describe("resolvePersistedTracks metadata hydrate", () => {
         assert.equal(result.failed, 0)
         assert.equal(result.resolved[0]?.info.sourceName, "spotify")
         assert.equal(result.resolved[0]?.info.uri, spotifyUri)
+    })
+
+    it("persists and hydrates ISRC for catalog YouTube search", async () => {
+        const spotifyUri = "https://open.spotify.com/track/4hqIKGKzDVJXCnD80y2fyn"
+        const persisted = persistedTrackFromLavalink({
+            encoded: "",
+            info: {
+                title: "Worth it",
+                author: "Outr3ach",
+                uri: spotifyUri,
+                duration: 259000,
+                isStream: false,
+                identifier: "4hqIKGKzDVJXCnD80y2fyn",
+                isSeekable: true,
+                sourceName: "spotify",
+                artworkUrl: null,
+                isrc: "USRC17600001",
+            },
+            requester: undefined,
+        } as never)
+        assert.equal(persisted?.isrc, "USRC17600001")
+        const result = await resolvePersistedTracks(null, [
+            stored({
+                uri: spotifyUri,
+                isrc: persisted?.isrc,
+            }),
+        ])
+        assert.equal(result.resolved[0]?.info.isrc, "USRC17600001")
     })
 
     it("hydrates public HTTP URIs as Queue metadata", async () => {
