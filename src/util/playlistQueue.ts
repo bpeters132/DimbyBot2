@@ -9,12 +9,12 @@ import {
 import { startPlaybackIfNeeded } from "./musicManager.js"
 import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
-import { tryGetBotClient } from "../lib/botClientRegistry.js"
-import {
-    companionPlaybackConfig,
-    resolveYoutubePlaybackTracks,
-} from "./youtubeCompanionPlayback.js"
 import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "./userMediaUrl.js"
+import {
+    isPlaylistLoadType,
+    queueMetadataTrackFromFields,
+    schedulePrefetchWindow,
+} from "./youtubePlaybackWindow.js"
 
 /** True when the player has a current track or upcoming queue entries. */
 export function playerHasQueueContent(player: Player): boolean {
@@ -41,57 +41,42 @@ function isResolvedTrack(track: unknown): track is Track {
     )
 }
 
-/** Parallel Lavalink lookups when loading saved playlists into the queue. */
-const PLAYLIST_RESOLVE_CONCURRENCY = 6
-
-async function resolveStoredTrackAtIndex(
-    player: Player,
-    uri: string,
-    requester: unknown
-): Promise<Track | null> {
-    // Defense in depth: skip private/Docker-internal hosts even if older rows bypassed
-    // playlistTracksPOST (Lavalink http:true would otherwise fetch the compose network).
-    if (isBlockedUserMediaUrl(uri)) {
-        return null
-    }
-    try {
-        const res = await player.search(uri, requester)
-        const first = res?.tracks?.[0]
-        return isResolvedTrack(first) ? first : null
-    } catch {
-        return null
-    }
-}
-
-/** Resolves stored playlist URIs via Lavalink (parallel, preserves track order). */
+/**
+ * Turns stored playlist rows into Queue metadata (no Lavalink search).
+ * Blocked User media URLs are counted as failed and omitted.
+ */
 export async function resolveStoredPlaylistTracks(
-    player: Player,
-    storedTracks: Pick<PlaylistTrackData, "uri">[],
+    _player: Player,
+    storedTracks: Pick<
+        PlaylistTrackData,
+        "uri" | "title" | "author" | "duration" | "thumbnailUrl"
+    >[],
     requester: unknown
 ): Promise<{ resolved: Track[]; failed: number }> {
     if (storedTracks.length === 0) {
         return { resolved: [], failed: 0 }
     }
-
-    const slots: (Track | null)[] = new Array(storedTracks.length).fill(null)
-    let nextIndex = 0
-
-    async function worker(): Promise<void> {
-        while (true) {
-            const i = nextIndex++
-            if (i >= storedTracks.length) return
-            slots[i] = await resolveStoredTrackAtIndex(player, storedTracks[i]!.uri, requester)
-        }
-    }
-
-    const workerCount = Math.min(PLAYLIST_RESOLVE_CONCURRENCY, storedTracks.length)
-    await Promise.all(Array.from({ length: workerCount }, () => worker()))
-
+    const requesterId =
+        typeof requester === "object" && requester !== null && "id" in requester
+            ? String((requester as { id?: unknown }).id ?? "")
+            : typeof requester === "string"
+              ? requester
+              : ""
     const resolved: Track[] = []
-    for (const track of slots) {
+    let failed = 0
+    for (const stored of storedTracks) {
+        const track = queueMetadataTrackFromFields({
+            title: stored.title ?? "Unknown",
+            author: stored.author ?? "Unknown",
+            uri: stored.uri,
+            duration: stored.duration ?? 0,
+            thumbnailUrl: stored.thumbnailUrl,
+            requesterId: requesterId || null,
+        })
         if (track) resolved.push(track)
+        else failed += 1
     }
-    return { resolved, failed: storedTracks.length - resolved.length }
+    return { resolved, failed }
 }
 
 export type EnqueuePlaylistResult = {
@@ -138,22 +123,11 @@ async function enqueueTracksUnderLock(
         // Already holding the guild queue lock -- do not re-enter via rebalancePlayerQueueRoundRobin.
         await rebalancePlayerQueueRoundRobinAssumingLock(player)
     }
-    let playbackStarted = false
-    let playbackError: string | undefined
-    if (!player.playing) {
-        try {
-            await startPlaybackIfNeeded(player)
-            playbackStarted = true
-        } catch (error: unknown) {
-            playbackError = error instanceof Error ? error.message : String(error)
-        }
-    }
     schedulePlayerSessionSave(player)
     return {
         queued: toQueue.length,
         failed: 0,
-        playbackStarted,
-        playbackError,
+        playbackStarted: false,
     }
 }
 
@@ -168,23 +142,7 @@ export async function enqueueResolvedPlaylistTracks(
     if (tracks.length === 0) {
         return { queued: 0, failed: 0, playbackStarted: false }
     }
-    const liveForResolve = getLivePlayer()
-    if (!liveForResolve) return "no_player"
-    const playableTracks = (await resolveYoutubePlaybackTracks(
-        liveForResolve,
-        tracks,
-        companionPlaybackConfig(tryGetBotClient() ?? undefined)
-    )) as Track[]
-    const skipped = tracks.length - playableTracks.length
-    return withGuildPlayerQueueLock(guildId, async () => {
-        const live = getLivePlayer()
-        if (!live) return "no_player"
-        if (playableTracks.length === 0) {
-            return { queued: 0, failed: skipped, playbackStarted: false }
-        }
-        const result = await enqueueTracksUnderLock(live, playableTracks, requesterId, shuffle)
-        return { ...result, failed: skipped }
-    })
+    return finishPlaylistEnqueue(getLivePlayer, guildId, tracks, requesterId, shuffle, false)
 }
 
 /**
@@ -204,28 +162,31 @@ export async function replaceUpcomingWithResolvedPlaylistTracks(
     if (tracks.length === 0) {
         return { queued: 0, failed: 0, playbackStarted: false }
     }
-    const liveForResolve = getLivePlayer()
-    if (!liveForResolve) return "no_player"
-    const playableTracks = (await resolveYoutubePlaybackTracks(
-        liveForResolve,
-        tracks,
-        companionPlaybackConfig(tryGetBotClient() ?? undefined)
-    )) as Track[]
-    const skipped = tracks.length - playableTracks.length
-    if (playableTracks.length === 0) {
-        return { queued: 0, failed: skipped, playbackStarted: false }
-    }
-    return withGuildPlayerQueueLock(guildId, async () => {
+    return finishPlaylistEnqueue(getLivePlayer, guildId, tracks, requesterId, shuffle, true)
+}
+
+async function finishPlaylistEnqueue(
+    getLivePlayer: () => Player | undefined,
+    guildId: string,
+    tracks: Track[],
+    requesterId: string,
+    shuffle: boolean,
+    replaceUpcoming: boolean
+): Promise<EnqueuePlaylistResult | "no_player"> {
+    if (!getLivePlayer()) return "no_player"
+    const locked = await withGuildPlayerQueueLock(guildId, async () => {
         const live = getLivePlayer()
-        if (!live) return "no_player"
+        if (!live) return "no_player" as const
+        if (!replaceUpcoming) {
+            return enqueueTracksUnderLock(live, tracks, requesterId, shuffle)
+        }
         const savedUpcoming = snapshotUpcomingQueue(live)
         try {
             const size = live.queue.tracks.length
             if (size > 0) {
                 await live.queue.splice(0, size)
             }
-            const result = await enqueueTracksUnderLock(live, playableTracks, requesterId, shuffle)
-            return { ...result, failed: skipped }
+            return await enqueueTracksUnderLock(live, tracks, requesterId, shuffle)
         } catch (enqueueErr: unknown) {
             try {
                 const size = live.queue.tracks.length
@@ -250,6 +211,22 @@ export async function replaceUpcomingWithResolvedPlaylistTracks(
             throw enqueueErr
         }
     })
+    if (locked === "no_player") return "no_player"
+
+    const liveAfter = getLivePlayer()
+    if (!liveAfter) return "no_player"
+    let playbackStarted = locked.playbackStarted
+    let playbackError = locked.playbackError
+    if (!liveAfter.playing) {
+        try {
+            await startPlaybackIfNeeded(liveAfter)
+            playbackStarted = true
+        } catch (error: unknown) {
+            playbackError = error instanceof Error ? error.message : String(error)
+        }
+    }
+    schedulePrefetchWindow(getLivePlayer, guildId)
+    return { ...locked, playbackStarted, playbackError }
 }
 
 export type PlaylistTrackSearchHit = {
@@ -258,10 +235,6 @@ export type PlaylistTrackSearchHit = {
     author: string
     duration: number
     thumbnailUrl: string | null
-}
-
-function isExternalPlaylistLoadType(loadType: string | undefined): boolean {
-    return loadType === "playlist" || loadType === "PLAYLIST_LOADED"
 }
 
 function trackToSearchHit(track: Track, fallbackUri: string): PlaylistTrackSearchHit {
@@ -306,7 +279,7 @@ export async function searchTracksForPlaylist(
         return { ok: false, error: "No tracks found." }
     }
 
-    if (isExternalPlaylistLoadType(res.loadType as string | undefined)) {
+    if (isPlaylistLoadType(res.loadType as string | undefined)) {
         const tracks: PlaylistTrackSearchHit[] = []
         for (const candidate of res.tracks) {
             if (isResolvedTrack(candidate)) {

@@ -42,8 +42,7 @@ export function PlayPlaylistMenu({
                 }
             } catch (error: unknown) {
                 if (cancelled) return
-                const message =
-                    error instanceof Error ? error.message : "Failed to load playlists."
+                const message = error instanceof Error ? error.message : "Failed to load playlists."
                 toast.error(message)
                 setPlaylists([])
             } finally {
@@ -87,17 +86,14 @@ export function PlayPlaylistMenu({
                 guildId,
                 playlist.id,
                 requesterId,
-                shuffle,
-                playlist.trackCount
+                shuffle
             )
             if (result.ok === false) {
                 toast.error(result.error)
                 return
             }
             const failNote =
-                result.data.failed > 0
-                    ? ` (${result.data.failed} could not be resolved)`
-                    : ""
+                result.data.failed > 0 ? ` (${result.data.failed} could not be resolved)` : ""
             toast.success(
                 `Queued ${result.data.queued} from "${result.data.playlistName}"${failNote}`
             )
@@ -161,4 +157,3 @@ export function PlayPlaylistMenu({
         </div>
     )
 }
-

@@ -143,8 +143,7 @@ export async function playPlaylistInGuildAction(
     guildId: string,
     playlistId: number,
     requesterDiscordUserId: string,
-    shuffle = false,
-    trackCount?: number
+    shuffle = false
 ): Promise<Ok<PlaylistPlayResponse> | Err> {
     try {
         const res = await serverFetchBot(`/api/guilds/${guildId}/player/play-playlist`, {
@@ -155,7 +154,7 @@ export async function playPlaylistInGuildAction(
                 requesterDiscordUserId,
             }),
             contentType: "application/json",
-            timeoutMs: playlistPlayTimeoutMs(trackCount ?? 1),
+            timeoutMs: playlistPlayTimeoutMs(),
         })
         const parsed = await parseApiResponse<PlaylistPlayResponse>(res)
         if (parsed.ok === false && res.status === 504) {

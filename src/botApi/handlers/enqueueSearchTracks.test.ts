@@ -34,6 +34,9 @@ function mockMutablePlayer(guildId: string, initial: Track[] = [], playing = tru
                 const list = Array.isArray(items) ? items : [items]
                 tracks.push(...list)
             },
+            async splice(start: number, deleteCount: number, ...insert: Track[]) {
+                return tracks.splice(start, deleteCount, ...insert.flat())
+            },
         },
         get() {
             return undefined
@@ -73,5 +76,18 @@ describe("enqueueSearchTracksAssumingSearchDone", () => {
             "user-1"
         )
         assert.equal(outcome.status, "no_player")
+    })
+
+    it("enqueues every track when Lavalink reports PLAYLIST_LOADED", async () => {
+        const guildId = "guild-search-playlist-loaded"
+        const live = mockMutablePlayer(guildId, [])
+        const outcome = await enqueueSearchTracksAssumingSearchDone(
+            () => live,
+            guildId,
+            { loadType: "PLAYLIST_LOADED", tracks: [mockTrack("p1"), mockTrack("p2")] },
+            "user-1"
+        )
+        assert.equal(outcome.status, "ok")
+        assert.equal(live.queue.tracks.map((t) => t.info.title).join(","), "p1,p2")
     })
 })

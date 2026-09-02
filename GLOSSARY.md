@@ -67,3 +67,11 @@ _Avoid_: stream URL, companion URL, Lavalink HTTP source
 **Companion stream URL**:
 An HTTP address the bot mints from invidious-companion so Lavalink can play YouTube audio.
 _Avoid_: User media URL, youtube-source stream
+
+**Queue metadata**:
+A queued item that still has Catalog track or YouTube search identity (title, artist, URI) and is not yet YouTube playback.
+_Avoid_: unresolved track, pending track, placeholder, lazy track
+
+**Prefetch window**:
+The current queued item plus the next one or two upcoming items that should already have YouTube playback prepared.
+_Avoid_: look-ahead buffer, resolve window, play-ahead

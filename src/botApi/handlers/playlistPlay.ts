@@ -8,8 +8,8 @@ import { toPlayerStateResponse } from "../../shared/player-state.js"
 import { getPlaylistById } from "../../repositories/playlistRepository.js"
 import { searchAndEnqueue } from "./searchAndEnqueue.js"
 import {
+    enqueueResolvedPlaylistTracks,
     playerHasQueueContent,
-    replaceUpcomingWithResolvedPlaylistTracks,
     resolveStoredPlaylistTracks,
 } from "../../util/playlistQueue.js"
 import {
@@ -175,11 +175,9 @@ export async function playerPlaylistPlayPOST(
                 }
             }
 
-            // Clear + enqueue must share one guild lock so a concurrent queue POST cannot
-            // succeed then be wiped by clearUpcoming between unlocked clear and locked add.
-            // Re-resolve under that lock: /stop (etc.) can destroy during resolve despite the
-            // reservation, and mutating the captured Player would resurrect the session.
-            const enqueue = await replaceUpcomingWithResolvedPlaylistTracks(
+            // Append (same as Discord /playlist play). Re-resolve the live player so
+            // /stop during hydrate cannot mutate a stale Player and resurrect its session.
+            const enqueue = await enqueueResolvedPlaylistTracks(
                 () => client.lavalink.getPlayer(guildId),
                 guildId,
                 resolved,

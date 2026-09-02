@@ -156,7 +156,8 @@ export function catalogYoutubeSearchQueries(track: Track | UnresolvedTrack): str
 
 const COMPANION_RESOLVED_FLAG = "invidiousCompanionResolved"
 
-function isCompanionResolvedTrack(track: Track | UnresolvedTrack): boolean {
+/** True when this queue item already has a Companion stream URL minted. */
+export function isCompanionResolvedTrack(track: Track | UnresolvedTrack): boolean {
     const userData = (track as { userData?: unknown }).userData
     return (
         typeof userData === "object" &&
@@ -460,10 +461,11 @@ async function resolveSpotifyCatalogPlaybackTrack(
 export async function resolveYoutubePlaybackTrack(
     player: Player,
     track: Track | UnresolvedTrack,
-    config: CompanionPlaybackConfig | null = companionPlaybackConfigFromEnv()
+    config: CompanionPlaybackConfig | null = companionPlaybackConfigFromEnv(),
+    options?: { force?: boolean }
 ): Promise<Track | UnresolvedTrack> {
     const log = companionLogger(config)
-    if (isCompanionResolvedTrack(track)) return track
+    if (!options?.force && isCompanionResolvedTrack(track)) return track
     if (isSpotifyCatalogTrack(track)) {
         return resolveSpotifyCatalogPlaybackTrack(player, track, config)
     }
