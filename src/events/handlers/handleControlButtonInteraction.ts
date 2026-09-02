@@ -3,6 +3,7 @@ import type BotClient from "../../lib/BotClient.js"
 import { getGuildSettings, isGuildSettingsInitialized } from "../../util/saveControlChannel.js"
 import { toggleAutoplay } from "../../util/autoplayHistory.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
+import { getLivePlayerIfUnchanged } from "../../util/livePlayerIdentity.js"
 import { startPlaybackIfNeeded } from "../../util/musicManager.js"
 import { updateControlMessage } from "./handleControlChannel.js"
 
@@ -220,6 +221,23 @@ export async function handleControlButtonInteraction(
                     client.warn("[ControlButtonHandler] Play/Pause clicked but no current track.")
                     break
                 }
+                if (
+                    !getLivePlayerIfUnchanged(() => client.lavalink?.getPlayer(guildId), player)
+                ) {
+                    client.warn(
+                        `[ControlButtonHandler] Aborting play/pause: player replaced for guild ${guildId}.`
+                    )
+                    try {
+                        await interaction.followUp({
+                            content:
+                                "The player was replaced. Try the control again on the current session.",
+                            ephemeral: true,
+                        })
+                    } catch {
+                        /* Ignore */
+                    }
+                    break
+                }
                 if (player.playing) {
                     client.debug("[ControlButtonHandler] Player is playing. Attempting to pause.")
                     try {
@@ -282,6 +300,24 @@ export async function handleControlButtonInteraction(
                                         "[ControlButtonHandler] User in correct VC, attempting player reconnect."
                                     )
                                     await player.connect()
+                                    // connect() awaits Discord voice; a successor may own the slot now.
+                                    // play() is guild-keyed — refuse to drive Lavalink for a replaced Player.
+                                    if (
+                                        !getLivePlayerIfUnchanged(
+                                            () => client.lavalink?.getPlayer(guildId),
+                                            player
+                                        )
+                                    ) {
+                                        client.warn(
+                                            `[ControlButtonHandler] Aborting play after connect: player replaced for guild ${guildId}.`
+                                        )
+                                        await interaction.followUp({
+                                            content:
+                                                "The player was replaced during reconnect. Try the control again.",
+                                            ephemeral: true,
+                                        })
+                                        break
+                                    }
                                     client.debug("[ControlButtonHandler] Reconnected player.")
                                 } else {
                                     client.error(
@@ -308,6 +344,19 @@ export async function handleControlButtonInteraction(
             }
             case "control_stop": {
                 try {
+                    if (
+                        !getLivePlayerIfUnchanged(() => client.lavalink?.getPlayer(guildId), player)
+                    ) {
+                        client.warn(
+                            `[ControlButtonHandler] Aborting stop: player replaced for guild ${guildId}.`
+                        )
+                        await interaction.followUp({
+                            content:
+                                "The player was replaced. Try the control again on the current session.",
+                            ephemeral: true,
+                        })
+                        break
+                    }
                     await player.destroy()
                     actionTaken = true
                     client.debug("[ControlButtonHandler] Player stopped")
@@ -337,14 +386,29 @@ export async function handleControlButtonInteraction(
                 }
 
                 try {
-                    if (player.queue.tracks.length > 0) {
+                    const live = getLivePlayerIfUnchanged(
+                        () => client.lavalink?.getPlayer(guildId),
+                        player
+                    )
+                    if (!live) {
+                        client.warn(
+                            `[ControlButtonHandler] Aborting skip: player replaced for guild ${guildId}.`
+                        )
+                        await interaction.followUp({
+                            content:
+                                "The player was replaced. Try the control again on the current session.",
+                            ephemeral: true,
+                        })
+                        break
+                    }
+                    if (live.queue.tracks.length > 0) {
                         client.debug("[ControlButtonHandler] player.skip() (queued tracks exist).")
-                        await player.skip()
+                        await live.skip()
                     } else {
                         client.debug(
                             "[ControlButtonHandler] player.skip(0, false) — only current track (e.g. autoplay)."
                         )
-                        await player.skip(0, false)
+                        await live.skip(0, false)
                     }
                     actionTaken = true
                     try {
