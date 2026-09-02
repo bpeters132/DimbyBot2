@@ -6,6 +6,8 @@ import {
     catalogYoutubeSearchQueries,
     companionLatestVersionPath,
     ensureCompanionOriginStreamUrl,
+    applyPlaybackDuration,
+    companionLengthMsFromPlayerJson,
     overlayCatalogIdentity,
     overlayYoutubeMetadata,
     pickPreferredAudioItag,
@@ -242,15 +244,19 @@ describe("youtube companion itag + URL helpers", () => {
         )
     })
 
-    it("copies YouTube metadata onto the HTTP track", () => {
-        const yt = youtubeTrack()
-        const http = overlayYoutubeMetadata(httpTrackFromSearch(), yt)
+    it("copies YouTube metadata onto the HTTP track without replacing Playback duration", () => {
+        const yt = youtubeTrack({ duration: 213000 })
+        const http = httpTrackFromSearch()
+        http.info.duration = 300000
+        http.info.isStream = false
+        overlayYoutubeMetadata(http, yt)
         assert.equal(http.info.title, yt.info.title)
         assert.equal(http.info.author, yt.info.author)
         assert.equal(http.info.uri, yt.info.uri)
         assert.equal(http.info.identifier, VIDEO_ID)
         assert.equal(http.info.sourceName, "youtube")
         assert.equal(http.info.artworkUrl, yt.info.artworkUrl)
+        assert.equal(http.info.duration, 300000)
         assert.equal(http.requester, "user-1")
         assert.equal(http.encoded, "http-encoded")
         assert.equal(
@@ -262,22 +268,62 @@ describe("youtube companion itag + URL helpers", () => {
 
     it("overlays Spotify catalog identity onto the companion HTTP track", () => {
         const catalog = spotifyTrack()
-        const http = overlayCatalogIdentity(
-            overlayYoutubeMetadata(httpTrackFromSearch(), youtubeTrack()),
+        const http = httpTrackFromSearch()
+        http.info.duration = 300000
+        const overlaid = overlayCatalogIdentity(
+            overlayYoutubeMetadata(http, youtubeTrack({ duration: 213000 })),
             catalog
         )
-        assert.equal(http.info.title, "Worth it")
-        assert.equal(http.info.author, "Outr3ach")
-        assert.equal(http.info.uri, catalog.info.uri)
-        assert.equal(http.info.identifier, catalog.info.identifier)
-        assert.equal(http.info.sourceName, "spotify")
-        assert.equal(http.info.isrc, "USRC17600001")
-        assert.equal(http.encoded, "http-encoded")
+        assert.equal(overlaid.info.title, "Worth it")
+        assert.equal(overlaid.info.author, "Outr3ach")
+        assert.equal(overlaid.info.uri, `https://www.youtube.com/watch?v=${VIDEO_ID}`)
+        assert.equal(overlaid.info.identifier, catalog.info.identifier)
+        assert.equal(overlaid.info.sourceName, "spotify")
+        assert.equal(overlaid.info.isrc, "USRC17600001")
+        assert.equal(overlaid.info.duration, 300000)
+        assert.equal(overlaid.encoded, "http-encoded")
         assert.equal(
-            (http as { userData?: { invidiousCompanionResolved?: boolean } }).userData
+            (overlaid as { userData?: { invidiousCompanionResolved?: boolean } }).userData
                 ?.invidiousCompanionResolved,
             true
         )
+    })
+
+    it("stamps Playback duration from HTTP, then companion length, then YouTube search", () => {
+        assert.equal(
+            companionLengthMsFromPlayerJson({ videoDetails: { lengthSeconds: "300" } }),
+            300000
+        )
+        assert.equal(
+            companionLengthMsFromPlayerJson({ video_details: { length_seconds: 250 } }),
+            250000
+        )
+        assert.equal(companionLengthMsFromPlayerJson({}), null)
+
+        const httpReady = httpTrackFromSearch()
+        httpReady.info.duration = 400000
+        applyPlaybackDuration(httpReady, {
+            companionLengthMs: 300000,
+            youtubeSearchDurationMs: 213000,
+        })
+        assert.equal(httpReady.info.duration, 400000)
+        assert.equal(httpReady.info.isStream, false)
+
+        const httpCompanion = httpTrackFromSearch()
+        applyPlaybackDuration(httpCompanion, {
+            companionLengthMs: 300000,
+            youtubeSearchDurationMs: 213000,
+        })
+        assert.equal(httpCompanion.info.duration, 300000)
+        assert.equal(httpCompanion.info.isStream, false)
+
+        const httpYoutube = httpTrackFromSearch()
+        applyPlaybackDuration(httpYoutube, {
+            companionLengthMs: null,
+            youtubeSearchDurationMs: 213000,
+        })
+        assert.equal(httpYoutube.info.duration, 213000)
+        assert.equal(httpYoutube.info.isStream, false)
     })
 
     it("builds LavaSrc-style catalog YouTube search queries", () => {
@@ -470,6 +516,39 @@ describe("resolveYoutubePlaybackTrack", () => {
         )
     })
 
+    it("uses companion lengthSeconds when Lavalink HTTP duration is 0", async () => {
+        const player = mockPlayer(async () => ({ tracks: [httpTrackFromSearch()] }))
+        const result = await resolveYoutubePlaybackTrack(
+            player,
+            youtubeTrack({ duration: 213000 }),
+            configWithFetch(async (url, init) => {
+                if (init?.method === "POST") {
+                    return jsonResponse({
+                        playabilityStatus: { status: "OK" },
+                        videoDetails: { lengthSeconds: "300" },
+                        streamingData: {
+                            adaptiveFormats: [{ itag: 251, mimeType: "audio/webm; codecs=opus" }],
+                        },
+                    })
+                }
+                return companionOkFetch()(url, init)
+            })
+        )
+        assert.equal(result.info.duration, 300000)
+        assert.equal(result.info.isStream, false)
+    })
+
+    it("falls back to YouTube search duration when HTTP and companion length are missing", async () => {
+        const player = mockPlayer(async () => ({ tracks: [httpTrackFromSearch()] }))
+        const result = await resolveYoutubePlaybackTrack(
+            player,
+            youtubeTrack({ duration: 213000 }),
+            configWithFetch(companionOkFetch())
+        )
+        assert.equal(result.info.duration, 213000)
+        assert.equal(result.info.isStream, false)
+    })
+
     it("does not re-resolve a track already proxied through companion", async () => {
         let fetched = false
         const already = overlayYoutubeMetadata(httpTrackFromSearch(), youtubeTrack())
@@ -504,9 +583,10 @@ describe("Spotify catalog → YouTube search → companion", () => {
         )
         assert.equal(searched[0], 'ytsearch:"USRC17600001"')
         assert.equal(result.info.sourceName, "spotify")
-        assert.equal(result.info.uri, catalog.info.uri)
+        assert.equal(result.info.uri, `https://www.youtube.com/watch?v=${VIDEO_ID}`)
         assert.equal(result.info.identifier, catalog.info.identifier)
         assert.equal(result.info.title, "Worth it")
+        assert.equal(result.info.duration, 213000)
         assert.equal((result as Track).encoded, "http-encoded")
         assert.equal(
             (result as { userData?: { invidiousCompanionResolved?: boolean } }).userData

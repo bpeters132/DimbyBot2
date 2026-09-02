@@ -6,5 +6,5 @@ LavaSrc can load Spotify URLs as **catalog tracks**, but it has no native Spotif
 
 - Leave LavaSrc to YouTube-search at play time — rejected; that is the login-wall path.
 - Translate SoundCloud (and every non-YouTube source) the same way — rejected; SoundCloud already has a native Lavalink source.
-- Replace queue identity with the YouTube hit — rejected; now-playing and restore should keep the Spotify URI.
+- Replace queue identity with the YouTube hit — rejected for title/artist/ISRC; the clickable now-playing link is the Playback URL (YouTube watch URL) after prepare (see ADR 0006).
 - YouTube OAuth so LavaSrc can play catalog tracks through youtube-plugin — rejected; companion HTTP remains the playback path.
