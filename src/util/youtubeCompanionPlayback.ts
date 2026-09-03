@@ -144,16 +144,24 @@ export function isSpotifyCatalogTrack(track: Track | UnresolvedTrack): boolean {
     return isSpotifyCatalogUri(track.info?.uri?.trim() ?? "")
 }
 
-/** LavaSrc-compatible YouTube searches: quoted ISRC, then title + author. */
+/**
+ * LavaSrc-compatible YouTube searches: quoted ISRC, then quoted title + author.
+ * Title/author must stay quoted: lavalink-client strips `ytsearch:` and treats a bare
+ * `http(s)://…` remainder as a raw `/loadtracks` identifier (SSRF via playlist metadata).
+ */
 export function catalogYoutubeSearchQueries(track: Track | UnresolvedTrack): string[] {
     const queries: string[] = []
     const isrc = track.info?.isrc?.trim()
-    if (isrc) queries.push(`ytsearch:"${isrc}"`)
+    if (isrc) queries.push(`ytsearch:"${stripEmbeddedQuotes(isrc)}"`)
     const title = track.info?.title?.trim() ?? ""
     const author = track.info?.author?.trim() ?? ""
     const q = `${title} ${author}`.trim()
-    if (q) queries.push(`ytsearch:${q}`)
+    if (q) queries.push(`ytsearch:"${stripEmbeddedQuotes(q)}"`)
     return queries
+}
+
+function stripEmbeddedQuotes(value: string): string {
+    return value.replace(/"/g, "")
 }
 
 const COMPANION_RESOLVED_FLAG = "invidiousCompanionResolved"

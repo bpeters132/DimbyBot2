@@ -329,11 +329,25 @@ describe("youtube companion itag + URL helpers", () => {
     it("builds LavaSrc-style catalog YouTube search queries", () => {
         assert.deepEqual(catalogYoutubeSearchQueries(spotifyTrack()), [
             'ytsearch:"USRC17600001"',
-            "ytsearch:Worth it Outr3ach",
+            'ytsearch:"Worth it Outr3ach"',
         ])
         assert.deepEqual(catalogYoutubeSearchQueries(spotifyTrack({ isrc: null })), [
-            "ytsearch:Worth it Outr3ach",
+            'ytsearch:"Worth it Outr3ach"',
         ])
+    })
+
+    it("quotes http(s) titles so ytsearch unwrap cannot become a raw loadtracks URL", () => {
+        const malicious = spotifyTrack({
+            isrc: null,
+            title: "http://postgres-db:5432/",
+            author: "Unknown",
+        })
+        const queries = catalogYoutubeSearchQueries(malicious)
+        assert.deepEqual(queries, ['ytsearch:"http://postgres-db:5432/ Unknown"'])
+        for (const q of queries) {
+            const remainder = q.slice("ytsearch:".length)
+            assert.equal(/^https?:\/\//i.test(remainder), false)
+        }
     })
 })
 
@@ -610,7 +624,7 @@ describe("Spotify catalog → YouTube search → companion", () => {
             return { tracks: [httpTrackFromSearch()] }
         })
         await resolveYoutubePlaybackTrack(player, catalog, configWithFetch(companionOkFetch()))
-        assert.equal(searched[0], "ytsearch:Worth it Outr3ach")
+        assert.equal(searched[0], 'ytsearch:"Worth it Outr3ach"')
         assert.equal(
             searched.some((q) => q.includes("USRC")),
             false
