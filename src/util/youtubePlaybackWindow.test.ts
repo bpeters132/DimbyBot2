@@ -316,6 +316,27 @@ describe("ensureCurrentPlayable + prefetch window", () => {
         assert.equal(isCompanionResolvedTrack(player.queue.current as Track), false)
     })
 
+    it("re-prepares when current is replaced during companion resolve", async () => {
+        const player = mockWindowPlayer("g-race-current", [], youtubeTrack(VIDEO_A, "first"))
+        let sawFirstPlayerPost = false
+        const fetchImpl: CompanionFetch = async (url, init) => {
+            if (init?.method === "POST") {
+                const body = JSON.parse(String(init.body ?? "{}")) as { videoId?: string }
+                if (body.videoId === VIDEO_A && !sawFirstPlayerPost) {
+                    sawFirstPlayerPost = true
+                    // Simulate skip/play-next replacing the head while prepare is in flight.
+                    player.queue.current = youtubeTrack(VIDEO_B, "successor")
+                }
+            }
+            return companionOkFetch()(url, init)
+        }
+        const result = await ensureCurrentPlayable(() => player, "g-race-current", configWithFetch(fetchImpl))
+        assert.equal(result, "ok")
+        assert.equal(player.queue.current?.info.identifier, VIDEO_B)
+        assert.equal(isCompanionResolvedTrack(player.queue.current as Track), true)
+        assert.equal(isYoutubePlaybackReady(player.queue.current as Track), true)
+    })
+
     it("prepares current plus the next two upcoming tracks only", async () => {
         assert.equal(PREFETCH_UPCOMING_COUNT, 2)
         const player = mockWindowPlayer(
@@ -501,6 +522,33 @@ describe("skip upcoming + companion retry", () => {
             configWithFetch(companionOkFetch())
         )
         assert.equal(result, "ok")
+        assert.equal(isCompanionResolvedTrack(player.queue.tracks[0] as Track), true)
+    })
+
+    it("re-prepares upcoming[0] when shuffle replaces it during resolve", async () => {
+        const player = mockWindowPlayer("g-race-upcoming", [
+            youtubeTrack(VIDEO_A, "first"),
+            youtubeTrack(VIDEO_B, "second"),
+        ])
+        let sawFirstPlayerPost = false
+        const fetchImpl: CompanionFetch = async (url, init) => {
+            if (init?.method === "POST") {
+                const body = JSON.parse(String(init.body ?? "{}")) as { videoId?: string }
+                if (body.videoId === VIDEO_A && !sawFirstPlayerPost) {
+                    sawFirstPlayerPost = true
+                    // Shuffle moved a different unresolved track into upcoming[0].
+                    await player.queue.splice(0, 1)
+                }
+            }
+            return companionOkFetch()(url, init)
+        }
+        const result = await ensureUpcomingHeadPlayable(
+            () => player,
+            "g-race-upcoming",
+            configWithFetch(fetchImpl)
+        )
+        assert.equal(result, "ok")
+        assert.equal(player.queue.tracks[0]?.info.identifier, VIDEO_B)
         assert.equal(isCompanionResolvedTrack(player.queue.tracks[0] as Track), true)
     })
 

@@ -195,12 +195,17 @@ export async function ensureCurrentPlayable(
                     live.queue.tracks[0] &&
                     queueTrackIdentity(live.queue.tracks[0]) === identity
                 ) {
-                    await replaceUpcomingAt(live, 0, identity, resolved)
-                    return "ok" as const
+                    const replaced = await replaceUpcomingAt(live, 0, identity, resolved)
+                    return replaced ? ("ok" as const) : ("continue" as const)
                 }
-                return "ok" as const
+                // Head moved during prepare (skip/shuffle/replace). Re-evaluate the live
+                // head — returning "ok" here would let startPlaybackIfNeeded play() an
+                // unprepared Queue-metadata track.
+                return "continue" as const
             })
-            return applied === "no_player" ? "no_player" : "ok"
+            if (applied === "no_player") return "no_player"
+            if (applied === "continue") continue
+            return "ok"
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err)
             if (!isPermanentYoutubePlaybackFailure(err)) {
@@ -254,12 +259,18 @@ async function ensureUpcomingSlotPlayable(
         const identity = queueTrackIdentity(track)
         try {
             const resolved = await prepareTrack(snapshot, track, config)
-            return await withGuildPlayerQueueLock(guildId, async () => {
+            const applied = await withGuildPlayerQueueLock(guildId, async () => {
                 const live = livePlayer(getLivePlayer, guildId)
-                if (!live) return "no_player"
-                await replaceUpcomingAt(live, index, identity, resolved)
-                return "ok"
+                if (!live) return "no_player" as const
+                const replaced = await replaceUpcomingAt(live, index, identity, resolved)
+                // Same race as ensureCurrentPlayable: skip/shuffle may have moved this
+                // slot. Returning "ok" without a successful replace lets skipCurrentTrack
+                // advance onto unprepared Queue metadata.
+                return replaced ? ("ok" as const) : ("continue" as const)
             })
+            if (applied === "no_player") return "no_player"
+            if (applied === "continue") continue
+            return "ok"
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err)
             if (!isPermanentYoutubePlaybackFailure(err)) {
