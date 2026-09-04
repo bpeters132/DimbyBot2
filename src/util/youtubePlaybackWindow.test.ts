@@ -198,6 +198,17 @@ describe("playlist load type + metadata helpers", () => {
             isrc: "USRC17600001",
         })
         assert.equal(withIsrc?.info.isrc, "USRC17600001")
+        const httpMeta = queueMetadataTrackFromFields({
+            title: "File",
+            author: "Host",
+            uri: "https://example.com/track.mp3",
+            duration: 1000,
+        })
+        assert.ok(httpMeta)
+        assert.equal(httpMeta.info.sourceName, "http")
+        assert.equal(httpMeta.encoded, "")
+        assert.equal(isYoutubePlaybackReady(httpMeta), false)
+        assert.equal(isYoutubePlaybackReady(httpReadyTrack("native")), true)
         assert.equal(
             queueMetadataTrackFromFields({
                 title: "x",
@@ -233,6 +244,49 @@ describe("ensureCurrentPlayable + prefetch window", () => {
         )
         assert.equal(result, "ok")
         assert.equal(isYoutubePlaybackReady(player.queue.current as Track), true)
+    })
+
+    it("hydrates HTTP Queue metadata via Lavalink search before play", async () => {
+        const meta = queueMetadataTrackFromFields({
+            title: "File",
+            author: "Host",
+            uri: "https://example.com/track.mp3",
+            duration: 1000,
+            requesterId: "user-restore",
+        })
+        assert.ok(meta)
+        assert.equal(isYoutubePlaybackReady(meta), false)
+        const player = mockWindowPlayer("g-http-meta", [], meta)
+        const result = await ensureCurrentPlayable(
+            () => player,
+            "g-http-meta",
+            configWithFetch(companionOkFetch())
+        )
+        assert.equal(result, "ok")
+        const current = player.queue.current as Track
+        assert.ok(current)
+        assert.equal(isYoutubePlaybackReady(current), true)
+        assert.ok(typeof current.encoded === "string" && current.encoded.length > 0)
+        assert.equal(current.requester, "user-restore")
+    })
+
+    it("skips HTTP metadata when Lavalink search returns nothing", async () => {
+        const meta = queueMetadataTrackFromFields({
+            title: "Missing",
+            author: "Host",
+            uri: "https://example.com/gone.mp3",
+            duration: 1000,
+        })
+        assert.ok(meta)
+        const player = mockWindowPlayer("g-http-miss", [], meta)
+        player.search = async () => ({ tracks: [] }) as never
+        const result = await ensureCurrentPlayable(
+            () => player,
+            "g-http-miss",
+            configWithFetch(companionOkFetch())
+        )
+        assert.equal(result, "empty")
+        assert.equal(player.queue.current, null)
     })
 
     it("skips permanently unplayable head items and starts the next playable", async () => {
