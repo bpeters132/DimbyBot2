@@ -22,6 +22,7 @@ import {
 } from "./musicManagerEnqueue.js"
 import { stampRequesterUserIdOnTracks } from "./rrqDisconnect.js"
 import { memberMayJoinOccupiedVoice, resolveOccupiedVoiceChannelId } from "./sameVoiceChannel.js"
+import type { CompanionPlaybackConfig } from "./youtubeCompanionPlayback.js"
 import {
     ensureCurrentPlayable,
     isPlaylistLoadType,
@@ -46,8 +47,12 @@ const playerStartLocks = new WeakMap<Player, Promise<PlaybackStartResult>>()
 
 /**
  * Prevents concurrent check-then-play races by serializing start attempts per player.
+ * Optional `config` is for tests / callers that inject companion fetch; production omits it.
  */
-export async function startPlaybackIfNeeded(player: Player): Promise<PlaybackStartResult> {
+export async function startPlaybackIfNeeded(
+    player: Player,
+    config?: CompanionPlaybackConfig | null
+): Promise<PlaybackStartResult> {
     // After waiting on another caller’s lock, re-check: that run may have left playback idle while
     // new tracks were enqueued, so we must not return without attempting start under our own lock.
     for (;;) {
@@ -58,7 +63,7 @@ export async function startPlaybackIfNeeded(player: Player): Promise<PlaybackSta
         }
 
         const startPromise = (async (): Promise<PlaybackStartResult> => {
-            const prepared = await ensureCurrentPlayable(() => player, player.guildId)
+            const prepared = await ensureCurrentPlayable(() => player, player.guildId, config)
             if (prepared !== "ok") return prepared
             if (!player.playing && (player.queue.current || player.queue.tracks.length > 0)) {
                 await player.play()
