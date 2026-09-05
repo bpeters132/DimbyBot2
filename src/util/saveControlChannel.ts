@@ -154,8 +154,11 @@ export type SaveGuildSettingsOptions = {
 }
 
 /**
- * Persists guild settings to database. On success, replaces the in-memory cache with `settings`.
- * @returns whether the database write succeeded
+ * Persists guild settings to database. On success, replaces the in-memory cache with the
+ * merged store that was written (or a successful post-write reload).
+ * @returns whether the database **write** succeeded — a post-write cache reload failure must
+ * not report false after a successful replace (callers like `/control-channel set` delete the
+ * newly posted control message when this returns false, while the DB still points at it).
  */
 export async function saveGuildSettings(
     settings: GuildSettingsStore,
@@ -222,9 +225,19 @@ export async function saveGuildSettings(
             const result = await guildSettingsStoreDb.replaceGuildSettingsStoreInDatabase(merged, {
                 deleteGuildIds: effectiveDeleteGuildIds,
             })
-            const reloaded = await readGuildSettingsFromDatabase(logger)
-            guildSettingsCache = cloneGuildSettingsStore(reloaded)
+            // Write succeeded: seed cache from what we persisted before attempting reload.
+            guildSettingsCache = cloneGuildSettingsStore(merged)
             guildSettingsInitialized = true
+            try {
+                const reloaded = await readGuildSettingsFromDatabase(logger)
+                guildSettingsCache = cloneGuildSettingsStore(reloaded)
+            } catch (reloadError: unknown) {
+                // Keep the merged write in cache; returning false here would make
+                // `/control-channel set` delete the Discord message the DB still references.
+                logger.error(
+                    `[guildSettings] Post-write reload failed after successful persist; using written snapshot for cache: ${reloadError}`
+                )
+            }
             logger.debug(
                 `[guildSettings] Successfully saved guild settings (upserted=${result.rowsUpserted}, deleted=${result.rowsDeleted}, affected=${result.rowsAffected}).`
             )
