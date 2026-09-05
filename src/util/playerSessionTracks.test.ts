@@ -56,7 +56,6 @@ describe("resolvePersistedTracks metadata hydrate", () => {
         assert.equal(result.resolved[0]?.info.uri, spotifyUri)
     })
 
-<<<<<<< HEAD
     it("persists and hydrates ISRC for catalog YouTube search", async () => {
         const spotifyUri = "https://open.spotify.com/track/4hqIKGKzDVJXCnD80y2fyn"
         const persisted = persistedTrackFromLavalink({
