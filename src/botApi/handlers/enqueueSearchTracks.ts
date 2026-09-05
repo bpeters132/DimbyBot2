@@ -2,6 +2,7 @@ import type { Player, Track, UnresolvedTrack } from "lavalink-client"
 import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { startPlaybackIfNeeded } from "../../util/musicManager.js"
+import { playbackStartedFromStartResult } from "../../util/playbackStartedFlag.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 import { isPlaylistLoadType, schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 
@@ -59,7 +60,8 @@ export async function enqueueSearchTracksAssumingSearchDone(
         return {
             status: "ok",
             player: liveAfter,
-            playbackStarted: !locked.wasPlaying && (liveAfter.playing || started === "ok"),
+            playbackStarted:
+                !locked.wasPlaying && playbackStartedFromStartResult(started, liveAfter.playing),
         }
     } catch (error: unknown) {
         const playbackError = error instanceof Error ? error.message : String(error)
