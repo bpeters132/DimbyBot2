@@ -1,9 +1,6 @@
 import { Prisma } from "@prisma/client"
 import { getPrismaClient } from "../lib/database.js"
-import type {
-    DownloadMetadataStoreSkippedEntry,
-    DownloadsMetadataStore,
-} from "../types/index.js"
+import type { DownloadMetadataStoreSkippedEntry, DownloadsMetadataStore } from "../types/index.js"
 import {
     downloadMetadataStoreKey,
     parseDownloadMetadataStoreKey,

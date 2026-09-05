@@ -224,9 +224,7 @@ export async function handleControlButtonInteraction(
                     client.warn("[ControlButtonHandler] Play/Pause clicked but no current track.")
                     break
                 }
-                if (
-                    !getLivePlayerIfUnchanged(() => client.lavalink?.getPlayer(guildId), player)
-                ) {
+                if (!getLivePlayerIfUnchanged(() => client.lavalink?.getPlayer(guildId), player)) {
                     client.warn(
                         `[ControlButtonHandler] Aborting play/pause: player replaced for guild ${guildId}.`
                     )

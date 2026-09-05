@@ -17,13 +17,15 @@ function isValidTimeZone(timeZone: string): boolean {
 
 /**
  * Returns the offset (ms) of `timeZone` from UTC at the given instant.
- * Positive means the zone is ahead of UTC. Uses the locale-string round-trip technique
- * so no external date library is required.
+ * Positive means the zone is ahead of UTC. Derived from `Intl` wall-clock parts so
+ * ambiguous fall-back hours are not mis-parsed by `Date` locale-string round-trips.
  */
 function timeZoneOffsetMs(timeZone: string, instant: Date): number {
-    const tzDate = new Date(instant.toLocaleString("en-US", { timeZone }))
-    const utcDate = new Date(instant.toLocaleString("en-US", { timeZone: "UTC" }))
-    return tzDate.getTime() - utcDate.getTime()
+    const wall = wallClockParts(timeZone, instant)
+    if (!wall) return 0
+    const wallAsUtc = Date.UTC(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute)
+    const instantMin = Math.floor(instant.getTime() / 60_000) * 60_000
+    return wallAsUtc - instantMin
 }
 
 /** Wall-clock Y/M/D/H/M components of `instant` in `timeZone` (24h). */
@@ -59,7 +61,8 @@ function wallClockParts(
  * Converts a wall-clock `date` (`YYYY-MM-DD`) and `time` (`HH:MM`, 24h) interpreted in
  * `timeZone` (IANA name) to a Unix timestamp in seconds. Validates formats, calendar validity,
  * and the time zone. Offset is iterated at the candidate instant so DST transitions are correct;
- * nonexistent spring-forward gap times are rejected.
+ * nonexistent spring-forward gap times are rejected; ambiguous fall-back hours use the
+ * earlier (still-DST) occurrence.
  */
 export function parseEventDateTime(
     date: string,
@@ -118,6 +121,21 @@ export function parseEventDateTime(
             ok: false,
             error: "That local time does not exist on that date (DST transition gap).",
         }
+    }
+
+    // Fall-back overlap: the same wall time exists twice. Prefer the earlier instant
+    // (first occurrence / still on DST) when that hour also maps to the requested clock.
+    const earlierMs = epochMs - 60 * 60 * 1000
+    const earlierWall = wallClockParts(timeZone, new Date(earlierMs))
+    if (
+        earlierWall &&
+        earlierWall.year === year &&
+        earlierWall.month === month &&
+        earlierWall.day === day &&
+        earlierWall.hour === hour &&
+        earlierWall.minute === minute
+    ) {
+        epochMs = earlierMs
     }
 
     return { ok: true, epochSeconds: Math.floor(epochMs / 1000) }

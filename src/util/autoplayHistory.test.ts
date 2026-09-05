@@ -258,10 +258,7 @@ describe("seedAutoplayHistoryFromPlayer", () => {
 
         seedAutoplayHistoryFromPlayer(player)
 
-        assert.equal(
-            isAutoplayRecentlyPlayed(player, info({ author: "A", title: "Older" })),
-            true
-        )
+        assert.equal(isAutoplayRecentlyPlayed(player, info({ author: "A", title: "Older" })), true)
         assert.equal(
             isAutoplayRecentlyPlayed(player, info({ author: "B", title: "Just Ended" })),
             true

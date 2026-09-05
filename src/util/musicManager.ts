@@ -24,10 +24,7 @@ import {
 import { stampRequesterUserIdOnTracks } from "./rrqDisconnect.js"
 import { memberMayJoinOccupiedVoice, resolveOccupiedVoiceChannelId } from "./sameVoiceChannel.js"
 import { startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
-import {
-    isPlaylistLoadType,
-    schedulePrefetchWindow,
-} from "./youtubePlaybackWindow.js"
+import { isPlaylistLoadType, schedulePrefetchWindow } from "./youtubePlaybackWindow.js"
 import {
     isBlockedUserMediaUrl,
     trimmedHttpUrlQuery,
@@ -662,9 +659,7 @@ export async function handleQueryAndPlay(
                             const enqueued = await enqueueMusicManagerTracksAssumingSearchDone(
                                 () => {
                                     const live = client.lavalink.getPlayer(guildId)
-                                    return isSameLivePlayer(live, expectedPlayer)
-                                        ? live
-                                        : undefined
+                                    return isSameLivePlayer(live, expectedPlayer) ? live : undefined
                                 },
                                 guildId,
                                 {

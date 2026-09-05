@@ -135,44 +135,43 @@ export async function playLocalFile(
         let postLavalinkHandoff: Promise<void> = new Promise((r) => queueMicrotask(r))
         let sessionHandoff: LocalPlaySessionHandoff | null = null
 
-    const abortIfCancelled = async (
-        connection?: VoiceConnection
-    ): Promise<QueryPlayResult | null> => {
-        if ((pendingLocalPlayCancelEpochByGuild.get(guildId) ?? 0) === cancelEpochAtStart) {
-            return null
-        }
-        if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
-            connection.destroy()
-        }
-        if (sessionHandoff) {
-            try {
-                const liveAfter = client.lavalink.getPlayer(guildId)
-                if (
-                    !lavalinkPlayer ||
-                    shouldClearSessionAfterFailedHandoffDestroy(lavalinkPlayer, liveAfter)
-                ) {
-                    await sessionHandoff.clearSessionAfterLocalReady()
-                } else {
-                    sessionHandoff.releaseLeftoverSuppressLease()
-                    client.debug(
-                        `[LocalPlayer] Skipping session clear after cancel for guild ${guildId}: successor owns the slot.`
+        const abortIfCancelled = async (
+            connection?: VoiceConnection
+        ): Promise<QueryPlayResult | null> => {
+            if ((pendingLocalPlayCancelEpochByGuild.get(guildId) ?? 0) === cancelEpochAtStart) {
+                return null
+            }
+            if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
+                connection.destroy()
+            }
+            if (sessionHandoff) {
+                try {
+                    const liveAfter = client.lavalink.getPlayer(guildId)
+                    if (
+                        !lavalinkPlayer ||
+                        shouldClearSessionAfterFailedHandoffDestroy(lavalinkPlayer, liveAfter)
+                    ) {
+                        await sessionHandoff.clearSessionAfterLocalReady()
+                    } else {
+                        sessionHandoff.releaseLeftoverSuppressLease()
+                        client.debug(
+                            `[LocalPlayer] Skipping session clear after cancel for guild ${guildId}: successor owns the slot.`
+                        )
+                    }
+                } catch (e: unknown) {
+                    const msg = e instanceof Error ? e.message : String(e)
+                    client.warn(
+                        `[LocalPlayer] session cleanup after cancel for guild ${guildId}: ${msg}`
                     )
                 }
-            } catch (e: unknown) {
-                const msg = e instanceof Error ? e.message : String(e)
-                client.warn(
-                    `[LocalPlayer] session cleanup after cancel for guild ${guildId}: ${msg}`
-                )
+            }
+            return {
+                success: false,
+                feedbackText: "Local playback was cancelled.",
+                error: new Error("pending local play cancelled"),
             }
         }
-        return {
-            success: false,
-            feedbackText: "Local playback was cancelled.",
-            error: new Error("pending local play cancelled"),
-        }
-    }
 
-    try {
         if (lavalinkPlayer) {
             client.debug(
                 `[LocalPlayer] Checking Lavalink player state for guild ${guildId}. Connected: ${lavalinkPlayer.connected}, Playing: ${lavalinkPlayer.playing}`
@@ -219,9 +218,7 @@ export async function playLocalFile(
                     // awaiting node.destroyPlayer. A successful Map.delete here would drop a
                     // concurrent createPlayer successor without destroying it.
                     if (
-                        shouldDeleteLavalinkPlayerAfterDestroy(
-                            client.lavalink.players.has(guildId)
-                        )
+                        shouldDeleteLavalinkPlayerAfterDestroy(client.lavalink.players.has(guildId))
                     ) {
                         client.lavalink.players.delete(guildId)
                     }

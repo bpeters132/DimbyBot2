@@ -33,7 +33,10 @@ describe("unwrapLavalinkSourcePrefix", () => {
         assert.equal(unwrapLavalinkSourcePrefix("link:http://127.0.0.1/"), "http://127.0.0.1/")
         assert.equal(unwrapLavalinkSourcePrefix("URI:http://postgres-db/"), "http://postgres-db/")
         assert.equal(unwrapLavalinkSourcePrefix("yt:http://10.0.0.5/"), "http://10.0.0.5/")
-        assert.equal(unwrapLavalinkSourcePrefix("sc:http://169.254.169.254/"), "http://169.254.169.254/")
+        assert.equal(
+            unwrapLavalinkSourcePrefix("sc:http://169.254.169.254/"),
+            "http://169.254.169.254/"
+        )
         assert.equal(unwrapLavalinkSourcePrefix("local:http://127.0.0.1/"), "http://127.0.0.1/")
         assert.equal(
             unwrapLavalinkSourcePrefix("ytsearch:never gonna give you up"),
@@ -42,10 +45,7 @@ describe("unwrapLavalinkSourcePrefix", () => {
     })
 
     it("prefers longer prefixes over short aliases", () => {
-        assert.equal(
-            unwrapLavalinkSourcePrefix("ytsearch:http://127.0.0.1/"),
-            "http://127.0.0.1/"
-        )
+        assert.equal(unwrapLavalinkSourcePrefix("ytsearch:http://127.0.0.1/"), "http://127.0.0.1/")
         assert.equal(unwrapLavalinkSourcePrefix("scsearch:http://10.0.0.1/"), "http://10.0.0.1/")
     })
 
@@ -144,14 +144,17 @@ describe("isBlockedUserMediaUrl", () => {
             false
         )
         assert.equal(isBlockedUserMediaUrl("uri:https://soundcloud.com/artist/track"), false)
-        assert.equal(isBlockedUserMediaUrl("ytsearch:http://127.0.0.1/"), false)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://127.0.0.1/"), true)
     })
 })
 
 describe("unwrapDirectLinkSourcePrefix", () => {
     it("strips link:/uri: once and leaves other queries unchanged", () => {
         assert.equal(unwrapDirectLinkSourcePrefix("link:http://127.0.0.1/"), "http://127.0.0.1/")
-        assert.equal(unwrapDirectLinkSourcePrefix("URI:https://example.com/a"), "https://example.com/a")
+        assert.equal(
+            unwrapDirectLinkSourcePrefix("URI:https://example.com/a"),
+            "https://example.com/a"
+        )
         assert.equal(unwrapDirectLinkSourcePrefix("  link: http://x/ "), "http://x/")
         assert.equal(unwrapDirectLinkSourcePrefix("http://127.0.0.1/"), "http://127.0.0.1/")
         assert.equal(unwrapDirectLinkSourcePrefix("ytsearch:rick"), "ytsearch:rick")

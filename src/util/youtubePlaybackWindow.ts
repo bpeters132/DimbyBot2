@@ -147,7 +147,7 @@ async function hydrateNativeMetadataTrack(
         res = await player.search(uri, track.requester)
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
-        throw new Error(`Lavalink search failed for ${uri}: ${msg}`)
+        throw new Error(`Lavalink search failed for ${uri}: ${msg}`, { cause: err })
     }
     const first = res?.tracks?.[0]
     const encoded =

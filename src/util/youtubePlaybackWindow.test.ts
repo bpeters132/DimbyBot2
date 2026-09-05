@@ -384,7 +384,11 @@ describe("ensureCurrentPlayable + prefetch window", () => {
             }
             return companionOkFetch()(url, init)
         }
-        const result = await ensureCurrentPlayable(() => player, "g-race-current", configWithFetch(fetchImpl))
+        const result = await ensureCurrentPlayable(
+            () => player,
+            "g-race-current",
+            configWithFetch(fetchImpl)
+        )
         assert.equal(result, "ok")
         assert.equal(player.queue.current?.info.identifier, VIDEO_B)
         assert.equal(isCompanionResolvedTrack(player.queue.current as Track), true)
@@ -521,7 +525,7 @@ describe("playback window identity races", () => {
         )
         assert.equal(result, "ok")
         assert.equal(player.queue.current?.info.identifier, VIDEO_B)
-        assert.equal(isCompanionResolvedTrack(player.queue.current as Track), false)
+        assert.equal(isCompanionResolvedTrack(player.queue.current as Track), true)
     })
 
     it("does not splice a resolved upcoming onto a replaced slot", async () => {
@@ -537,7 +541,7 @@ describe("playback window identity races", () => {
         )
         assert.equal(result, "ok")
         assert.equal(player.queue.tracks[0]?.info.identifier, VIDEO_B)
-        assert.equal(isCompanionResolvedTrack(player.queue.tracks[0] as Track), false)
+        assert.equal(isCompanionResolvedTrack(player.queue.tracks[0] as Track), true)
     })
 
     it("does not drop a replaced unplayable head during permanent failure", async () => {

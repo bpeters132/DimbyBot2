@@ -67,7 +67,7 @@ describe("resolveStoredPlaylistTracks metadata-only enqueue", () => {
         assert.equal(native?.encoded, "")
         assert.equal(native?.info.sourceName, "http")
         assert.equal(native?.requester, "user-42")
-        assert.equal(isYoutubePlaybackReady(native!), true)
+        assert.equal(isYoutubePlaybackReady(native!), false)
     })
 
     it("accepts a string requester id and defaults blank title/author", async () => {

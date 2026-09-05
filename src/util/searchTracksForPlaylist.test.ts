@@ -1,10 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import type { Player, Track } from "lavalink-client"
-import {
-    PLAYLIST_SEARCH_TRANSIENT_ERROR,
-    searchTracksForPlaylist,
-} from "./playlistQueue.js"
+import { PLAYLIST_SEARCH_TRANSIENT_ERROR, searchTracksForPlaylist } from "./playlistQueue.js"
 
 function resolvedTrack(opts: {
     title: string
@@ -82,11 +79,9 @@ describe("searchTracksForPlaylist", () => {
                 loadType,
                 tracks: [t1, unresolvedHit(), t2],
             }))
-            const result = await searchTracksForPlaylist(
-                player,
-                "https://example.com/list",
-                { id: "u1" }
-            )
+            const result = await searchTracksForPlaylist(player, "https://example.com/list", {
+                id: "u1",
+            })
             assert.equal(result.ok, true)
             if (result.ok === true) {
                 assert.equal(result.tracks.length, 2)
@@ -131,7 +126,10 @@ describe("searchTracksForPlaylist", () => {
     it("fails when the first non-playlist hit is unresolved", async () => {
         const player = mockPlayer(async () => ({
             loadType: "track",
-            tracks: [unresolvedHit(), resolvedTrack({ title: "Later", uri: "https://example.com/x" })],
+            tracks: [
+                unresolvedHit(),
+                resolvedTrack({ title: "Later", uri: "https://example.com/x" }),
+            ],
         }))
         const result = await searchTracksForPlaylist(player, "query", { id: "u1" })
         assert.equal(result.ok, false)

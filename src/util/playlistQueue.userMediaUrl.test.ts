@@ -1,10 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import type { Player } from "lavalink-client"
-import {
-    resolveStoredPlaylistTracks,
-    searchTracksForPlaylist,
-} from "./playlistQueue.js"
+import { resolveStoredPlaylistTracks, searchTracksForPlaylist } from "./playlistQueue.js"
 import { USER_MEDIA_URL_BLOCKED } from "./userMediaUrl.js"
 
 function mockPlayer(searchUris: string[]): Player {

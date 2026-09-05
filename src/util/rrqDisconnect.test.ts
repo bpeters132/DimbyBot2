@@ -49,10 +49,7 @@ function mockPlayer(tracks: Track[] = []): Player {
     } as unknown as Player
 }
 
-function mockMutableQueuePlayer(opts: {
-    current?: Track | null
-    tracks?: Track[]
-}): Player {
+function mockMutableQueuePlayer(opts: { current?: Track | null; tracks?: Track[] }): Player {
     const tracks = [...(opts.tracks ?? [])]
     const store = new Map<string, unknown>()
     return {

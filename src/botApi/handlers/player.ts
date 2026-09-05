@@ -117,9 +117,7 @@ export async function playerPOST(
                 break
             }
             case "stop":
-                await destroyLavalinkPlayerForStop(player, () =>
-                    client.lavalink.getPlayer(guildId)
-                )
+                await destroyLavalinkPlayerForStop(player, () => client.lavalink.getPlayer(guildId))
                 break
             case "seek":
                 if (

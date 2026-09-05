@@ -22,10 +22,7 @@ describe("normalizedRowsFromStore", () => {
         assert.equal(rows.length, 1)
         assert.equal(rows[0]?.guildId, "guild-ok")
         assert.equal(rows[0]?.fileName, "legacy.wav")
-        assert.deepEqual(
-            skippedEntries.map((e) => e.key).sort(),
-            [unknownKey, "orphan.wav"].sort()
-        )
+        assert.deepEqual(skippedEntries.map((e) => e.key).sort(), [unknownKey, "orphan.wav"].sort())
         assert.ok(skippedEntries.every((e) => e.reason === "unresolvable-guild-id"))
     })
 

@@ -1,11 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import type { Player, Track } from "lavalink-client"
-import {
-    clearUpcomingQueue,
-    restoreUpcomingQueue,
-    snapshotUpcomingQueue,
-} from "./playlistQueue.js"
+import { clearUpcomingQueue, restoreUpcomingQueue, snapshotUpcomingQueue } from "./playlistQueue.js"
 
 function mockTrack(id: string): Track {
     return {
