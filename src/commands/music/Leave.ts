@@ -8,7 +8,7 @@ import {
     cancelPendingLocalPlay,
 } from "../../util/localPlayer.js"
 import {
-    forceClearPlayerSession,
+    forceClearPlayerSessionIfNoLivePlayer,
     forceClearPlayerSessionAfterDestroyIfSafe,
 } from "../../util/playerSessionPersistence.js"
 import {
@@ -118,9 +118,12 @@ export default {
                         ) {
                             await botVoiceState?.disconnect()
                         }
-                        // Drop leftover local-handoff session only if still no live player.
+                        // Re-check at write time: a successor can persist between the last
+                        // liveStillAbsent() read and this delete.
                         if (liveStillAbsent()) {
-                            await forceClearPlayerSession(guild.id)
+                            await forceClearPlayerSessionIfNoLivePlayer(guild.id, () =>
+                                client.lavalink.getPlayer(guild.id)
+                            )
                         } else {
                             client.debug(
                                 `Leave: skipping force-clear for guild ${guild.id}; successor player already live`

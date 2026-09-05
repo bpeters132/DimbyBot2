@@ -65,6 +65,16 @@ describe("clearUpcomingOnLivePlayer", () => {
         const cleared = await clearUpcomingOnLivePlayer(() => undefined, "guild-clear-gone")
         assert.equal(cleared, 0)
     })
+
+    it("returns stale when a successor replaced the expected player", async () => {
+        const guildId = "guild-clear-successor"
+        const expected = mockMutablePlayer(guildId, [mockTrack("old-a")])
+        const successor = mockMutablePlayer(guildId, [mockTrack("new-a"), mockTrack("new-b")])
+        const cleared = await clearUpcomingOnLivePlayer(() => successor, guildId, expected)
+        assert.equal(cleared, "stale")
+        assert.equal(successor.queue.tracks.length, 2)
+        assert.equal(expected.queue.tracks.length, 1)
+    })
 })
 
 describe("shuffleUpcomingOnLivePlayer", () => {
@@ -89,5 +99,17 @@ describe("shuffleUpcomingOnLivePlayer", () => {
     it("returns false when the player was destroyed during the wait", async () => {
         const shuffled = await shuffleUpcomingOnLivePlayer(() => undefined, "guild-shuffle-gone")
         assert.equal(shuffled, false)
+    })
+
+    it("returns stale when a successor replaced the expected player", async () => {
+        const guildId = "guild-shuffle-successor"
+        const expected = mockMutablePlayer(guildId, [mockTrack("e1"), mockTrack("e2")])
+        const successor = mockMutablePlayer(guildId, [mockTrack("s1"), mockTrack("s2")])
+        const shuffled = await shuffleUpcomingOnLivePlayer(() => successor, guildId, expected)
+        assert.equal(shuffled, "stale")
+        assert.deepEqual(
+            successor.queue.tracks.map((t) => t.info.title),
+            ["s1", "s2"]
+        )
     })
 })

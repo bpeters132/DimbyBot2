@@ -220,7 +220,7 @@ async function finishPlaylistEnqueue(
     if (locked === "no_player") return "no_player"
 
     const liveAfter = getLivePlayer()
-    if (!liveAfter) return "no_player"
+    if (!liveAfter || liveAfter !== liveForResolve) return "no_player"
     let playbackStarted = locked.playbackStarted
     let playbackError = locked.playbackError
     if (!liveAfter.playing) {

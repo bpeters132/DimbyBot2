@@ -60,4 +60,10 @@ describe("isStaleSubscribeAttempt", () => {
         assert.equal(isStaleSubscribeAttempt(undefined, 1), true)
         assert.equal(isStaleSubscribeAttempt(0, 1), true)
     })
+
+    it("treats an unsubscribe generation bump as stale for the pending attempt", () => {
+        const pendingGeneration = 2
+        const afterUnsubscribe = pendingGeneration + 1
+        assert.equal(isStaleSubscribeAttempt(afterUnsubscribe, pendingGeneration), true)
+    })
 })

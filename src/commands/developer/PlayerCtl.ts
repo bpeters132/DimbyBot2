@@ -218,7 +218,19 @@ export default {
                         })
                         return
                     }
-                    await skipCurrentTrack(live)
+                    const skipped = await skipCurrentTrack(live, undefined, resolveLive)
+                    if (skipped === "stale") {
+                        await interaction.editReply({
+                            content: `❌ Player for Guild ID ${guildId} stopped or was replaced before skip finished.`,
+                        })
+                        return
+                    }
+                    if (skipped === "deferred") {
+                        await interaction.editReply({
+                            content: `❌ Could not skip in Guild ID ${guildId}; the next track is still preparing.`,
+                        })
+                        return
+                    }
                     await interaction.editReply(`✅ Force-skipped track in Guild ID: ${guildId}`)
                     client.debug(`[PlayerCtl] Force-skipped track for guild ${guildId}`)
                     break

@@ -142,6 +142,28 @@ describe("playlist enqueue live-player re-resolve", () => {
         assert.equal(resolvePlayer.queue.tracks.map((t) => t.info.title).join(","), "old")
     })
 
+    it("enqueueResolvedPlaylistTracks returns no_player when a successor appears after the lock", async () => {
+        const guildId = "guild-playlist-post-lock"
+        const original = mockMutablePlayer(guildId, [mockTrack("old")])
+        const successor = mockMutablePlayer(guildId, [mockTrack("kept")])
+        let calls = 0
+
+        const outcome = await enqueueResolvedPlaylistTracks(
+            () => {
+                calls += 1
+                return calls <= 2 ? original : successor
+            },
+            guildId,
+            [mockTrack("queued")],
+            "user-1",
+            false
+        )
+
+        assert.equal(outcome, "no_player")
+        assert.equal(original.queue.tracks.map((t) => t.info.title).join(","), "old,queued")
+        assert.equal(successor.queue.tracks.map((t) => t.info.title).join(","), "kept")
+    })
+
     it("replaceUpcomingWithResolvedPlaylistTracks refuses a successor after resolve", async () => {
         const guildId = "guild-playlist-replace-successor"
         const resolvePlayer = mockMutablePlayer(guildId, [mockTrack("old")])

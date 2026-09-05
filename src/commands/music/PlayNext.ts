@@ -65,9 +65,9 @@ export default {
         // had no reservation and could enqueue onto a destroyed Player after a false success).
         return withGuildPlayerLifecycleReservation(guild.id, async () => {
             const searchPlayer = client.lavalink.getPlayer(guild.id)
-            if (!searchPlayer) {
+            if (!isSameLivePlayer(searchPlayer, player)) {
                 return interaction.editReply({
-                    content: "The player stopped before the search finished. Try again.",
+                    content: "The player was replaced. Try again.",
                 })
             }
 
@@ -94,11 +94,10 @@ export default {
             }
 
             const track = res.tracks[0]
-            const searchPlayerRef = searchPlayer
             const outcome = await enqueuePlayNextTrackAssumingSearchDone(
                 () => {
                     const live = client.lavalink.getPlayer(guild.id)
-                    return isSameLivePlayer(live, searchPlayerRef) ? live : undefined
+                    return isSameLivePlayer(live, player) ? live : undefined
                 },
                 guild.id,
                 track,

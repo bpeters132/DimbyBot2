@@ -438,6 +438,10 @@ export class ConnectionManager {
         }
         meta.guildSubscriptions.delete(guildId)
         this.subscribeLastAttempt.delete(socket)
+        // Invalidate an in-flight subscribe awaiting permission resolution so it cannot
+        // complete after unsubscribe and re-subscribe the socket.
+        const currentGeneration = this.subscribeAttemptGeneration.get(socket) ?? 0
+        this.subscribeAttemptGeneration.set(socket, currentGeneration + 1)
     }
 
     private subscribe(socket: WebSocket, guildId: string): void {

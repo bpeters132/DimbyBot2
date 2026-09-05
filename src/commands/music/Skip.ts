@@ -71,7 +71,14 @@ export default {
         }
 
         try {
-            const skipped = await skipCurrentTrack(live)
+            const skipped = await skipCurrentTrack(live, undefined, () =>
+                client.lavalink.getPlayer(guild.id)
+            )
+            if (skipped === "stale") {
+                return interaction.editReply({
+                    content: "The player stopped before the skip finished. Try again.",
+                })
+            }
             if (skipped === "deferred") {
                 return interaction.editReply({
                     content:

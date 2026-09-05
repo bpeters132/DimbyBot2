@@ -52,8 +52,15 @@ export default {
         // Re-resolve under the lock so /stop during the wait cannot shuffle+save a zombie.
         const shuffled = await shuffleUpcomingOnLivePlayer(
             () => client.lavalink.getPlayer(guild.id),
-            guild.id
+            guild.id,
+            player
         )
+        if (shuffled === "stale") {
+            return await interaction.reply({
+                content: "The player was replaced. Try again.",
+                ephemeral: true,
+            })
+        }
         if (!shuffled) {
             return await interaction.reply({
                 content: "Not enough songs in the queue to shuffle.",

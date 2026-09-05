@@ -154,9 +154,10 @@ export async function removeCountdown(id: number): Promise<boolean> {
         if (!countdownCache[id]) {
             return false
         }
-        // Claim under the lock before awaiting DB so a concurrent remover cannot also announce.
+        // Await DB first so a rejected delete keeps the cache for a later sweep retry.
+        // The save lock already serializes removers, so this cannot double-announce.
+        const deleted = await countdownStoreDb.deleteCountdown(id)
         delete countdownCache[id]
-        await countdownStoreDb.deleteCountdown(id)
-        return true
+        return deleted
     })
 }

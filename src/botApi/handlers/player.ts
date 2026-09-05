@@ -100,7 +100,21 @@ export async function playerPOST(
                 else if (player.paused) await player.resume()
                 break
             case "skip": {
-                const skipped = await skipCurrentTrack(player)
+                const skipped = await skipCurrentTrack(player, undefined, () =>
+                    client.lavalink.getPlayer(guildId)
+                )
+                if (skipped === "stale") {
+                    return {
+                        status: 409,
+                        body: {
+                            ok: false,
+                            error: {
+                                error: "player_replaced",
+                                details: "The player was replaced. Try skip again.",
+                            },
+                        },
+                    }
+                }
                 if (skipped === "deferred") {
                     return {
                         status: 409,
@@ -148,9 +162,10 @@ export async function playerPOST(
                 {
                     const shuffled = await shuffleUpcomingOnLivePlayer(
                         () => client.lavalink.getPlayer(guildId),
-                        guildId
+                        guildId,
+                        player
                     )
-                    if (shuffled) {
+                    if (shuffled === true) {
                         schedulePrefetchWindow(() => client.lavalink.getPlayer(guildId), guildId)
                     }
                 }

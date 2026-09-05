@@ -85,8 +85,16 @@ export default {
             // schedulePlayerSessionSave would resurrect the cleared session (current track remains).
             const cleared = await clearUpcomingOnLivePlayer(
                 () => client.lavalink.getPlayer(guild.id),
-                guild.id
+                guild.id,
+                player
             )
+
+            if (cleared === "stale") {
+                return interaction.reply({
+                    content: "The player was replaced. Try again.",
+                    ephemeral: true,
+                })
+            }
 
             if (cleared === 0) {
                 return interaction.reply({

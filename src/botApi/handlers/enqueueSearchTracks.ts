@@ -3,7 +3,14 @@ import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { startPlaybackIfNeeded } from "../../util/startPlaybackIfNeeded.js"
 import { scheduleSaveIfPlayerStillLive } from "../../util/playerSessionPersistence.js"
+import { isSpotifyCatalogTrack, isYoutubeSourceTrack } from "../../util/youtubeCompanionPlayback.js"
 import { isPlaylistLoadType, schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
+
+function canEnqueueSearchTrack(track: Track | UnresolvedTrack): boolean {
+    const uri = track.info?.uri
+    if (typeof uri === "string" && uri.trim().length > 0) return true
+    return isYoutubeSourceTrack(track) || isSpotifyCatalogTrack(track)
+}
 
 export type EnqueueSearchTracksResult =
     | { status: "ok"; player: Player; playbackStarted: boolean; playbackError?: string }
@@ -31,7 +38,8 @@ export async function enqueueSearchTracksAssumingSearchDone(
     if (!liveForEnqueue) return { status: "no_player" }
 
     const isPlaylist = isPlaylistLoadType(searchResult.loadType)
-    const tracksToEnqueue = isPlaylist ? searchResult.tracks : [searchResult.tracks[0]!]
+    const candidates = isPlaylist ? searchResult.tracks : [searchResult.tracks[0]!]
+    const tracksToEnqueue = candidates.filter(canEnqueueSearchTrack)
     if (tracksToEnqueue.length === 0 || !tracksToEnqueue[0]) {
         throw new Error("None of the playlist tracks could be prepared for playback.")
     }
@@ -53,7 +61,7 @@ export async function enqueueSearchTracksAssumingSearchDone(
     if (locked.status === "no_player") return locked
 
     const liveAfter = getLivePlayer()
-    if (!liveAfter) return { status: "no_player" }
+    if (!liveAfter || liveAfter !== locked.player) return { status: "no_player" }
 
     try {
         const started = await startPlaybackIfNeeded(liveAfter)

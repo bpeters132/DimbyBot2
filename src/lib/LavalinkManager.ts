@@ -236,6 +236,7 @@ async function tryQueueAndPlayAutoplay(
             return true
         })
         if (!injected) return false
+        if (client.lavalink.getPlayer(player.guildId) !== player) return false
 
         try {
             await player.play()

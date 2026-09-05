@@ -182,4 +182,32 @@ describe("countdownStore save lock", () => {
         assert.equal(getCountdown(3), undefined)
         assert.deepEqual(deletedIds, [3])
     })
+
+    it("keeps the cache and rejects when database deletion throws", async () => {
+        setCountdownStoreDbForTests({
+            getAllCountdownsFromDatabase: async () => ({
+                8: sampleEntry({ id: 8 }),
+            }),
+            deleteCountdown: async () => {
+                throw new Error("db unavailable")
+            },
+        })
+        await initializeCountdownStore({ info() {} })
+
+        await assert.rejects(() => removeCountdown(8), /db unavailable/)
+        assert.equal(getCountdown(8)?.id, 8)
+    })
+
+    it("returns false and drops the cache when the database row was already gone", async () => {
+        setCountdownStoreDbForTests({
+            getAllCountdownsFromDatabase: async () => ({
+                9: sampleEntry({ id: 9 }),
+            }),
+            deleteCountdown: async () => false,
+        })
+        await initializeCountdownStore({ info() {} })
+
+        assert.equal(await removeCountdown(9), false)
+        assert.equal(getCountdown(9), undefined)
+    })
 })

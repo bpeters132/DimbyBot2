@@ -41,10 +41,10 @@ function mockTrack(info: Partial<Track["info"]> & { uri?: string; title?: string
 }
 
 describe("trackMatchesStored", () => {
-    it("matches URI case-insensitively and ignores trailing slashes", () => {
+    it("matches URI scheme/host case-insensitively and ignores trailing slashes", () => {
         assert.equal(
             trackMatchesStored(
-                mockTrack({ uri: "HTTPS://Example.com/Track/" }),
+                mockTrack({ uri: "HTTPS://Example.com/track/" }),
                 stored({ uri: "https://example.com/track" })
             ),
             true
@@ -55,6 +55,22 @@ describe("trackMatchesStored", () => {
                 stored({ uri: "https://example.com/track/" })
             ),
             true
+        )
+    })
+
+    it("rejects differently cased YouTube video IDs", () => {
+        assert.equal(
+            trackMatchesStored(
+                mockTrack({
+                    title: "A",
+                    uri: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                }),
+                stored({
+                    title: "B",
+                    uri: "https://www.youtube.com/watch?v=dqw4w9wgxcq",
+                })
+            ),
+            false
         )
     })
 
@@ -80,6 +96,20 @@ describe("trackMatchesStored", () => {
             trackMatchesStored(
                 mockTrack({ title: "A", uri: "https://cdn.example/a" }),
                 stored({ title: "B", uri: "https://cdn.example/b" })
+            ),
+            false
+        )
+    })
+
+    it("rejects same-title tracks by a different artist", () => {
+        assert.equal(
+            trackMatchesStored(
+                mockTrack({
+                    title: "Hello World",
+                    author: "Artist A",
+                    uri: "https://cdn.example/a",
+                }),
+                stored({ title: "Hello World", author: "Artist B", uri: "https://cdn.example/b" })
             ),
             false
         )

@@ -169,6 +169,18 @@ async function deleteStaleSessionIfUnchanged(
     await deletePlayerSession(session.guildId)
 }
 
+async function safeDeleteStaleSession(
+    client: BotClient,
+    session: PlayerSessionData
+): Promise<void> {
+    try {
+        await deleteStaleSessionIfUnchanged(client, session)
+    } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        client.info(`[playerSession] stale session delete failed for ${session.guildId}: ${msg}`)
+    }
+}
+
 function resolveTextChannelId(session: PlayerSessionData): string | null {
     if (session.textChannelId) return session.textChannelId
     const settings = getGuildSettings()[session.guildId]
@@ -194,12 +206,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
         client.info(
             `[playerSession] stale session removed for ${guildId}: voice channel ${voiceChannelId} not found`
         )
-        try {
-            await deleteStaleSessionIfUnchanged(client, session)
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err)
-            client.info(`[playerSession] stale session delete failed for ${guildId}: ${msg}`)
-        }
+        await safeDeleteStaleSession(client, session)
         return
     }
     const voiceChannel = voiceResult.channel
@@ -209,13 +216,13 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
         client.info(
             `[playerSession] stale session removed for ${guildId}: no humans in VC ${voiceChannelId}`
         )
-        await deleteStaleSessionIfUnchanged(client, session)
+        await safeDeleteStaleSession(client, session)
         return
     }
 
     const tracksToRestore = [...(snapshot.current ? [snapshot.current] : []), ...snapshot.queue]
     if (tracksToRestore.length === 0) {
-        await deleteStaleSessionIfUnchanged(client, session)
+        await safeDeleteStaleSession(client, session)
         return
     }
 

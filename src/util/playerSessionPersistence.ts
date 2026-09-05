@@ -578,6 +578,19 @@ export async function forceClearPlayerSession(guildId: string): Promise<void> {
 }
 
 /**
+ * Force-clears only when `getLivePlayer` is still empty at write time.
+ * `/leave` with no Lavalink player can race a successor `/play` that persists a session
+ * between the last absence check and this delete.
+ */
+export async function forceClearPlayerSessionIfNoLivePlayer(
+    guildId: string,
+    getLivePlayer: () => object | null | undefined
+): Promise<void> {
+    if (getLivePlayer()) return
+    await forceClearPlayerSession(guildId)
+}
+
+/**
  * Force-clears only when {@link shouldForceClearPlayerSessionAfterDestroy} is true.
  * Call after `await player.destroy()` with a fresh `getPlayer(guildId)` read.
  */

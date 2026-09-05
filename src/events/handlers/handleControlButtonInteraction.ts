@@ -405,7 +405,17 @@ export async function handleControlButtonInteraction(
                         break
                     }
                     client.debug("[ControlButtonHandler] skipCurrentTrack.")
-                    const skipped = await skipCurrentTrack(live)
+                    const skipped = await skipCurrentTrack(live, undefined, () =>
+                        client.lavalink?.getPlayer(guildId)
+                    )
+                    if (skipped === "stale") {
+                        await interaction.followUp({
+                            content:
+                                "The player was replaced. Try the control again on the current session.",
+                            ephemeral: true,
+                        })
+                        break
+                    }
                     if (skipped === "deferred") {
                         await interaction.followUp({
                             content:
@@ -448,8 +458,24 @@ export async function handleControlButtonInteraction(
                     // Re-resolve so /stop during the wait cannot shuffle a destroyed Player.
                     const shuffled = await shuffleUpcomingOnLivePlayer(
                         () => client.lavalink.getPlayer(guildId),
-                        guildId
+                        guildId,
+                        player
                     )
+                    if (shuffled === "stale") {
+                        try {
+                            await interaction.followUp({
+                                content:
+                                    "The player was replaced. Try the control again on the current session.",
+                                ephemeral: true,
+                            })
+                        } catch (followErr: unknown) {
+                            client.error(
+                                `[ControlButtonHandler] followUp failed after shuffle stale for ${customId}:`,
+                                followErr
+                            )
+                        }
+                        break
+                    }
                     if (!shuffled) {
                         try {
                             await interaction.followUp({
