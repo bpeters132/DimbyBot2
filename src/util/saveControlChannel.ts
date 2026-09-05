@@ -18,9 +18,43 @@ let guildSettingsCache: GuildSettingsStore = {}
 let guildSettingsInitialized = false
 let saveGuildSettingsChain: Promise<void> = Promise.resolve()
 
+type GuildSettingsStoreDb = {
+    getGuildSettingsStoreFromDatabase: typeof getGuildSettingsStoreFromDatabase
+    replaceGuildSettingsStoreInDatabase: typeof replaceGuildSettingsStoreInDatabase
+}
+
+let guildSettingsStoreDb: GuildSettingsStoreDb = {
+    getGuildSettingsStoreFromDatabase,
+    replaceGuildSettingsStoreInDatabase,
+}
+
 /** Returns whether {@link initializeGuildSettingsStore} has finished loading settings from the database. */
 export function isGuildSettingsInitialized(): boolean {
     return guildSettingsInitialized
+}
+
+/** Test-only: replace DB adapters (pass `null` to restore defaults). */
+export function setGuildSettingsStoreDbForTests(next: Partial<GuildSettingsStoreDb> | null): void {
+    guildSettingsStoreDb = next
+        ? {
+              getGuildSettingsStoreFromDatabase:
+                  next.getGuildSettingsStoreFromDatabase ??
+                  guildSettingsStoreDb.getGuildSettingsStoreFromDatabase,
+              replaceGuildSettingsStoreInDatabase:
+                  next.replaceGuildSettingsStoreInDatabase ??
+                  guildSettingsStoreDb.replaceGuildSettingsStoreInDatabase,
+          }
+        : {
+              getGuildSettingsStoreFromDatabase,
+              replaceGuildSettingsStoreInDatabase,
+          }
+}
+
+/** Test-only: clear cache, init flag, and save lock chain. */
+export function resetGuildSettingsStoreForTests(): void {
+    guildSettingsCache = {}
+    guildSettingsInitialized = false
+    saveGuildSettingsChain = Promise.resolve()
 }
 
 function cloneGuildSettingsStore(store: GuildSettingsStore): GuildSettingsStore {
@@ -53,7 +87,7 @@ async function readGuildSettingsFromDatabase(
     const logger = loggerFromPartial(loggerInstance)
     logger.debug("[guildSettings] Attempting to load settings from database.")
     try {
-        const store = await getGuildSettingsStoreFromDatabase()
+        const store = await guildSettingsStoreDb.getGuildSettingsStoreFromDatabase()
         logger.debug(
             `[guildSettings] Successfully loaded ${Object.keys(store).length} guild settings rows.`
         )
@@ -120,8 +154,11 @@ export type SaveGuildSettingsOptions = {
 }
 
 /**
- * Persists guild settings to database. On success, replaces the in-memory cache with `settings`.
- * @returns whether the database write succeeded
+ * Persists guild settings to database. On success, replaces the in-memory cache with the
+ * merged store that was written (or a successful post-write reload).
+ * @returns whether the database **write** succeeded — a post-write cache reload failure must
+ * not report false after a successful replace (callers like `/control-channel set` delete the
+ * newly posted control message when this returns false, while the DB still points at it).
  */
 export async function saveGuildSettings(
     settings: GuildSettingsStore,
@@ -185,12 +222,22 @@ export async function saveGuildSettings(
             for (const guildId of effectiveDeleteGuildIds) {
                 delete merged[guildId]
             }
-            const result = await replaceGuildSettingsStoreInDatabase(merged, {
+            const result = await guildSettingsStoreDb.replaceGuildSettingsStoreInDatabase(merged, {
                 deleteGuildIds: effectiveDeleteGuildIds,
             })
-            const reloaded = await readGuildSettingsFromDatabase(logger)
-            guildSettingsCache = cloneGuildSettingsStore(reloaded)
+            // Write succeeded: seed cache from what we persisted before attempting reload.
+            guildSettingsCache = cloneGuildSettingsStore(merged)
             guildSettingsInitialized = true
+            try {
+                const reloaded = await readGuildSettingsFromDatabase(logger)
+                guildSettingsCache = cloneGuildSettingsStore(reloaded)
+            } catch (reloadError: unknown) {
+                // Keep the merged write in cache; returning false here would make
+                // `/control-channel set` delete the Discord message the DB still references.
+                logger.error(
+                    `[guildSettings] Post-write reload failed after successful persist; using written snapshot for cache: ${reloadError}`
+                )
+            }
             logger.debug(
                 `[guildSettings] Successfully saved guild settings (upserted=${result.rowsUpserted}, deleted=${result.rowsDeleted}, affected=${result.rowsAffected}).`
             )
