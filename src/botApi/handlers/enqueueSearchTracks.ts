@@ -38,7 +38,7 @@ export async function enqueueSearchTracksAssumingSearchDone(
     if (!liveForEnqueue) return { status: "no_player" }
 
     const isPlaylist = isPlaylistLoadType(searchResult.loadType)
-    const candidates = isPlaylist ? searchResult.tracks : [searchResult.tracks[0]!]
+    const candidates = isPlaylist ? searchResult.tracks : searchResult.tracks.slice(0, 1)
     const tracksToEnqueue = candidates.filter(canEnqueueSearchTrack)
     if (tracksToEnqueue.length === 0 || !tracksToEnqueue[0]) {
         throw new Error("None of the playlist tracks could be prepared for playback.")
@@ -65,6 +65,7 @@ export async function enqueueSearchTracksAssumingSearchDone(
 
     try {
         const started = await startPlaybackIfNeeded(liveAfter)
+        if (getLivePlayer() !== liveAfter) return { status: "no_player" }
         schedulePrefetchWindow(getLivePlayer, guildId)
         scheduleSaveIfPlayerStillLive(getLivePlayer, liveAfter)
         return {
@@ -73,6 +74,7 @@ export async function enqueueSearchTracksAssumingSearchDone(
             playbackStarted: !locked.wasPlaying && (liveAfter.playing || started === "ok"),
         }
     } catch (error: unknown) {
+        if (getLivePlayer() !== liveAfter) return { status: "no_player" }
         const playbackError = error instanceof Error ? error.message : String(error)
         scheduleSaveIfPlayerStillLive(getLivePlayer, liveAfter)
         return {

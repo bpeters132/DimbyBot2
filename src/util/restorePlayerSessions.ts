@@ -3,7 +3,7 @@ import type { Player } from "lavalink-client"
 import type BotClient from "../lib/BotClient.js"
 import type { PlayerSessionData } from "../types/index.js"
 import {
-    deletePlayerSession,
+    deletePlayerSessionIfUnchanged,
     getPlayerSession,
     listPlayerSessions,
 } from "../repositories/playerSessionRepository.js"
@@ -153,20 +153,22 @@ async function deleteStaleSessionIfUnchanged(
     client: BotClient,
     session: PlayerSessionData
 ): Promise<void> {
-    const latest = await getPlayerSession(session.guildId)
-    if (
-        !shouldDeleteStaleRestoredSession({
-            evaluated: session,
-            latest,
-            livePlayerExists: Boolean(client.lavalink.getPlayer(session.guildId)),
-        })
-    ) {
-        client.debug(
-            `[playerSession] skip stale delete for ${session.guildId}: live player or successor session present`
-        )
-        return
-    }
-    await deletePlayerSession(session.guildId)
+    await withGuildPlayerQueueLock(session.guildId, async () => {
+        const latest = await getPlayerSession(session.guildId)
+        if (
+            !shouldDeleteStaleRestoredSession({
+                evaluated: session,
+                latest,
+                livePlayerExists: Boolean(client.lavalink.getPlayer(session.guildId)),
+            })
+        ) {
+            client.debug(
+                `[playerSession] skip stale delete for ${session.guildId}: live player or successor session present`
+            )
+            return
+        }
+        await deletePlayerSessionIfUnchanged(session)
+    })
 }
 
 async function safeDeleteStaleSession(
@@ -310,7 +312,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                 client.warn(
                     `[playerSession] restore for ${guildId}: no tracks resolved; destroying player`
                 )
-                await deletePlayerSession(guildId)
+                await deletePlayerSessionIfUnchanged(session)
                 return
             }
 

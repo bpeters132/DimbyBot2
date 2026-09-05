@@ -231,6 +231,7 @@ async function finishPlaylistEnqueue(
             playbackError = error instanceof Error ? error.message : String(error)
         }
     }
+    if (getLivePlayer() !== liveAfter) return "no_player"
     schedulePrefetchWindow(getLivePlayer, guildId)
     return { ...locked, playbackStarted, playbackError }
 }
