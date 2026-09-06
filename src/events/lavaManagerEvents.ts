@@ -39,6 +39,7 @@ import { playerBroadcaster } from "../shared/websocket/PlayerBroadcaster.js"
 import {
     clearPlayerSession,
     consumePlayerSessionClearSuppressLease,
+    dropPendingPlayerSessionSaveIfPlayer,
     resolvePlayerDestroySessionClearAction,
     schedulePlayerSessionSave,
 } from "../util/playerSessionPersistence.js"
@@ -150,6 +151,10 @@ export default async (client: BotClient) => {
                 client.debug(
                     `[LavaMgrEvents] Preserving player session for guild ${player.guildId} after destroy reason: ${String(reason)}`
                 )
+            }
+            // Destroyed player's debounced save must not overwrite a live successor's session.
+            if (livePlayer != null && livePlayer !== player) {
+                dropPendingPlayerSessionSaveIfPlayer(player.guildId, player)
             }
             scheduleControlMessageUpdate(client, player.guildId, "playerDestroy")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, null, "playerDestroy")
