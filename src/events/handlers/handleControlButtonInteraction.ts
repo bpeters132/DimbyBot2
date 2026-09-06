@@ -7,6 +7,7 @@ import { shuffleUpcomingOnLivePlayer } from "../../util/livePlayerQueueMutations
 import { getLivePlayerIfUnchanged } from "../../util/livePlayerIdentity.js"
 import { startPlaybackIfNeeded } from "../../util/startPlaybackIfNeeded.js"
 import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
+import { SKIP_DEFERRED_USER_MESSAGE } from "../../util/skipDeferredResult.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 import { updateControlMessage } from "./handleControlChannel.js"
 
@@ -418,8 +419,7 @@ export async function handleControlButtonInteraction(
                     }
                     if (skipped === "deferred") {
                         await interaction.followUp({
-                            content:
-                                "Could not skip right now. The next track is still preparing. Try again in a moment.",
+                            content: SKIP_DEFERRED_USER_MESSAGE,
                             ephemeral: true,
                         })
                         break
