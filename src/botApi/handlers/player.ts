@@ -9,6 +9,7 @@ import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
+import { playerHttpResultForSkip } from "../../util/skipDeferredResult.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 import { parsePlayerAction } from "../parseBotApiParams.js"
 
@@ -100,19 +101,8 @@ export async function playerPOST(
                 break
             case "skip": {
                 const skipped = await skipCurrentTrack(player)
-                if (skipped === "deferred") {
-                    return {
-                        status: 409,
-                        body: {
-                            ok: false,
-                            error: {
-                                error: "next_track_not_ready",
-                                details:
-                                    "The next track is still preparing. Try skip again in a moment.",
-                            },
-                        },
-                    }
-                }
+                const deferredHttp = playerHttpResultForSkip(skipped)
+                if (deferredHttp) return deferredHttp
                 break
             }
             case "stop":
