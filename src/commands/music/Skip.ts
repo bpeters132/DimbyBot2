@@ -4,6 +4,7 @@ import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import { discordDeleteErrorDetails } from "../../util/discordErrorDetails.js"
 import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
+import { SKIP_DEFERRED_USER_MESSAGE } from "../../util/skipDeferredResult.js"
 
 export default {
     data: new SlashCommandBuilder().setName("skip").setDescription("Skip the song"),
@@ -58,8 +59,7 @@ export default {
             const skipped = await skipCurrentTrack(player)
             if (skipped === "deferred") {
                 return interaction.editReply({
-                    content:
-                        "Could not skip right now. The next track is still preparing. Try again in a moment.",
+                    content: SKIP_DEFERRED_USER_MESSAGE,
                 })
             }
         } catch (e) {
