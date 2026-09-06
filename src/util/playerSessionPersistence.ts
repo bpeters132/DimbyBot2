@@ -284,10 +284,50 @@ function cancelPendingPlayerSessionSave(guildId: string): void {
     pendingPlayers.delete(guildId)
 }
 
+type LivePlayerLookup = (guildId: string) => Player | null | undefined
+
+/** Test-only override for {@link getLivePlayerForSessionWrite}. Pass `null` to restore. */
+let livePlayerLookupForTests: LivePlayerLookup | null = null
+
+/** Test-only: replace live-player lookup used by session writes (pass `null` to clear). */
+export function setLivePlayerLookupForTests(lookup: LivePlayerLookup | null): void {
+    livePlayerLookupForTests = lookup
+}
+
+/**
+ * Live Lavalink player for this guild, if any.
+ * Used so a destroyed player's debounced/in-flight save cannot overwrite a successor.
+ */
+function getLivePlayerForSessionWrite(guildId: string): Player | null | undefined {
+    if (livePlayerLookupForTests) return livePlayerLookupForTests(guildId)
+    return tryGetBotClient()?.lavalink.getPlayer(guildId)
+}
+
+/**
+ * True when another player already owns the guild slot — writing `player` would corrupt
+ * the successor's session (or race a newer snapshot).
+ */
+function isStalePlayerForSessionWrite(player: Player): boolean {
+    const live = getLivePlayerForSessionWrite(player.guildId)
+    return live != null && live !== player
+}
+
+/**
+ * Cancels a debounced save only when it still references `player`.
+ * Call when destroy skips clear because a successor is live, so the destroyed player's
+ * pending flush cannot overwrite the successor's queue.
+ */
+export function dropPendingPlayerSessionSaveIfPlayer(guildId: string, player: Player): void {
+    if (pendingPlayers.get(guildId) !== player) return
+    cancelPendingPlayerSessionSave(guildId)
+}
+
 async function writePlayerSession(player: Player, saveEpoch: number): Promise<void> {
     if (getSessionClearEpoch(player.guildId) !== saveEpoch) return
     // Defense in depth: flush/shutdown paths must honor the same partial-restore guard.
     if (shouldPreservePriorPlayerSessionSnapshot(player.guildId)) return
+    // Successor already owns this guild — never persist a destroyed player's in-memory queue.
+    if (isStalePlayerForSessionWrite(player)) return
 
     const snapshot = snapshotFromPlayer(player)
     const voiceChannelId = player.voiceChannelId
@@ -302,6 +342,7 @@ async function writePlayerSession(player: Player, saveEpoch: number): Promise<vo
         // Re-check under the lock: a clear may have landed while we waited for the chain.
         if (getSessionClearEpoch(guildId) !== saveEpoch) return
         if (shouldPreservePriorPlayerSessionSnapshot(guildId)) return
+        if (isStalePlayerForSessionWrite(player)) return
 
         // Claim a persist generation before awaiting so a newer write/clear can outrank this undo.
         const writeGeneration = bumpSessionPersistGeneration(guildId)
