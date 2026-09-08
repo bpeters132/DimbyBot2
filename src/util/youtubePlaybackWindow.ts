@@ -5,6 +5,8 @@ import { loggerFromPartial } from "./loggerFromPartial.js"
 import { isBlockedUserMediaUrl } from "./userMediaUrl.js"
 import {
     companionPlaybackConfig,
+    COMPANION_RESOLVED_FLAG,
+    COMPANION_RETRY_USED_FLAG,
     isCompanionResolvedTrack,
     isSpotifyCatalogTrack,
     isSpotifyCatalogUri,
@@ -17,7 +19,6 @@ import {
 /** Upcoming slots after current that belong in the Prefetch window. */
 export const PREFETCH_UPCOMING_COUNT = 2
 
-const COMPANION_RETRY_USED_FLAG = "companionErrorRetryUsed"
 const LOG_PREFIX = "[YoutubePlaybackWindow]"
 
 export function isPlaylistLoadType(loadType: string | undefined): boolean {
@@ -52,6 +53,21 @@ export function markCompanionRetryUsed(track: Track | UnresolvedTrack): void {
             : {}
     merged[COMPANION_RETRY_USED_FLAG] = true
     ;(track as { userData?: unknown }).userData = merged
+}
+
+/**
+ * After a companion remint is exhausted, drop the minted HTTP item back to YouTube
+ * metadata so skip/prefetch must prepare again instead of treating a dead stream as ready.
+ */
+export function demoteCompanionResolvedTrack(track: Track | UnresolvedTrack): void {
+    markCompanionRetryUsed(track)
+    const existing = (track as { userData?: unknown }).userData
+    if (typeof existing === "object" && existing !== null) {
+        const merged: Record<string, unknown> = { ...(existing as Record<string, unknown>) }
+        delete merged[COMPANION_RESOLVED_FLAG]
+        ;(track as { userData?: unknown }).userData = merged
+    }
+    ;(track as { encoded?: string }).encoded = ""
 }
 
 /** Catalog miss / companion playability — skip this item. Network blips are not this. */
@@ -316,16 +332,19 @@ export async function retryCompanionPlaybackOnce(
     failedTrack: Track | UnresolvedTrack | null,
     config: CompanionPlaybackConfig | null = playbackConfig()
 ): Promise<"retried" | "skip"> {
-    if (
-        !failedTrack ||
-        !isCompanionResolvedTrack(failedTrack) ||
-        isCompanionRetryUsed(failedTrack)
-    ) {
+    if (!failedTrack || !isCompanionResolvedTrack(failedTrack)) {
+        return "skip"
+    }
+    if (isCompanionRetryUsed(failedTrack)) {
+        demoteCompanionResolvedTrack(failedTrack)
         return "skip"
     }
     markCompanionRetryUsed(failedTrack)
     const snapshot = livePlayer(getLivePlayer, guildId)
-    if (!snapshot) return "skip"
+    if (!snapshot) {
+        demoteCompanionResolvedTrack(failedTrack)
+        return "skip"
+    }
     try {
         const resolved = await prepareTrack(snapshot, failedTrack, config, { force: true })
         const applied = await withGuildPlayerQueueLock(guildId, async () => {
@@ -336,18 +355,26 @@ export async function retryCompanionPlaybackOnce(
                 queueTrackIdentity(live.queue.current) === queueTrackIdentity(failedTrack)
             ) {
                 assignCurrent(live, resolved)
+                markCompanionRetryUsed(resolved)
                 return true
             }
             return false
         })
-        if (!applied) return "skip"
+        if (!applied) {
+            demoteCompanionResolvedTrack(failedTrack)
+            return "skip"
+        }
         const live = livePlayer(getLivePlayer, guildId)
-        if (!live) return "skip"
+        if (!live) {
+            demoteCompanionResolvedTrack(failedTrack)
+            return "skip"
+        }
         await live.play()
         return "retried"
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         windowLogger(config).warn(`${LOG_PREFIX} companion retry failed: ${msg}`)
+        demoteCompanionResolvedTrack(failedTrack)
         return "skip"
     }
 }

@@ -156,7 +156,9 @@ export function catalogYoutubeSearchQueries(track: Track | UnresolvedTrack): str
     return queries
 }
 
-const COMPANION_RESOLVED_FLAG = "invidiousCompanionResolved"
+export const COMPANION_RESOLVED_FLAG = "invidiousCompanionResolved"
+/** Set on a companion HTTP item after one trackError remint; overlays must not copy this onto a fresh mint. */
+export const COMPANION_RETRY_USED_FLAG = "companionErrorRetryUsed"
 
 /** True when this queue item already has a Companion stream URL minted. */
 export function isCompanionResolvedTrack(track: Track | UnresolvedTrack): boolean {
@@ -300,6 +302,7 @@ export function overlayYoutubeMetadata(
             ? { ...(youtubeUserData as Record<string, unknown>) }
             : {}
     mergedUserData[COMPANION_RESOLVED_FLAG] = true
+    delete mergedUserData[COMPANION_RETRY_USED_FLAG]
     ;(httpTrack as { userData?: unknown }).userData = mergedUserData
     return httpTrack
 }
@@ -334,6 +337,7 @@ export function overlayCatalogIdentity(
         Object.assign(mergedUserData, catalogUserData as Record<string, unknown>)
     }
     mergedUserData[COMPANION_RESOLVED_FLAG] = true
+    delete mergedUserData[COMPANION_RETRY_USED_FLAG]
     ;(httpTrack as { userData?: unknown }).userData = mergedUserData
     return httpTrack
 }

@@ -4,6 +4,7 @@ import type { Player, Track } from "lavalink-client"
 import type { CompanionFetch, CompanionPlaybackConfig } from "./youtubeCompanionPlayback.js"
 import { skipCurrentTrack } from "./skipCurrentTrack.js"
 import {
+    demoteCompanionResolvedTrack,
     ensureCurrentPlayable,
     ensurePrefetchWindow,
     ensureUpcomingHeadPlayable,
@@ -366,6 +367,72 @@ describe("skip upcoming + companion retry", () => {
             configWithFetch(companionOkFetch())
         )
         assert.equal(second, "skip")
+        assert.equal(isCompanionResolvedTrack(current), false)
+        assert.equal(current.encoded, "")
+        assert.equal(isYoutubePlaybackReady(current), false)
+    })
+
+    it("demotes a dead companion track so skip cannot treat it as ready", () => {
+        const track = youtubeTrack(VIDEO_A)
+        ;(track as { userData?: Record<string, unknown> }).userData = {
+            invidiousCompanionResolved: true,
+            companionErrorRetryUsed: true,
+        }
+        track.encoded = "http-stale"
+        demoteCompanionResolvedTrack(track)
+        assert.equal(isCompanionResolvedTrack(track), false)
+        assert.equal(isCompanionRetryUsed(track), true)
+        assert.equal(track.encoded, "")
+        assert.equal(isYoutubePlaybackReady(track), false)
+    })
+
+    it("demotes on a failed remint so queue-repeat cannot skip-loop the same HTTP item", async () => {
+        const current = youtubeTrack(VIDEO_A)
+        ;(current as { userData?: Record<string, unknown> }).userData = {
+            invidiousCompanionResolved: true,
+        }
+        current.encoded = "http-dead"
+        const player = mockWindowPlayer("g-retry-fail", [], current)
+        const result = await retryCompanionPlaybackOnce(
+            () => player,
+            "g-retry-fail",
+            current,
+            configWithFetch(async () => {
+                throw new Error("companion down")
+            })
+        )
+        assert.equal(result, "skip")
+        assert.equal(isCompanionRetryUsed(current), true)
+        assert.equal(isCompanionResolvedTrack(current), false)
+        assert.equal(current.encoded, "")
+        assert.equal(isYoutubePlaybackReady(current), false)
+    })
+
+    it("defers skip when a demoted upcoming track cannot remint", async () => {
+        const upcoming = youtubeTrack(VIDEO_A)
+        ;(upcoming as { userData?: Record<string, unknown> }).userData = {
+            invidiousCompanionResolved: true,
+            companionErrorRetryUsed: true,
+        }
+        upcoming.encoded = "http-dead"
+        demoteCompanionResolvedTrack(upcoming)
+        const skipCalls: number[] = []
+        const player = mockWindowPlayer("g-skip-demote", [upcoming])
+        const skipPlayer = {
+            ...player,
+            skip: async () => {
+                skipCalls.push(1)
+            },
+        }
+        const result = await skipCurrentTrack(
+            skipPlayer,
+            configWithFetch(async () => {
+                throw new Error("companion down")
+            })
+        )
+        assert.equal(result, "deferred")
+        assert.deepEqual(skipCalls, [])
+        assert.equal(player.queue.tracks[0]?.info.identifier, VIDEO_A)
     })
 
     it("marks retry used without affecting a fresh track", () => {
