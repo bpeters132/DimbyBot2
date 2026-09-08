@@ -1,14 +1,32 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { isBlockedUserMediaUrl, isHttpUrlQuery, trimmedHttpUrlQuery } from "./userMediaUrl.js"
+import {
+    isBlockedUserMediaUrl,
+    isHttpUrlQuery,
+    rewriteIcySchemeToHttp,
+    trimmedHttpUrlQuery,
+} from "./userMediaUrl.js"
 
 describe("isHttpUrlQuery", () => {
-    it("detects http(s) prefixes", () => {
+    it("detects http(s) and icy prefixes", () => {
         assert.equal(isHttpUrlQuery("https://youtube.com/watch?v=dQw4w9WgXcQ"), true)
         assert.equal(isHttpUrlQuery("  http://open.spotify.com/track/abc  "), true)
         assert.equal(isHttpUrlQuery("HTTP://127.0.0.1/"), true)
+        assert.equal(isHttpUrlQuery("icy://radio.example.com/stream"), true)
+        assert.equal(isHttpUrlQuery("ICY://127.0.0.1/"), true)
         assert.equal(isHttpUrlQuery("never gonna give you up"), false)
         assert.equal(isHttpUrlQuery("ytsearch:rick astley"), false)
+    })
+})
+
+describe("rewriteIcySchemeToHttp", () => {
+    it("rewrites icy:// to http:// like lavaplayer getAsHttpReference", () => {
+        assert.equal(rewriteIcySchemeToHttp("icy://postgres-db:5432/"), "http://postgres-db:5432/")
+        assert.equal(rewriteIcySchemeToHttp("  ICY://127.0.0.1/  "), "http://127.0.0.1/")
+        assert.equal(
+            rewriteIcySchemeToHttp("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        )
     })
 })
 
@@ -19,6 +37,7 @@ describe("trimmedHttpUrlQuery", () => {
             "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
         )
         assert.equal(trimmedHttpUrlQuery("never gonna give you up"), null)
+        assert.equal(trimmedHttpUrlQuery("icy://radio.example.com/live"), "http://radio.example.com/live")
     })
 })
 
@@ -56,7 +75,17 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://yt-cipher:8001/"), true)
     })
 
+    it("rejects icy:// aliases that lavaplayer rewrites to http://", () => {
+        assert.equal(isBlockedUserMediaUrl("icy://postgres-db:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://127.0.0.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://10.0.0.5/"), true)
+        assert.equal(isBlockedUserMediaUrl("ICY://localhost/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://192.168.1.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://radio.example.com/stream"), false)
+    })
+
     it("fails closed on unparseable http(s) strings", () => {
         assert.equal(isBlockedUserMediaUrl("http://"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://"), true)
     })
 })

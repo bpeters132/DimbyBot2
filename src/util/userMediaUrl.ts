@@ -1,25 +1,41 @@
 /** User-facing copy when a User media URL targets a private or Docker-internal host. */
 export const USER_MEDIA_URL_BLOCKED = "That URL isn't allowed."
 
-/** True when `query` looks like an HTTP(S) URL (user paste or dashboard play). */
-export function isHttpUrlQuery(query: string): boolean {
-    return /^https?:\/\//i.test(query.trim())
+/**
+ * Lavaplayer `HttpAudioSourceManager.getAsHttpReference` rewrites `icy://` to `http://`
+ * before fetching. Treat the alias like HTTP at the user-media boundary so private hosts
+ * cannot bypass {@link isBlockedUserMediaUrl} when `defaultSearchPlatform` is `local`
+ * (lavalink-client sends the bare identifier with no search prefix).
+ */
+export function rewriteIcySchemeToHttp(query: string): string {
+    const trimmed = query.trim()
+    if (!/^icy:\/\//i.test(trimmed)) return trimmed
+    return `http://${trimmed.slice(trimmed.indexOf("://") + 3)}`
 }
 
-/** Trimmed HTTP(S) string for Lavalink `player.search`, or `null` when `query` is not an HTTP URL. */
+/** True when `query` looks like an HTTP(S) or lavaplayer `icy://` URL (user paste or dashboard play). */
+export function isHttpUrlQuery(query: string): boolean {
+    return /^(?:https?|icy):\/\//i.test(query.trim())
+}
+
+/**
+ * Trimmed HTTP(S) string for Lavalink `player.search`, or `null` when `query` is not an
+ * HTTP / icy URL. `icy://` is normalized to `http://` (same rewrite lavaplayer applies).
+ */
 export function trimmedHttpUrlQuery(query: string): string | null {
     if (!isHttpUrlQuery(query)) return null
-    return query.trim()
+    return rewriteIcySchemeToHttp(query)
 }
 
 /**
  * True when a User media URL must not be sent to Lavalink: loopback, RFC1918,
  * link-local, or a single-label Docker DNS name. Non-URLs (ytsearch text) are allowed.
+ * Also covers lavaplayer `icy://` aliases that would otherwise skip the `https?://` gate.
  */
 export function isBlockedUserMediaUrl(query: string): boolean {
     if (!isHttpUrlQuery(query)) return false
     try {
-        const hostname = new URL(query.trim()).hostname
+        const hostname = new URL(rewriteIcySchemeToHttp(query)).hostname
         return isBlockedUserMediaHost(hostname)
     } catch {
         return true
