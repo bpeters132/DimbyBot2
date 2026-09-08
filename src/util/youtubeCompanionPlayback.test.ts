@@ -264,6 +264,11 @@ describe("youtube companion itag + URL helpers", () => {
                 ?.invidiousCompanionResolved,
             true
         )
+        assert.equal(
+            (http as { userData?: { companionErrorRetryUsed?: boolean } }).userData
+                ?.companionErrorRetryUsed,
+            undefined
+        )
     })
 
     it("overlays Spotify catalog identity onto the companion HTTP track", () => {
@@ -287,6 +292,29 @@ describe("youtube companion itag + URL helpers", () => {
                 ?.invidiousCompanionResolved,
             true
         )
+    })
+
+    it("does not copy companionErrorRetryUsed onto a freshly minted HTTP track", () => {
+        const yt = youtubeTrack()
+        ;(yt as { userData?: Record<string, unknown> }).userData = {
+            companionErrorRetryUsed: true,
+            queueMetadata: true,
+        }
+        const http = httpTrackFromSearch()
+        overlayYoutubeMetadata(http, yt)
+        const youtubeData = (http as { userData?: Record<string, unknown> }).userData
+        assert.equal(youtubeData?.invidiousCompanionResolved, true)
+        assert.equal(youtubeData?.companionErrorRetryUsed, undefined)
+        assert.equal(youtubeData?.queueMetadata, true)
+
+        const catalog = spotifyTrack()
+        ;(catalog as { userData?: Record<string, unknown> }).userData = {
+            companionErrorRetryUsed: true,
+        }
+        overlayCatalogIdentity(http, catalog)
+        const catalogData = (http as { userData?: Record<string, unknown> }).userData
+        assert.equal(catalogData?.invidiousCompanionResolved, true)
+        assert.equal(catalogData?.companionErrorRetryUsed, undefined)
     })
 
     it("stamps Playback duration from HTTP, then companion length, then YouTube search", () => {
