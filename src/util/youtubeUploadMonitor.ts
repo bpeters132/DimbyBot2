@@ -138,9 +138,14 @@ async function classifyEntry(
     return classifyFromFeedEntry(entry)
 }
 
+/** True when the Watch should record this id so we do not retry (no Alerts, or every Alert posted). */
+export function shouldMarkUploadSeen(matchingAlertCount: number, postedCount: number): boolean {
+    return matchingAlertCount === 0 || postedCount === matchingAlertCount
+}
+
 /**
  * Delivers a classified event to every matching Alert on every Watch for the channel.
- * Marks the id seen after delivery attempts (including Discord failures). Upcoming events
+ * Marks the id seen only when every matching Alert posted (or none matched). Upcoming events
  * are left unseen.
  */
 export async function processYoutubeUploadEvent(
@@ -157,6 +162,7 @@ export async function processYoutubeUploadEvent(
     for (const watch of getYoutubeWatchesForChannel(channelId)) {
         if (isYoutubeVideoSeen(watch.id, seenId)) continue
         const alerts = matchYoutubeAlerts(getYoutubeAlertsForWatch(watch.id), eventType)
+        let postedForWatch = 0
         for (const alert of alerts) {
             const ok = await postYoutubeAlert(
                 client,
@@ -169,9 +175,14 @@ export async function processYoutubeUploadEvent(
                 },
                 logger
             )
-            if (ok) posted += 1
+            if (ok) {
+                posted += 1
+                postedForWatch += 1
+            }
         }
-        await markYoutubeVideosSeen(watch.id, [seenId])
+        if (shouldMarkUploadSeen(alerts.length, postedForWatch)) {
+            await markYoutubeVideosSeen(watch.id, [seenId])
+        }
     }
     return posted
 }

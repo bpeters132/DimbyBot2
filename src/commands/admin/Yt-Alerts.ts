@@ -1,5 +1,6 @@
 import {
     ChannelType,
+    EmbedBuilder,
     MessageFlags,
     PermissionFlagsBits,
     SlashCommandBuilder,
@@ -222,7 +223,9 @@ async function handleList(
     if (description.length > 3900) {
         description = `${description.slice(0, 3900)}\n…`
     }
-    return interaction.editReply({ content: description })
+    return interaction.editReply({
+        embeds: [new EmbedBuilder().setTitle("Upload Alerts").setDescription(description)],
+    })
 }
 
 async function handleRemove(

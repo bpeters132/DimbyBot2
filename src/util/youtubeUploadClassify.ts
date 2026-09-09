@@ -27,7 +27,6 @@ export function classifyUploadEvent(details: YoutubeVideoDetails): UploadEventTy
 
     if (live === "live") {
         if (looksShort) return "short"
-        if (duration != null && duration > 0 && duration <= 60 * 60 * 12) return "premiere"
         return "live"
     }
 

@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client"
 import { getPrismaClient } from "../lib/database.js"
 import { normalizeOptionalDiscordSnowflake } from "../shared/discord-snowflake.js"
 import type {
@@ -181,20 +182,26 @@ export async function createYoutubeAlertWithWatch(input: YoutubeAlertInput): Pro
         })
         return { watch: toWatch(existing), alert, createdWatch: false }
     }
-    const watch = await createYoutubeWatch({
-        guildId,
-        youtubeChannelId,
-        youtubeChannelName: input.youtubeChannelName,
+    return prisma.$transaction(async (tx) => {
+        const watchRow = await tx.youtubeWatch.create({
+            data: {
+                guildId,
+                youtubeChannelId,
+                youtubeChannelName: input.youtubeChannelName.trim() || youtubeChannelId,
+            },
+        })
+        const alertRow = await tx.youtubeAlert.create({
+            data: {
+                watchId: watchRow.id,
+                discordChannelId: requireSnowflake(input.discordChannelId, "discordChannelId"),
+                mentionRoleIds: requireRoleIds(input.mentionRoleIds),
+                messageTemplate: input.messageTemplate?.trim() || null,
+                eventTypes: requireEventTypes(input.eventTypes),
+                createdBy: requireSnowflake(input.createdBy, "createdBy"),
+            },
+        })
+        return { watch: toWatch(watchRow), alert: toAlert(alertRow), createdWatch: true }
     })
-    const alert = await createYoutubeAlert({
-        watchId: watch.id,
-        discordChannelId: input.discordChannelId,
-        mentionRoleIds: input.mentionRoleIds,
-        messageTemplate: input.messageTemplate,
-        eventTypes: input.eventTypes,
-        createdBy: input.createdBy,
-    })
-    return { watch, alert, createdWatch: true }
 }
 
 /** Updates an Upload Alert. Returns null when the id is missing. */
@@ -224,8 +231,11 @@ export async function updateYoutubeAlert(
     try {
         const row = await prisma.youtubeAlert.update({ where: { id }, data })
         return toAlert(row)
-    } catch {
-        return null
+    } catch (error: unknown) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+            return null
+        }
+        throw error
     }
 }
 
@@ -243,14 +253,16 @@ export async function deleteYoutubeAlert(id: number): Promise<{
         include: { watch: { include: { alerts: true } } },
     })
     if (!existing) return null
-    await prisma.youtubeAlert.delete({ where: { id } })
     const remaining = existing.watch.alerts.filter((row) => row.id !== id)
-    let removedWatch: YoutubeWatchEntry | null = null
-    if (remaining.length === 0) {
-        await prisma.youtubeWatch.delete({ where: { id: existing.watchId } })
-        removedWatch = toWatch(existing.watch)
-    }
-    return { alert: toAlert(existing), removedWatch }
+    return prisma.$transaction(async (tx) => {
+        await tx.youtubeAlert.delete({ where: { id } })
+        let removedWatch: YoutubeWatchEntry | null = null
+        if (remaining.length === 0) {
+            await tx.youtubeWatch.delete({ where: { id: existing.watchId } })
+            removedWatch = toWatch(existing.watch)
+        }
+        return { alert: toAlert(existing), removedWatch }
+    })
 }
 
 /** Inserts seen video IDs, ignoring duplicates. */

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
+    decodeYoutubeXmlEntities,
     parseIso8601Duration,
     parseYoutubeAtomFeed,
     youtubeChannelIdFromTopic,
@@ -42,6 +43,14 @@ describe("parseYoutubeAtomFeed", () => {
         assert.equal(parsed.entries[0]?.title, "New video & friends")
         assert.equal(parsed.entries[0]?.durationSeconds, 125)
         assert.equal(parsed.entries[1]?.url, "https://www.youtube.com/shorts/abcdefghijk")
+    })
+})
+
+describe("decodeYoutubeXmlEntities", () => {
+    it("decodes in one pass so &amp;lt; stays &lt;", () => {
+        assert.equal(decodeYoutubeXmlEntities("A &amp; B"), "A & B")
+        assert.equal(decodeYoutubeXmlEntities("&amp;lt;script&amp;gt;"), "&lt;script&gt;")
+        assert.equal(decodeYoutubeXmlEntities("&quot;x&#39;"), `"x'`)
     })
 })
 

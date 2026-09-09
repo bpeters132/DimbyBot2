@@ -7,7 +7,7 @@ import {
     resetYoutubeAlertStoreForTests,
     setYoutubeAlertStoreDbForTests,
 } from "./youtubeAlertStore.js"
-import { seedYoutubeWatchSeenFromRss } from "./youtubeUploadMonitor.js"
+import { seedYoutubeWatchSeenFromRss, shouldMarkUploadSeen } from "./youtubeUploadMonitor.js"
 
 const CHANNEL_ID = "UCXuqSBlHAE6Xw-yeJA0Tunw"
 
@@ -20,6 +20,15 @@ const RSS = `<?xml version="1.0"?>
 afterEach(() => {
     resetYoutubeAlertStoreForTests()
     setYoutubeAlertStoreDbForTests(null)
+})
+
+describe("shouldMarkUploadSeen", () => {
+    it("marks seen when no Alerts match or every matching Alert posted", () => {
+        assert.equal(shouldMarkUploadSeen(0, 0), true)
+        assert.equal(shouldMarkUploadSeen(2, 2), true)
+        assert.equal(shouldMarkUploadSeen(2, 1), false)
+        assert.equal(shouldMarkUploadSeen(1, 0), false)
+    })
 })
 
 describe("seedYoutubeWatchSeenFromRss", () => {

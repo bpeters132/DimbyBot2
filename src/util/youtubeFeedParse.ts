@@ -9,19 +9,26 @@ export type YoutubeFeedEntry = {
     description: string
 }
 
-function decodeXml(value: string): string {
-    return value
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
+const XML_ENTITIES: Record<string, string> = {
+    "&lt;": "<",
+    "&gt;": ">",
+    "&quot;": '"',
+    "&#39;": "'",
+    "&amp;": "&",
+}
+
+/** Decodes common XML entities in one pass so values are never rescanned. */
+export function decodeYoutubeXmlEntities(value: string): string {
+    return value.replace(
+        /&amp;|&lt;|&gt;|&quot;|&#39;/g,
+        (entity) => XML_ENTITIES[entity] ?? entity
+    )
 }
 
 function tag(block: string, name: string): string | null {
     const re = new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`, "i")
     const match = block.match(re)
-    return match?.[1] ? decodeXml(match[1].trim()) : null
+    return match?.[1] ? decodeYoutubeXmlEntities(match[1].trim()) : null
 }
 
 function attr(block: string, name: string, attrName: string): string | null {
@@ -82,7 +89,7 @@ export function parseYoutubeAtomFeed(xml: string): {
     entries: YoutubeFeedEntry[]
 } {
     const titleMatch = xml.match(/<title>([^<]+)<\/title>/i)
-    const channelTitle = titleMatch?.[1] ? decodeXml(titleMatch[1].trim()) : null
+    const channelTitle = titleMatch?.[1] ? decodeYoutubeXmlEntities(titleMatch[1].trim()) : null
     const entries: YoutubeFeedEntry[] = []
     const seen = new Set<string>()
     const re = /<entry\b[\s\S]*?<\/entry>/gi

@@ -7,10 +7,7 @@ export type YoutubeCommunityPost = {
 const POST_ID_RE = /"(?:postId|sharedPostId)"\s*:\s*"(Ug[A-Za-z0-9_-]+)"/g
 
 /** Best-effort extract of community post ids from a channel posts/community HTML page. */
-export function parseYoutubeCommunityPostsHtml(
-    html: string,
-    channelId: string
-): YoutubeCommunityPost[] {
+export function parseYoutubeCommunityPostsHtml(html: string): YoutubeCommunityPost[] {
     const seen = new Set<string>()
     const posts: YoutubeCommunityPost[] = []
     let match: RegExpExecArray | null
@@ -22,7 +19,7 @@ export function parseYoutubeCommunityPostsHtml(
         posts.push({
             postId,
             title: "Community post",
-            url: `https://www.youtube.com/channel/${channelId}/community`,
+            url: `https://www.youtube.com/post/${postId}`,
         })
     }
     return posts
@@ -46,7 +43,7 @@ export async function fetchYoutubeCommunityPosts(
         try {
             const res = await fetchImpl(url)
             if (!res.ok) continue
-            const posts = parseYoutubeCommunityPostsHtml(res.text, channelId)
+            const posts = parseYoutubeCommunityPostsHtml(res.text)
             if (posts.length > 0) return posts
         } catch {
             // try the next URL

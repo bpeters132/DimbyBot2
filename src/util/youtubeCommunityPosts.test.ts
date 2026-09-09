@@ -11,12 +11,12 @@ const CHANNEL_ID = "UCXuqSBlHAE6Xw-yeJA0Tunw"
 describe("parseYoutubeCommunityPostsHtml", () => {
     it("dedupes post ids", () => {
         const html = `"postId":"Ug1abc_def-ghi","postId":"Ug1abc_def-ghi","sharedPostId":"Ug2xyz"`
-        const posts = parseYoutubeCommunityPostsHtml(html, CHANNEL_ID)
+        const posts = parseYoutubeCommunityPostsHtml(html)
         assert.deepEqual(
             posts.map((p) => p.postId),
             ["Ug1abc_def-ghi", "Ug2xyz"]
         )
-        assert.match(posts[0]?.url ?? "", /\/community$/)
+        assert.equal(posts[0]?.url, "https://www.youtube.com/post/Ug1abc_def-ghi")
     })
 })
 

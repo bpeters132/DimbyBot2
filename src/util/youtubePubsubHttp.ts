@@ -104,21 +104,25 @@ export async function handleYoutubePubsubRequest(
         return
     }
     const secret = youtubePubsubHubSecretFromEnv()
-    if (secret) {
-        const ok = verifyYoutubePubsubSignature(
-            body,
-            {
-                signature: header(req, "x-hub-signature"),
-                signature256: header(req, "x-hub-signature-256"),
-            },
-            secret
-        )
-        if (!ok) {
-            logger.warn("[yt-alerts] PubSub POST rejected: bad hub signature.")
-            res.statusCode = 403
-            res.end("Forbidden")
-            return
-        }
+    if (!secret) {
+        logger.warn("[yt-alerts] PubSub POST rejected: YOUTUBE_PUBSUB_HUB_SECRET is unset.")
+        res.statusCode = 403
+        res.end("Forbidden")
+        return
+    }
+    const ok = verifyYoutubePubsubSignature(
+        body,
+        {
+            signature: header(req, "x-hub-signature"),
+            signature256: header(req, "x-hub-signature-256"),
+        },
+        secret
+    )
+    if (!ok) {
+        logger.warn("[yt-alerts] PubSub POST rejected: bad hub signature.")
+        res.statusCode = 403
+        res.end("Forbidden")
+        return
     }
     const xml = body.toString("utf8")
     const { entries } = parseYoutubeAtomFeed(xml)

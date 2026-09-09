@@ -1,3 +1,5 @@
+import { decodeYoutubeXmlEntities } from "./youtubeFeedParse.js"
+
 const YOUTUBE_CHANNEL_ID_RE = /^UC[\w-]{22}$/
 const YOUTUBE_VIDEO_ID_RE = /^[a-zA-Z0-9_-]{11}$/
 const HANDLE_RE = /^@[\w.-]{1,30}$/
@@ -117,7 +119,7 @@ export function parseYoutubeChannelInput(
 function displayNameFromFeedOrHtml(text: string, fallback: string): string {
     const feedTitle = text.match(/<title>([^<]+)<\/title>/i)
     if (feedTitle?.[1]) {
-        const name = decodeXml(feedTitle[1])
+        const name = decodeYoutubeXmlEntities(feedTitle[1])
             .replace(/\s*-\s*YouTube\s*$/i, "")
             .trim()
         if (name) return name
@@ -128,15 +130,6 @@ function displayNameFromFeedOrHtml(text: string, fallback: string): string {
         if (name) return name
     }
     return fallback
-}
-
-function decodeXml(value: string): string {
-    return value
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
 }
 
 async function identityFromChannelId(

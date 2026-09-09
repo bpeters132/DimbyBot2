@@ -21,7 +21,7 @@ export type UploadAlertPostPayload = {
     thumbnailUrl?: string | null
 }
 
-/** Posts one Upload Alert. Returns false when Discord rejects the send (caller still marks seen). */
+/** Posts one Upload Alert. Returns false when Discord rejects the send (caller leaves unseen to retry). */
 export async function postYoutubeAlert(
     client: Client,
     watch: YoutubeWatchEntry,
@@ -61,7 +61,12 @@ export async function postYoutubeAlert(
             template: alert.messageTemplate,
             thumbnailUrl,
         })
-        await textChannel.send({ content, embeds: [embed], components })
+        await textChannel.send({
+            content,
+            embeds: [embed],
+            components,
+            allowedMentions: { parse: [], roles: alert.mentionRoleIds },
+        })
         return true
     } catch (error: unknown) {
         log.warn(`[yt-alerts] Failed to post Alert #${alert.id} for Watch #${watch.id}:`, error)

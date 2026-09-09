@@ -21,11 +21,11 @@ describe("classifyUploadEvent", () => {
         assert.equal(classifyUploadEvent({ liveBroadcastContent: "upcoming" }), null)
     })
 
-    it("classifies live, premiere, short, and video", () => {
+    it("classifies live (including live with duration), short, and video", () => {
         assert.equal(classifyUploadEvent({ liveBroadcastContent: "live" }), "live")
         assert.equal(
             classifyUploadEvent({ liveBroadcastContent: "live", durationSeconds: 600 }),
-            "premiere"
+            "live"
         )
         assert.equal(classifyUploadEvent({ title: "Fun #Shorts", durationSeconds: 200 }), "short")
         assert.equal(classifyUploadEvent({ durationSeconds: 45 }), "short")
