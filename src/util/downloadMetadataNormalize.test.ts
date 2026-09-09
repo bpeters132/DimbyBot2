@@ -7,6 +7,7 @@ import {
 import {
     deleteConditionsForStoreKeys,
     normalizedRowsFromStore,
+    toDownloadMetadataEntry,
 } from "./downloadMetadataNormalize.js"
 
 describe("normalizedRowsFromStore", () => {
@@ -21,10 +22,7 @@ describe("normalizedRowsFromStore", () => {
         assert.equal(rows.length, 1)
         assert.equal(rows[0]?.guildId, "guild-ok")
         assert.equal(rows[0]?.fileName, "legacy.wav")
-        assert.deepEqual(
-            skippedEntries.map((e) => e.key).sort(),
-            [unknownKey, "orphan.wav"].sort()
-        )
+        assert.deepEqual(skippedEntries.map((e) => e.key).sort(), [unknownKey, "orphan.wav"].sort())
         assert.ok(skippedEntries.every((e) => e.reason === "unresolvable-guild-id"))
     })
 
@@ -95,5 +93,55 @@ describe("deleteConditionsForStoreKeys", () => {
 
     it("returns no conditions when only filename-only keys are provided", () => {
         assert.deepEqual(deleteConditionsForStoreKeys(["a.wav", "b.wav", ""]), [])
+    })
+})
+
+describe("toDownloadMetadataEntry", () => {
+    it("serializes finite Date and ISO string downloadDate values", () => {
+        const iso = "2026-08-01T12:00:00.000Z"
+        assert.deepEqual(
+            toDownloadMetadataEntry({
+                guildId: "guild-1",
+                downloadDate: new Date(iso),
+                originalUrl: "https://example.com/a",
+                filePath: "/tmp/a.wav",
+            }),
+            {
+                guildId: "guild-1",
+                downloadDate: iso,
+                originalUrl: "https://example.com/a",
+                filePath: "/tmp/a.wav",
+            }
+        )
+        assert.equal(
+            toDownloadMetadataEntry({
+                guildId: "guild-1",
+                downloadDate: iso,
+                originalUrl: null,
+                filePath: null,
+            }).downloadDate,
+            iso
+        )
+    })
+
+    it("omits invalid downloadDate instead of emitting Invalid Date", () => {
+        assert.deepEqual(
+            toDownloadMetadataEntry({
+                guildId: "guild-1",
+                downloadDate: "not-a-date",
+                originalUrl: null,
+                filePath: null,
+            }),
+            { guildId: "guild-1" }
+        )
+        assert.deepEqual(
+            toDownloadMetadataEntry({
+                guildId: "guild-1",
+                downloadDate: new Date("nope"),
+                originalUrl: "https://x",
+                filePath: null,
+            }),
+            { guildId: "guild-1", originalUrl: "https://x" }
+        )
     })
 })

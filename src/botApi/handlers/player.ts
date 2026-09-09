@@ -7,10 +7,11 @@ import { toPlayerStateResponse } from "../../shared/player-state.js"
 import { webPlayerDebug } from "../../shared/web-player-debug-log.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
-import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
+import { shuffleUpcomingOnLivePlayer } from "../../util/livePlayerQueueMutations.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 import { parsePlayerAction } from "../parseBotApiParams.js"
+import { destroyLavalinkPlayerForStop } from "../../util/stopLavalinkPlayer.js"
 
 export async function playerGET(
     headers: Headers,
@@ -99,7 +100,21 @@ export async function playerPOST(
                 else if (player.paused) await player.resume()
                 break
             case "skip": {
-                const skipped = await skipCurrentTrack(player)
+                const skipped = await skipCurrentTrack(player, undefined, () =>
+                    client.lavalink.getPlayer(guildId)
+                )
+                if (skipped === "stale") {
+                    return {
+                        status: 409,
+                        body: {
+                            ok: false,
+                            error: {
+                                error: "player_replaced",
+                                details: "The player was replaced. Try skip again.",
+                            },
+                        },
+                    }
+                }
                 if (skipped === "deferred") {
                     return {
                         status: 409,
@@ -116,7 +131,7 @@ export async function playerPOST(
                 break
             }
             case "stop":
-                await player.destroy()
+                await destroyLavalinkPlayerForStop(player, () => client.lavalink.getPlayer(guildId))
                 break
             case "seek":
                 if (
@@ -143,19 +158,23 @@ export async function playerPOST(
             case "shuffle":
                 // Serialize with dashboard clear/reorder and Discord RRQ mutations so shuffle
                 // cannot interleave between a locked remove+insert (lost / duplicated tracks).
+                // Re-resolve under the lock so a concurrent stop cannot shuffle a zombie.
                 {
-                    const shuffled = await withGuildPlayerQueueLock(guildId, async () => {
-                        if (player.queue.tracks.length < 2) return false
-                        await player.queue.shuffle()
-                        return true
-                    })
-                    if (shuffled) {
+                    const shuffled = await shuffleUpcomingOnLivePlayer(
+                        () => client.lavalink.getPlayer(guildId),
+                        guildId,
+                        player
+                    )
+                    if (shuffled === true) {
                         schedulePrefetchWindow(() => client.lavalink.getPlayer(guildId), guildId)
                     }
                 }
                 break
             case "autoplay":
-                player.set("autoplay", !player.get("autoplay"))
+                {
+                    const live = client.lavalink.getPlayer(guildId)
+                    if (live) live.set("autoplay", !live.get("autoplay"))
+                }
                 break
         }
 

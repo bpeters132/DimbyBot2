@@ -6,8 +6,8 @@ import {
     rebalancePlayerQueueRoundRobinAssumingLock,
     stampRequesterUserIdOnTracks,
 } from "./rrqDisconnect.js"
-import { startPlaybackIfNeeded } from "./musicManager.js"
-import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
+import { startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
+import { scheduleSaveIfPlayerStillLive } from "./playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
 import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "./userMediaUrl.js"
 import {
@@ -111,6 +111,7 @@ export async function clearUpcomingQueue(player: Player): Promise<void> {
 }
 
 async function enqueueTracksUnderLock(
+    getLivePlayer: () => Player | undefined,
     player: Player,
     tracks: Track[],
     requesterId: string,
@@ -123,7 +124,8 @@ async function enqueueTracksUnderLock(
         // Already holding the guild queue lock -- do not re-enter via rebalancePlayerQueueRoundRobin.
         await rebalancePlayerQueueRoundRobinAssumingLock(player)
     }
-    schedulePlayerSessionSave(player)
+    // /stop can destroy during play() even under the queue lock — never save a zombie.
+    scheduleSaveIfPlayerStillLive(getLivePlayer, player)
     return {
         queued: toQueue.length,
         failed: 0,
@@ -131,7 +133,9 @@ async function enqueueTracksUnderLock(
     }
 }
 
-/** Adds resolved tracks to the *live* guild player under the shared queue lock. */
+/** Adds resolved tracks to the *live* guild player under the shared queue lock.
+ * After companion resolve, refuses enqueue if a successor replaced the resolve-time Player.
+ */
 export async function enqueueResolvedPlaylistTracks(
     getLivePlayer: () => Player | undefined,
     guildId: string,
@@ -173,12 +177,14 @@ async function finishPlaylistEnqueue(
     shuffle: boolean,
     replaceUpcoming: boolean
 ): Promise<EnqueuePlaylistResult | "no_player"> {
-    if (!getLivePlayer()) return "no_player"
+    const liveForResolve = getLivePlayer()
+    if (!liveForResolve) return "no_player"
     const locked = await withGuildPlayerQueueLock(guildId, async () => {
+        // Companion resolve can outlive /stop + successor createPlayer — refuse identity change.
         const live = getLivePlayer()
-        if (!live) return "no_player" as const
+        if (!live || live !== liveForResolve) return "no_player" as const
         if (!replaceUpcoming) {
-            return enqueueTracksUnderLock(live, tracks, requesterId, shuffle)
+            return enqueueTracksUnderLock(getLivePlayer, live, tracks, requesterId, shuffle)
         }
         const savedUpcoming = snapshotUpcomingQueue(live)
         try {
@@ -186,7 +192,7 @@ async function finishPlaylistEnqueue(
             if (size > 0) {
                 await live.queue.splice(0, size)
             }
-            return await enqueueTracksUnderLock(live, tracks, requesterId, shuffle)
+            return await enqueueTracksUnderLock(getLivePlayer, live, tracks, requesterId, shuffle)
         } catch (enqueueErr: unknown) {
             try {
                 const size = live.queue.tracks.length
@@ -196,7 +202,7 @@ async function finishPlaylistEnqueue(
                 if (savedUpcoming.length > 0) {
                     await live.queue.splice(0, 0, savedUpcoming)
                 }
-                schedulePlayerSessionSave(live)
+                scheduleSaveIfPlayerStillLive(getLivePlayer, live)
             } catch (restoreErr: unknown) {
                 const restoreMessage =
                     restoreErr instanceof Error ? restoreErr.message : String(restoreErr)
@@ -214,7 +220,7 @@ async function finishPlaylistEnqueue(
     if (locked === "no_player") return "no_player"
 
     const liveAfter = getLivePlayer()
-    if (!liveAfter) return "no_player"
+    if (!liveAfter || liveAfter !== liveForResolve) return "no_player"
     let playbackStarted = locked.playbackStarted
     let playbackError = locked.playbackError
     if (!liveAfter.playing) {
@@ -225,6 +231,7 @@ async function finishPlaylistEnqueue(
             playbackError = error instanceof Error ? error.message : String(error)
         }
     }
+    if (getLivePlayer() !== liveAfter) return "no_player"
     schedulePrefetchWindow(getLivePlayer, guildId)
     return { ...locked, playbackStarted, playbackError }
 }

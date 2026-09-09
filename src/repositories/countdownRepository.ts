@@ -78,10 +78,14 @@ export async function createCountdown(input: CountdownInput): Promise<CountdownE
     return toCountdownEntry(row)
 }
 
-/** Removes a single countdown by id. No-op if the row no longer exists. */
-export async function deleteCountdown(id: number): Promise<void> {
+/**
+ * Removes a single countdown by id.
+ * @returns true when a row was deleted; false when the id was already gone.
+ */
+export async function deleteCountdown(id: number): Promise<boolean> {
     const prisma = getPrismaClient()
-    await prisma.countdown.deleteMany({ where: { id } })
+    const result = await prisma.countdown.deleteMany({ where: { id } })
+    return result.count > 0
 }
 
 /** Bulk-removes countdowns whose target time is at or before `beforeTime`; returns rows deleted. */

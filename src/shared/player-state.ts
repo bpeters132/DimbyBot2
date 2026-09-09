@@ -97,8 +97,12 @@ function requesterId(track: Track | UnresolvedTrack): string | null {
     return getRequesterUserId(track.requester)
 }
 
-/** Username / display name embedded on the Lavalink requester (web dashboard or Discord.js user). */
-function requesterUsernameFromPayload(requester: unknown): string | null {
+/**
+ * Username / display name embedded on the Lavalink requester (web dashboard or Discord.js user).
+ * Prefer guild nick (`displayName`), then Discord global name, login username, then legacy `tag`.
+ * Distinct from {@link snapshotFromRequester}, which prefers globalName over displayName.
+ */
+export function requesterUsernameFromPayload(requester: unknown): string | null {
     if (requester === null || requester === undefined) return null
     if (typeof requester !== "object") return null
     const o = requester as Record<string, unknown>
@@ -279,7 +283,7 @@ function trackToPlayerTrackSummary(
  * `queue.current` is sometimes rehydrated from Lavalink without `requester`; we stamp who
  * requested the track on `trackStart` (see {@link DASHBOARD_REQUESTER_KEY}).
  */
-function applyDashboardRequesterFallback(
+export function applyDashboardRequesterFallback(
     player: Player | null,
     summary: PlayerTrackSummary | null
 ): PlayerTrackSummary | null {

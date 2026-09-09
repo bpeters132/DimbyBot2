@@ -4,10 +4,16 @@ import type { Player, Track } from "lavalink-client"
 import {
     COMPANION_FETCH_TIMEOUT_MS,
     catalogYoutubeSearchQueries,
+    collectPlayerFormats,
     companionLatestVersionPath,
+    companionPlaybackConfig,
+    companionPlaybackConfigFromEnv,
     ensureCompanionOriginStreamUrl,
     applyPlaybackDuration,
     companionLengthMsFromPlayerJson,
+    isSpotifyCatalogTrack,
+    isSpotifyCatalogUri,
+    isYoutubeSourceTrack,
     overlayCatalogIdentity,
     overlayYoutubeMetadata,
     pickPreferredAudioItag,
@@ -158,6 +164,73 @@ function recordingLogger(): {
     }
 }
 
+describe("companionPlaybackConfigFromEnv / companionPlaybackConfig", () => {
+    const prevUrl = process.env.INVIDIOUS_COMPANION_URL
+    const prevKey = process.env.INVIDIOUS_COMPANION_KEY
+
+    function restoreEnv(): void {
+        if (prevUrl === undefined) delete process.env.INVIDIOUS_COMPANION_URL
+        else process.env.INVIDIOUS_COMPANION_URL = prevUrl
+        if (prevKey === undefined) delete process.env.INVIDIOUS_COMPANION_KEY
+        else process.env.INVIDIOUS_COMPANION_KEY = prevKey
+    }
+
+    it("returns null from env when the companion secret is missing", () => {
+        try {
+            delete process.env.INVIDIOUS_COMPANION_URL
+            delete process.env.INVIDIOUS_COMPANION_KEY
+            assert.equal(companionPlaybackConfigFromEnv(), null)
+
+            process.env.INVIDIOUS_COMPANION_URL = "http://companion:8282"
+            process.env.INVIDIOUS_COMPANION_KEY = "   "
+            assert.equal(companionPlaybackConfigFromEnv(), null)
+        } finally {
+            restoreEnv()
+        }
+    })
+
+    it("reads origin + secret and strips trailing slashes", () => {
+        try {
+            process.env.INVIDIOUS_COMPANION_URL = "http://companion:8282///"
+            process.env.INVIDIOUS_COMPANION_KEY = "  abcdefghijklmnop  "
+            assert.deepEqual(companionPlaybackConfigFromEnv(), {
+                origin: "http://companion:8282",
+                secretKey: "abcdefghijklmnop",
+            })
+        } finally {
+            restoreEnv()
+        }
+    })
+
+    it("defaults origin to the compose service when only the key is set", () => {
+        try {
+            delete process.env.INVIDIOUS_COMPANION_URL
+            process.env.INVIDIOUS_COMPANION_KEY = "abcdefghijklmnop"
+            assert.deepEqual(companionPlaybackConfigFromEnv(), {
+                origin: "http://invidious-companion:8282",
+                secretKey: "abcdefghijklmnop",
+            })
+        } finally {
+            restoreEnv()
+        }
+    })
+
+    it("returns a warn-ready empty-secret config when env is unset", () => {
+        try {
+            delete process.env.INVIDIOUS_COMPANION_URL
+            delete process.env.INVIDIOUS_COMPANION_KEY
+            const { logger } = recordingLogger()
+            assert.deepEqual(companionPlaybackConfig(logger), {
+                origin: "http://invidious-companion:8282",
+                secretKey: "",
+                logger,
+            })
+        } finally {
+            restoreEnv()
+        }
+    })
+})
+
 describe("youtube companion itag + URL helpers", () => {
     it("prefers Opus 251 then AAC 140", () => {
         assert.equal(PREFERRED_AUDIO_ITAGS[0], 251)
@@ -188,6 +261,12 @@ describe("youtube companion itag + URL helpers", () => {
         assert.equal(youtubeVideoIdFromUri(`https://youtu.be/${VIDEO_ID}`), VIDEO_ID)
         assert.equal(youtubeVideoIdFromUri(`https://www.youtube.com/embed/${VIDEO_ID}`), VIDEO_ID)
         assert.equal(youtubeVideoIdFromUri(`https://www.youtube.com/shorts/${VIDEO_ID}`), VIDEO_ID)
+        assert.equal(
+            youtubeVideoIdFromUri(`https://music.youtube.com/watch?v=${VIDEO_ID}`),
+            VIDEO_ID
+        )
+        assert.equal(youtubeVideoIdFromUri(`https://m.youtube.com/watch?v=${VIDEO_ID}`), VIDEO_ID)
+        assert.equal(youtubeVideoIdFromUri(`https://www.youtube.com/live/${VIDEO_ID}`), VIDEO_ID)
         assert.equal(youtubeVideoIdFromUri("https://example.com/watch?v=dQw4w9WgXcQ"), null)
         assert.equal(
             youtubeVideoIdFromTrack({
@@ -200,6 +279,52 @@ describe("youtube companion itag + URL helpers", () => {
             } as Track),
             null
         )
+    })
+
+    it("classifies Spotify catalog URIs and YouTube sources used by restore/enqueue", () => {
+        assert.equal(isSpotifyCatalogUri("https://open.spotify.com/track/abc"), true)
+        assert.equal(isSpotifyCatalogUri("https://play.spotify.com/track/abc"), true)
+        assert.equal(isSpotifyCatalogUri("https://www.open.spotify.com/track/abc"), true)
+        assert.equal(isSpotifyCatalogUri("spotify:track:4hqIKGKzDVJXCnD80y2fyn"), true)
+        assert.equal(isSpotifyCatalogUri("spotify:album:abc"), false)
+        assert.equal(isSpotifyCatalogUri(""), false)
+        assert.equal(isSpotifyCatalogUri("https://example.com/track"), false)
+
+        assert.equal(isSpotifyCatalogTrack(spotifyTrack()), true)
+        assert.equal(
+            isSpotifyCatalogTrack({
+                ...youtubeTrack(),
+                info: {
+                    ...youtubeTrack().info,
+                    sourceName: undefined,
+                    uri: "https://open.spotify.com/track/abc",
+                    identifier: "abc",
+                },
+            } as Track),
+            true
+        )
+        assert.equal(isSpotifyCatalogTrack(youtubeTrack()), false)
+
+        assert.equal(isYoutubeSourceTrack(youtubeTrack()), true)
+        assert.equal(
+            isYoutubeSourceTrack(
+                youtubeTrack({ sourceName: "youtubemusic", identifier: VIDEO_ID })
+            ),
+            true
+        )
+        assert.equal(
+            isYoutubeSourceTrack({
+                ...youtubeTrack(),
+                info: {
+                    ...youtubeTrack().info,
+                    sourceName: undefined,
+                    uri: `https://music.youtube.com/watch?v=${VIDEO_ID}`,
+                },
+            } as Track),
+            true
+        )
+        assert.equal(isYoutubeSourceTrack(spotifyTrack()), false)
+        assert.equal(isYoutubeSourceTrack(soundcloudTrack()), false)
     })
 
     it("rewrites relative and localhost companion redirects onto the companion origin", () => {
@@ -216,6 +341,29 @@ describe("youtube companion itag + URL helpers", () => {
             COMPANION_ORIGIN
         )
         assert.equal(local, `${COMPANION_ORIGIN}/companion/videoplayback?id=${VIDEO_ID}`)
+        const localhost = resolveCompanionRedirectUrl(
+            `http://localhost:8282/companion/videoplayback?id=${VIDEO_ID}`,
+            COMPANION_ORIGIN
+        )
+        assert.equal(localhost, `${COMPANION_ORIGIN}/companion/videoplayback?id=${VIDEO_ID}`)
+    })
+
+    it("merges camelCase and snake_case companion player format lists", () => {
+        const formats = collectPlayerFormats({
+            streamingData: {
+                formats: [{ itag: 18, mimeType: "video/mp4" }],
+                adaptiveFormats: [{ itag: 140, mimeType: "audio/mp4" }],
+            },
+            streaming_data: {
+                formats: [{ itag: 22, mime_type: "video/mp4" }],
+                adaptive_formats: [{ itag: 251, mime_type: "audio/webm" }],
+            },
+        })
+        assert.deepEqual(
+            formats.map((f) => f.itag),
+            [18, 140, 22, 251]
+        )
+        assert.equal(pickPreferredAudioItag(formats), 251)
     })
 
     it("rewrites googlevideo URLs onto companion videoplayback", () => {
@@ -241,6 +389,36 @@ describe("youtube companion itag + URL helpers", () => {
             {
                 message: /Refusing to play non-companion HTTP URL/,
             }
+        )
+    })
+
+    it("accepts companion-relative stream paths and refuses host-confusion shapes", () => {
+        // Relative Location values from companion resolve onto the companion origin (intentional).
+        assert.equal(
+            ensureCompanionOriginStreamUrl(
+                `/companion/videoplayback?id=${VIDEO_ID}`,
+                COMPANION_ORIGIN
+            ),
+            `${COMPANION_ORIGIN}/companion/videoplayback?id=${VIDEO_ID}`
+        )
+
+        // resolveCompanionRedirectUrl can pass through protocol-relative / userinfo hosts;
+        // ensureCompanionOriginStreamUrl is the hard refuse gate before Lavalink HTTP search.
+        assert.equal(
+            resolveCompanionRedirectUrl("//evil.example/audio.mp3", COMPANION_ORIGIN),
+            "http://evil.example/audio.mp3"
+        )
+        assert.throws(
+            () => ensureCompanionOriginStreamUrl("//evil.example/audio.mp3", COMPANION_ORIGIN),
+            { message: /Refusing to play non-companion HTTP URL/ }
+        )
+        assert.throws(
+            () =>
+                ensureCompanionOriginStreamUrl(
+                    `http://invidious-companion:8282@evil.example/audio.mp3`,
+                    COMPANION_ORIGIN
+                ),
+            { message: /Refusing to play non-companion HTTP URL/ }
         )
     })
 
@@ -326,14 +504,41 @@ describe("youtube companion itag + URL helpers", () => {
         assert.equal(httpYoutube.info.isStream, false)
     })
 
+    it("pins invidiousCompanionResolved true even when catalog userData sets it false", () => {
+        const catalog = spotifyTrack()
+        ;(catalog as { userData?: unknown }).userData = {
+            invidiousCompanionResolved: false,
+            catalogTag: "keep",
+        }
+        const http = overlayCatalogIdentity(httpTrackFromSearch(), catalog)
+        const userData = (http as { userData?: Record<string, unknown> }).userData
+        assert.equal(userData?.invidiousCompanionResolved, true)
+        assert.equal(userData?.catalogTag, "keep")
+        assert.equal(http.info.sourceName, "spotify")
+    })
+
     it("builds LavaSrc-style catalog YouTube search queries", () => {
         assert.deepEqual(catalogYoutubeSearchQueries(spotifyTrack()), [
             'ytsearch:"USRC17600001"',
-            "ytsearch:Worth it Outr3ach",
+            'ytsearch:"Worth it Outr3ach"',
         ])
         assert.deepEqual(catalogYoutubeSearchQueries(spotifyTrack({ isrc: null })), [
-            "ytsearch:Worth it Outr3ach",
+            'ytsearch:"Worth it Outr3ach"',
         ])
+    })
+
+    it("quotes http(s) titles so ytsearch unwrap cannot become a raw loadtracks URL", () => {
+        const malicious = spotifyTrack({
+            isrc: null,
+            title: "http://postgres-db:5432/",
+            author: "Unknown",
+        })
+        const queries = catalogYoutubeSearchQueries(malicious)
+        assert.deepEqual(queries, ['ytsearch:"http://postgres-db:5432/ Unknown"'])
+        for (const q of queries) {
+            const remainder = q.slice("ytsearch:".length)
+            assert.equal(/^https?:\/\//i.test(remainder), false)
+        }
     })
 })
 
@@ -610,7 +815,7 @@ describe("Spotify catalog → YouTube search → companion", () => {
             return { tracks: [httpTrackFromSearch()] }
         })
         await resolveYoutubePlaybackTrack(player, catalog, configWithFetch(companionOkFetch()))
-        assert.equal(searched[0], "ytsearch:Worth it Outr3ach")
+        assert.equal(searched[0], 'ytsearch:"Worth it Outr3ach"')
         assert.equal(
             searched.some((q) => q.includes("USRC")),
             false

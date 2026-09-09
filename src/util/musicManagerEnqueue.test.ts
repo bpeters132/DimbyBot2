@@ -3,6 +3,7 @@ import { describe, it } from "node:test"
 import type { Player, Track } from "lavalink-client"
 import {
     enqueueMusicManagerTracksAssumingSearchDone,
+    resolveLivePlayerAfterReplacementConnectWaits,
     scheduleSaveIfPlayerStillLive,
 } from "./musicManagerEnqueue.js"
 
@@ -104,6 +105,24 @@ describe("enqueueMusicManagerTracksAssumingSearchDone", () => {
         assert.equal(staleDestroyed.queue.tracks.length, 1)
     })
 
+    it("returns no_player when expectedPlayer differs from the live successor", async () => {
+        const guildId = "guild-mm-enqueue-successor"
+        const resolvePlayer = mockMutablePlayer(guildId, [mockTrack("old")])
+        const successor = mockMutablePlayer(guildId, [mockTrack("kept")])
+
+        const outcome = await enqueueMusicManagerTracksAssumingSearchDone(
+            () => successor,
+            guildId,
+            { isPlaylist: false, tracks: [mockTrack("pollution")] },
+            "user-1",
+            resolvePlayer
+        )
+
+        assert.equal(outcome.status, "no_player")
+        assert.equal(successor.queue.tracks.map((t) => t.info.title).join(","), "kept")
+        assert.equal(resolvePlayer.queue.tracks.map((t) => t.info.title).join(","), "old")
+    })
+
     it("scheduleSaveIfPlayerStillLive ignores a destroyed zombie reference", async () => {
         const guildId = "guild-mm-save-zombie"
         const zombie = mockMutablePlayer(guildId, [mockTrack("stopped-queue")])
@@ -116,5 +135,108 @@ describe("enqueueMusicManagerTracksAssumingSearchDone", () => {
         live = mockMutablePlayer(guildId, [mockTrack("kept")])
         scheduleSaveIfPlayerStillLive(() => live, live)
         scheduleSaveIfPlayerStillLive(() => live, zombie)
+    })
+})
+
+describe("resolveLivePlayerAfterReplacementConnectWaits", () => {
+    it("skips reconnect when the player identity did not change during the first wait", async () => {
+        const guildId = "guild-mm-replace-same"
+        const player = mockMutablePlayer(guildId)
+        const ensureCalls: Player[] = []
+
+        const live = await resolveLivePlayerAfterReplacementConnectWaits(
+            player,
+            player,
+            () => player,
+            async (p) => {
+                ensureCalls.push(p)
+            }
+        )
+
+        assert.equal(live, player)
+        assert.equal(ensureCalls.length, 0)
+    })
+
+    it("reconnects once after a replacement and returns the re-resolved player", async () => {
+        const guildId = "guild-mm-replace-once"
+        const before = mockMutablePlayer(guildId)
+        const after = mockMutablePlayer(guildId)
+        const ensureCalls: Player[] = []
+
+        const live = await resolveLivePlayerAfterReplacementConnectWaits(
+            before,
+            after,
+            () => after,
+            async (p) => {
+                ensureCalls.push(p)
+            }
+        )
+
+        assert.equal(live, after)
+        assert.equal(ensureCalls.length, 1)
+        assert.equal(ensureCalls[0], after)
+    })
+
+    it("reconnects a second time when identity changes again during the replacement wait", async () => {
+        const guildId = "guild-mm-replace-twice"
+        const before = mockMutablePlayer(guildId)
+        const afterFirst = mockMutablePlayer(guildId)
+        const afterSecond = mockMutablePlayer(guildId)
+        let liveRef: Player | undefined = afterFirst
+        const ensureCalls: Player[] = []
+
+        const live = await resolveLivePlayerAfterReplacementConnectWaits(
+            before,
+            afterFirst,
+            () => liveRef,
+            async (p) => {
+                ensureCalls.push(p)
+                // /stop wins during the first replacement connect → successor #2.
+                if (p === afterFirst) liveRef = afterSecond
+            }
+        )
+
+        assert.equal(live, afterSecond)
+        assert.equal(ensureCalls.length, 2)
+        assert.equal(ensureCalls[0], afterFirst)
+        assert.equal(ensureCalls[1], afterSecond)
+    })
+
+    it("returns undefined when /stop destroys the player during the first replacement wait", async () => {
+        const guildId = "guild-mm-replace-destroyed-1"
+        const before = mockMutablePlayer(guildId)
+        const after = mockMutablePlayer(guildId)
+        let liveRef: Player | undefined = after
+
+        const live = await resolveLivePlayerAfterReplacementConnectWaits(
+            before,
+            after,
+            () => liveRef,
+            async () => {
+                liveRef = undefined
+            }
+        )
+
+        assert.equal(live, undefined)
+    })
+
+    it("returns undefined when /stop destroys the player during the second replacement wait", async () => {
+        const guildId = "guild-mm-replace-destroyed-2"
+        const before = mockMutablePlayer(guildId)
+        const afterFirst = mockMutablePlayer(guildId)
+        const afterSecond = mockMutablePlayer(guildId)
+        let liveRef: Player | undefined = afterFirst
+
+        const live = await resolveLivePlayerAfterReplacementConnectWaits(
+            before,
+            afterFirst,
+            () => liveRef,
+            async (p) => {
+                if (p === afterFirst) liveRef = afterSecond
+                else liveRef = undefined
+            }
+        )
+
+        assert.equal(live, undefined)
     })
 })

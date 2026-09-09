@@ -90,4 +90,117 @@ describe("enqueueSearchTracksAssumingSearchDone", () => {
         assert.equal(outcome.status, "ok")
         assert.equal(live.queue.tracks.map((t) => t.info.title).join(","), "p1,p2")
     })
+
+    it("returns no_player when a successor replaced the resolve-time player", async () => {
+        const guildId = "guild-search-enqueue-successor"
+        const resolvePlayer = mockMutablePlayer(guildId, [mockTrack("old")])
+        const successor = mockMutablePlayer(guildId, [mockTrack("kept")])
+        let calls = 0
+
+        const outcome = await enqueueSearchTracksAssumingSearchDone(
+            () => {
+                calls += 1
+                // First call: companion resolve. Later calls (under lock): successor only.
+                return calls === 1 ? resolvePlayer : successor
+            },
+            guildId,
+            { loadType: "track", tracks: [mockTrack("pollution")] },
+            "user-1"
+        )
+
+        assert.equal(outcome.status, "no_player")
+        assert.equal(successor.queue.tracks.map((t) => t.info.title).join(","), "kept")
+        assert.equal(resolvePlayer.queue.tracks.map((t) => t.info.title).join(","), "old")
+    })
+
+    it("returns no_player when a successor appears after the lock", async () => {
+        const guildId = "guild-search-enqueue-post-lock"
+        const original = mockMutablePlayer(guildId, [mockTrack("old")], false)
+        const successor = mockMutablePlayer(guildId, [mockTrack("kept")], false)
+        let calls = 0
+        let successorPlayed = false
+        successor.play = async () => {
+            successorPlayed = true
+        }
+
+        const outcome = await enqueueSearchTracksAssumingSearchDone(
+            () => {
+                calls += 1
+                return calls <= 2 ? original : successor
+            },
+            guildId,
+            { loadType: "track", tracks: [mockTrack("queued")] },
+            "user-1"
+        )
+
+        assert.equal(outcome.status, "no_player")
+        assert.equal(original.queue.tracks.map((t) => t.info.title).join(","), "old,queued")
+        assert.equal(successor.queue.tracks.map((t) => t.info.title).join(","), "kept")
+        assert.equal(successorPlayed, false)
+    })
+
+    it("throws a controlled error when a non-playlist search returns no tracks", async () => {
+        await assert.rejects(
+            () =>
+                enqueueSearchTracksAssumingSearchDone(
+                    () => mockMutablePlayer("guild-empty-tracks"),
+                    "guild-empty-tracks",
+                    { loadType: "track", tracks: [] },
+                    "user-1"
+                ),
+            /None of the playlist tracks/
+        )
+    })
+
+    it("returns no_player when a successor appears after startPlaybackIfNeeded", async () => {
+        const guildId = "guild-search-enqueue-post-start"
+        const original = mockMutablePlayer(guildId, [mockTrack("old")], false)
+        const successor = mockMutablePlayer(guildId, [mockTrack("kept")], false)
+        let live: Player = original
+        let successorPlayed = false
+        original.play = async () => {
+            live = successor
+        }
+        successor.play = async () => {
+            successorPlayed = true
+        }
+
+        const outcome = await enqueueSearchTracksAssumingSearchDone(
+            () => live,
+            guildId,
+            { loadType: "track", tracks: [mockTrack("queued")] },
+            "user-1"
+        )
+
+        assert.equal(outcome.status, "no_player")
+        assert.equal(original.queue.tracks.map((t) => t.info.title).join(","), "old,queued")
+        assert.equal(successor.queue.tracks.map((t) => t.info.title).join(","), "kept")
+        assert.equal(successorPlayed, false)
+    })
+
+    it("omits native tracks that have no URI so they are not treated as permanently unplayable", async () => {
+        const guildId = "guild-search-empty-uri"
+        const live = mockMutablePlayer(guildId, [])
+        const blankUri = mockTrack("blank")
+        blankUri.info.uri = ""
+        const withUri = mockTrack("ok")
+        await assert.rejects(
+            () =>
+                enqueueSearchTracksAssumingSearchDone(
+                    () => live,
+                    guildId,
+                    { loadType: "track", tracks: [blankUri] },
+                    "user-1"
+                ),
+            /None of the playlist tracks/
+        )
+        const playlist = await enqueueSearchTracksAssumingSearchDone(
+            () => live,
+            guildId,
+            { loadType: "PLAYLIST_LOADED", tracks: [blankUri, withUri] },
+            "user-1"
+        )
+        assert.equal(playlist.status, "ok")
+        assert.equal(live.queue.tracks.map((t) => t.info.title).join(","), "ok")
+    })
 })

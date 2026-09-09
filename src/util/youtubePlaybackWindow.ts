@@ -28,11 +28,16 @@ export function queueTrackIdentity(track: Track | UnresolvedTrack): string {
     return (track.info?.uri ?? "").trim().toLowerCase().replace(/\/+$/, "")
 }
 
-/** Native Lavalink sources and already-minted companion HTTP tracks can play without prepare. */
+/**
+ * Companion-minted HTTP and native tracks with a non-empty Lavalink `encoded` can play.
+ * Queue metadata (`encoded: ""`) is never ready — YouTube/Spotify go through companion
+ * prepare; other sources must be hydrated via Lavalink search first.
+ */
 export function isYoutubePlaybackReady(track: Track | UnresolvedTrack): boolean {
     if (isCompanionResolvedTrack(track)) return true
     if (isSpotifyCatalogTrack(track) || isYoutubeSourceTrack(track)) return false
-    return true
+    const encoded = (track as { encoded?: unknown }).encoded
+    return typeof encoded === "string" && encoded.length > 0
 }
 
 export function isCompanionRetryUsed(track: Track | UnresolvedTrack): boolean {
@@ -122,13 +127,55 @@ function windowLogger(
     return loggerFromPartial(config?.logger)
 }
 
+/**
+ * Hydrates non-YouTube/Spotify Queue metadata (empty `encoded`) via Lavalink URI search.
+ * YouTube/Spotify stay on the companion path in {@link resolveYoutubePlaybackTrack}.
+ */
+async function hydrateNativeMetadataTrack(
+    player: Player,
+    track: Track | UnresolvedTrack
+): Promise<Track | UnresolvedTrack> {
+    const uri = track.info?.uri?.trim() ?? ""
+    if (!uri) {
+        throw new Error("cannot play track with empty URI")
+    }
+    if (isBlockedUserMediaUrl(uri)) {
+        throw new Error(`cannot play blocked user-media URL: ${uri}`)
+    }
+    let res: Awaited<ReturnType<Player["search"]>>
+    try {
+        res = await player.search(uri, track.requester)
+    } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        throw new Error(`Lavalink search failed for ${uri}: ${msg}`, { cause: err })
+    }
+    const first = res?.tracks?.[0]
+    const encoded =
+        first && typeof (first as { encoded?: unknown }).encoded === "string"
+            ? (first as { encoded: string }).encoded
+            : ""
+    if (!first || !encoded) {
+        throw new Error(`cannot play: no Lavalink result for ${uri}`)
+    }
+    if (track.requester != null && (first as { requester?: unknown }).requester == null) {
+        ;(first as { requester?: unknown }).requester = track.requester
+    }
+    return first
+}
+
 async function prepareTrack(
     player: Player,
     track: Track | UnresolvedTrack,
     config: CompanionPlaybackConfig | null,
     options?: { force?: boolean }
 ): Promise<Track | UnresolvedTrack> {
-    return resolveYoutubePlaybackTrack(player, track, config, options)
+    if (isSpotifyCatalogTrack(track) || isYoutubeSourceTrack(track)) {
+        return resolveYoutubePlaybackTrack(player, track, config, options)
+    }
+    if (!options?.force && isYoutubePlaybackReady(track)) {
+        return track
+    }
+    return hydrateNativeMetadataTrack(player, track)
 }
 
 export type PlaybackWindowResult = "ok" | "empty" | "no_player" | "deferred"
@@ -195,12 +242,17 @@ export async function ensureCurrentPlayable(
                     live.queue.tracks[0] &&
                     queueTrackIdentity(live.queue.tracks[0]) === identity
                 ) {
-                    await replaceUpcomingAt(live, 0, identity, resolved)
-                    return "ok" as const
+                    const replaced = await replaceUpcomingAt(live, 0, identity, resolved)
+                    return replaced ? ("ok" as const) : ("continue" as const)
                 }
-                return "ok" as const
+                // Head moved during prepare (skip/shuffle/replace). Re-evaluate the live
+                // head — returning "ok" here would let startPlaybackIfNeeded play() an
+                // unprepared Queue-metadata track.
+                return "continue" as const
             })
-            return applied === "no_player" ? "no_player" : "ok"
+            if (applied === "no_player") return "no_player"
+            if (applied === "continue") continue
+            return "ok"
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err)
             if (!isPermanentYoutubePlaybackFailure(err)) {
@@ -254,12 +306,18 @@ async function ensureUpcomingSlotPlayable(
         const identity = queueTrackIdentity(track)
         try {
             const resolved = await prepareTrack(snapshot, track, config)
-            return await withGuildPlayerQueueLock(guildId, async () => {
+            const applied = await withGuildPlayerQueueLock(guildId, async () => {
                 const live = livePlayer(getLivePlayer, guildId)
-                if (!live) return "no_player"
-                await replaceUpcomingAt(live, index, identity, resolved)
-                return "ok"
+                if (!live) return "no_player" as const
+                const replaced = await replaceUpcomingAt(live, index, identity, resolved)
+                // Same race as ensureCurrentPlayable: skip/shuffle may have moved this
+                // slot. Returning "ok" without a successful replace lets skipCurrentTrack
+                // advance onto unprepared Queue metadata.
+                return replaced ? ("ok" as const) : ("continue" as const)
             })
+            if (applied === "no_player") return "no_player"
+            if (applied === "continue") continue
+            return "ok"
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err)
             if (!isPermanentYoutubePlaybackFailure(err)) {

@@ -142,11 +142,22 @@ export async function addCountdown(input: CountdownInput): Promise<CountdownEntr
     })
 }
 
-/** Removes a countdown from the database and the cache. */
-export async function removeCountdown(id: number): Promise<void> {
+/**
+ * Removes a countdown from the database and the cache.
+ * @returns true when this call claimed the entry (present in cache under the save lock);
+ * false if it was already removed. Finish announcements must only run when this returns true
+ * so overlapping updater passes cannot double-ping roles.
+ */
+export async function removeCountdown(id: number): Promise<boolean> {
     assertInitialized()
-    await withCountdownSaveLock(async () => {
-        await countdownStoreDb.deleteCountdown(id)
+    return withCountdownSaveLock(async () => {
+        if (!countdownCache[id]) {
+            return false
+        }
+        // Await DB first so a rejected delete keeps the cache for a later sweep retry.
+        // The save lock already serializes removers, so this cannot double-announce.
+        const deleted = await countdownStoreDb.deleteCountdown(id)
         delete countdownCache[id]
+        return deleted
     })
 }

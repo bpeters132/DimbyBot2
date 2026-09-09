@@ -3,7 +3,12 @@ import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction, Message } from "discord.js"
 import { discordDeleteErrorDetails } from "../../util/discordErrorDetails.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
-import { stopLocalPlayer, getLocalPlayerState } from "../../util/localPlayer.js"
+import {
+    stopLocalPlayer,
+    getLocalPlayerState,
+    cancelPendingLocalPlay,
+    isPendingLocalPlay,
+} from "../../util/localPlayer.js"
 import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
@@ -56,6 +61,15 @@ export default {
         /** Destroyed an idle Lavalink player (no current track / queue / playback). */
         let lavalinkIdleCleaned = false
         let lavalinkDestroyFailed = false
+        let cancelledPendingLocal = false
+
+        // Cancel in-flight local join before checking active local/Lavalink state so a Ready
+        // wait after handoff cannot start audio after the user already asked to stop.
+        if (isPendingLocalPlay(guild.id)) {
+            cancelPendingLocalPlay(guild.id)
+            cancelledPendingLocal = true
+            client.debug(`[StopCmd] Cancelled pending local play for guild ${guild.id}`)
+        }
 
         const localState = getLocalPlayerState(guild.id)
         const localPlayerWasActive = localState?.isPlaying || false
@@ -76,7 +90,9 @@ export default {
             // Also ensures playerDestroy → clearPlayerSession bumps the session epoch before this
             // command continues (Leave/web stop already await).
             try {
-                await destroyLavalinkPlayerForStop(lavalinkPlayer)
+                await destroyLavalinkPlayerForStop(lavalinkPlayer, () =>
+                    client.lavalink.getPlayer(guild.id)
+                )
                 if (hadContent) {
                     client.debug(`[StopCmd] Destroyed Lavalink player for guild ${guild.id}`)
                     stoppedLavalink = true
@@ -111,11 +127,14 @@ export default {
             replyContent = "Lavalink playback stopped and the queue was cleared."
         } else if (lavalinkIdleCleaned) {
             replyContent = "Lavalink player was idle; resources cleaned up."
+        } else if (cancelledPendingLocal) {
+            replyContent = "Local playback start was cancelled."
         } else if (localPlayerWasActive && !stoppedLocal) {
             replyContent = "Could not stop the local player. Please check logs."
         }
 
-        const stoppedSomething = stoppedLocal || stoppedLavalink || lavalinkIdleCleaned
+        const stoppedSomething =
+            stoppedLocal || stoppedLavalink || lavalinkIdleCleaned || cancelledPendingLocal
         // Destroy failures still need a user-visible reply (ephemeral unless something else stopped).
         const shouldConfirmPublicly = stoppedSomething && !lavalinkDestroyFailed
 

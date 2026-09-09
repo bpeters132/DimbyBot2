@@ -2,9 +2,19 @@ import { SlashCommandBuilder, type Message } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
-import { stopLocalPlayer, getLocalPlayerState } from "../../util/localPlayer.js"
-import { forceClearPlayerSession } from "../../util/playerSessionPersistence.js"
-import { shouldDisconnectOrphanVoice } from "../../util/leaveOrphanVoice.js"
+import {
+    stopLocalPlayer,
+    getLocalPlayerState,
+    cancelPendingLocalPlay,
+} from "../../util/localPlayer.js"
+import {
+    forceClearPlayerSessionIfNoLivePlayer,
+    forceClearPlayerSessionAfterDestroyIfSafe,
+} from "../../util/playerSessionPersistence.js"
+import {
+    shouldDisconnectOrphanVoice,
+    shouldTearDownAbsentLavalinkOnLeave,
+} from "../../util/leaveOrphanVoice.js"
 import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
@@ -74,6 +84,8 @@ export default {
         await interaction.deferReply()
 
         let stoppedLocal = false
+        // Cancel in-flight local join so Ready after handoff cannot resume after leave.
+        cancelPendingLocalPlay(guild.id)
         const localState = getLocalPlayerState(guild.id)
         if (localState != null) {
             if (stopLocalPlayer(client, guild.id)) {
@@ -89,12 +101,35 @@ export default {
             const botVoiceState = guild.members.me?.voice
             if (stoppedLocal || botVoiceState?.channel) {
                 try {
-                    // May return undefined when no player exists — do not call .catch on it.
-                    await client.lavalink.destroyPlayer(guild.id)
-                    if (shouldDisconnectOrphanVoice(false, Boolean(botVoiceState?.channel))) {
-                        await botVoiceState?.disconnect()
+                    // Re-read before each destructive step: concurrent /play can install a
+                    // successor after the initial null check (and between awaits below).
+                    const liveStillAbsent = () =>
+                        shouldTearDownAbsentLavalinkOnLeave(client.lavalink.getPlayer(guild.id))
+                    if (!liveStillAbsent()) {
+                        client.debug(
+                            `Leave: skipping Lavalink teardown for guild ${guild.id}; successor player already live`
+                        )
+                    } else {
+                        // Do not destroyPlayer(guildId) here — null means nothing to destroy;
+                        // a racing createPlayer would be torn down incorrectly.
+                        if (
+                            liveStillAbsent() &&
+                            shouldDisconnectOrphanVoice(false, Boolean(botVoiceState?.channel))
+                        ) {
+                            await botVoiceState?.disconnect()
+                        }
+                        // Re-check at write time: a successor can persist between the last
+                        // liveStillAbsent() read and this delete.
+                        if (liveStillAbsent()) {
+                            await forceClearPlayerSessionIfNoLivePlayer(guild.id, () =>
+                                client.lavalink.getPlayer(guild.id)
+                            )
+                        } else {
+                            client.debug(
+                                `Leave: skipping force-clear for guild ${guild.id}; successor player already live`
+                            )
+                        }
                     }
-                    await forceClearPlayerSession(guild.id)
                     await interaction.editReply({ content: "Left the voice channel." })
                     const msg = await interaction.fetchReply()
                     client.debug("Successfully left voice channel (local and/or orphan VC).")
@@ -126,7 +161,12 @@ export default {
             await player.destroy()
             // playerDestroy → clearPlayerSession is skipped while restore-in-progress;
             // force-clear so an intentional leave cannot resurrect on the next reconnect.
-            await forceClearPlayerSession(guild.id)
+            // Skip when a successor was created during destroy (cache-delete window).
+            await forceClearPlayerSessionAfterDestroyIfSafe(
+                guild.id,
+                player,
+                client.lavalink.getPlayer(guild.id)
+            )
             client.debug(`Player destroyed for guild ${guild.id}`)
             await interaction.editReply({ content: "BYE!" })
             const msg = await interaction.fetchReply()

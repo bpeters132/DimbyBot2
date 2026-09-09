@@ -51,6 +51,31 @@ export async function deletePlayerSession(guildId: string): Promise<void> {
     await prisma.playerSession.deleteMany({ where: { guildId } })
 }
 
+/** Prisma `where` for a stale-row delete that must not match a successor upsert. */
+export function playerSessionUnchangedDeleteWhere(
+    session: Pick<PlayerSessionData, "guildId" | "voiceChannelId" | "updatedAt">
+): { guildId: string; voiceChannelId: string; updatedAt: Date } {
+    return {
+        guildId: session.guildId,
+        voiceChannelId: session.voiceChannelId,
+        updatedAt: session.updatedAt,
+    }
+}
+
+/**
+ * Deletes the session row only when guild, voice channel, and `updatedAt` still match.
+ * A successor `/play` upsert changes `updatedAt` (and maybe voice), so this cannot wipe it.
+ */
+export async function deletePlayerSessionIfUnchanged(
+    session: Pick<PlayerSessionData, "guildId" | "voiceChannelId" | "updatedAt">
+): Promise<number> {
+    const prisma = getPrismaClient()
+    const result = await prisma.playerSession.deleteMany({
+        where: playerSessionUnchangedDeleteWhere(session),
+    })
+    return result.count
+}
+
 /** Returns all persisted player sessions with valid v1 snapshots. */
 export async function listPlayerSessions(): Promise<PlayerSessionData[]> {
     const prisma = getPrismaClient()

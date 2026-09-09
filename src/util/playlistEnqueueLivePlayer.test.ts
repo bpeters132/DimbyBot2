@@ -25,13 +25,13 @@ function mockTrack(id: string): Track {
     } as unknown as Track
 }
 
-function mockMutablePlayer(guildId: string, initial: Track[] = []): Player {
+function mockMutablePlayer(guildId: string, initial: Track[] = [], playing = true): Player {
     const tracks = [...initial]
     return {
         guildId,
-        playing: true,
+        playing,
         queue: {
-            current: null,
+            current: playing ? mockTrack("current") : null,
             tracks,
             add(items: Track | Track[]) {
                 const list = Array.isArray(items) ? items : [items]
@@ -42,6 +42,9 @@ function mockMutablePlayer(guildId: string, initial: Track[] = []): Player {
             },
         },
         get() {
+            return undefined
+        },
+        async play() {
             return undefined
         },
     } as unknown as Player
@@ -118,5 +121,98 @@ describe("playlist enqueue live-player re-resolve", () => {
         assert.equal(outcome.queued, 1)
         assert.equal(live.queue.tracks.map((t) => t.info.title).join(","), "from-playlist")
         assert.equal(staleDestroyed.queue.tracks.length, 2)
+    })
+
+    it("enqueueResolvedPlaylistTracks returns no_player when a successor replaces resolve-time player", async () => {
+        const guildId = "guild-playlist-successor"
+        const resolvePlayer = mockMutablePlayer(guildId, [mockTrack("old")])
+        const successor = mockMutablePlayer(guildId, [mockTrack("kept")])
+        let calls = 0
+
+        const outcome = await enqueueResolvedPlaylistTracks(
+            () => {
+                calls += 1
+                return calls === 1 ? resolvePlayer : successor
+            },
+            guildId,
+            [mockTrack("pollution")],
+            "user-1",
+            false
+        )
+
+        assert.equal(outcome, "no_player")
+        assert.equal(successor.queue.tracks.map((t) => t.info.title).join(","), "kept")
+        assert.equal(resolvePlayer.queue.tracks.map((t) => t.info.title).join(","), "old")
+    })
+
+    it("enqueueResolvedPlaylistTracks returns no_player when a successor appears after the lock", async () => {
+        const guildId = "guild-playlist-post-lock"
+        const original = mockMutablePlayer(guildId, [mockTrack("old")])
+        const successor = mockMutablePlayer(guildId, [mockTrack("kept")])
+        let calls = 0
+
+        const outcome = await enqueueResolvedPlaylistTracks(
+            () => {
+                calls += 1
+                return calls <= 2 ? original : successor
+            },
+            guildId,
+            [mockTrack("queued")],
+            "user-1",
+            false
+        )
+
+        assert.equal(outcome, "no_player")
+        assert.equal(original.queue.tracks.map((t) => t.info.title).join(","), "old,queued")
+        assert.equal(successor.queue.tracks.map((t) => t.info.title).join(","), "kept")
+    })
+
+    it("enqueueResolvedPlaylistTracks returns no_player when a successor appears after startPlayback", async () => {
+        const guildId = "guild-playlist-post-start"
+        const original = mockMutablePlayer(guildId, [mockTrack("old")], false)
+        const successor = mockMutablePlayer(guildId, [mockTrack("kept")], false)
+        let live: Player = original
+        let successorPlayed = false
+        original.play = async () => {
+            live = successor
+        }
+        successor.play = async () => {
+            successorPlayed = true
+        }
+
+        const outcome = await enqueueResolvedPlaylistTracks(
+            () => live,
+            guildId,
+            [mockTrack("queued")],
+            "user-1",
+            false
+        )
+
+        assert.equal(outcome, "no_player")
+        assert.equal(original.queue.tracks.map((t) => t.info.title).join(","), "old,queued")
+        assert.equal(successor.queue.tracks.map((t) => t.info.title).join(","), "kept")
+        assert.equal(successorPlayed, false)
+    })
+
+    it("replaceUpcomingWithResolvedPlaylistTracks refuses a successor after resolve", async () => {
+        const guildId = "guild-playlist-replace-successor"
+        const resolvePlayer = mockMutablePlayer(guildId, [mockTrack("old")])
+        const successor = mockMutablePlayer(guildId, [mockTrack("kept")])
+        let calls = 0
+
+        const outcome = await replaceUpcomingWithResolvedPlaylistTracks(
+            () => {
+                calls += 1
+                return calls === 1 ? resolvePlayer : successor
+            },
+            guildId,
+            [mockTrack("pollution")],
+            "user-1",
+            false
+        )
+
+        assert.equal(outcome, "no_player")
+        assert.equal(successor.queue.tracks.map((t) => t.info.title).join(","), "kept")
+        assert.equal(resolvePlayer.queue.tracks.map((t) => t.info.title).join(","), "old")
     })
 })

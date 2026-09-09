@@ -36,6 +36,42 @@ export function persistedTrackFromLavalink(
     }
 }
 
+/** Lowercases http(s) scheme and host only so path/query (YouTube video IDs) stay case-sensitive. */
+function normalizeUriForCompare(uri: string): string {
+    const trimmed = uri.trim()
+    try {
+        const parsed = new URL(trimmed)
+        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+            const path = parsed.pathname.replace(/\/+$/, "") || "/"
+            return `${parsed.protocol}//${parsed.host.toLowerCase()}${path}${parsed.search}${parsed.hash}`
+        }
+    } catch {
+        // Non-URL forms (spotify:track:…) keep their original case aside from trailing slashes.
+    }
+    return trimmed.replace(/\/+$/, "")
+}
+
+/**
+ * True when a resolved Lavalink track matches what we persisted (guards bad search hits).
+ * Prefer URI equality (scheme/host case-insensitive); otherwise require title, author, and duration.
+ */
+export function trackMatchesStored(track: Track, stored: PersistedQueueTrack): boolean {
+    const resolvedUri = track.info.uri?.trim()
+    const storedUri = stored.uri.trim()
+    if (resolvedUri && storedUri) {
+        if (normalizeUriForCompare(resolvedUri) === normalizeUriForCompare(storedUri)) {
+            return true
+        }
+    }
+    const resolvedTitle = track.info.title?.trim().toLowerCase()
+    const storedTitle = stored.title.trim().toLowerCase()
+    if (!resolvedTitle || !storedTitle || resolvedTitle !== storedTitle) return false
+    const resolvedAuthor = (track.info.author ?? "").trim().toLowerCase()
+    const storedAuthor = (stored.author ?? "").trim().toLowerCase()
+    if (resolvedAuthor !== storedAuthor) return false
+    return track.info.duration === stored.duration
+}
+
 /**
  * Hydrates persisted session rows as Queue metadata (no Lavalink search or decode).
  * Blocked User media URLs are omitted. YouTube playback is prepared in the prefetch window.

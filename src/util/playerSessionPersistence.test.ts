@@ -9,12 +9,15 @@ import {
     consumePlayerSessionClearSuppressLease,
     destroyPlayerSuppressingSessionClear,
     forceClearPlayerSession,
+    forceClearPlayerSessionAfterDestroyIfSafe,
+    forceClearPlayerSessionIfNoLivePlayer,
     getSessionClearEpochForTests,
     markPlayerSessionPreservePriorSnapshot,
     markPlayerSessionRestoreInProgress,
     resolvePlayerDestroySessionClearAction,
     schedulePlayerSessionSave,
     setPlayerSessionPersistenceDbForTests,
+    shouldForceClearPlayerSessionAfterDestroy,
     shouldPreservePriorPlayerSessionSnapshot,
     shouldSkipPlayerSessionClear,
     shouldSkipPlayerSessionClearForState,
@@ -205,6 +208,84 @@ describe("resolvePlayerDestroySessionClearAction", () => {
             resolvePlayerDestroySessionClearAction("NodeDestroy", destroyed, null),
             "preserve-reason"
         )
+    })
+})
+
+describe("shouldForceClearPlayerSessionAfterDestroy", () => {
+    it("force-clears when no live player remains (intentional teardown)", () => {
+        const destroyed = mockPlayer({})
+        assert.equal(shouldForceClearPlayerSessionAfterDestroy(destroyed, null), true)
+        assert.equal(shouldForceClearPlayerSessionAfterDestroy(destroyed, undefined), true)
+        assert.equal(shouldForceClearPlayerSessionAfterDestroy(destroyed, destroyed), true)
+    })
+
+    it("skips force-clear when a successor already owns the guild", () => {
+        const destroyed = mockPlayer({})
+        const successor = mockPlayer({})
+        assert.equal(shouldForceClearPlayerSessionAfterDestroy(destroyed, successor), false)
+    })
+})
+
+describe("forceClearPlayerSessionAfterDestroyIfSafe", () => {
+    afterEach(() => {
+        setPlayerSessionPersistenceDbForTests(null)
+    })
+
+    it("deletes when no successor is live", async () => {
+        const guildId = "guild-force-clear-safe"
+        const destroyed = mockPlayer({})
+        let deleted = false
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async (id) => {
+                if (id === guildId) deleted = true
+            },
+        })
+        await forceClearPlayerSessionAfterDestroyIfSafe(guildId, destroyed, null)
+        assert.equal(deleted, true)
+    })
+
+    it("does not delete when a successor owns the guild", async () => {
+        const guildId = "guild-force-clear-successor"
+        const destroyed = mockPlayer({})
+        const successor = mockPlayer({})
+        let deleted = false
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async (id) => {
+                if (id === guildId) deleted = true
+            },
+        })
+        await forceClearPlayerSessionAfterDestroyIfSafe(guildId, destroyed, successor)
+        assert.equal(deleted, false)
+    })
+})
+
+describe("forceClearPlayerSessionIfNoLivePlayer", () => {
+    afterEach(() => {
+        setPlayerSessionPersistenceDbForTests(null)
+    })
+
+    it("deletes when no live player exists at write time", async () => {
+        const guildId = "guild-force-clear-absent"
+        let deleted = false
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async (id) => {
+                if (id === guildId) deleted = true
+            },
+        })
+        await forceClearPlayerSessionIfNoLivePlayer(guildId, () => null)
+        assert.equal(deleted, true)
+    })
+
+    it("skips delete when a successor is already live", async () => {
+        const guildId = "guild-force-clear-absent-successor"
+        let deleted = false
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async (id) => {
+                if (id === guildId) deleted = true
+            },
+        })
+        await forceClearPlayerSessionIfNoLivePlayer(guildId, () => ({ id: "successor" }))
+        assert.equal(deleted, false)
     })
 })
 

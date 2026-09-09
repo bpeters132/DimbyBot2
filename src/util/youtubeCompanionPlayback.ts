@@ -124,15 +124,17 @@ export function isYoutubeSourceTrack(track: Track | UnresolvedTrack): boolean {
     return Boolean(youtubeVideoIdFromUri(track.info?.uri?.trim() ?? ""))
 }
 
-/** True for open.spotify.com / play.spotify.com catalog URIs (no native audio). */
+/** True for open.spotify.com / play.spotify.com / spotify:track: catalog URIs (no native audio). */
 export function isSpotifyCatalogUri(uri: string): boolean {
     if (!uri) return false
+    // URL() accepts `spotify:track:…` (protocol "spotify:") without throwing, so check first.
+    if (uri.startsWith("spotify:track:")) return true
     try {
         const url = new URL(uri)
         const host = url.hostname.replace(/^www\./, "")
         return host === "open.spotify.com" || host === "play.spotify.com"
     } catch {
-        return uri.startsWith("spotify:track:")
+        return false
     }
 }
 
@@ -144,16 +146,24 @@ export function isSpotifyCatalogTrack(track: Track | UnresolvedTrack): boolean {
     return isSpotifyCatalogUri(track.info?.uri?.trim() ?? "")
 }
 
-/** LavaSrc-compatible YouTube searches: quoted ISRC, then title + author. */
+/**
+ * LavaSrc-compatible YouTube searches: quoted ISRC, then quoted title + author.
+ * Title/author must stay quoted: lavalink-client strips `ytsearch:` and treats a bare
+ * `http(s)://…` remainder as a raw `/loadtracks` identifier (SSRF via playlist metadata).
+ */
 export function catalogYoutubeSearchQueries(track: Track | UnresolvedTrack): string[] {
     const queries: string[] = []
     const isrc = track.info?.isrc?.trim()
-    if (isrc) queries.push(`ytsearch:"${isrc}"`)
+    if (isrc) queries.push(`ytsearch:"${stripEmbeddedQuotes(isrc)}"`)
     const title = track.info?.title?.trim() ?? ""
     const author = track.info?.author?.trim() ?? ""
     const q = `${title} ${author}`.trim()
-    if (q) queries.push(`ytsearch:${q}`)
+    if (q) queries.push(`ytsearch:"${stripEmbeddedQuotes(q)}"`)
     return queries
+}
+
+function stripEmbeddedQuotes(value: string): string {
+    return value.replace(/"/g, "")
 }
 
 const COMPANION_RESOLVED_FLAG = "invidiousCompanionResolved"

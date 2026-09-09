@@ -5,6 +5,7 @@ import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import { enqueuePlayNextTrackAssumingSearchDone } from "../../util/playNextEnqueue.js"
 import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
 import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "../../util/userMediaUrl.js"
+import { isSameLivePlayer } from "../../util/livePlayerIdentity.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -64,9 +65,9 @@ export default {
         // had no reservation and could enqueue onto a destroyed Player after a false success).
         return withGuildPlayerLifecycleReservation(guild.id, async () => {
             const searchPlayer = client.lavalink.getPlayer(guild.id)
-            if (!searchPlayer) {
+            if (!isSameLivePlayer(searchPlayer, player)) {
                 return interaction.editReply({
-                    content: "The player stopped before the search finished. Try again.",
+                    content: "The player was replaced. Try again.",
                 })
             }
 
@@ -94,7 +95,10 @@ export default {
 
             const track = res.tracks[0]
             const outcome = await enqueuePlayNextTrackAssumingSearchDone(
-                () => client.lavalink.getPlayer(guild.id),
+                () => {
+                    const live = client.lavalink.getPlayer(guild.id)
+                    return isSameLivePlayer(live, player) ? live : undefined
+                },
                 guild.id,
                 track,
                 interaction.user.id

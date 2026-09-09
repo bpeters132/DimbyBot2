@@ -224,15 +224,19 @@ async function tryQueueAndPlayAutoplay(
 
         // Hold the guild queue lock for inject + RRQ so dashboard replaceUpcoming rollback
         // (splice entire upcoming) cannot delete an unlocked autoplay enqueue mid-flight.
+        // Identity-gate: /stop during companion resolve leaves a zombie; never add/play it.
         const injected = await withGuildPlayerQueueLock(player.guildId, async () => {
-            if (!shouldStillInjectAutoplayTrack(player)) return false
-            await player.queue.add(playableTrack)
-            if (isRRQActive(player)) {
-                await rebalancePlayerQueueRoundRobinAssumingLock(player)
+            const live = client.lavalink.getPlayer(player.guildId)
+            if (!live || live !== player) return false
+            if (!shouldStillInjectAutoplayTrack(live)) return false
+            await live.queue.add(playableTrack)
+            if (isRRQActive(live)) {
+                await rebalancePlayerQueueRoundRobinAssumingLock(live)
             }
             return true
         })
         if (!injected) return false
+        if (client.lavalink.getPlayer(player.guildId) !== player) return false
 
         try {
             await player.play()
@@ -243,7 +247,9 @@ async function tryQueueAndPlayAutoplay(
             )
             try {
                 await withGuildPlayerQueueLock(player.guildId, async () => {
-                    await player.queue.remove(playableTrack)
+                    const live = client.lavalink.getPlayer(player.guildId)
+                    if (!live || live !== player) return
+                    await live.queue.remove(playableTrack)
                 })
             } catch (removeErr: unknown) {
                 const rmsg = removeErr instanceof Error ? removeErr.message : String(removeErr)

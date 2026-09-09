@@ -19,7 +19,9 @@ import type {
 } from "../types/index.js"
 import { shouldDeleteLavalinkPlayerAfterDestroy } from "./lavalinkManagerPlayerDelete.js"
 import {
+    shouldAbortLocalPlayForLivePlayerConflict,
     shouldClearSessionAfterFailedHandoffDestroy,
+    shouldClearSessionAfterLocalHandoffReady,
     shouldDestroyLeftoverHandoffPlayer,
 } from "./localPlayHandoffLeftover.js"
 import {
@@ -29,6 +31,24 @@ import {
 
 const activeLocalPlayers = new Map<string, ActiveLocalPlayer>()
 const pendingLocalPlayGuildIds = new Set<string>()
+/** Bumped by `/stop` / `/leave` so in-flight local joins abort before starting audio. */
+const pendingLocalPlayCancelEpochByGuild = new Map<string, number>()
+
+/**
+ * Cancels an in-flight `playLocalFile` join (before audio starts). Safe when nothing is pending.
+ * Call from `/stop` and `/leave` so a Ready wait after Lavalink handoff cannot resume playback.
+ */
+export function cancelPendingLocalPlay(guildId: string): void {
+    pendingLocalPlayCancelEpochByGuild.set(
+        guildId,
+        (pendingLocalPlayCancelEpochByGuild.get(guildId) ?? 0) + 1
+    )
+}
+
+/** True while `playLocalFile` holds the guild pending lock (join may still be in flight). */
+export function isPendingLocalPlay(guildId: string): boolean {
+    return pendingLocalPlayGuildIds.has(guildId)
+}
 
 /**
  * Resolves when Lavalink emits `playerDestroy` for the guild or after `timeoutMs`.
@@ -90,72 +110,138 @@ export async function playLocalFile(
             error: new Error("pending local play"),
         }
     }
-    pendingLocalPlayGuildIds.add(guildId)
 
-    let postLavalinkHandoff: Promise<void> = new Promise((r) => queueMicrotask(r))
-    let sessionHandoff: LocalPlaySessionHandoff | null = null
-
-    if (lavalinkPlayer) {
+    // Stale local-match confirmation: /stop+/play may have installed a successor while the
+    // button await was open. Never flush/destroy/join against a different live player.
+    const liveBeforePending = client.lavalink.getPlayer(guildId)
+    if (shouldAbortLocalPlayForLivePlayerConflict(lavalinkPlayer, liveBeforePending)) {
         client.debug(
-            `[LocalPlayer] Checking Lavalink player state for guild ${guildId}. Connected: ${lavalinkPlayer.connected}, Playing: ${lavalinkPlayer.playing}`
+            `[LocalPlayer] Aborting local play for guild ${guildId}: live Lavalink player is not the handoff target.`
         )
-        if (client.lavalink.players.has(guildId)) {
-            // Flush the full queue *before* stopPlaying(true) clears upcoming tracks, then
-            // suppress clearPlayerSession across destroy so a failed local join can restore.
-            let destroyEventWait: Promise<boolean> = Promise.resolve(false)
-            sessionHandoff = await beginLocalPlaySessionHandoff(lavalinkPlayer, async () => {
-                if (lavalinkPlayer.playing) {
-                    try {
-                        await lavalinkPlayer.stopPlaying(true, false)
-                        client.debug(`[LocalPlayer] Stopped Lavalink player in guild ${guildId}.`)
-                    } catch (e: unknown) {
-                        const msg = e instanceof Error ? e.message : String(e)
-                        client.warn(
-                            `[LocalPlayer] Failed to stop Lavalink player in guild ${guildId}: ${msg}`
-                        )
-                    }
-                }
-                destroyEventWait = waitForLavalinkPlayerDestroy(client, guildId, 2000)
-                client.debug(
-                    `[LocalPlayer] Attempting to destroy existing Lavalink player for guild ${guildId}.`
-                )
-                await lavalinkPlayer.destroy()
-                client.debug(`[LocalPlayer] Destroyed Lavalink player for guild ${guildId}.`)
-                // Lavalink-client already removed this guild from the manager cache before
-                // awaiting node.destroyPlayer. A successful Map.delete here would drop a
-                // concurrent createPlayer successor without destroying it.
-                if (shouldDeleteLavalinkPlayerAfterDestroy(client.lavalink.players.has(guildId))) {
-                    client.lavalink.players.delete(guildId)
-                }
-            })
-            if (!sessionHandoff.destroyedLavalink) {
-                client.warn(
-                    `[LocalPlayer] Failed to destroy Lavalink player in guild ${guildId}. Proceeding with @discordjs/voice connection attempt.`
-                )
-            }
-            postLavalinkHandoff = destroyEventWait.then((eventSeen) => {
-                if (eventSeen) sessionHandoff?.markDestroyEventSeen()
-            })
-        } else {
-            client.debug(
-                `[LocalPlayer] No Lavalink player found in manager for guild ${guildId} prior to local play.`
-            )
-            if (lavalinkPlayer.playing) {
-                try {
-                    await lavalinkPlayer.stopPlaying(true, false)
-                    client.debug(`[LocalPlayer] Stopped Lavalink player in guild ${guildId}.`)
-                } catch (e: unknown) {
-                    const msg = e instanceof Error ? e.message : String(e)
-                    client.warn(
-                        `[LocalPlayer] Failed to stop Lavalink player in guild ${guildId}: ${msg}`
-                    )
-                }
-            }
+        return {
+            success: false,
+            feedbackText:
+                "Playback changed while you were confirming. Start your request again if you still want the local file.",
+            error: new Error("lavalink player replaced before local play"),
         }
     }
 
+    pendingLocalPlayGuildIds.add(guildId)
+    const cancelEpochAtStart = pendingLocalPlayCancelEpochByGuild.get(guildId) ?? 0
+
+    // Handoff (flush/destroy) can throw before the join try — keep the pending clear in
+    // finally so a DB blip cannot permanently poison local play for this guild.
     try {
+        let postLavalinkHandoff: Promise<void> = new Promise((r) => queueMicrotask(r))
+        let sessionHandoff: LocalPlaySessionHandoff | null = null
+
+        const abortIfCancelled = async (
+            connection?: VoiceConnection
+        ): Promise<QueryPlayResult | null> => {
+            if ((pendingLocalPlayCancelEpochByGuild.get(guildId) ?? 0) === cancelEpochAtStart) {
+                return null
+            }
+            if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
+                connection.destroy()
+            }
+            if (sessionHandoff) {
+                try {
+                    const liveAfter = client.lavalink.getPlayer(guildId)
+                    if (
+                        !lavalinkPlayer ||
+                        shouldClearSessionAfterFailedHandoffDestroy(lavalinkPlayer, liveAfter)
+                    ) {
+                        await sessionHandoff.clearSessionAfterLocalReady()
+                    } else {
+                        sessionHandoff.releaseLeftoverSuppressLease()
+                        client.debug(
+                            `[LocalPlayer] Skipping session clear after cancel for guild ${guildId}: successor owns the slot.`
+                        )
+                    }
+                } catch (e: unknown) {
+                    const msg = e instanceof Error ? e.message : String(e)
+                    client.warn(
+                        `[LocalPlayer] session cleanup after cancel for guild ${guildId}: ${msg}`
+                    )
+                }
+            }
+            return {
+                success: false,
+                feedbackText: "Local playback was cancelled.",
+                error: new Error("pending local play cancelled"),
+            }
+        }
+
+        if (lavalinkPlayer) {
+            client.debug(
+                `[LocalPlayer] Checking Lavalink player state for guild ${guildId}. Connected: ${lavalinkPlayer.connected}, Playing: ${lavalinkPlayer.playing}`
+            )
+            // Identity match only — `players.has(guildId)` is true for a successor and would
+            // flush the stale handoff Player over that session then steal Discord voice.
+            const liveForHandoff = client.lavalink.getPlayer(guildId)
+            if (shouldAbortLocalPlayForLivePlayerConflict(lavalinkPlayer, liveForHandoff)) {
+                client.debug(
+                    `[LocalPlayer] Aborting local play for guild ${guildId}: player replaced before handoff.`
+                )
+                return {
+                    success: false,
+                    feedbackText:
+                        "Playback changed while you were confirming. Start your request again if you still want the local file.",
+                    error: new Error("lavalink player replaced before local handoff"),
+                }
+            }
+            if (liveForHandoff === lavalinkPlayer) {
+                // Flush the full queue *before* stopPlaying(true) clears upcoming tracks, then
+                // suppress clearPlayerSession across destroy so a failed local join can restore.
+                let destroyEventWait: Promise<boolean> = Promise.resolve(false)
+                sessionHandoff = await beginLocalPlaySessionHandoff(lavalinkPlayer, async () => {
+                    if (lavalinkPlayer.playing) {
+                        try {
+                            await lavalinkPlayer.stopPlaying(true, false)
+                            client.debug(
+                                `[LocalPlayer] Stopped Lavalink player in guild ${guildId}.`
+                            )
+                        } catch (e: unknown) {
+                            const msg = e instanceof Error ? e.message : String(e)
+                            client.warn(
+                                `[LocalPlayer] Failed to stop Lavalink player in guild ${guildId}: ${msg}`
+                            )
+                        }
+                    }
+                    destroyEventWait = waitForLavalinkPlayerDestroy(client, guildId, 2000)
+                    client.debug(
+                        `[LocalPlayer] Attempting to destroy existing Lavalink player for guild ${guildId}.`
+                    )
+                    await lavalinkPlayer.destroy()
+                    client.debug(`[LocalPlayer] Destroyed Lavalink player for guild ${guildId}.`)
+                    // Lavalink-client already removed this guild from the manager cache before
+                    // awaiting node.destroyPlayer. A successful Map.delete here would drop a
+                    // concurrent createPlayer successor without destroying it.
+                    if (
+                        shouldDeleteLavalinkPlayerAfterDestroy(client.lavalink.players.has(guildId))
+                    ) {
+                        client.lavalink.players.delete(guildId)
+                    }
+                })
+                if (!sessionHandoff.destroyedLavalink) {
+                    client.warn(
+                        `[LocalPlayer] Failed to destroy Lavalink player in guild ${guildId}. Proceeding with @discordjs/voice connection attempt.`
+                    )
+                }
+                postLavalinkHandoff = destroyEventWait.then((eventSeen) => {
+                    if (eventSeen) sessionHandoff?.markDestroyEventSeen()
+                })
+            } else {
+                client.debug(
+                    `[LocalPlayer] No matching Lavalink player in manager for guild ${guildId} prior to local play.`
+                )
+            }
+        }
+
         await postLavalinkHandoff
+
+        const cancelledBeforeJoin = await abortIfCancelled()
+        if (cancelledBeforeJoin) return cancelledBeforeJoin
 
         if (activeLocalPlayers.has(guildId)) {
             const oldPlayer = activeLocalPlayers.get(guildId)!
@@ -191,6 +277,9 @@ export async function playLocalFile(
 
             await entersState(connection, VoiceConnectionStatus.Ready, 30_000)
             client.debug(`[LocalPlayer] Voice connection Ready for guild ${guildId}`)
+
+            const cancelledAfterReady = await abortIfCancelled(connection)
+            if (cancelledAfterReady) return cancelledAfterReady
         } catch (error: unknown) {
             client.error(
                 `[LocalPlayer] Failed to join or get ready in voice channel ${voiceChannel.id} for guild ${guildId}:`,
@@ -236,41 +325,50 @@ export async function playLocalFile(
         }
 
         try {
-            // Same leftover path when handoff destroy threw but local Ready succeeded:
-            // remove only the original empty player under lease, then clear the snapshot
-            // unless a successor already owns the guild (preserve its session).
-            if (sessionHandoff && !sessionHandoff.destroyedLavalink && lavalinkPlayer) {
-                const leftover = client.lavalink.getPlayer(guildId)
-                if (leftover && shouldDestroyLeftoverHandoffPlayer(lavalinkPlayer, leftover)) {
-                    try {
-                        const destroyEventWait = waitForLavalinkPlayerDestroy(client, guildId, 2000)
-                        await leftover.destroy()
-                        if (await destroyEventWait) {
-                            sessionHandoff.markDestroyEventSeen()
+            // After handoff (destroy success *or* failure), only clear the flushed Lavalink
+            // session when no successor owns the guild. Successful destroy still races with
+            // /play during the up-to-30s Ready wait — unconditional clear would wipe that row.
+            if (sessionHandoff && lavalinkPlayer) {
+                if (!sessionHandoff.destroyedLavalink) {
+                    const leftover = client.lavalink.getPlayer(guildId)
+                    if (leftover && shouldDestroyLeftoverHandoffPlayer(lavalinkPlayer, leftover)) {
+                        try {
+                            const destroyEventWait = waitForLavalinkPlayerDestroy(
+                                client,
+                                guildId,
+                                2000
+                            )
+                            await leftover.destroy()
+                            if (await destroyEventWait) {
+                                sessionHandoff.markDestroyEventSeen()
+                            }
+                        } catch (destroyErr: unknown) {
+                            const msg =
+                                destroyErr instanceof Error
+                                    ? destroyErr.message
+                                    : String(destroyErr)
+                            client.warn(
+                                `[LocalPlayer] Leftover Lavalink destroy after local Ready for guild ${guildId}: ${msg}`
+                            )
                         }
-                    } catch (destroyErr: unknown) {
-                        const msg =
-                            destroyErr instanceof Error ? destroyErr.message : String(destroyErr)
-                        client.warn(
-                            `[LocalPlayer] Leftover Lavalink destroy after local Ready for guild ${guildId}: ${msg}`
+                    } else if (leftover) {
+                        client.debug(
+                            `[LocalPlayer] Skipping leftover destroy after local Ready for guild ${guildId}: live player is not the handoff instance.`
                         )
                     }
-                } else if (leftover) {
-                    client.debug(
-                        `[LocalPlayer] Skipping leftover destroy after local Ready for guild ${guildId}: live player is not the handoff instance.`
-                    )
                 }
-                // Re-read after destroy: node.destroyPlayer await can admit a successor
-                // between cache delete and playerDestroy; do not wipe that session.
+                // Re-read after optional leftover destroy: node.destroyPlayer await can admit a
+                // successor between cache delete and playerDestroy; do not wipe that session.
                 const liveAfter = client.lavalink.getPlayer(guildId)
-                if (shouldClearSessionAfterFailedHandoffDestroy(lavalinkPlayer, liveAfter)) {
+                if (shouldClearSessionAfterLocalHandoffReady(lavalinkPlayer, liveAfter)) {
                     await sessionHandoff.clearSessionAfterLocalReady()
                 } else {
                     // Successor owns the slot — drop our suppress lease without wiping its row.
                     sessionHandoff.releaseLeftoverSuppressLease()
+                    client.debug(
+                        `[LocalPlayer] Skipping session clear after local Ready for guild ${guildId}: successor player owns the slot.`
+                    )
                 }
-            } else {
-                await sessionHandoff?.clearSessionAfterLocalReady()
             }
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e)

@@ -14,7 +14,7 @@ import { formatDuration } from "../../util/formatDuration.js"
 import {
     addTracksToPlaylist,
     createPlaylist,
-    deletePlaylist,
+    deletePlaylistById,
     getPlaylist,
     getUserPlaylists,
     removeTrackFromPlaylistById,
@@ -32,6 +32,7 @@ import {
 } from "../../util/guildPlayerQueueLock.js"
 import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
 import { thumbnailFromLavalinkTrack } from "../../util/trackThumbnail.js"
+import { isSameLivePlayer } from "../../util/livePlayerIdentity.js"
 import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
@@ -155,7 +156,8 @@ export default {
                         ephemeral: true,
                     })
                 }
-                await deletePlaylist(userId, name)
+                // Delete by id so a concurrent recreate of the same name is not wiped.
+                await deletePlaylistById(userId, existing.id)
                 return interaction.reply({
                     content: `Deleted playlist **${name}**.`,
                     ephemeral: true,
@@ -365,12 +367,16 @@ export default {
                             if (!createdHere) return
                             // Match web playlist/search teardown: ephemeral create-then-fail must not
                             // wipe a prior persisted session still awaiting restore.
+                            const createdPlayer = player
                             await tryDestroyOrphanGuildPlayer(guild.id, {
                                 hasQueueContent: () => {
-                                    const live = client.lavalink.getPlayer(guild.id) ?? player
+                                    const live = client.lavalink.getPlayer(guild.id)
+                                    if (!isSameLivePlayer(live, createdPlayer)) return true
                                     return playerHasQueueContent(live)
                                 },
                                 destroyPlayer: async () => {
+                                    const live = client.lavalink.getPlayer(guild.id)
+                                    if (!isSameLivePlayer(live, createdPlayer)) return
                                     await destroyPlayerSuppressingSessionClear(guild.id, () =>
                                         client.lavalink.destroyPlayer(guild.id)
                                     )
@@ -396,8 +402,16 @@ export default {
                             return { kind: "no_tracks" as const, name }
                         }
 
+                        if (!isSameLivePlayer(client.lavalink.getPlayer(guild.id), player)) {
+                            return { kind: "player_gone" as const }
+                        }
+
+                        const playPlayer = player
                         const enqueue = await enqueueResolvedPlaylistTracks(
-                            () => client.lavalink.getPlayer(guild.id),
+                            () => {
+                                const live = client.lavalink.getPlayer(guild.id)
+                                return isSameLivePlayer(live, playPlayer) ? live : undefined
+                            },
                             guild.id,
                             resolved,
                             interaction.user.id,

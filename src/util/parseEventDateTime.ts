@@ -17,19 +17,52 @@ function isValidTimeZone(timeZone: string): boolean {
 
 /**
  * Returns the offset (ms) of `timeZone` from UTC at the given instant.
- * Positive means the zone is ahead of UTC. Uses the locale-string round-trip technique
- * so no external date library is required.
+ * Positive means the zone is ahead of UTC. Derived from `Intl` wall-clock parts so
+ * ambiguous fall-back hours are not mis-parsed by `Date` locale-string round-trips.
  */
 function timeZoneOffsetMs(timeZone: string, instant: Date): number {
-    const tzDate = new Date(instant.toLocaleString("en-US", { timeZone }))
-    const utcDate = new Date(instant.toLocaleString("en-US", { timeZone: "UTC" }))
-    return tzDate.getTime() - utcDate.getTime()
+    const wall = wallClockParts(timeZone, instant)
+    if (!wall) return 0
+    const wallAsUtc = Date.UTC(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute)
+    const instantMin = Math.floor(instant.getTime() / 60_000) * 60_000
+    return wallAsUtc - instantMin
+}
+
+/** Wall-clock Y/M/D/H/M components of `instant` in `timeZone` (24h). */
+function wallClockParts(
+    timeZone: string,
+    instant: Date
+): { year: number; month: number; day: number; hour: number; minute: number } | null {
+    try {
+        const parts = new Intl.DateTimeFormat("en-US", {
+            timeZone,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            hourCycle: "h23",
+        }).formatToParts(instant)
+        const get = (type: Intl.DateTimeFormatPartTypes): string | undefined =>
+            parts.find((p) => p.type === type)?.value
+        const year = Number(get("year"))
+        const month = Number(get("month"))
+        const day = Number(get("day"))
+        const hour = Number(get("hour"))
+        const minute = Number(get("minute"))
+        if (![year, month, day, hour, minute].every((n) => Number.isFinite(n))) return null
+        return { year, month, day, hour, minute }
+    } catch {
+        return null
+    }
 }
 
 /**
  * Converts a wall-clock `date` (`YYYY-MM-DD`) and `time` (`HH:MM`, 24h) interpreted in
  * `timeZone` (IANA name) to a Unix timestamp in seconds. Validates formats, calendar validity,
- * and the time zone. The offset is resolved at the target instant so DST is accounted for.
+ * and the time zone. Offset is iterated at the candidate instant so DST transitions are correct;
+ * nonexistent spring-forward gap times are rejected; ambiguous fall-back hours use the
+ * earlier (still-DST) occurrence.
  */
 export function parseEventDateTime(
     date: string,
@@ -64,7 +97,46 @@ export function parseEventDateTime(
         return { ok: false, error: "That date does not exist on the calendar." }
     }
 
-    const offset = timeZoneOffsetMs(timeZone, new Date(asUtc))
-    const epochMs = asUtc - offset
+    // Iterate: a single offset sampled at `asUtc` is wrong near DST transitions (e.g. Chicago
+    // spring-forward mornings), because that UTC instant still sits in the previous offset.
+    let epochMs = asUtc
+    for (let i = 0; i < 5; i++) {
+        const offset = timeZoneOffsetMs(timeZone, new Date(epochMs))
+        const next = asUtc - offset
+        if (next === epochMs) break
+        epochMs = next
+    }
+
+    const wall = wallClockParts(timeZone, new Date(epochMs))
+    if (
+        !wall ||
+        wall.year !== year ||
+        wall.month !== month ||
+        wall.day !== day ||
+        wall.hour !== hour ||
+        wall.minute !== minute
+    ) {
+        // Spring-forward gap (e.g. 02:30 on the day clocks jump) has no unique local instant.
+        return {
+            ok: false,
+            error: "That local time does not exist on that date (DST transition gap).",
+        }
+    }
+
+    // Fall-back overlap: the same wall time exists twice. Prefer the earlier instant
+    // (first occurrence / still on DST) when that hour also maps to the requested clock.
+    const earlierMs = epochMs - 60 * 60 * 1000
+    const earlierWall = wallClockParts(timeZone, new Date(earlierMs))
+    if (
+        earlierWall &&
+        earlierWall.year === year &&
+        earlierWall.month === month &&
+        earlierWall.day === day &&
+        earlierWall.hour === hour &&
+        earlierWall.minute === minute
+    ) {
+        epochMs = earlierMs
+    }
+
     return { ok: true, epochSeconds: Math.floor(epochMs / 1000) }
 }

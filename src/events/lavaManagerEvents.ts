@@ -294,7 +294,9 @@ export default async (client: BotClient) => {
             // A second skip races that path and can drop the next good track — see trackStuckAdvance.
             if (shouldApplicationSkipOnTrackStuck()) {
                 try {
-                    await skipCurrentTrack(player)
+                    await skipCurrentTrack(player, undefined, () =>
+                        client.lavalink.getPlayer(player.guildId)
+                    )
                 } catch (e: unknown) {
                     client.error(
                         `[LavaMgrEvents] Failed to skip stuck track in guild ${player.guildId}:`,
@@ -400,7 +402,9 @@ export default async (client: BotClient) => {
                 }
                 if (player.queue.tracks.length > 0) {
                     try {
-                        await skipCurrentTrack(player)
+                        await skipCurrentTrack(player, undefined, () =>
+                            client.lavalink.getPlayer(player.guildId)
+                        )
                     } catch (e: unknown) {
                         client.error(
                             `[LavaMgrEvents] Failed to skip after track error in guild ${player.guildId}:`,

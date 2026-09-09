@@ -143,6 +143,7 @@ describe("countdownStore save lock", () => {
             },
             deleteCountdown: async (id) => {
                 createOrder.push(`delete-${id}`)
+                return true
             },
         })
         await initializeCountdownStore({ info() {} })
@@ -154,11 +155,59 @@ describe("countdownStore save lock", () => {
 
         releaseCreate!()
         const created = await addPromise
-        await removePromise
+        const removed = await removePromise
 
         assert.equal(created.id, 10)
+        assert.equal(removed, true)
         assert.deepEqual(createOrder, ["create-start", "create-end", "delete-1"])
         assert.equal(getCountdown(10)?.eventName, "New")
         assert.equal(getCountdown(1), undefined)
+    })
+
+    it("returns false on a second remove so only one finish announcer can win", async () => {
+        const deletedIds: number[] = []
+        setCountdownStoreDbForTests({
+            getAllCountdownsFromDatabase: async () => ({
+                3: sampleEntry({ id: 3 }),
+            }),
+            deleteCountdown: async (id) => {
+                deletedIds.push(id)
+                return true
+            },
+        })
+        await initializeCountdownStore({ info() {} })
+
+        assert.equal(await removeCountdown(3), true)
+        assert.equal(await removeCountdown(3), false)
+        assert.equal(getCountdown(3), undefined)
+        assert.deepEqual(deletedIds, [3])
+    })
+
+    it("keeps the cache and rejects when database deletion throws", async () => {
+        setCountdownStoreDbForTests({
+            getAllCountdownsFromDatabase: async () => ({
+                8: sampleEntry({ id: 8 }),
+            }),
+            deleteCountdown: async () => {
+                throw new Error("db unavailable")
+            },
+        })
+        await initializeCountdownStore({ info() {} })
+
+        await assert.rejects(() => removeCountdown(8), /db unavailable/)
+        assert.equal(getCountdown(8)?.id, 8)
+    })
+
+    it("returns false and drops the cache when the database row was already gone", async () => {
+        setCountdownStoreDbForTests({
+            getAllCountdownsFromDatabase: async () => ({
+                9: sampleEntry({ id: 9 }),
+            }),
+            deleteCountdown: async () => false,
+        })
+        await initializeCountdownStore({ info() {} })
+
+        assert.equal(await removeCountdown(9), false)
+        assert.equal(getCountdown(9), undefined)
     })
 })

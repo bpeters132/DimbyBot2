@@ -6,6 +6,11 @@ import { auth } from "../auth-node.js"
 import { tryGetBotClient } from "../../lib/botClientRegistry.js"
 import { resolveDiscordUserSnowflake } from "../discord-user-id.js"
 import { parseWsConnectToken } from "./ws-connect-token.js"
+import {
+    evaluateSubscribeDebounce,
+    isStaleSubscribeAttempt,
+    type SubscribeLastAttempt,
+} from "./wsSubscribeDecision.js"
 import { webPlayerTrace, webPlayerWarn } from "../web-player-debug-log.js"
 
 interface SocketMeta {
@@ -18,10 +23,12 @@ export class ConnectionManager {
     private readonly guildConnections = new Map<string, Set<WebSocket>>()
     private readonly socketMeta = new Map<WebSocket, SocketMeta>()
     /** Last subscribe attempt per socket (same guild) for debouncing permission resolution. */
-    private readonly subscribeLastAttempt = new Map<
-        WebSocket,
-        { guildId: string; at: number; success: boolean }
-    >()
+    private readonly subscribeLastAttempt = new Map<WebSocket, SubscribeLastAttempt>()
+    /**
+     * Monotonic per-socket subscribe generation. Bumped when a non-debounced subscribe starts
+     * resolving permissions so a slower older attempt cannot overwrite a newer guild choice.
+     */
+    private readonly subscribeAttemptGeneration = new Map<WebSocket, number>()
     private static readonly SUBSCRIBE_DEBOUNCE_MS = 4000
     private readonly heartbeatIntervalMs: number
     private heartbeatTimer: NodeJS.Timeout | null = null
@@ -293,17 +300,23 @@ export class ConnectionManager {
 
             const now = Date.now()
             const last = this.subscribeLastAttempt.get(socket)
-            if (
-                last &&
-                last.guildId === guildId &&
-                now - last.at < ConnectionManager.SUBSCRIBE_DEBOUNCE_MS
-            ) {
-                this.subscribeLastAttempt.set(socket, { guildId, at: now, success: last.success })
+            const debounce = evaluateSubscribeDebounce(
+                last,
+                guildId,
+                now,
+                ConnectionManager.SUBSCRIBE_DEBOUNCE_MS
+            )
+            if (debounce.action === "reuse") {
+                this.subscribeLastAttempt.set(socket, {
+                    guildId,
+                    at: now,
+                    success: debounce.success,
+                })
                 webPlayerTrace("WS subscribe debounced (same guild)", {
                     guildId,
                     viewerIdPrefix: meta.userId.slice(0, 8),
                 })
-                if (last.success) {
+                if (debounce.success) {
                     socket.send(JSON.stringify({ type: "subscribed", guildId }))
                 } else {
                     socket.send(
@@ -317,10 +330,21 @@ export class ConnectionManager {
                 return
             }
 
+            const attemptGeneration = (this.subscribeAttemptGeneration.get(socket) ?? 0) + 1
+            this.subscribeAttemptGeneration.set(socket, attemptGeneration)
+
             let resolution: Awaited<ReturnType<typeof resolveUserPermissions>>
             try {
                 resolution = await resolveUserPermissions(botClient, guildId, meta.userId)
             } catch (error: unknown) {
+                if (
+                    isStaleSubscribeAttempt(
+                        this.subscribeAttemptGeneration.get(socket),
+                        attemptGeneration
+                    )
+                ) {
+                    return
+                }
                 this.subscribeLastAttempt.set(socket, { guildId, at: Date.now(), success: false })
                 const message = error instanceof Error ? error.message : String(error)
                 webPlayerWarn("WS subscribe permission resolution failed", {
@@ -335,6 +359,14 @@ export class ConnectionManager {
                         message: "Could not resolve permissions for this subscription request.",
                     })
                 )
+                return
+            }
+            if (
+                isStaleSubscribeAttempt(
+                    this.subscribeAttemptGeneration.get(socket),
+                    attemptGeneration
+                )
+            ) {
                 return
             }
             if (!hasRequiredPermissions(resolution.permissions, [WebPermission.VIEW_PLAYER])) {
@@ -406,6 +438,10 @@ export class ConnectionManager {
         }
         meta.guildSubscriptions.delete(guildId)
         this.subscribeLastAttempt.delete(socket)
+        // Invalidate an in-flight subscribe awaiting permission resolution so it cannot
+        // complete after unsubscribe and re-subscribe the socket.
+        const currentGeneration = this.subscribeAttemptGeneration.get(socket) ?? 0
+        this.subscribeAttemptGeneration.set(socket, currentGeneration + 1)
     }
 
     private subscribe(socket: WebSocket, guildId: string): void {
@@ -433,6 +469,7 @@ export class ConnectionManager {
 
         this.socketMeta.delete(socket)
         this.subscribeLastAttempt.delete(socket)
+        this.subscribeAttemptGeneration.delete(socket)
     }
 }
 

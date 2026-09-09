@@ -374,6 +374,17 @@ export function schedulePlayerSessionSave(player: Player): void {
     if (typeof timer.unref === "function") timer.unref()
 }
 
+/** Persist only when the guild still has this live player (never a post-destroy zombie). */
+export function scheduleSaveIfPlayerStillLive(
+    getLivePlayer: () => Player | undefined,
+    expected: Player
+): void {
+    const live = getLivePlayer()
+    if (live && live === expected) {
+        schedulePlayerSessionSave(live)
+    }
+}
+
 /** Immediately persists the latest snapshot for one guild. */
 export async function flushPlayerSessionSave(guildId: string): Promise<void> {
     const timer = pendingSaveTimers.get(guildId)
@@ -457,6 +468,19 @@ export function resolvePlayerDestroySessionClearAction(
     if (!shouldClearPlayerSessionOnDestroy(reason)) return "preserve-reason"
     if (livePlayer != null && livePlayer !== destroyedPlayer) return "skip-successor"
     return "clear"
+}
+
+/**
+ * After an intentional destroy (`/leave`, `/stop`, control/web stop), whether to
+ * {@link forceClearPlayerSession}. `playerDestroy` → {@link clearPlayerSession} already
+ * skips when a successor owns the guild; force-clear must use the same identity rule or
+ * it wipes that successor's persisted snapshot (and invalidates its pending save).
+ */
+export function shouldForceClearPlayerSessionAfterDestroy(
+    destroyedPlayer: object,
+    livePlayer: object | null | undefined
+): boolean {
+    return livePlayer == null || livePlayer === destroyedPlayer
 }
 
 /**
@@ -551,4 +575,30 @@ export async function forceClearPlayerSession(guildId: string): Promise<void> {
         clearPlayerSessionPreservePriorSnapshot(guildId)
     }
     await deletePlayerSessionRow(guildId)
+}
+
+/**
+ * Force-clears only when `getLivePlayer` is still empty at write time.
+ * `/leave` with no Lavalink player can race a successor `/play` that persists a session
+ * between the last absence check and this delete.
+ */
+export async function forceClearPlayerSessionIfNoLivePlayer(
+    guildId: string,
+    getLivePlayer: () => object | null | undefined
+): Promise<void> {
+    if (getLivePlayer()) return
+    await forceClearPlayerSession(guildId)
+}
+
+/**
+ * Force-clears only when {@link shouldForceClearPlayerSessionAfterDestroy} is true.
+ * Call after `await player.destroy()` with a fresh `getPlayer(guildId)` read.
+ */
+export async function forceClearPlayerSessionAfterDestroyIfSafe(
+    guildId: string,
+    destroyedPlayer: object,
+    livePlayer: object | null | undefined
+): Promise<void> {
+    if (!shouldForceClearPlayerSessionAfterDestroy(destroyedPlayer, livePlayer)) return
+    await forceClearPlayerSession(guildId)
 }

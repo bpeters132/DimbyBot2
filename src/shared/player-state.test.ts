@@ -1,12 +1,15 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
+    applyDashboardRequesterFallback,
+    composePlayerStateResponse,
     isActivePlayerSession,
     isPlayer,
     resolveBotVoiceChannelId,
     snapshotGuildListPlayer,
     summarizeVoiceForWeb,
 } from "./player-state.js"
+import { DASHBOARD_REQUESTER_KEY } from "../util/dashboardRequesterSnapshot.js"
 
 function mockPlayer(opts: {
     guildId?: string
@@ -15,13 +18,21 @@ function mockPlayer(opts: {
     paused?: boolean
     tracks?: unknown[]
     current?: { info?: { title?: string; author?: string } } | null
+    volume?: number
+    position?: number
+    repeatMode?: string
+    getOverrides?: Record<string, unknown>
 }) {
+    const getOverrides = opts.getOverrides ?? {}
     return {
-        get: () => undefined,
+        get: (key: string) => getOverrides[key],
         guildId: opts.guildId ?? "guild-1",
         voiceChannelId: opts.voiceChannelId === undefined ? "vc-bot" : opts.voiceChannelId,
         playing: opts.playing ?? false,
         paused: opts.paused ?? false,
+        volume: opts.volume ?? 100,
+        position: opts.position ?? 0,
+        repeatMode: opts.repeatMode ?? "off",
         queue: {
             tracks: opts.tracks ?? [],
             current: opts.current ?? null,
@@ -262,5 +273,128 @@ describe("snapshotGuildListPlayer", () => {
             currentTrackAuthor: "Artist",
             queueCount: 2,
         })
+    })
+})
+
+describe("composePlayerStateResponse", () => {
+    it("reports idle without a player and maps playing/paused/loop/autoplay fields", () => {
+        assert.deepEqual(composePlayerStateResponse("guild-1", "user-1", null, null), {
+            guildId: "guild-1",
+            hasPlayer: false,
+            status: "idle",
+            positionMs: 0,
+            loopMode: "off",
+            autoplay: false,
+            volume: 100,
+            queueCount: 0,
+            inVoiceWithBot: false,
+            botInVoiceChannel: false,
+            canQueueTracks: false,
+            currentTrack: null,
+        })
+
+        const playing = mockPlayer({
+            playing: true,
+            position: 12_000,
+            volume: 40,
+            repeatMode: "track",
+            tracks: [{}, {}],
+            getOverrides: { autoplay: true },
+        })
+        const track = {
+            title: "Song",
+            uri: "https://example.com/a",
+            durationMs: 1000,
+            isStream: false,
+            thumbnailUrl: null,
+            requesterId: "u1",
+            requesterUsername: "Alice",
+        }
+        const composed = composePlayerStateResponse("guild-1", "user-1", playing as never, track)
+        assert.equal(composed.hasPlayer, true)
+        assert.equal(composed.status, "playing")
+        assert.equal(composed.positionMs, 12_000)
+        assert.equal(composed.loopMode, "track")
+        assert.equal(composed.autoplay, true)
+        assert.equal(composed.volume, 40)
+        assert.equal(composed.queueCount, 2)
+        assert.equal(composed.currentTrack, track)
+
+        const paused = mockPlayer({ playing: false, paused: true, repeatMode: "queue" })
+        assert.equal(
+            composePlayerStateResponse("guild-1", "user-1", paused as never, null).status,
+            "paused"
+        )
+        assert.equal(
+            composePlayerStateResponse("guild-1", "user-1", paused as never, null).loopMode,
+            "queue"
+        )
+    })
+})
+
+describe("applyDashboardRequesterFallback", () => {
+    const baseSummary = {
+        title: "Song",
+        uri: null,
+        durationMs: 1000,
+        isStream: false,
+        thumbnailUrl: null,
+        requesterId: null as string | null,
+        requesterUsername: null as string | null,
+    }
+
+    it("fills missing requester id/username from the dashboard snapshot", () => {
+        const player = mockPlayer({
+            getOverrides: {
+                [DASHBOARD_REQUESTER_KEY]: { id: "dash-1", username: "DashUser" },
+            },
+        })
+        const filled = applyDashboardRequesterFallback(player as never, { ...baseSummary })
+        assert.deepEqual(filled, {
+            ...baseSummary,
+            requesterId: "dash-1",
+            requesterUsername: "DashUser",
+        })
+    })
+
+    it("does not override a different requester id, but fills a blank username for the same id", () => {
+        const player = mockPlayer({
+            getOverrides: {
+                [DASHBOARD_REQUESTER_KEY]: { id: "dash-1", username: "DashUser" },
+            },
+        })
+        assert.deepEqual(
+            applyDashboardRequesterFallback(player as never, {
+                ...baseSummary,
+                requesterId: "other",
+                requesterUsername: "Other",
+            }),
+            {
+                ...baseSummary,
+                requesterId: "other",
+                requesterUsername: "Other",
+            }
+        )
+        assert.deepEqual(
+            applyDashboardRequesterFallback(player as never, {
+                ...baseSummary,
+                requesterId: "dash-1",
+                requesterUsername: "   ",
+            }),
+            {
+                ...baseSummary,
+                requesterId: "dash-1",
+                requesterUsername: "DashUser",
+            }
+        )
+    })
+
+    it("returns the summary unchanged when player or dash snapshot is missing", () => {
+        assert.equal(applyDashboardRequesterFallback(null, baseSummary), baseSummary)
+        assert.equal(applyDashboardRequesterFallback(mockPlayer({}) as never, null), null)
+        assert.deepEqual(
+            applyDashboardRequesterFallback(mockPlayer({}) as never, baseSummary),
+            baseSummary
+        )
     })
 })

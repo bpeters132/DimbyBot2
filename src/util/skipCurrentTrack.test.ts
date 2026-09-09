@@ -100,4 +100,28 @@ describe("skipCurrentTrack", () => {
         assert.equal(result, "deferred")
         assert.deepEqual(calls, [])
     })
+
+    it("returns stale and does not skip when the player is replaced during prepare", async () => {
+        const originalCalls: number[] = []
+        const successorCalls: number[] = []
+        const tracks = [nativeTrack("next")]
+        const original = {
+            guildId: "guild-skip-stale",
+            queue: { tracks },
+            skip: async () => {
+                originalCalls.push(1)
+            },
+        }
+        const successor = {
+            guildId: "guild-skip-stale",
+            queue: { tracks },
+            skip: async () => {
+                successorCalls.push(1)
+            },
+        }
+        const result = await skipCurrentTrack(original, undefined, () => successor)
+        assert.equal(result, "stale")
+        assert.deepEqual(originalCalls, [])
+        assert.deepEqual(successorCalls, [])
+    })
 })
