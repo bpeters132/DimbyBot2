@@ -6,6 +6,7 @@ import type {
     PlaylistTrackData,
     PlaylistTrackInput,
 } from "../types/index.js"
+import { reorderPlaylistTrackRows } from "./playlistTrackReorder.js"
 
 export class PlaylistDuplicateNameError extends Error {
     constructor(name: string) {
@@ -256,22 +257,11 @@ export async function movePlaylistTrack(
             where: { playlistId },
             orderBy: { position: "asc" },
         })
-        if (rows.length === 0) {
-            throw new PlaylistTrackNotFoundError(fromPosition)
+        const ordered = reorderPlaylistTrackRows(rows, fromPosition, toPosition)
+        if (ordered.ok === false) {
+            throw new PlaylistTrackNotFoundError(ordered.missingPosition)
         }
-        const fromIdx = rows.findIndex((r) => r.position === fromPosition)
-        if (fromIdx === -1) {
-            throw new PlaylistTrackNotFoundError(fromPosition)
-        }
-        if (toPosition < 1 || toPosition > rows.length) {
-            throw new PlaylistTrackNotFoundError(toPosition)
-        }
-        const reordered = [...rows]
-        const [moved] = reordered.splice(fromIdx, 1)
-        if (!moved) {
-            throw new PlaylistTrackNotFoundError(fromPosition)
-        }
-        reordered.splice(toPosition - 1, 0, moved)
+        const reordered = ordered.rows
         for (let i = 0; i < reordered.length; i++) {
             await tx.playlistTrack.update({
                 where: { id: reordered[i]!.id },
