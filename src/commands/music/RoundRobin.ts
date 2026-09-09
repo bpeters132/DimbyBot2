@@ -5,6 +5,10 @@ import { guildMemberFromInteraction } from "../../util/guildMember.js"
 
 import { rebalancePlayerQueueRoundRobin, toggleRRQ } from "../../util/rrqDisconnect.js"
 import { updateControlMessage } from "../../events/handlers/handleControlChannel.js"
+import {
+    memberMayJoinOccupiedVoice,
+    resolveOccupiedVoiceChannelId,
+} from "../../util/sameVoiceChannel.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -41,7 +45,10 @@ export default {
             })
         }
 
-        if (player.connected && player.voiceChannelId !== voiceChannel.id) {
+        // Require same VC even when Lavalink reports disconnected; enabling RRQ rebalances
+        // the upcoming queue. `player.connected &&` previously skipped this gate.
+        const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, player)
+        if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
             return interaction.reply({
                 content: "You need to be in the same voice channel as the bot!",
                 ephemeral: true,
