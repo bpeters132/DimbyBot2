@@ -14,13 +14,14 @@ const XML_ENTITIES: Record<string, string> = {
     "&gt;": ">",
     "&quot;": '"',
     "&#39;": "'",
+    "&apos;": "'",
     "&amp;": "&",
 }
 
 /** Decodes common XML entities in one pass so values are never rescanned. */
 export function decodeYoutubeXmlEntities(value: string): string {
     return value.replace(
-        /&amp;|&lt;|&gt;|&quot;|&#39;/g,
+        /&amp;|&lt;|&gt;|&quot;|&#39;|&apos;/g,
         (entity) => XML_ENTITIES[entity] ?? entity
     )
 }

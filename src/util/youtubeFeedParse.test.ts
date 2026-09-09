@@ -51,6 +51,21 @@ describe("decodeYoutubeXmlEntities", () => {
         assert.equal(decodeYoutubeXmlEntities("A &amp; B"), "A & B")
         assert.equal(decodeYoutubeXmlEntities("&amp;lt;script&amp;gt;"), "&lt;script&gt;")
         assert.equal(decodeYoutubeXmlEntities("&quot;x&#39;"), `"x'`)
+        assert.equal(decodeYoutubeXmlEntities("It&apos;s fine"), "It's fine")
+    })
+
+    it("decodes &apos; in feed titles and descriptions", () => {
+        const parsed = parseYoutubeAtomFeed(`<feed>
+  <title>It&apos;s a channel</title>
+  <entry>
+    <yt:videoId>xxxxxxxxxxx</yt:videoId>
+    <title>Creator&apos;s cut</title>
+    <media:group><media:description>Don&apos;t skip</media:description></media:group>
+  </entry>
+</feed>`)
+        assert.equal(parsed.channelTitle, "It's a channel")
+        assert.equal(parsed.entries[0]?.title, "Creator's cut")
+        assert.equal(parsed.entries[0]?.description, "Don't skip")
     })
 })
 
