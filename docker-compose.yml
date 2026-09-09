@@ -146,6 +146,9 @@ services:
             # invidious-companion: YouTube stream URLs for Lavalink HTTP playback (search still uses youtube-source).
             - INVIDIOUS_COMPANION_URL=${INVIDIOUS_COMPANION_URL:-http://invidious-companion:8282}
             - INVIDIOUS_COMPANION_KEY=${INVIDIOUS_COMPANION_KEY:-changemechangeme}
+            - YOUTUBE_PUBSUB_CALLBACK_URL=${YOUTUBE_PUBSUB_CALLBACK_URL:-}
+            - YOUTUBE_PUBSUB_HUB_SECRET=${YOUTUBE_PUBSUB_HUB_SECRET:-}
+            - YOUTUBE_DATA_API_KEY=${YOUTUBE_DATA_API_KEY:-}
             # Prefer DATABASE_URL from project .env (password URL-encoded). Fallback builds from POSTGRES_*.
             - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-db:5432/${POSTGRES_DB}}
         # Named volumes: persist across `compose up`/`down` (no -v). CI deploy uses this file only;

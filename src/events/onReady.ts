@@ -3,6 +3,7 @@ import type BotClient from "../lib/BotClient.js"
 import { attachDiscordLogForwarding } from "../util/discordLogForward.js"
 import { refreshAllControlMessages } from "./handlers/handleControlChannel.js"
 import { updateAllCountdowns } from "../util/countdownUpdater.js"
+import { startYoutubeUploadMonitor } from "../util/youtubeUploadMonitor.js"
 import { markDiscordReadyForPlayerRestore } from "../util/restorePlayerSessions.js"
 
 export default async (client: BotClient) => {
@@ -39,6 +40,12 @@ export default async (client: BotClient) => {
                 client.error("[onReady] updateAllCountdowns interval failed:", err)
             )
         }, 60 * 1000)
+
+        try {
+            startYoutubeUploadMonitor(client, client)
+        } catch (err: unknown) {
+            client.error("[onReady] startYoutubeUploadMonitor failed:", err)
+        }
 
         // Create a toggle for status rotation
         let showGuildCount = true

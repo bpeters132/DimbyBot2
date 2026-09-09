@@ -63,6 +63,54 @@ model PlaylistTrack {
   @@index([playlistId], name: "PlaylistTrack_playlistId_idx")
 }
 
+/// Guild subscription to one YouTube channel (Upload Watch). Unique per guild + channel.
+model YoutubeWatch {
+  id                 Int                @id @default(autoincrement())
+  guildId            String
+  youtubeChannelId   String
+  youtubeChannelName String
+  createdAt          DateTime           @default(now())
+  alerts             YoutubeAlert[]
+  seenVideos         YoutubeSeenVideo[]
+
+  @@unique([guildId, youtubeChannelId])
+  @@index([guildId], name: "YoutubeWatch_guildId_idx")
+  @@index([youtubeChannelId], name: "YoutubeWatch_youtubeChannelId_idx")
+}
+
+/// Discord posting rule hanging off an Upload Watch (Upload Alert).
+model YoutubeAlert {
+  id               Int          @id @default(autoincrement())
+  watchId          Int
+  watch            YoutubeWatch @relation(fields: [watchId], references: [id], onDelete: Cascade)
+  discordChannelId String
+  mentionRoleIds   String[]     @default([])
+  messageTemplate  String?
+  eventTypes       String[]
+  createdBy        String
+  createdAt        DateTime     @default(now())
+
+  @@index([watchId], name: "YoutubeAlert_watchId_idx")
+}
+
+/// Video or community post IDs already processed for an Upload Watch (no backlog / no edit re-pings).
+model YoutubeSeenVideo {
+  watchId Int
+  watch   YoutubeWatch @relation(fields: [watchId], references: [id], onDelete: Cascade)
+  videoId String
+  seenAt  DateTime     @default(now())
+
+  @@id([watchId, videoId])
+  @@index([watchId], name: "YoutubeSeenVideo_watchId_idx")
+}
+
+/// Shared PubSubHubbub lease for a YouTube channel (one lease across all guilds).
+model YoutubeChannelLease {
+  youtubeChannelId String   @id
+  leaseExpiresAt   DateTime
+  updatedAt        DateTime @updatedAt
+}
+
 model Countdown {
   id            Int      @id @default(autoincrement())
   guildId       String

@@ -14,6 +14,8 @@ import {
     isPrivateLanOrLoopbackPeer,
     shouldEnforceBotApiPrivateClientIp,
 } from "./util/botApiPrivatePeer.js"
+import { handleYoutubePubsubRequest, isYoutubePubsubPath } from "./util/youtubePubsubHttp.js"
+import { stopYoutubeUploadMonitor } from "./util/youtubeUploadMonitor.js"
 
 const logFilePath = path.join(import.meta.dirname, "..", "logs", "app.log")
 const botApiPort = resolvedBotApiPort()
@@ -90,6 +92,7 @@ async function run(): Promise<void> {
                 logger.error("Error flushing player session saves:", flushErr)
             }
             stopHeartbeat?.()
+            stopYoutubeUploadMonitor()
             if (wss) {
                 for (const ws of wss.clients) {
                     try {
@@ -157,7 +160,7 @@ async function run(): Promise<void> {
             )
         }
         logger.info(
-            "Serving bot HTTP: /health, /api/* (Express guild + admin routes), /ws (WebSocket). Next.js is not used here."
+            "Serving bot HTTP: /health, /youtube/pubsub, /api/* (Express guild + admin routes), /ws (WebSocket). Next.js is not used here."
         )
 
         wss = new WebSocketServer({ noServer: true })
@@ -165,8 +168,11 @@ async function run(): Promise<void> {
         stopHeartbeat = () => connectionManager.stopHeartbeat()
 
         server = http.createServer((req, res) => {
+            const pathOnly = pathnameOnly(req.url)
+            const pubsub = isYoutubePubsubPath(pathOnly)
             if (
                 enforcePrivatePeers &&
+                !pubsub &&
                 !isPrivateLanOrLoopbackPeer(req.socket.remoteAddress ?? undefined)
             ) {
                 res.statusCode = 403
@@ -174,7 +180,18 @@ async function run(): Promise<void> {
                 res.end(JSON.stringify({ ok: false, error: "Forbidden" }))
                 return
             }
-            const pathOnly = pathnameOnly(req.url)
+            if (pubsub) {
+                void handleYoutubePubsubRequest(req, res, client, logger).catch(
+                    (error: unknown) => {
+                        logger.error("[yt-alerts] PubSub HTTP handler failed:", error)
+                        if (!res.headersSent) {
+                            res.statusCode = 500
+                            res.end("Internal Server Error")
+                        }
+                    }
+                )
+                return
+            }
             if (pathOnly === "/health" || pathOnly === "/health/") {
                 if (isBotApiVerbose()) {
                     console.log("[bot-api:express] GET /health -> 200")
