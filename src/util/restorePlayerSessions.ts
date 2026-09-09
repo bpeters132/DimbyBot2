@@ -32,6 +32,22 @@ export function shouldPersistRestoredPlayerSession(transientFailures: number): b
 }
 
 /**
+ * Whether a concurrent-enqueue abandon may overwrite the persisted session row.
+ *
+ * When restore still has playable tracks (or only transient resolve failures), saving the
+ * thin live queue permanently drops the fuller snapshot. Only when every stored track failed
+ * deterministically is it safe to persist the concurrent live queue as the new session.
+ */
+export function shouldPersistConcurrentAbandonSession(options: {
+    playableCount: number
+    transientFailures: number
+}): boolean {
+    if (options.playableCount > 0) return false
+    if (options.transientFailures > 0) return false
+    return true
+}
+
+/**
  * True when restore must not destroy the live player / delete the session row because
  * another request already enqueued content on the player created for hydrate.
  * `/play` saves are no-ops while restore-in-progress, so destroying here would drop
@@ -213,9 +229,19 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                     client.warn(
                         `[playerSession] restore for ${guildId}: no tracks resolved but live queue has content; keeping player`
                     )
-                    // Drop a leftover preserve guard so schedulePlayerSessionSave after finally can run.
-                    clearPlayerSessionPreservePriorSnapshot(guildId)
-                    playerToPersist = player
+                    if (
+                        shouldPersistConcurrentAbandonSession({
+                            playableCount: 0,
+                            transientFailures: transientTotal,
+                        })
+                    ) {
+                        // Deterministic resolve miss: prior snapshot was unrecoverable; keep live queue.
+                        clearPlayerSessionPreservePriorSnapshot(guildId)
+                        playerToPersist = player
+                    } else {
+                        // Transient failures + concurrent enqueue must not wipe the fuller DB row.
+                        markPlayerSessionPreservePriorSnapshot(guildId)
+                    }
                     return
                 }
                 // Lavalink/source blips that throw during decode/search must not wipe the snapshot.
@@ -246,8 +272,9 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                 client.warn(
                     `[playerSession] restore for ${guildId}: skipped hydrate; concurrent queue content present`
                 )
-                clearPlayerSessionPreservePriorSnapshot(guildId)
-                playerToPersist = player
+                // Keep the prior full snapshot: schedulePlayerSessionSave of the thin concurrent
+                // queue would permanently drop the restored session from the DB.
+                markPlayerSessionPreservePriorSnapshot(guildId)
                 scheduleControlMessageUpdate(client, guildId)
                 playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
                 return
@@ -301,11 +328,10 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
                 client.warn(
                     `[playerSession] restore for ${guildId}: error after concurrent enqueue; keeping player`
                 )
-                clearPlayerSessionPreservePriorSnapshot(guildId)
-                playerToPersist = orphan
-            } else {
-                playerToPersist = null
+                // Failed restore must not overwrite the prior snapshot with a concurrent thin queue.
+                markPlayerSessionPreservePriorSnapshot(guildId)
             }
+            playerToPersist = null
         } else {
             playerToPersist = null
         }

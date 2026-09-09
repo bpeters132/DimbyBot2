@@ -3,6 +3,7 @@ import { describe, it } from "node:test"
 import {
     isStaleSessionDiscordError,
     shouldAbandonRestoreForConcurrentQueue,
+    shouldPersistConcurrentAbandonSession,
     shouldPersistRestoredPlayerSession,
 } from "./restorePlayerSessions.js"
 
@@ -32,6 +33,33 @@ describe("shouldPersistRestoredPlayerSession", () => {
         // One resolved + one transient failure must not overwrite the full prior snapshot.
         assert.equal(shouldPersistRestoredPlayerSession(1), false)
         assert.equal(shouldPersistRestoredPlayerSession(2), false)
+    })
+})
+
+describe("shouldPersistConcurrentAbandonSession", () => {
+    it("blocks save when restore still had playable tracks (thin concurrent queue must not wipe DB)", () => {
+        assert.equal(
+            shouldPersistConcurrentAbandonSession({ playableCount: 50, transientFailures: 0 }),
+            false
+        )
+        assert.equal(
+            shouldPersistConcurrentAbandonSession({ playableCount: 1, transientFailures: 0 }),
+            false
+        )
+    })
+
+    it("blocks save when resolve failed only transiently (even with zero playable)", () => {
+        assert.equal(
+            shouldPersistConcurrentAbandonSession({ playableCount: 0, transientFailures: 1 }),
+            false
+        )
+    })
+
+    it("allows save when every stored track failed deterministically (prior row unrecoverable)", () => {
+        assert.equal(
+            shouldPersistConcurrentAbandonSession({ playableCount: 0, transientFailures: 0 }),
+            true
+        )
     })
 })
 
