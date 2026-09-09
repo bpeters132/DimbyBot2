@@ -10,6 +10,7 @@ import { migrateDownloadMetadata, migrateGuildSettings } from "../util/migrateJs
 import { initializeGuildSettingsStore } from "../util/saveControlChannel.js"
 import { initializeDownloadMetadataStore } from "../util/downloadMetadataStore.js"
 import { initializeCountdownStore } from "../util/countdownStore.js"
+import { initializeYoutubeAlertStore } from "../util/youtubeAlertStore.js"
 
 export default class BotClient extends Client {
     logger: Logger
@@ -104,6 +105,7 @@ export default class BotClient extends Client {
             await initializeGuildSettingsStore(this)
             await initializeDownloadMetadataStore(this)
             await initializeCountdownStore(this)
+            await initializeYoutubeAlertStore(this)
             this.info(
                 "BotClient start: Runtime settings/metadata caches initialized from database."
             )

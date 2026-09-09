@@ -1,5 +1,6 @@
 import type { AudioPlayer, VoiceConnection } from "@discordjs/voice"
 import type {
+    AutocompleteInteraction,
     ChatInputCommandInteraction,
     RESTPostAPIChatInputApplicationCommandsJSONBody,
 } from "discord.js"
@@ -25,6 +26,7 @@ export type SlashCommandExecute = (
 export interface Command {
     data: SlashCommandData
     execute: SlashCommandExecute
+    autocomplete?: (interaction: AutocompleteInteraction, client: BotClient) => Promise<void>
     category?: string
     aliases?: string[]
 }
@@ -263,6 +265,57 @@ export interface CountdownInput {
 
 /** Map of countdown id → countdown entry. */
 export type CountdownStore = Record<number, CountdownEntry>
+
+/** Upload event type an Upload Alert can match. */
+export type UploadEventType = "video" | "short" | "premiere" | "live" | "community"
+
+/** Guild subscription to one YouTube channel (Upload Watch). */
+export interface YoutubeWatchEntry {
+    id: number
+    guildId: string
+    youtubeChannelId: string
+    youtubeChannelName: string
+    createdAt: Date
+}
+
+/** Discord posting rule hanging off an Upload Watch (Upload Alert). */
+export interface YoutubeAlertEntry {
+    id: number
+    watchId: number
+    discordChannelId: string
+    mentionRoleIds: string[]
+    messageTemplate: string | null
+    eventTypes: UploadEventType[]
+    createdBy: string
+    createdAt: Date
+}
+
+/** Input for creating an Upload Alert (watch created if needed). */
+export interface YoutubeAlertInput {
+    guildId: string
+    youtubeChannelId: string
+    youtubeChannelName: string
+    discordChannelId: string
+    mentionRoleIds: string[]
+    messageTemplate: string | null
+    eventTypes: UploadEventType[]
+    createdBy: string
+}
+
+/** Patch for an existing Upload Alert. */
+export interface YoutubeAlertPatch {
+    discordChannelId?: string
+    mentionRoleIds?: string[]
+    messageTemplate?: string | null
+    eventTypes?: UploadEventType[]
+}
+
+/** PubSubHubbub lease for a YouTube channel shared across guilds. */
+export interface YoutubeChannelLeaseEntry {
+    youtubeChannelId: string
+    leaseExpiresAt: Date
+    updatedAt: Date
+}
 
 /** Serialized queue track for player session persistence across bot restarts. */
 export interface PersistedQueueTrack {

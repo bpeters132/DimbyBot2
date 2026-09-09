@@ -105,3 +105,17 @@ _Avoid_: progress bar max, timeline
 **Playback URL**:
 The YouTube watch URL of the video being streamed after YouTube playback is prepared. Unprepared Queue metadata may still show a Catalog track URI.
 _Avoid_: Companion stream URL, Catalog URI (as the clickable now-playing link)
+
+## Upload alerts
+
+**Upload Watch**:
+The Bot’s subscription to one YouTube channel for one guild. Unique per guild and YouTube channel; created and removed with that guild’s Upload Alerts.
+_Avoid_: YouTube search, YouTube playback, monitor (unqualified), subscription (unqualified)
+
+**Upload Alert**:
+A guild admin’s notify-only posting rule: Discord channel, role mentions, message template, and Upload event types. Many Upload Alerts may share one Upload Watch.
+_Avoid_: announcement (unqualified), notification (as the persisted object), YouTube playback
+
+**Upload event type**:
+The kind of YouTube activity an Upload Alert can match: video, short, premiere, live, or community.
+_Avoid_: announcement (unqualified), YouTube search

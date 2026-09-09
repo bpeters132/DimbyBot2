@@ -52,6 +52,32 @@ export default (client: BotClient) => {
             return
         }
 
+        if (interaction.isAutocomplete()) {
+            const command = client.commands.get(interaction.commandName)
+            if (!command?.autocomplete) {
+                try {
+                    await interaction.respond([])
+                } catch {
+                    // Interaction expired.
+                }
+                return
+            }
+            try {
+                await command.autocomplete(interaction, client)
+            } catch (error: unknown) {
+                client.error(
+                    `[InteractionCreate] Autocomplete failed for /${interaction.commandName}:`,
+                    error
+                )
+                try {
+                    if (!interaction.responded) await interaction.respond([])
+                } catch {
+                    // Interaction expired.
+                }
+            }
+            return
+        }
+
         // --- Chat Input Command Handling ---
         if (interaction.isChatInputCommand()) {
             const commandName = interaction.commandName
