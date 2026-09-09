@@ -1,6 +1,20 @@
 # DimbyBot2
 
-Ubiquitous language for this Discord music bot and how change is reviewed. Product terms belong here as they are resolved; this first pass records Contribution vocabulary from PR consolidation.
+Ubiquitous language for the Bot, the Dashboard, and how change is reviewed. Product terms belong here as they are resolved.
+
+## Applications
+
+**Bot**:
+The Discord process that handles slash commands, playback, and the Bot API. Not the Dashboard.
+_Avoid_: backend (unqualified), server (unqualified), app
+
+**Dashboard**:
+The Next.js UI people use to control the Bot.
+_Avoid_: portal, control panel, web app (as a second name)
+
+**Bot API**:
+The Bot’s HTTP and WebSocket surface that the Dashboard calls. Not Discord’s API.
+_Avoid_: dashboard API, backend API, web API
 
 ## Contribution
 
@@ -31,7 +45,7 @@ The in-memory ring of recent `warn` and `error` Bot log lines used by the owner 
 _Avoid_: error log, audit trail
 
 **Audit log**:
-Structured web / Discord OAuth / dashboard events written by `writeAuditLog`. Playback, Lavalink, and YouTube OAuth are not this trail.
+Structured web / Discord OAuth / Dashboard events written by `writeAuditLog`. Playback, Lavalink, and YouTube OAuth are not this trail.
 _Avoid_: bot log, security log, YouTube OAuth
 
 **Developer command**:
@@ -53,7 +67,7 @@ YouTube’s “sign in to confirm you’re not a bot” or login-required challe
 _Avoid_: captcha, bot check (unqualified), sign-in error (when you have not checked whether search returned tracks)
 
 **YouTube OAuth**:
-A Google account credential used so YouTube search can act as a signed-in user. Distinct from Discord sign-in and from a dashboard “link YouTube” flow.
+A Google account credential used so YouTube search can act as a signed-in user. Distinct from Discord sign-in and from a Dashboard “link YouTube” flow.
 _Avoid_: Google login (unqualified), Discord OAuth, link YouTube account
 
 **Catalog track**:
@@ -61,7 +75,7 @@ A Spotify (or similar) item that is title, artist, and URI only — it has no na
 _Avoid_: Spotify stream, playable Spotify track
 
 **User media URL**:
-An HTTP(S) address a person types into `/play`, the dashboard, or playlist search to look up a track.
+An HTTP(S) address a person types into `/play`, the Dashboard, or playlist search to look up a track.
 _Avoid_: stream URL, companion URL, Lavalink HTTP source
 
 **Companion stream URL**:
@@ -85,7 +99,7 @@ The length on a Catalog track. It is a hint until YouTube playback is prepared.
 _Avoid_: Playback duration, Spotify length (as a second name)
 
 **Displayed duration**:
-What the dashboard and Discord control channel show: Catalog duration or YouTube search length until prepare, then Playback duration. It may grow if playback runs past the stamp.
+What the Dashboard and Discord control channel show: Catalog duration or YouTube search length until prepare, then Playback duration. It may grow if playback runs past the stamp.
 _Avoid_: progress bar max, timeline
 
 **Playback URL**:

@@ -1,87 +1,88 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
+This repo is **two applications**. Names are in [`GLOSSARY.md`](GLOSSARY.md); load-bearing trade-offs are in [`docs/adr/`](docs/adr/). Docker, host Node, and `dev-env.sh` live in [`README.md`](README.md).
 
-- `src/` contains the bot source code (TypeScript, compiled to `dist/`).
-    - `src/commands/` slash command definitions.
-    - `src/deploy/` deploy/destroy scripts for Discord commands.
-    - `src/events/` Discord event handlers.
-    - `src/lib/` core libraries and services.
-    - `src/util/` shared utilities.
-    - `src/types/` shared type definitions (`src/types/index.ts`).
-    - `src/shared/` code used by **both** the bot (root `tsc` → `dist/shared/`) and the dashboard (via `@/shared/*` in `src/web/tsconfig.json` and thin re-exports under `src/web/`). Prefer adding cross-runtime logic here instead of importing `src/web/` from bot handlers.
-    - `src/index.ts` app entry point.
-- `src/web/` is the **Next.js dashboard** (web UI and controls). It is a **separate application** from the bot: own `package.json`, install/build commands, and **its own container image** (`Dockerfile.web`). The root TypeScript project **does not compile** `src/web` (see `tsconfig.json` `exclude` and **Web dashboard vs. bot runtime** below). The main bot image builds with **`yarn build:bot`** only.
-- `Lavalink/` holds the Lavalink service files.
-- `downloads/`, `logs/`, `storage/` are runtime directories and should stay out of commits.
+## Two applications
 
-## Web dashboard vs. bot runtime
+- **Bot** — Discord process (slash commands, playback, Bot API). Entry: [`src/server.ts`](src/server.ts) → `dist/server.js`. Do not extend leftover [`src/index.ts`](src/index.ts).
+- **Dashboard** — Next.js UI in nested [`src/web/`](src/web/). Do not call it a portal, control panel, or “web app” as a second name.
+- **Contract** — The Dashboard talks to the Bot over HTTP/WebSocket and env-configured URLs. Never import `src/web/` from Bot code. Logic used by both apps goes in [`src/shared/`](src/shared/).
+- **Compile graphs** — Root `tsc` uses `rootDir: src` and `exclude: ["src/web"]`. `yarn build:bot` does not emit the Dashboard. Nested `src/web/` plus that exclude is the layout; do not relocate the Dashboard unless a human asks. See [ADR 0007](docs/adr/0007-two-apps-nested-dashboard.md).
 
-These rules keep the **Discord bot** and the **Next.js dashboard** separate at build and deploy time, even though both live under the same repository.
+## Bot placement (`src/` except `src/web/`)
 
-- **Two applications**: Bot logic and the HTTP/WebSocket bot API live under `src/` (except `src/web/`). The dashboard and web player UI live in **`src/web/`** as its own Next.js app (`package.json`, lockfile, `next.config`, etc.).
-- **Bot TypeScript scope**: Root `tsc` uses **`rootDir`: `src`** but **`exclude`: `["src/web"]`**, so **`yarn build:bot`** does not compile or emit the Next.js tree into `dist/`. The **`yarn typecheck`** script runs root **`tsc --noEmit`** (same exclusion) and then typechecks **`src/web`** as its own project.
-- **Bot container**: The main **`Dockerfile`** runs **`yarn build:bot`** (not `yarn build`), so the bot image does not run the Next production build. Runtime is `node` + `dist/` + shared root deps as defined in that image.
-- **Web container**: **`Dockerfile.web`** builds the dashboard (`yarn --cwd src/web build`, standalone output) and runs it as a **separate image/service** from the bot (production: `docker-compose.dashboard.yml`).
-- **Local dev**: `docker-compose.dev.yml` runs the **bot stack only**; the dashboard is **`yarn dev:web` on the host**, not a dev compose service. `dimbybot-web` is production-only.
-- **When to build what**: Use **`yarn build:bot`** for bot-only or bot image work; use **`yarn build:web`** or dashboard Docker for the UI; use **`yarn build`** for a full local/CI verification of both halves.
+- `src/commands/`, `src/events/`, `src/deploy/` — Discord surface
+- `src/botApi/` — HTTP/WS handlers the Dashboard calls
+- `src/repositories/` and [`prisma/`](prisma/) — persistence
+- `src/lib/` — Bot runtime services (client, logger, database)
+- `src/util/` — Bot helpers
+- `src/shared/` — isomorphic logic for both apps (root `tsc` emits `dist/shared/`; Dashboard imports `@/shared/*`)
+- `src/workers/` — isolated workers
+- `src/types/` — shared command/client types (`Command` uses `SlashCommandData` + `SlashCommandExecute`; `BotClient` is exported for helpers)
 
-### Optional: moving `src/web` out of `src/`
+## Dashboard placement (`src/web/`)
 
-The current layout is intentional and supported: exclusion in `tsconfig.json` plus split Dockerfiles already prevent the bot image from compiling the web app. Relocate only if the nested path causes confusion or you want a formal monorepo layout.
+- `src/web/app/` — routes, layouts, and route-local UI only. No reusable `lib/`, `utils/`, or shared server modules under `app/`.
+- `src/web/server/` — Next server-only helpers (`next/headers`, Bot API proxies) **and** all `"use server"` files as `*.actions.ts` (one concern per file or a small related group).
+- `src/web/lib/` — helpers that are not Next-server-bound. **Do not add** new `"use server"` modules under `src/web/lib/actions/` (`player.actions.ts` / `playlist.actions.ts` stay until a later move).
+- `src/web/components/`, `src/web/hooks/` — UI. Prefer `*.actions.ts` over `fetch("/api/...")` when the work should run on the server with cookies forwarded.
+- `app/api/**/route.ts` — thin HTTP contracts; import from `@/server/*` or `@/lib/*`.
 
-- **Typical target**: `web/` or `apps/web/` at the **repository root** (alongside `src/`), still versioned in the same repo.
-- **What to update**: Root `package.json` scripts that use `yarn --cwd src/web` → new path; **`Dockerfile.web`** `COPY`/`WORKDIR` and paths to `.next/standalone`; any **CI/deploy** or compose files that reference `src/web`; **ESLint/Prettier** globs; Cursor rules that mention `src/web` (e.g. `next-app-no-lib.mdc`).
-- **Yarn workspaces (optional)**: Add `"workspaces": ["apps/web"]` (and later `packages/bot` if you split further) so installs hoist consistently; keep **no direct TypeScript imports** from web into bot sources (the contract stays HTTP/WS and env-configured URLs).
-- **Tradeoff**: Moving is a one-time path churn; benefit is a clearer boundary (`src` = bot only) and no need to remember the `exclude` for new contributors.
+## Scripts
 
-## Build, Test, and Development Commands
+Use **Yarn**, not npm (`packageManager` in `package.json`).
 
-- **Node.js 24+** in Docker/CI images (`node:24-*` in Dockerfiles, `node-version: "24"` in deploy workflow). Production hosts that only run containers do not need Node or nvm. Root `engines` and `.nvmrc` apply when installing or running Yarn on the host (local dev).
-- `yarn install` installs dependencies.
-- `yarn build` runs **`build:bot` and `build:web`** (full stack). **`yarn build:bot`** runs root `tsc` and emits bot JavaScript to `dist/` (Next.js is not part of this emit).
-- **`yarn build:web`**, **`yarn dev:web`**, and **`yarn web:install`** operate on `src/web/` only.
-- `yarn typecheck` runs root **`tsc --noEmit`**, then **`yarn web:install`**, then **`yarn --cwd src/web typecheck`** (both halves; no `dist/` emit from the root step).
-- `yarn lint` runs ESLint on the repo (`eslint.config.js`).
-- `yarn start` runs the compiled bot entry (`node dist/server.js` per `package.json`). Run `yarn build:bot` (or `yarn build`) first, or use Docker: the **bot** image runs `build:bot` only; the **web** image is built separately (`Dockerfile.web`).
-- `yarn dev` runs `tsc --watch` and `nodemon` together so `dist/` stays up to date.
-- Docker dev environment:
-    - `./dev-env.sh build` builds images.
-    - `./dev-env.sh up` starts services (bot + Lavalink + Postgres + yt-cipher + invidious-companion).
-    - `make up` or `make down` provides the same via Makefile shortcuts.
-- Command deployment (after `yarn build`):
-    - `yarn deployGlobal` / `yarn destroyGlobal`
-    - `yarn deployGuild` / `yarn destroyGuild` (requires `GUILD_ID`).
+- `yarn install` — root Bot dependencies
+- `yarn web:install` — Dashboard dependencies (`src/web/`)
+- `yarn build:bot` — root `tsc` → `dist/` (Dashboard is not part of this emit)
+- `yarn build:web` — Dashboard production build
+- `yarn build` — both apps (local/CI full stack)
+- `yarn typecheck` — root `tsc --noEmit`, then `tsconfig.tests.json`, then Dashboard `tsc --noEmit`
+- `yarn lint` — ESLint (`eslint.config.js`)
+- `yarn prettier --check .` / `yarn prettier --write .`
+- `yarn test` — `yarn test:bot` then `yarn test:web`
+- `yarn start` — compiled Bot (`node dist/server.js`); build the Bot first
+- `yarn dev` / `yarn dev:web` — Bot watch + nodemon; Dashboard Next dev server
+- `yarn deployGlobal` / `yarn destroyGlobal` / `yarn deployGuild` / `yarn destroyGuild` — slash commands (need `dist/deploy/`; `deployGuild` needs `GUILD_ID`)
 
-## Coding Style & Naming Conventions
+Bring-up, Compose, and Node-on-host details: [README.md](README.md).
 
-- TypeScript (ES modules). Imports from local modules use `.js` extensions (NodeNext). Indentation: 4 spaces.
-- **Documentation:** Prefer short `/** … */` summaries on non-trivial exports. Avoid legacy JSDoc `@param {import('…')}` blocks in `.ts` files—use real TypeScript parameter types instead.
-- **Shared command types** (`src/types/index.ts`): `Command` uses `SlashCommandData` (`name` + `toJSON()` for REST) and `SlashCommandExecute` (`Promise<unknown>` so handlers may return Discord reply objects). A `BotClient` type alias is exported for use in helpers.
-- **`tsconfig.json`:** `strict` is on; `strictNullChecks` and `noImplicitAny` are currently **off** so older handlers stay buildable. Tightening those flags is welcome once call sites use proper guards (e.g. `interaction.inGuild()`, `GuildMember` vs API payloads) and typed parameters in `src/util/`.
-- **Root `lavaNodesConfig.d.ts`:** typings for generated `lavaNodesConfig.js` (included next to `src/**/*` in `tsconfig`).
-- Semicolons are disabled; see `eslint.config.js`.
-- Prettier config in `.prettierrc.json` (print width 100, double quotes).
-- Suggested manual checks: `yarn lint`, `yarn typecheck`, and `yarn prettier --check .`.
+## Coding style
 
-## Testing Guidelines
+- TypeScript ESM. Bot local imports use `.js` extensions (NodeNext). Indentation: 4 spaces. Semicolons off; Prettier in `.prettierrc.json` (print width 100, double quotes).
+- **TSDoc:** Short `/** … */` summaries on non-obvious exports and non-trivial logic (Discord/Lavalink/security invariants). Use real TypeScript parameter and return types; do not duplicate them with `@param {import('…')}`. Skip noise on obvious getters and wrappers.
+- **`strict` is on** in both tsconfigs; **`strictNullChecks` and `noImplicitAny` are off**. Leave those flags as they are unless a human asks. New code should still be well-typed (guards, no new implicit `any` at boundaries).
+- Root `lavaNodesConfig.d.ts` types generated `lavaNodesConfig.js`.
 
-- Unit tests use Node’s built-in test runner via `tsx`: `yarn test` runs `src/**/*.test.ts` next to the code under test.
-- Prefer keeping new suites under `src/` (e.g. `src/util/*.test.ts`, `src/shared/*.test.ts`).
-- Suggested manual checks: `yarn lint`, `yarn typecheck`, and `yarn test`.
+## Testing
 
-## Commit & Pull Request Guidelines
+Typecheck, lint, Prettier, and tests apply to **both** the Bot and the Dashboard.
 
-- No enforced commit convention found; keep messages short and descriptive (e.g., "fix lavalink reconnect").
-- PRs should include a clear summary, relevant config changes, and screenshots/logs if behavior changes.
-- **CodeRabbit:** Configuration lives in `.coderabbit.yaml`. Draft PRs, titles containing `WIP` / `DO NOT MERGE` / `[skip review]`, or the GitHub label **`wip`** skip automatic reviews. Remove the label or mark the PR ready when you want a review, or comment `@coderabbitai review`. Ensure the repo has a `wip` label (create it under Issues → Labels if missing).
+- Colocate `*.test.ts` next to the code: Bot under `src/` except `src/web/`; Dashboard under `src/web/`.
+- Style: Node `node:test` + `tsx` + `node:assert/strict`.
+- New features get tests. Touching untested modules should add tests. Do not skip the Dashboard because a suite is thin.
+- Dashboard tests are unit tests of `server/` / `lib/` / shared helpers, not a React Testing Library suite unless asked.
+- `yarn test:bot` excludes `src/web/`. `yarn test:web` uses the Dashboard tsconfig so `@/*` and `@/shared/*` resolve.
 
-## Configuration & Secrets
+## Pull requests
 
-- Local dev requires `.env` and `lavaNodesConfig.js` in the repo root.
-- Use `.env.example` and `lavaNodesConfig.js.example` as templates.
-- Never commit real tokens or credentials.
+Keep messages short and descriptive (e.g. `fix lavalink reconnect`). PRs need a clear summary; include config notes and screenshots or logs when behavior changes.
 
-## Tooling & Docs
+**CodeRabbit:** [`.coderabbit.yaml`](.coderabbit.yaml). Draft PRs, titles containing `WIP` / `DO NOT MERGE` / `[skip review]`, or the `wip` label skip automatic reviews. Remove the label or mark the PR ready to review, or comment `@coderabbitai review`.
 
-- Strongly prefer MCP server resources when available; use Context7 for library/framework documentation queries.
+## Configuration and secrets
+
+Local dev needs `.env` and `lavaNodesConfig.js` in the repo root. Use `.env.example` and `lavaNodesConfig.js.example`. Never commit tokens or credentials.
+
+## Tooling
+
+Prefer MCP resources when available; use Context7 for library and framework docs.
+
+After substantive code changes, run:
+
+```bash
+yarn typecheck
+yarn lint
+yarn prettier --check .
+yarn test
+```

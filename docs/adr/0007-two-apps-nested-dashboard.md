@@ -1,0 +1,3 @@
+# Two applications, nested Dashboard, two compile graphs
+
+This repo is one Git tree and two applications: the Bot (root `tsc` → `dist/`) and the Dashboard (Next.js in nested `src/web/`). Root `tsconfig.json` excludes `src/web/`, so `yarn build:bot` never emits the Dashboard, and Bot code must not import it. Relocating the Dashboard to `web/` or `apps/web/` (and optional Yarn workspaces) was rejected for now: the split Dockerfiles and `tsc` exclude already keep the compile graphs apart, and a move is path churn without changing the HTTP/WebSocket contract. Do not relocate `src/web/` unless a human asks.

@@ -7,6 +7,7 @@
         "predev": "node scripts/predev.js",
         "dev": "next dev --webpack --hostname 0.0.0.0",
         "typecheck": "tsc --noEmit",
+        "test": "node ../../node_modules/tsx/dist/cli.mjs --tsconfig ./tsconfig.json --test \"./**/*.test.ts\"",
         "build": "next build --webpack",
         "start": "next start"
     },
