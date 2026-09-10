@@ -24,7 +24,8 @@ import {
     resolveYoutubeChannel,
 } from "../../util/youtubeChannelResolve.js"
 import {
-    seedYoutubeWatchSeenFromRss,
+    seedYoutubeWatchBacklog,
+    seedYoutubeWatchSeenFromCommunity,
     subscribeYoutubeChannelPubsub,
     unsubscribeYoutubeChannelPubsub,
 } from "../../util/youtubeUploadMonitor.js"
@@ -167,9 +168,9 @@ async function handleAdd(
 
     if (created.createdWatch) {
         try {
-            const seeded = await seedYoutubeWatchSeenFromRss(created.watch)
+            const seeded = await seedYoutubeWatchBacklog(created.watch)
             client.info(
-                `[yt-alerts] Seeded ${seeded} seen id(s) for Watch #${created.watch.id} (${identity.channelId}).`
+                `[yt-alerts] Seeded Watch #${created.watch.id} (${identity.channelId}): rss=${seeded.rss}, community=${seeded.community}.`
             )
             await subscribeYoutubeChannelPubsub(identity.channelId, client)
         } catch (error: unknown) {
@@ -179,6 +180,13 @@ async function handleAdd(
                 content:
                     "Created the Alert but could not snapshot the channel’s current videos. Try again.",
             })
+        }
+    } else if (types.includes("community")) {
+        // Existing Watch may predate community seeding; snapshot posts before the first community poll.
+        try {
+            await seedYoutubeWatchSeenFromCommunity(created.watch)
+        } catch (error: unknown) {
+            client.warn("[yt-alerts] Failed to seed community posts for existing Watch:", error)
         }
     }
 
@@ -309,6 +317,15 @@ async function handleEdit(
     })
     if (!updated) {
         return interaction.editReply({ content: `No Upload Alert **#${id}** in this server.` })
+    }
+    const communityNewlyEnabled =
+        eventTypes?.includes("community") === true && !existing.eventTypes.includes("community")
+    if (communityNewlyEnabled) {
+        try {
+            await seedYoutubeWatchSeenFromCommunity(watch)
+        } catch (error: unknown) {
+            client.warn("[yt-alerts] Failed to seed community posts after edit:", error)
+        }
     }
     return interaction.editReply({
         content:

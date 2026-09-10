@@ -12,6 +12,7 @@ export type YoutubeVideoDetails = {
 /**
  * Classifies a YouTube item into an Upload event type.
  * Upcoming livestreams/premieres return null so we do not mark them seen until they are watchable.
+ * A live item with a known duration is treated as a premiere (fixed-length); open-ended lives stay `"live"`.
  */
 export function classifyUploadEvent(details: YoutubeVideoDetails): UploadEventType | null {
     const live = (details.liveBroadcastContent ?? "none").toLowerCase()
@@ -27,6 +28,8 @@ export function classifyUploadEvent(details: YoutubeVideoDetails): UploadEventTy
 
     if (live === "live") {
         if (looksShort) return "short"
+        // Premieres expose a fixed duration while airing; true livestreams usually do not yet.
+        if (duration != null && duration > 0) return "premiere"
         return "live"
     }
 
