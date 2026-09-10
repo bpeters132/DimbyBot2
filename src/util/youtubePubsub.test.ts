@@ -49,6 +49,18 @@ describe("youtubePubsubVerifyResponse", () => {
         assert.deepEqual(result, { status: 200, body: "abc123" })
     })
 
+    it("accepts unsubscribe challenges for known topics", () => {
+        const result = youtubePubsubVerifyResponse(
+            {
+                "hub.mode": "unsubscribe",
+                "hub.topic": `https://www.youtube.com/feeds/videos.xml?channel_id=${CHANNEL_ID}`,
+                "hub.challenge": "bye",
+            },
+            new Set([CHANNEL_ID])
+        )
+        assert.deepEqual(result, { status: 200, body: "bye" })
+    })
+
     it("rejects unknown topics", () => {
         const result = youtubePubsubVerifyResponse(
             {
@@ -59,6 +71,25 @@ describe("youtubePubsubVerifyResponse", () => {
             new Set()
         )
         assert.equal(result.status, 404)
+    })
+
+    it("rejects missing mode, topic, or challenge", () => {
+        const topic = `https://www.youtube.com/feeds/videos.xml?channel_id=${CHANNEL_ID}`
+        const known = new Set([CHANNEL_ID])
+        assert.equal(
+            youtubePubsubVerifyResponse({ "hub.topic": topic, "hub.challenge": "x" }, known).status,
+            400
+        )
+        assert.equal(
+            youtubePubsubVerifyResponse({ "hub.mode": "subscribe", "hub.challenge": "x" }, known)
+                .status,
+            400
+        )
+        assert.equal(
+            youtubePubsubVerifyResponse({ "hub.mode": "subscribe", "hub.topic": topic }, known)
+                .status,
+            400
+        )
     })
 })
 
@@ -75,5 +106,14 @@ describe("verifyYoutubePubsubSignature", () => {
             verifyYoutubePubsubSignature(body, { signature256: "sha256=deadbeef" }, secret),
             false
         )
+    })
+
+    it("accepts sha1 when sha256 is absent and rejects missing signatures", () => {
+        const body = Buffer.from("<feed/>")
+        const secret = "hub-secret"
+        const hex = createHmac("sha1", secret).update(body).digest("hex")
+        assert.equal(verifyYoutubePubsubSignature(body, { signature: `sha1=${hex}` }, secret), true)
+        assert.equal(verifyYoutubePubsubSignature(body, {}, secret), false)
+        assert.equal(verifyYoutubePubsubSignature(body, { signature: "md5=abc" }, secret), false)
     })
 })
