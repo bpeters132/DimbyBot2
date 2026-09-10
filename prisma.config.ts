@@ -1,5 +1,8 @@
 import "dotenv/config"
 import { defineConfig } from "prisma/config"
+// Runtime image copies this compiled module next to prisma.config.ts (see Dockerfile).
+// Do not import other `src/` files here — they are not in the production image.
+import { resolvePrismaDatasourceUrl } from "./src/util/prismaDatasourceUrl.js"
 
 export default defineConfig({
     schema: "prisma/schema.prisma",
@@ -7,8 +10,6 @@ export default defineConfig({
         path: "prisma/migrations",
     },
     datasource: {
-        // Allow `prisma generate` in build contexts where DATABASE_URL is not injected yet.
-        // Runtime startup still validates real DB connectivity before the bot proceeds.
-        url: process.env.DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/postgres",
+        url: resolvePrismaDatasourceUrl(),
     },
 })

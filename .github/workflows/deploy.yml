@@ -132,6 +132,7 @@ jobs:
                   docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -f /app/prisma/schema.prisma"
                   docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -d /app/prisma/migrations"
                   docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -f /app/prisma.config.ts"
+                  docker run --rm --entrypoint /bin/sh "$IMAGE_BOT_SHA" -c "test -f /app/src/util/prismaDatasourceUrl.js"
 
             - name: Verify web image contains Next.js standalone
               run: |

@@ -48,6 +48,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+# prisma.config.ts imports this compiled helper; `src/` is otherwise omitted from the runtime image.
+COPY --from=builder /app/dist/util/prismaDatasourceUrl.js ./src/util/prismaDatasourceUrl.js
 
 # Runtime environment (inject via compose/K8s; do not bake secrets into the image):
 #   Required for Lavalink: LAVALINK_HOST, LAVALINK_PORT, LAVALINK_PASSWORD, LAVALINK_NODE_ID, LAVALINK_SECURE
@@ -68,6 +70,7 @@ RUN apk add --no-cache dos2unix \
     && chown -R node:node /app/dist /app/prisma /app/storage \
     && chown node:node /app \
     && chown node:node /app/package.json /app/yarn.lock /app/prisma.config.ts \
+        /app/src/util/prismaDatasourceUrl.js \
         /app/entrypoint.sh /app/healthcheck.sh
 
 # Entrypoint runs as root: generate lavaNodesConfig.js, chown /app/storage (and other writable paths), then su-exec node.
