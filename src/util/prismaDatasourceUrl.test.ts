@@ -49,6 +49,17 @@ describe("resolvePrismaDatasourceUrl", () => {
         )
     })
 
+    it("encodes user and database names that contain URL delimiters", () => {
+        assert.equal(
+            resolvePrismaDatasourceUrl({
+                POSTGRES_USER: "user@name",
+                POSTGRES_PASSWORD: "secret",
+                POSTGRES_DB: "db/name?x#y",
+            }),
+            "postgresql://user%40name:secret@localhost:5432/db%2Fname%3Fx%23y"
+        )
+    })
+
     it("falls back to the generate dummy URL when neither source is set", () => {
         assert.equal(
             resolvePrismaDatasourceUrl({}),

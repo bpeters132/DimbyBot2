@@ -15,14 +15,16 @@ export function resolvePrismaDatasourceUrl(env: NodeJS.ProcessEnv = process.env)
     const user = env.POSTGRES_USER?.trim()
     const database = env.POSTGRES_DB?.trim()
     if (user && database) {
+        const encodedUser = encodeURIComponent(user)
         const password = encodeURIComponent(env.POSTGRES_PASSWORD ?? "")
+        const encodedDatabase = encodeURIComponent(database)
         // Compose / CI inject DATABASE_URL with hostname postgres-db. If that is missing
         // inside a production container, do not fall back to localhost (that is the host CLI).
         const host =
             env.POSTGRES_HOST?.trim() ||
             (env.NODE_ENV === "production" ? "postgres-db" : "localhost")
         const port = env.POSTGRES_PORT?.trim() || "5432"
-        return `postgresql://${user}:${password}@${host}:${port}/${database}`
+        return `postgresql://${encodedUser}:${password}@${host}:${port}/${encodedDatabase}`
     }
 
     return "postgresql://postgres:postgres@localhost:5432/postgres"
