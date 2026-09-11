@@ -6,6 +6,7 @@ import {
     getYoutubeAlert,
     getYoutubeAlertsForGuild,
     getYoutubeAlertsForWatch,
+    getYoutubeChannelIdsNeedingLeaseRenew,
     getYoutubeWatch,
     initializeYoutubeAlertStore,
     isYoutubeAlertStoreInitialized,
@@ -152,5 +153,59 @@ describe("youtubeAlertStore alerts and watches", () => {
         assert.equal(isYoutubeVideoSeen(1, "new"), false)
         await markYoutubeVideosSeen(1, ["new", "new"])
         assert.equal(isYoutubeVideoSeen(1, "new"), true)
+    })
+})
+
+describe("getYoutubeChannelIdsNeedingLeaseRenew", () => {
+    it("includes watched channels with missing or expired leases only", async () => {
+        const other = "UCuCuCuCuCuCuCuCuCuCuCuC"
+        setYoutubeAlertStoreDbForTests({
+            getAllYoutubeWatchesFromDatabase: async () => ({
+                watches: [
+                    watch({ id: 1, youtubeChannelId: CHANNEL_ID }),
+                    watch({ id: 2, youtubeChannelId: other, guildId: "101" }),
+                ],
+                alerts: [],
+                seenByWatch: {},
+                leases: [
+                    {
+                        youtubeChannelId: CHANNEL_ID,
+                        leaseExpiresAt: new Date("2026-09-11T12:00:00.000Z"),
+                        updatedAt: new Date("2026-09-10T00:00:00.000Z"),
+                    },
+                    {
+                        youtubeChannelId: other,
+                        leaseExpiresAt: new Date("2026-09-12T00:00:00.000Z"),
+                        updatedAt: new Date("2026-09-10T00:00:00.000Z"),
+                    },
+                ],
+            }),
+        })
+        await initializeYoutubeAlertStore({ info() {}, error() {} })
+
+        const before = new Date("2026-09-11T12:00:00.000Z")
+        const due = getYoutubeChannelIdsNeedingLeaseRenew(before).sort()
+        assert.deepEqual(due, [CHANNEL_ID].sort())
+
+        const later = getYoutubeChannelIdsNeedingLeaseRenew(
+            new Date("2026-09-12T00:00:00.000Z")
+        ).sort()
+        assert.deepEqual(later, [CHANNEL_ID, other].sort())
+    })
+
+    it("treats a missing lease as due for renew", async () => {
+        setYoutubeAlertStoreDbForTests({
+            getAllYoutubeWatchesFromDatabase: async () => ({
+                watches: [watch()],
+                alerts: [],
+                seenByWatch: {},
+                leases: [],
+            }),
+        })
+        await initializeYoutubeAlertStore({ info() {}, error() {} })
+        assert.deepEqual(
+            getYoutubeChannelIdsNeedingLeaseRenew(new Date("2026-09-11T00:00:00.000Z")),
+            [CHANNEL_ID]
+        )
     })
 })
