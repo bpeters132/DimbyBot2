@@ -10,7 +10,7 @@ import {
     youtubePubsubHubSecretFromEnv,
     youtubePubsubVerifyResponse,
 } from "./youtubePubsub.js"
-import { processYoutubeFeedEntries } from "./youtubeUploadMonitor.js"
+import { processYoutubeFeedEntries, withYoutubeUploadPollLock } from "./youtubeUploadMonitor.js"
 
 export { isYoutubePubsubPath }
 
@@ -129,7 +129,11 @@ export async function handleYoutubePubsubRequest(
     const channelId = entries[0]?.channelId
     if (client && channelId) {
         try {
-            await processYoutubeFeedEntries(client, channelId, entries, undefined, logger)
+            // Same lock as RSS/community so duplicate hub POSTs (or PubSub∥poll)
+            // cannot both announce before seen is marked.
+            await withYoutubeUploadPollLock(() =>
+                processYoutubeFeedEntries(client, channelId, entries, undefined, logger)
+            )
         } catch (error: unknown) {
             logger.warn("[yt-alerts] PubSub notify failed:", error)
         }

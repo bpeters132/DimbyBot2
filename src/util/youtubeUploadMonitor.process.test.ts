@@ -8,7 +8,12 @@ import {
     resetYoutubeAlertStoreForTests,
     setYoutubeAlertStoreDbForTests,
 } from "./youtubeAlertStore.js"
-import { processYoutubeUploadEvent } from "./youtubeUploadMonitor.js"
+import {
+    processYoutubeUploadEvent,
+    withYoutubeUploadPollLock,
+    youtubeAlertDeliverySeenId,
+    YOUTUBE_WATCH_SEED_MARKER,
+} from "./youtubeUploadMonitor.js"
 
 const CHANNEL_ID = "UCXuqSBlHAE6Xw-yeJA0Tunw"
 const VIDEO_ID = "dQw4w9WgXcQ"
@@ -88,6 +93,12 @@ afterEach(() => {
     setYoutubeAlertStoreDbForTests(null)
 })
 
+describe("youtubeAlertDeliverySeenId", () => {
+    it("namespaces per-Alert delivery under the Watch seen id", () => {
+        assert.equal(youtubeAlertDeliverySeenId(VIDEO_ID, 7), `${VIDEO_ID}::alert:7`)
+    })
+})
+
 describe("processYoutubeUploadEvent", () => {
     it("marks seen without posting when no Alert matches the event type", async () => {
         const seenWrites: Array<{ watchId: number; ids: string[] }> = []
@@ -95,7 +106,7 @@ describe("processYoutubeUploadEvent", () => {
             getAllYoutubeWatchesFromDatabase: async () => ({
                 watches: [watch()],
                 alerts: [alert({ eventTypes: ["short"] })],
-                seenByWatch: {},
+                seenByWatch: { 1: [YOUTUBE_WATCH_SEED_MARKER] },
                 leases: [],
             }),
             addYoutubeSeenVideos: async (watchId, ids) => {
@@ -124,7 +135,7 @@ describe("processYoutubeUploadEvent", () => {
                     alert({ id: 1, discordChannelId: "200", eventTypes: ["video"] }),
                     alert({ id: 2, discordChannelId: "201", eventTypes: ["video", "short"] }),
                 ],
-                seenByWatch: {},
+                seenByWatch: { 1: [YOUTUBE_WATCH_SEED_MARKER] },
                 leases: [],
             }),
             addYoutubeSeenVideos: async (watchId, ids) => {
@@ -140,11 +151,15 @@ describe("processYoutubeUploadEvent", () => {
 
         assert.equal(posted, 2)
         assert.deepEqual(sentChannelIds.sort(), ["200", "201"])
-        assert.deepEqual(seenWrites, [{ watchId: 1, ids: [VIDEO_ID] }])
+        assert.deepEqual(seenWrites, [
+            { watchId: 1, ids: [youtubeAlertDeliverySeenId(VIDEO_ID, 1)] },
+            { watchId: 1, ids: [youtubeAlertDeliverySeenId(VIDEO_ID, 2)] },
+            { watchId: 1, ids: [VIDEO_ID] },
+        ])
         assert.equal(isYoutubeVideoSeen(1, VIDEO_ID), true)
     })
 
-    it("leaves unseen when a matching Alert fails to post so delivery can retry", async () => {
+    it("records successful Alert deliveries and does not re-post them on retry", async () => {
         const seenWrites: Array<{ watchId: number; ids: string[] }> = []
         setYoutubeAlertStoreDbForTests({
             getAllYoutubeWatchesFromDatabase: async () => ({
@@ -153,7 +168,7 @@ describe("processYoutubeUploadEvent", () => {
                     alert({ id: 1, discordChannelId: "200", eventTypes: ["video"] }),
                     alert({ id: 2, discordChannelId: "201", eventTypes: ["video"] }),
                 ],
-                seenByWatch: {},
+                seenByWatch: { 1: [YOUTUBE_WATCH_SEED_MARKER] },
                 leases: [],
             }),
             addYoutubeSeenVideos: async (watchId, ids) => {
@@ -161,18 +176,41 @@ describe("processYoutubeUploadEvent", () => {
             },
         })
         await initializeYoutubeAlertStore({ info() {}, error() {} })
-        const { client, sentChannelIds } = mockClient({
-            missingChannelIds: new Set(["201"]),
-        })
+        const first = mockClient({ missingChannelIds: new Set(["201"]) })
 
-        const posted = await processYoutubeUploadEvent(client, entry(), "video", VIDEO_ID, {
-            warn() {},
-        })
+        const postedFirst = await processYoutubeUploadEvent(
+            first.client,
+            entry(),
+            "video",
+            VIDEO_ID,
+            { warn() {} }
+        )
 
-        assert.equal(posted, 1)
-        assert.deepEqual(sentChannelIds, ["200"])
-        assert.deepEqual(seenWrites, [])
+        assert.equal(postedFirst, 1)
+        assert.deepEqual(first.sentChannelIds, ["200"])
         assert.equal(isYoutubeVideoSeen(1, VIDEO_ID), false)
+        assert.equal(isYoutubeVideoSeen(1, youtubeAlertDeliverySeenId(VIDEO_ID, 1)), true)
+        assert.deepEqual(seenWrites, [
+            { watchId: 1, ids: [youtubeAlertDeliverySeenId(VIDEO_ID, 1)] },
+        ])
+
+        const second = mockClient()
+        const postedSecond = await processYoutubeUploadEvent(
+            second.client,
+            entry(),
+            "video",
+            VIDEO_ID,
+            { warn() {} }
+        )
+
+        assert.equal(postedSecond, 1)
+        assert.deepEqual(second.sentChannelIds, ["201"])
+        assert.equal(isYoutubeVideoSeen(1, VIDEO_ID), true)
+        assert.deepEqual(seenWrites, [
+            { watchId: 1, ids: [youtubeAlertDeliverySeenId(VIDEO_ID, 1)] },
+            { watchId: 1, ids: [youtubeAlertDeliverySeenId(VIDEO_ID, 2)] },
+            { watchId: 1, ids: [VIDEO_ID] },
+        ])
     })
 
     it("skips an already-seen id without posting or rewriting seen", async () => {
@@ -181,7 +219,7 @@ describe("processYoutubeUploadEvent", () => {
             getAllYoutubeWatchesFromDatabase: async () => ({
                 watches: [watch()],
                 alerts: [alert()],
-                seenByWatch: { 1: [VIDEO_ID] },
+                seenByWatch: { 1: [YOUTUBE_WATCH_SEED_MARKER, VIDEO_ID] },
                 leases: [],
             }),
             addYoutubeSeenVideos: async (watchId, ids) => {
@@ -209,7 +247,10 @@ describe("processYoutubeUploadEvent", () => {
                     alert({ id: 1, watchId: 1, discordChannelId: "200" }),
                     alert({ id: 2, watchId: 2, discordChannelId: "201" }),
                 ],
-                seenByWatch: {},
+                seenByWatch: {
+                    1: [YOUTUBE_WATCH_SEED_MARKER],
+                    2: [YOUTUBE_WATCH_SEED_MARKER],
+                },
                 leases: [],
             }),
             addYoutubeSeenVideos: async (watchId, ids) => {
@@ -227,8 +268,28 @@ describe("processYoutubeUploadEvent", () => {
 
         assert.equal(posted, 1)
         assert.deepEqual(sentChannelIds, ["200"])
-        assert.deepEqual(seenWrites, [{ watchId: 1, ids: [VIDEO_ID] }])
+        assert.deepEqual(seenWrites, [
+            { watchId: 1, ids: [youtubeAlertDeliverySeenId(VIDEO_ID, 1)] },
+            { watchId: 1, ids: [VIDEO_ID] },
+        ])
         assert.equal(isYoutubeVideoSeen(1, VIDEO_ID), true)
         assert.equal(isYoutubeVideoSeen(2, VIDEO_ID), false)
+    })
+})
+
+describe("withYoutubeUploadPollLock", () => {
+    it("runs work serially so overlapping callers cannot interleave", async () => {
+        const order: string[] = []
+        const first = withYoutubeUploadPollLock(async () => {
+            order.push("a-start")
+            await new Promise((resolve) => setTimeout(resolve, 30))
+            order.push("a-end")
+        })
+        const second = withYoutubeUploadPollLock(async () => {
+            order.push("b-start")
+            order.push("b-end")
+        })
+        await Promise.all([first, second])
+        assert.deepEqual(order, ["a-start", "a-end", "b-start", "b-end"])
     })
 })
