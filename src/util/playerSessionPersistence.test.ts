@@ -8,6 +8,7 @@ import {
     clearPlayerSessionRestoreInProgress,
     consumePlayerSessionClearSuppressLease,
     destroyPlayerSuppressingSessionClear,
+    enqueueGuildPersistenceTaskForTests,
     forceClearPlayerSession,
     forceClearPlayerSessionAfterDestroyIfSafe,
     forceClearPlayerSessionIfNoLivePlayer,
@@ -272,8 +273,10 @@ describe("forceClearPlayerSessionIfNoLivePlayer", () => {
                 if (id === guildId) deleted = true
             },
         })
+        const epochBefore = getSessionClearEpochForTests(guildId)
         await forceClearPlayerSessionIfNoLivePlayer(guildId, () => null)
         assert.equal(deleted, true)
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
     })
 
     it("skips delete when a successor is already live", async () => {
@@ -284,8 +287,46 @@ describe("forceClearPlayerSessionIfNoLivePlayer", () => {
                 if (id === guildId) deleted = true
             },
         })
+        const epochBefore = getSessionClearEpochForTests(guildId)
         await forceClearPlayerSessionIfNoLivePlayer(guildId, () => ({ id: "successor" }))
         assert.equal(deleted, false)
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore)
+    })
+
+    it("skips delete and epoch bump when a successor appears while waiting for the lock", async () => {
+        const guildId = "guild-force-clear-race-successor"
+        let deleted = false
+        let live: object | null = null
+        let releaseHold!: () => void
+        const holdGate = new Promise<void>((resolve) => {
+            releaseHold = resolve
+        })
+
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async (id) => {
+                if (id === guildId) deleted = true
+            },
+        })
+
+        // Hold the persistence lock so the force-clear queues behind after its entry null check.
+        const holdP = enqueueGuildPersistenceTaskForTests(guildId, async () => {
+            await holdGate
+        })
+
+        const clearP = forceClearPlayerSessionIfNoLivePlayer(guildId, () => live)
+        // Let the clear enqueue behind the hold.
+        await Promise.resolve()
+        await Promise.resolve()
+
+        // Successor /play lands while /leave waits for the lock.
+        live = { id: "successor" }
+        const epochBefore = getSessionClearEpochForTests(guildId)
+
+        releaseHold()
+        await Promise.all([holdP, clearP])
+
+        assert.equal(deleted, false)
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore)
     })
 })
 

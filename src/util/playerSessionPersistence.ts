@@ -581,13 +581,31 @@ export async function forceClearPlayerSession(guildId: string): Promise<void> {
  * Force-clears only when `getLivePlayer` is still empty at write time.
  * `/leave` with no Lavalink player can race a successor `/play` that persists a session
  * between the last absence check and this delete.
+ *
+ * Epoch bumps and pending-save cancellation must not run until the under-lock re-check
+ * confirms absence — otherwise a racing successor’s row/saves are wiped or invalidated.
  */
 export async function forceClearPlayerSessionIfNoLivePlayer(
     guildId: string,
     getLivePlayer: () => object | null | undefined
 ): Promise<void> {
+    if (persistenceShuttingDown) return
     if (getLivePlayer()) return
-    await forceClearPlayerSession(guildId)
+
+    await withGuildPersistenceLock(guildId, async () => {
+        // Write-time re-check: successor /play may have landed while waiting for the lock.
+        if (getLivePlayer()) return
+        if (persistenceShuttingDown) return
+
+        suppressLeaseCountByGuild.delete(guildId)
+        if (shouldPreservePriorPlayerSessionSnapshot(guildId)) {
+            clearPlayerSessionPreservePriorSnapshot(guildId)
+        }
+        bumpSessionClearEpoch(guildId)
+        bumpSessionPersistGeneration(guildId)
+        cancelPendingPlayerSessionSave(guildId)
+        await persistenceDb.deletePlayerSession(guildId)
+    })
 }
 
 /**
