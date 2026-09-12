@@ -51,7 +51,8 @@ function toAlert(row: {
     }
 }
 
-function requireSnowflake(value: string, label: string): string {
+/** Validates a Discord snowflake for Watch/Alert writes; throws when invalid. */
+export function requireSnowflake(value: string, label: string): string {
     const id = normalizeOptionalDiscordSnowflake(value)
     if (!id) {
         throw new Error(`youtubeAlertRepository: invalid Discord snowflake for ${label}.`)
@@ -59,7 +60,8 @@ function requireSnowflake(value: string, label: string): string {
     return id
 }
 
-function requireYoutubeChannelId(value: string): string {
+/** Validates a YouTube channel id (`UC` + 22 chars); throws when invalid. */
+export function requireYoutubeChannelId(value: string): string {
     const id = value.trim()
     if (!YOUTUBE_CHANNEL_ID_RE.test(id)) {
         throw new Error("youtubeAlertRepository: invalid YouTube channel id.")
@@ -67,7 +69,11 @@ function requireYoutubeChannelId(value: string): string {
     return id
 }
 
-function requireEventTypes(types: UploadEventType[]): UploadEventType[] {
+/**
+ * Filters unknown event type strings, then requires at least one known type.
+ * Empty or all-unknown inputs must not persist as an Alert with no matchers.
+ */
+export function requireEventTypes(types: UploadEventType[]): UploadEventType[] {
     const parsed = parseUploadEventTypes(types)
     if (parsed.length === 0) {
         throw new Error("youtubeAlertRepository: at least one Upload event type is required.")
@@ -75,7 +81,8 @@ function requireEventTypes(types: UploadEventType[]): UploadEventType[] {
     return parsed
 }
 
-function requireRoleIds(ids: string[]): string[] {
+/** Validates mention role snowflakes and dedupes while preserving first-seen order. */
+export function requireRoleIds(ids: string[]): string[] {
     const out: string[] = []
     for (const raw of ids) {
         const id = normalizeOptionalDiscordSnowflake(raw)
