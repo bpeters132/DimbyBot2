@@ -225,7 +225,7 @@ async function finishPlaylistEnqueue(
     let playbackError = locked.playbackError
     if (!liveAfter.playing) {
         try {
-            const started = await startPlaybackIfNeeded(liveAfter)
+            const started = await startPlaybackIfNeeded(liveAfter, getLivePlayer)
             playbackStarted = liveAfter.playing || started === "ok"
         } catch (error: unknown) {
             playbackError = error instanceof Error ? error.message : String(error)

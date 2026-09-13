@@ -692,7 +692,9 @@ export async function handleQueryAndPlay(
                                 client.debug(
                                     `[MusicManager] Before play check: player.playing=${player.playing}, player.queue.tracks.length=${player.queue.tracks.length}`
                                 )
-                                await startPlaybackIfNeeded(player)
+                                await startPlaybackIfNeeded(player, () =>
+                                    client.lavalink.getPlayer(guildId)
+                                )
                                 schedulePrefetchWindow(
                                     () => client.lavalink.getPlayer(guildId),
                                     guildId

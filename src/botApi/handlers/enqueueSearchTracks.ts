@@ -64,7 +64,7 @@ export async function enqueueSearchTracksAssumingSearchDone(
     if (!liveAfter || liveAfter !== locked.player) return { status: "no_player" }
 
     try {
-        const started = await startPlaybackIfNeeded(liveAfter)
+        const started = await startPlaybackIfNeeded(liveAfter, getLivePlayer)
         if (getLivePlayer() !== liveAfter) return { status: "no_player" }
         schedulePrefetchWindow(getLivePlayer, guildId)
         scheduleSaveIfPlayerStillLive(getLivePlayer, liveAfter)

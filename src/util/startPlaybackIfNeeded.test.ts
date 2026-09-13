@@ -62,13 +62,13 @@ describe("startPlaybackIfNeeded", () => {
             playing: true,
             current: mockTrack("cur"),
         })
-        await startPlaybackIfNeeded(player)
+        await startPlaybackIfNeeded(player, () => player)
         assert.equal(player.playCalls, 0)
     })
 
     it("does not call play when the queue is empty", async () => {
         const player = mockPlayer({ playing: false, current: null, tracks: [] })
-        await startPlaybackIfNeeded(player)
+        await startPlaybackIfNeeded(player, () => player)
         assert.equal(player.playCalls, 0)
     })
 
@@ -77,7 +77,7 @@ describe("startPlaybackIfNeeded", () => {
             playing: false,
             current: mockTrack("cur"),
         })
-        await startPlaybackIfNeeded(player)
+        await startPlaybackIfNeeded(player, () => player)
         assert.equal(player.playCalls, 1)
         assert.equal(player.playing, true)
     })
@@ -88,7 +88,7 @@ describe("startPlaybackIfNeeded", () => {
             current: null,
             tracks: [mockTrack("next")],
         })
-        await startPlaybackIfNeeded(player)
+        await startPlaybackIfNeeded(player, () => player)
         assert.equal(player.playCalls, 1)
     })
 
@@ -98,7 +98,10 @@ describe("startPlaybackIfNeeded", () => {
             current: mockTrack("cur"),
             playDelayMs: 40,
         })
-        await Promise.all([startPlaybackIfNeeded(player), startPlaybackIfNeeded(player)])
+        await Promise.all([
+            startPlaybackIfNeeded(player, () => player),
+            startPlaybackIfNeeded(player, () => player),
+        ])
         assert.equal(player.playCalls, 1)
     })
 
@@ -117,8 +120,53 @@ describe("startPlaybackIfNeeded", () => {
             player.playing = playInvocations > 1
         }
 
-        await Promise.all([startPlaybackIfNeeded(player), startPlaybackIfNeeded(player)])
+        await Promise.all([
+            startPlaybackIfNeeded(player, () => player),
+            startPlaybackIfNeeded(player, () => player),
+        ])
         assert.equal(player.playCalls, 2)
         assert.equal(player.playing, true)
+    })
+
+    it("returns no_player and does not call play when getLivePlayer is already a successor", async () => {
+        const player = mockPlayer({
+            playing: false,
+            current: mockTrack("cur"),
+        })
+        const successor = mockPlayer({
+            playing: false,
+            current: mockTrack("other"),
+        })
+        const result = await startPlaybackIfNeeded(player, () => successor)
+        assert.equal(result, "no_player")
+        assert.equal(player.playCalls, 0)
+        assert.equal(successor.playCalls, 0)
+    })
+
+    it("returns no_player and does not call play when replaced during prepare", async () => {
+        const player = mockPlayer({
+            playing: false,
+            current: mockTrack("cur"),
+        })
+        const successor = mockPlayer({
+            playing: false,
+            current: mockTrack("other"),
+        })
+        // Native-ready path returns ok without awaiting companion; flip after a tick by
+        // delaying play readiness via a getter that switches mid-flight is covered by
+        // the prepare-await path below using a thenable getLivePlayer sequence.
+        let calls = 0
+        const result = await startPlaybackIfNeeded(player, () => {
+            calls += 1
+            // First identity check + ensureCurrentPlayable snapshot see original;
+            // after prepare returns, the post-prepare gate must see the successor.
+            if (calls >= 3) return successor
+            return player
+        })
+        // For native-ready tracks, ensureCurrentPlayable returns immediately after 1-2
+        // getLivePlayer reads; force the post-prepare gate to observe a successor.
+        assert.equal(result, "no_player")
+        assert.equal(player.playCalls, 0)
+        assert.equal(successor.playCalls, 0)
     })
 })

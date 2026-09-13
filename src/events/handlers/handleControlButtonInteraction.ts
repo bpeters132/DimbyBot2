@@ -332,7 +332,9 @@ export async function handleControlButtonInteraction(
                                     break // Don't try to play
                                 }
                             }
-                            await startPlaybackIfNeeded(player)
+                            await startPlaybackIfNeeded(player, () =>
+                                client.lavalink?.getPlayer(guildId)
+                            )
                             client.debug("[ControlButtonHandler] Player started playing.")
                             actionTaken = true
                         } catch (playError) {
