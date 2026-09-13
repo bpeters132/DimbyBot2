@@ -389,7 +389,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
             player.set("autoplay", snapshot.autoplay)
             player.set("rrqEnabled", snapshot.rrqEnabled)
 
-            await startPlaybackIfNeeded(player)
+            await startPlaybackIfNeeded(player, () => client.lavalink.getPlayer(guildId))
             schedulePrefetchWindow(() => client.lavalink.getPlayer(guildId), guildId)
             if (
                 snapshot.paused &&
