@@ -18,6 +18,7 @@ import {
 } from "../../util/guildPlayerQueueLock.js"
 import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
 import { isSameLivePlayer } from "../../util/livePlayerIdentity.js"
+import { parsePlaylistPlayBody } from "../parsePlaylistParams.js"
 
 export async function playerPlaylistPlayPOST(
     headers: Headers,
@@ -44,32 +45,8 @@ export async function playerPlaylistPlayPOST(
             }
         }
 
-        const body = (typeof rawBody === "object" && rawBody !== null ? rawBody : {}) as {
-            playlistId?: unknown
-            shuffle?: unknown
-        }
-        let playlistId: number
-        if (typeof body.playlistId === "number") {
-            if (
-                !Number.isFinite(body.playlistId) ||
-                !Number.isInteger(body.playlistId) ||
-                body.playlistId < 1
-            ) {
-                return {
-                    status: 400,
-                    body: {
-                        ok: false,
-                        error: { error: "Bad request", details: "playlistId is required." },
-                    },
-                }
-            }
-            playlistId = body.playlistId
-        } else if (
-            typeof body.playlistId === "string" &&
-            /^[1-9]\d*$/.test(body.playlistId.trim())
-        ) {
-            playlistId = Number.parseInt(body.playlistId.trim(), 10)
-        } else {
+        const parsedBody = parsePlaylistPlayBody(rawBody)
+        if (!parsedBody) {
             return {
                 status: 400,
                 body: {
@@ -78,17 +55,7 @@ export async function playerPlaylistPlayPOST(
                 },
             }
         }
-        if (!Number.isInteger(playlistId) || playlistId < 1) {
-            return {
-                status: 400,
-                body: {
-                    ok: false,
-                    error: { error: "Bad request", details: "playlistId is required." },
-                },
-            }
-        }
-
-        const shuffle = body.shuffle === true
+        const { playlistId, shuffle } = parsedBody
 
         const playlist = await getPlaylistById(playlistId)
         if (!playlist) {

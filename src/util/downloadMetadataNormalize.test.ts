@@ -6,6 +6,7 @@ import {
 } from "./downloadMetadataKeys.js"
 import {
     deleteConditionsForStoreKeys,
+    filterRowsExcludingDeletedStoreKeys,
     normalizedRowsFromStore,
     toDownloadMetadataEntry,
 } from "./downloadMetadataNormalize.js"
@@ -93,6 +94,29 @@ describe("deleteConditionsForStoreKeys", () => {
 
     it("returns no conditions when only filename-only keys are provided", () => {
         assert.deepEqual(deleteConditionsForStoreKeys(["a.wav", "b.wav", ""]), [])
+    })
+})
+
+describe("filterRowsExcludingDeletedStoreKeys", () => {
+    const keep = { guildId: "guild-a", fileName: "keep.wav" }
+    const drop = { guildId: "guild-a", fileName: "drop.wav" }
+    const otherGuild = { guildId: "guild-b", fileName: "drop.wav" }
+
+    it("returns all rows when delete keys are empty or filename-only", () => {
+        const rows = [keep, drop]
+        assert.deepEqual(filterRowsExcludingDeletedStoreKeys(rows, []), rows)
+        assert.deepEqual(filterRowsExcludingDeletedStoreKeys(rows, ["drop.wav", ""]), rows)
+    })
+
+    it("drops rows matching composite delete keys (delete-then-resurrect guard)", () => {
+        const dropKey = downloadMetadataStoreKey("guild-a", "drop.wav")
+        const filtered = filterRowsExcludingDeletedStoreKeys([keep, drop, otherGuild], [dropKey])
+        assert.deepEqual(filtered, [keep, otherGuild])
+    })
+
+    it("does not drop same fileName in a different guild", () => {
+        const dropKey = downloadMetadataStoreKey("guild-a", "drop.wav")
+        assert.deepEqual(filterRowsExcludingDeletedStoreKeys([otherGuild], [dropKey]), [otherGuild])
     })
 })
 
