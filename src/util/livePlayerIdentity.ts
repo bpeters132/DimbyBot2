@@ -23,3 +23,29 @@ export function getLivePlayerIfUnchanged<T>(
     const live = getPlayer()
     return live != null && live === expected ? live : null
 }
+
+/**
+ * True when a `playerMove` event completes a connect wait for the expected player instance
+ * into the target voice channel. A successor for the same guild must not resolve the wait.
+ */
+export function isExpectedPlayerMoveConfirm<T extends object>(
+    movedPlayer: T,
+    expectedPlayer: T,
+    newChannelId: string | null,
+    targetChannelId: string
+): boolean {
+    return movedPlayer === expectedPlayer && newChannelId === targetChannelId
+}
+
+/**
+ * True when a `playerUpdate` event confirms the expected player is connected in the target channel.
+ */
+export function isExpectedPlayerUpdateConfirm<
+    T extends { connected: boolean; voiceChannelId: string | null },
+>(updatedPlayer: T, expectedPlayer: T, targetChannelId: string): boolean {
+    return (
+        updatedPlayer === expectedPlayer &&
+        updatedPlayer.connected &&
+        updatedPlayer.voiceChannelId === targetChannelId
+    )
+}

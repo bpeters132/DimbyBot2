@@ -16,6 +16,7 @@ import type BotClient from "../lib/BotClient.js"
 import type { LocalFile, QueryPlayResult } from "../types/index.js"
 import { downloadMetadataFileBelongsToGuild } from "./downloadMetadataKeys.js"
 import { getDownloadMetadataStore } from "./downloadMetadataStore.js"
+import { isExpectedPlayerMoveConfirm, isExpectedPlayerUpdateConfirm } from "./livePlayerIdentity.js"
 import {
     enqueueMusicManagerTracksAssumingSearchDone,
     resolveLivePlayerAfterReplacementConnectWaits,
@@ -71,17 +72,15 @@ export async function ensurePlayerConnected(
             ) => {
                 // Identity-gate: a successor's connect/move for the same guild must not
                 // complete this wait — that would let a cancelled request continue onto it.
-                if (movedPlayer === player && newChannelId === voiceChannel.id) {
+                if (
+                    isExpectedPlayerMoveConfirm(movedPlayer, player, newChannelId, voiceChannel.id)
+                ) {
                     disposeMoveWait?.()
                     resolve()
                 }
             }
             const onPlayerUpdate = (_oldPlayerJson: PlayerJson, updatedPlayer: Player) => {
-                if (
-                    updatedPlayer === player &&
-                    updatedPlayer.connected &&
-                    updatedPlayer.voiceChannelId === voiceChannel.id
-                ) {
+                if (isExpectedPlayerUpdateConfirm(updatedPlayer, player, voiceChannel.id)) {
                     disposeMoveWait?.()
                     resolve()
                 }

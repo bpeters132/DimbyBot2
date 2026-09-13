@@ -145,3 +145,23 @@ export function deleteConditionsForStoreKeys(
     }
     return conditions
 }
+
+/**
+ * Drops upsert rows that match intentional deletes in the same replace call.
+ * Callers may still pass a full DB snapshot that contains keys being deleted — writing those
+ * rows would recreate deleted guild/file metadata (delete-then-resurrect).
+ */
+export function filterRowsExcludingDeletedStoreKeys<
+    T extends { guildId: string; fileName: string },
+>(rows: T[], deleteStoreKeys: string[]): T[] {
+    const deletedGuildFileKeys = new Set<string>()
+    for (const storeKey of deleteStoreKeys) {
+        if (typeof storeKey !== "string" || storeKey.length === 0) continue
+        const parsed = parseDownloadMetadataStoreKey(storeKey)
+        if (parsed.guildId !== null && parsed.guildId.length > 0) {
+            deletedGuildFileKeys.add(`${parsed.guildId}|${parsed.fileName}`)
+        }
+    }
+    if (deletedGuildFileKeys.size === 0) return rows
+    return rows.filter((row) => !deletedGuildFileKeys.has(`${row.guildId}|${row.fileName}`))
+}

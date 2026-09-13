@@ -1,12 +1,10 @@
 import { Prisma } from "@prisma/client"
 import { getPrismaClient } from "../lib/database.js"
 import type { DownloadMetadataStoreSkippedEntry, DownloadsMetadataStore } from "../types/index.js"
-import {
-    downloadMetadataStoreKey,
-    parseDownloadMetadataStoreKey,
-} from "../util/downloadMetadataKeys.js"
+import { downloadMetadataStoreKey } from "../util/downloadMetadataKeys.js"
 import {
     deleteConditionsForStoreKeys,
+    filterRowsExcludingDeletedStoreKeys,
     normalizedRowsFromStore,
     toDownloadMetadataEntry,
 } from "../util/downloadMetadataNormalize.js"
@@ -68,17 +66,7 @@ export async function replaceDownloadMetadataStoreInDatabase(
 
     // Never upsert rows that were explicitly deleted in this call — callers may still pass a
     // full db snapshot that still contains those keys (delete-then-resurrect bug).
-    const deletedGuildFileKeys = new Set<string>()
-    for (const storeKey of deleteStoreKeys) {
-        const parsed = parseDownloadMetadataStoreKey(storeKey)
-        if (parsed.guildId !== null && parsed.guildId.length > 0) {
-            deletedGuildFileKeys.add(`${parsed.guildId}|${parsed.fileName}`)
-        }
-    }
-    const rowsToWrite =
-        deletedGuildFileKeys.size === 0
-            ? rows
-            : rows.filter((row) => !deletedGuildFileKeys.has(`${row.guildId}|${row.fileName}`))
+    const rowsToWrite = filterRowsExcludingDeletedStoreKeys(rows, deleteStoreKeys)
 
     await prisma.$transaction(async (tx) => {
         const deleteConditions: Prisma.DownloadMetadataWhereInput[] =
