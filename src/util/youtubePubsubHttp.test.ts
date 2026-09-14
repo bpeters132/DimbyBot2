@@ -71,8 +71,9 @@ function fakeReq(opts: {
     ee.method = opts.method
     ee.url = opts.url ?? "/youtube/pubsub"
     ee.headers = opts.headers ?? {}
-    ;(ee as IncomingMessage & { destroy: () => void }).destroy = () => {
+    ;(ee as IncomingMessage).destroy = function destroy(this: IncomingMessage) {
         ee.emit("close")
+        return this
     }
     queueMicrotask(() => {
         for (const chunk of opts.bodyChunks ?? []) {

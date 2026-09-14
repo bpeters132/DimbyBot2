@@ -19,7 +19,6 @@ import {
     schedulePlayerSessionSave,
     setLivePlayerLookupForTests,
     dropPendingPlayerSessionSaveIfPlayer,
-    enqueueGuildPersistenceTaskForTests,
     setPlayerSessionPersistenceDbForTests,
     shouldForceClearPlayerSessionAfterDestroy,
     shouldPreservePriorPlayerSessionSnapshot,
@@ -946,4 +945,3 @@ describe("successor session overwrite guard", () => {
         assert.deepEqual(upserts, [])
     })
 })
-
