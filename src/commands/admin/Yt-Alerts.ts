@@ -28,6 +28,7 @@ import {
     seedYoutubeWatchSeenFromCommunity,
     subscribeYoutubeChannelPubsub,
     unsubscribeYoutubeChannelPubsub,
+    withYoutubeUploadChannelLock,
 } from "../../util/youtubeUploadMonitor.js"
 import {
     YT_ALERT_ROLE_OPTION_NAMES,
@@ -167,7 +168,9 @@ async function handleAdd(
 
     if (created.createdWatch) {
         try {
-            const seeded = await seedYoutubeWatchBacklog(created.watch)
+            const seeded = await withYoutubeUploadChannelLock(identity.channelId, async () =>
+                seedYoutubeWatchBacklog(created.watch)
+            )
             client.info(
                 `[yt-alerts] Seeded Watch #${created.watch.id} (${identity.channelId}): rss=${seeded.rss}, community=${seeded.community}.`
             )
@@ -183,7 +186,9 @@ async function handleAdd(
     } else if (types.includes("community")) {
         // Existing Watch may predate community seeding; snapshot posts before the first community poll.
         try {
-            await seedYoutubeWatchSeenFromCommunity(created.watch)
+            await withYoutubeUploadChannelLock(identity.channelId, async () => {
+                await seedYoutubeWatchSeenFromCommunity(created.watch)
+            })
         } catch (error: unknown) {
             client.warn("[yt-alerts] Failed to seed community posts for existing Watch:", error)
         }

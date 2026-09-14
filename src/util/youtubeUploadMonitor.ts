@@ -48,7 +48,7 @@ export const YOUTUBE_WATCH_COMMUNITY_SEED_MARKER = "__yt_alert_community_seed_v1
 let rssTimer: ReturnType<typeof setInterval> | null = null
 let communityTimer: ReturnType<typeof setInterval> | null = null
 let leaseTimer: ReturnType<typeof setInterval> | null = null
-let pollChain: Promise<void> = Promise.resolve()
+const channelPollChains = new Map<string, Promise<void>>()
 
 export type YoutubeUploadMonitorDeps = {
     fetchImpl?: YoutubeFetch
@@ -56,16 +56,29 @@ export type YoutubeUploadMonitorDeps = {
 }
 
 /**
- * Serializes RSS, community, and PubSub delivery so concurrent notify + poll
- * cannot both announce the same unseen id.
+ * Serializes RSS, community, PubSub, and seed work for one YouTube channel so
+ * concurrent notify + poll cannot both announce the same unseen id. Other channels
+ * are not queued behind this chain (PubSub HTTP 204 must not wait on unrelated RSS).
  */
-export function withYoutubeUploadPollLock(work: () => Promise<void>): Promise<void> {
-    const run = pollChain.then(work, work)
-    pollChain = run.then(
-        () => undefined,
-        () => undefined
+export function withYoutubeUploadChannelLock<T>(
+    channelId: string,
+    work: () => Promise<T>
+): Promise<T> {
+    const previous = channelPollChains.get(channelId) ?? Promise.resolve()
+    const run = previous.then(work, work)
+    channelPollChains.set(
+        channelId,
+        run.then(
+            () => undefined,
+            () => undefined
+        )
     )
     return run
+}
+
+/** Test-only: drop per-channel lock chains (does not cancel in-flight work). */
+export function resetYoutubeUploadChannelLocksForTests(): void {
+    channelPollChains.clear()
 }
 
 /** True when this Watch finished its initial backlog seed. */
@@ -140,14 +153,17 @@ export async function ensureYoutubeWatchesSeeded(
     const logger = loggerFromPartial(loggerInstance)
     for (const watch of getAllYoutubeWatches()) {
         if (isYoutubeWatchSeedComplete(watch.id)) continue
-        try {
-            const seeded = await seedYoutubeWatchBacklog(watch, fetchImpl)
-            logger.info(
-                `[yt-alerts] Completed backlog seed for Watch #${watch.id} (rss=${seeded.rss}, community=${seeded.community}).`
-            )
-        } catch (error: unknown) {
-            logger.warn(`[yt-alerts] Backlog seed failed for Watch #${watch.id}:`, error)
-        }
+        await withYoutubeUploadChannelLock(watch.youtubeChannelId, async () => {
+            if (isYoutubeWatchSeedComplete(watch.id)) return
+            try {
+                const seeded = await seedYoutubeWatchBacklog(watch, fetchImpl)
+                logger.info(
+                    `[yt-alerts] Completed backlog seed for Watch #${watch.id} (rss=${seeded.rss}, community=${seeded.community}).`
+                )
+            } catch (error: unknown) {
+                logger.warn(`[yt-alerts] Backlog seed failed for Watch #${watch.id}:`, error)
+            }
+        })
     }
 }
 
@@ -363,17 +379,19 @@ export async function pollYoutubeRssOnce(
     const fetchImpl = deps.fetchImpl ?? defaultYoutubeFetch
     const channelIds = getUniqueYoutubeChannelIds()
     for (const channelId of channelIds) {
-        try {
-            const res = await fetchImpl(youtubeRssUrl(channelId))
-            if (!res.ok) {
-                logger.warn(`[yt-alerts] RSS HTTP ${res.status} for ${channelId}`)
-                continue
+        await withYoutubeUploadChannelLock(channelId, async () => {
+            try {
+                const res = await fetchImpl(youtubeRssUrl(channelId))
+                if (!res.ok) {
+                    logger.warn(`[yt-alerts] RSS HTTP ${res.status} for ${channelId}`)
+                    return
+                }
+                const { entries } = parseYoutubeAtomFeed(res.text)
+                await processYoutubeFeedEntries(client, channelId, entries, fetchImpl, logger)
+            } catch (error: unknown) {
+                logger.warn(`[yt-alerts] RSS poll failed for ${channelId}:`, error)
             }
-            const { entries } = parseYoutubeAtomFeed(res.text)
-            await processYoutubeFeedEntries(client, channelId, entries, fetchImpl, logger)
-        } catch (error: unknown) {
-            logger.warn(`[yt-alerts] RSS poll failed for ${channelId}:`, error)
-        }
+        })
     }
 }
 
@@ -396,47 +414,49 @@ export async function pollYoutubeCommunityOnce(
         if (wantsCommunity) channelIds.add(channelId)
     }
     for (const channelId of channelIds) {
-        try {
-            const posts = await fetchYoutubeCommunityPosts(channelId, fetchImpl)
-            if (posts.length === 0) continue
-            for (const watch of getYoutubeWatchesForChannel(channelId)) {
-                if (!isYoutubeWatchSeedComplete(watch.id)) continue
-                const wantsCommunity = getYoutubeAlertsForWatch(watch.id).some((alert) =>
-                    alert.eventTypes.includes("community")
-                )
-                if (!wantsCommunity) continue
-                if (!isYoutubeVideoSeen(watch.id, YOUTUBE_WATCH_COMMUNITY_SEED_MARKER)) {
-                    await markYoutubeVideosSeen(watch.id, [
-                        ...posts.map((post) => communitySeenId(post.postId)),
-                        YOUTUBE_WATCH_COMMUNITY_SEED_MARKER,
-                    ])
-                    logger.info(
-                        `[yt-alerts] Seeded ${posts.length} community post(s) for Watch #${watch.id} (no announce).`
+        await withYoutubeUploadChannelLock(channelId, async () => {
+            try {
+                const posts = await fetchYoutubeCommunityPosts(channelId, fetchImpl)
+                if (posts.length === 0) return
+                for (const watch of getYoutubeWatchesForChannel(channelId)) {
+                    if (!isYoutubeWatchSeedComplete(watch.id)) continue
+                    const wantsCommunity = getYoutubeAlertsForWatch(watch.id).some((alert) =>
+                        alert.eventTypes.includes("community")
                     )
-                    continue
+                    if (!wantsCommunity) continue
+                    if (!isYoutubeVideoSeen(watch.id, YOUTUBE_WATCH_COMMUNITY_SEED_MARKER)) {
+                        await markYoutubeVideosSeen(watch.id, [
+                            ...posts.map((post) => communitySeenId(post.postId)),
+                            YOUTUBE_WATCH_COMMUNITY_SEED_MARKER,
+                        ])
+                        logger.info(
+                            `[yt-alerts] Seeded ${posts.length} community post(s) for Watch #${watch.id} (no announce).`
+                        )
+                        continue
+                    }
                 }
-            }
-            for (const post of posts) {
-                const entry: YoutubeFeedEntry = {
-                    videoId: post.postId,
-                    channelId,
-                    title: post.title,
-                    url: post.url,
-                    published: null,
-                    durationSeconds: null,
-                    description: "",
+                for (const post of posts) {
+                    const entry: YoutubeFeedEntry = {
+                        videoId: post.postId,
+                        channelId,
+                        title: post.title,
+                        url: post.url,
+                        published: null,
+                        durationSeconds: null,
+                        description: "",
+                    }
+                    await processYoutubeUploadEvent(
+                        client,
+                        entry,
+                        "community",
+                        communitySeenId(post.postId),
+                        logger
+                    )
                 }
-                await processYoutubeUploadEvent(
-                    client,
-                    entry,
-                    "community",
-                    communitySeenId(post.postId),
-                    logger
-                )
+            } catch (error: unknown) {
+                logger.warn(`[yt-alerts] Community poll failed for ${channelId}:`, error)
             }
-        } catch (error: unknown) {
-            logger.warn(`[yt-alerts] Community poll failed for ${channelId}:`, error)
-        }
+        })
     }
 }
 
@@ -463,13 +483,12 @@ export function startYoutubeUploadMonitor(
     const logger = loggerFromPartial(loggerInstance)
     stopYoutubeUploadMonitor()
     const runRss = () =>
-        withYoutubeUploadPollLock(async () => {
-            await ensureYoutubeWatchesSeeded(defaultYoutubeFetch, logger)
-            await pollYoutubeRssOnce(client, {}, logger)
-        }).catch((error: unknown) => logger.warn("[yt-alerts] RSS poll cycle failed:", error))
+        ensureYoutubeWatchesSeeded(defaultYoutubeFetch, logger)
+            .then(() => pollYoutubeRssOnce(client, {}, logger))
+            .catch((error: unknown) => logger.warn("[yt-alerts] RSS poll cycle failed:", error))
     const runCommunity = () =>
-        withYoutubeUploadPollLock(() => pollYoutubeCommunityOnce(client, {}, logger)).catch(
-            (error: unknown) => logger.warn("[yt-alerts] Community poll cycle failed:", error)
+        pollYoutubeCommunityOnce(client, {}, logger).catch((error: unknown) =>
+            logger.warn("[yt-alerts] Community poll cycle failed:", error)
         )
     const runLeases = () =>
         renewYoutubePubsubLeases(logger).catch((error: unknown) =>
@@ -498,5 +517,5 @@ export function stopYoutubeUploadMonitor(): void {
     rssTimer = null
     communityTimer = null
     leaseTimer = null
-    pollChain = Promise.resolve()
+    channelPollChains.clear()
 }

@@ -38,8 +38,9 @@ export function parseNewPosition(raw: unknown): number | null {
 
 /**
  * Parses the dashboard playlist-play JSON body.
- * `playlistId` accepts a finite integer ≥ 1 or a digit string without leading zeros;
- * `shuffle` is true only when the body field is strictly boolean `true`.
+ * `playlistId` accepts a safe integer ≥ 1 or a digit string without leading zeros;
+ * values above `Number.MAX_SAFE_INTEGER` are rejected. `shuffle` is true only when
+ * the body field is strictly boolean `true`.
  */
 export function parsePlaylistPlayBody(
     raw: unknown
@@ -50,23 +51,15 @@ export function parsePlaylistPlayBody(
     }
     let playlistId: number
     if (typeof body.playlistId === "number") {
-        if (
-            !Number.isFinite(body.playlistId) ||
-            !Number.isInteger(body.playlistId) ||
-            body.playlistId < 1
-        ) {
+        if (!Number.isSafeInteger(body.playlistId) || body.playlistId < 1) {
             return null
         }
         playlistId = body.playlistId
-    } else if (
-        typeof body.playlistId === "string" &&
-        STRICT_POSITIVE_INT.test(body.playlistId.trim())
-    ) {
-        playlistId = Number.parseInt(body.playlistId.trim(), 10)
+    } else if (typeof body.playlistId === "string") {
+        const parsed = parseStrictPositiveInt(body.playlistId)
+        if (parsed == null) return null
+        playlistId = parsed
     } else {
-        return null
-    }
-    if (!Number.isInteger(playlistId) || playlistId < 1) {
         return null
     }
     return { playlistId, shuffle: body.shuffle === true }

@@ -24,7 +24,7 @@ import {
 } from "./musicManagerEnqueue.js"
 import { stampRequesterUserIdOnTracks } from "./rrqDisconnect.js"
 import { memberMayJoinOccupiedVoice, resolveOccupiedVoiceChannelId } from "./sameVoiceChannel.js"
-import { startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
+import { playbackStartLostLivePlayer, startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
 import { isPlaylistLoadType, schedulePrefetchWindow } from "./youtubePlaybackWindow.js"
 import {
     isBlockedUserMediaUrl,
@@ -691,20 +691,26 @@ export async function handleQueryAndPlay(
                                 client.debug(
                                     `[MusicManager] Before play check: player.playing=${player.playing}, player.queue.tracks.length=${player.queue.tracks.length}`
                                 )
-                                await startPlaybackIfNeeded(player, () =>
+                                const started = await startPlaybackIfNeeded(player, () =>
                                     client.lavalink.getPlayer(guildId)
                                 )
-                                schedulePrefetchWindow(
-                                    () => client.lavalink.getPlayer(guildId),
-                                    guildId
-                                )
-                                scheduleSaveIfPlayerStillLive(
-                                    () => client.lavalink.getPlayer(guildId),
-                                    player
-                                )
-                                client.debug(
-                                    `[MusicManager] Lavalink player started playing [${player.queue.current?.info?.title || "track from queue"}].`
-                                )
+                                if (playbackStartLostLivePlayer(started)) {
+                                    feedbackText = `${requester}, The player stopped before the track could be queued. Try again.`
+                                    success = false
+                                    errorResult = new Error("Player destroyed before play")
+                                } else {
+                                    schedulePrefetchWindow(
+                                        () => client.lavalink.getPlayer(guildId),
+                                        guildId
+                                    )
+                                    scheduleSaveIfPlayerStillLive(
+                                        () => client.lavalink.getPlayer(guildId),
+                                        player
+                                    )
+                                    client.debug(
+                                        `[MusicManager] Lavalink player started playing [${player.queue.current?.info?.title || "track from queue"}].`
+                                    )
+                                }
                             }
                         }
                     }

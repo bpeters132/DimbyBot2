@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import type { Player, Track } from "lavalink-client"
-import { startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
+import { playbackStartLostLivePlayer, startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
 
 function mockTrack(id: string): Track {
     return {
@@ -168,5 +168,14 @@ describe("startPlaybackIfNeeded", () => {
         assert.equal(result, "no_player")
         assert.equal(player.playCalls, 0)
         assert.equal(successor.playCalls, 0)
+    })
+})
+
+describe("playbackStartLostLivePlayer", () => {
+    it("is true only for no_player so Discord/API do not report a zombie enqueue as success", () => {
+        assert.equal(playbackStartLostLivePlayer("no_player"), true)
+        assert.equal(playbackStartLostLivePlayer("ok"), false)
+        assert.equal(playbackStartLostLivePlayer("deferred"), false)
+        assert.equal(playbackStartLostLivePlayer("empty"), false)
     })
 })

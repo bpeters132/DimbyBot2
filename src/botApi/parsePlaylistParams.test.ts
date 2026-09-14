@@ -139,5 +139,7 @@ describe("parsePlaylistPlayBody", () => {
         assert.equal(parsePlaylistPlayBody({ playlistId: "1e2" }), null)
         assert.equal(parsePlaylistPlayBody({ playlistId: Number.NaN }), null)
         assert.equal(parsePlaylistPlayBody({ playlistId: Number.POSITIVE_INFINITY }), null)
+        assert.equal(parsePlaylistPlayBody({ playlistId: Number.MAX_SAFE_INTEGER + 1 }), null)
+        assert.equal(parsePlaylistPlayBody({ playlistId: "9007199254740993" }), null)
     })
 })

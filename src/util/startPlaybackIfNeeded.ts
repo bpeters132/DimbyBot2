@@ -6,6 +6,14 @@ import { ensureCurrentPlayable } from "./youtubePlaybackWindow.js"
 /** Outcome of {@link startPlaybackIfNeeded}; `deferred` means play was not started. */
 export type PlaybackStartResult = "ok" | "deferred" | "empty" | "no_player"
 
+/**
+ * True when a post-enqueue start must not be reported as success: companion prepare
+ * outlived `/stop` and the live guild slot is a successor (queued tracks are gone).
+ */
+export function playbackStartLostLivePlayer(result: PlaybackStartResult): boolean {
+    return result === "no_player"
+}
+
 const playerStartLocks = new WeakMap<Player, Promise<PlaybackStartResult>>()
 
 /**

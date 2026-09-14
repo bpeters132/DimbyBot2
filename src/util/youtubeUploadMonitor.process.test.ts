@@ -10,7 +10,8 @@ import {
 } from "./youtubeAlertStore.js"
 import {
     processYoutubeUploadEvent,
-    withYoutubeUploadPollLock,
+    resetYoutubeUploadChannelLocksForTests,
+    withYoutubeUploadChannelLock,
     youtubeAlertDeliverySeenId,
     YOUTUBE_WATCH_SEED_MARKER,
 } from "./youtubeUploadMonitor.js"
@@ -91,6 +92,7 @@ function mockClient(options: MockClientOptions = {}): {
 afterEach(() => {
     resetYoutubeAlertStoreForTests()
     setYoutubeAlertStoreDbForTests(null)
+    resetYoutubeUploadChannelLocksForTests()
 })
 
 describe("youtubeAlertDeliverySeenId", () => {
@@ -277,19 +279,41 @@ describe("processYoutubeUploadEvent", () => {
     })
 })
 
-describe("withYoutubeUploadPollLock", () => {
-    it("runs work serially so overlapping callers cannot interleave", async () => {
+describe("withYoutubeUploadChannelLock", () => {
+    it("runs same-channel work serially so overlapping callers cannot interleave", async () => {
         const order: string[] = []
-        const first = withYoutubeUploadPollLock(async () => {
+        const first = withYoutubeUploadChannelLock(CHANNEL_ID, async () => {
             order.push("a-start")
             await new Promise((resolve) => setTimeout(resolve, 30))
             order.push("a-end")
         })
-        const second = withYoutubeUploadPollLock(async () => {
+        const second = withYoutubeUploadChannelLock(CHANNEL_ID, async () => {
             order.push("b-start")
             order.push("b-end")
         })
         await Promise.all([first, second])
         assert.deepEqual(order, ["a-start", "a-end", "b-start", "b-end"])
+    })
+
+    it("does not queue a second channel behind an in-flight first-channel lock", async () => {
+        const order: string[] = []
+        let releaseA: (() => void) | undefined
+        const gate = new Promise<void>((resolve) => {
+            releaseA = resolve
+        })
+        const first = withYoutubeUploadChannelLock("UC-aaa", async () => {
+            order.push("a-start")
+            await gate
+            order.push("a-end")
+        })
+        const second = withYoutubeUploadChannelLock("UC-bbb", async () => {
+            order.push("b-start")
+            order.push("b-end")
+        })
+        await new Promise((resolve) => setImmediate(resolve))
+        assert.deepEqual(order, ["a-start", "b-start", "b-end"])
+        releaseA!()
+        await Promise.all([first, second])
+        assert.deepEqual(order, ["a-start", "b-start", "b-end", "a-end"])
     })
 })
