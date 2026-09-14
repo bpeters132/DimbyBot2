@@ -9,6 +9,7 @@ import { scheduleSaveIfPlayerStillLive } from "../../util/playerSessionPersisten
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 import { parseQueueIndex } from "../parseBotApiParams.js"
+import { clampQueueReorderInsertIndex } from "../queueReorderInsert.js"
 
 export async function queueIndexDELETE(
     headers: Headers,
@@ -142,9 +143,8 @@ export async function queueIndexPATCH(
             if (!track) {
                 return { ok: false as const, error: "Queue index out of range." }
             }
-            const insertIndexRaw = destinationIndex
             const lenAfterRemove = live.queue.tracks.length
-            const insertIndex = Math.min(Math.max(insertIndexRaw, 0), lenAfterRemove)
+            const insertIndex = clampQueueReorderInsertIndex(destinationIndex, lenAfterRemove)
             try {
                 await live.queue.splice(insertIndex, 0, track)
             } catch (insertErr: unknown) {

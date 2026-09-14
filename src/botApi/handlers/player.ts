@@ -9,6 +9,7 @@ import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { schedulePlayerSessionSave } from "../../util/playerSessionPersistence.js"
 import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
 import { shuffleUpcomingOnLivePlayer } from "../../util/livePlayerQueueMutations.js"
+import { playerHttpResultForSkip } from "../../util/skipDeferredResult.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 import { parsePlayerAction } from "../parseBotApiParams.js"
 import { destroyLavalinkPlayerForStop } from "../../util/stopLavalinkPlayer.js"
@@ -115,19 +116,8 @@ export async function playerPOST(
                         },
                     }
                 }
-                if (skipped === "deferred") {
-                    return {
-                        status: 409,
-                        body: {
-                            ok: false,
-                            error: {
-                                error: "next_track_not_ready",
-                                details:
-                                    "The next track is still preparing. Try skip again in a moment.",
-                            },
-                        },
-                    }
-                }
+                const deferredHttp = playerHttpResultForSkip(skipped)
+                if (deferredHttp) return deferredHttp
                 break
             }
             case "stop":

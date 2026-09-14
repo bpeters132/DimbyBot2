@@ -18,5 +18,5 @@ export async function destroyLavalinkPlayerForStop(
     getLivePlayer: () => object | null | undefined
 ): Promise<void> {
     await player.destroy()
-    await forceClearPlayerSessionAfterDestroyIfSafe(player.guildId, player, getLivePlayer())
+    await forceClearPlayerSessionAfterDestroyIfSafe(player.guildId, player, getLivePlayer)
 }

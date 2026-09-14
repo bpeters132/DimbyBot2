@@ -24,11 +24,20 @@ import {
     resolveYoutubeChannel,
 } from "../../util/youtubeChannelResolve.js"
 import {
-    seedYoutubeWatchSeenFromRss,
+    seedYoutubeWatchBacklog,
+    seedYoutubeWatchSeenFromCommunity,
     subscribeYoutubeChannelPubsub,
     unsubscribeYoutubeChannelPubsub,
+    withYoutubeUploadChannelLock,
 } from "../../util/youtubeUploadMonitor.js"
-import { ALL_UPLOAD_EVENT_TYPES } from "../../util/uploadEventType.js"
+import {
+    YT_ALERT_ROLE_OPTION_NAMES,
+    YT_ALERT_TYPE_OPTION_NAMES,
+    dedupeYtAlertRoleIds,
+    resolveYtAlertEventTypes,
+    resolveYtAlertMentionRoleIdsUpdate,
+    ytAlertTypeFlagsPresent,
+} from "../../util/ytAlertCommandOptions.js"
 
 const REQUIRED_CHANNEL_PERMS = [
     PermissionFlagsBits.ViewChannel,
@@ -36,37 +45,29 @@ const REQUIRED_CHANNEL_PERMS = [
     PermissionFlagsBits.EmbedLinks,
 ]
 
-const TYPE_OPTION_NAMES = ["video", "short", "premiere", "live", "community"] as const
-
 function collectRoles(interaction: ChatInputCommandInteraction): string[] {
-    const ids: string[] = []
-    for (const name of ["role", "role2", "role3", "role4", "role5"] as const) {
-        const role = interaction.options.getRole(name)
-        if (role && !ids.includes(role.id)) ids.push(role.id)
-    }
-    return ids
+    return dedupeYtAlertRoleIds(
+        YT_ALERT_ROLE_OPTION_NAMES.map((name) => interaction.options.getRole(name)?.id)
+    )
 }
 
 function collectEventTypes(interaction: ChatInputCommandInteraction): UploadEventType[] | null {
-    const provided: { type: UploadEventType; value: boolean }[] = []
-    for (const name of TYPE_OPTION_NAMES) {
-        const value = interaction.options.getBoolean(name)
-        if (value !== null) provided.push({ type: name, value })
+    const flags: Partial<Record<(typeof YT_ALERT_TYPE_OPTION_NAMES)[number], boolean | null>> = {}
+    for (const name of YT_ALERT_TYPE_OPTION_NAMES) {
+        flags[name] = interaction.options.getBoolean(name)
     }
-    if (provided.length === 0) return [...ALL_UPLOAD_EVENT_TYPES]
-    const selected = provided.filter((row) => row.value).map((row) => row.type)
-    return selected.length > 0 ? selected : null
+    return resolveYtAlertEventTypes(flags)
 }
 
 function addTypeOptionFlags(sub: SlashCommandSubcommandBuilder): SlashCommandSubcommandBuilder {
-    const descriptions: Record<(typeof TYPE_OPTION_NAMES)[number], string> = {
+    const descriptions: Record<(typeof YT_ALERT_TYPE_OPTION_NAMES)[number], string> = {
         video: "Match regular videos",
         short: "Match Shorts",
         premiere: "Match premieres when they become watchable",
         live: "Match livestream starts",
         community: "Match Community posts",
     }
-    for (const name of TYPE_OPTION_NAMES) {
+    for (const name of YT_ALERT_TYPE_OPTION_NAMES) {
         sub.addBooleanOption((opt) =>
             opt.setName(name).setDescription(descriptions[name]).setRequired(false)
         )
@@ -167,9 +168,11 @@ async function handleAdd(
 
     if (created.createdWatch) {
         try {
-            const seeded = await seedYoutubeWatchSeenFromRss(created.watch)
+            const seeded = await withYoutubeUploadChannelLock(identity.channelId, async () =>
+                seedYoutubeWatchBacklog(created.watch)
+            )
             client.info(
-                `[yt-alerts] Seeded ${seeded} seen id(s) for Watch #${created.watch.id} (${identity.channelId}).`
+                `[yt-alerts] Seeded Watch #${created.watch.id} (${identity.channelId}): rss=${seeded.rss}, community=${seeded.community}.`
             )
             await subscribeYoutubeChannelPubsub(identity.channelId, client)
         } catch (error: unknown) {
@@ -179,6 +182,15 @@ async function handleAdd(
                 content:
                     "Created the Alert but could not snapshot the channel’s current videos. Try again.",
             })
+        }
+    } else if (types.includes("community")) {
+        // Existing Watch may predate community seeding; snapshot posts before the first community poll.
+        try {
+            await withYoutubeUploadChannelLock(identity.channelId, async () => {
+                await seedYoutubeWatchSeenFromCommunity(created.watch)
+            })
+        } catch (error: unknown) {
+            client.warn("[yt-alerts] Failed to seed community posts for existing Watch:", error)
         }
     }
 
@@ -281,12 +293,14 @@ async function handleEdit(
         }
     }
 
-    const typeFlagsPresent = TYPE_OPTION_NAMES.some(
-        (name) => interaction.options.getBoolean(name) !== null
-    )
+    const typeFlags: Partial<Record<(typeof YT_ALERT_TYPE_OPTION_NAMES)[number], boolean | null>> =
+        {}
+    for (const name of YT_ALERT_TYPE_OPTION_NAMES) {
+        typeFlags[name] = interaction.options.getBoolean(name)
+    }
     let eventTypes: UploadEventType[] | undefined
-    if (typeFlagsPresent) {
-        const types = collectEventTypes(interaction)
+    if (ytAlertTypeFlagsPresent(typeFlags)) {
+        const types = resolveYtAlertEventTypes(typeFlags)
         if (!types) {
             return interaction.editReply({
                 content:
@@ -296,19 +310,34 @@ async function handleEdit(
         eventTypes = types
     }
 
-    const rolesProvided = ["role", "role2", "role3", "role4", "role5"].some(
+    const rolesProvided = YT_ALERT_ROLE_OPTION_NAMES.some(
         (name) => interaction.options.getRole(name) !== null
     )
     const clearRoles = interaction.options.getBoolean("clear_roles") === true
 
     const updated = await updateYoutubeAlert(id, {
         discordChannelId: channel?.id,
-        mentionRoleIds: clearRoles ? [] : rolesProvided ? collectRoles(interaction) : undefined,
+        mentionRoleIds: resolveYtAlertMentionRoleIdsUpdate({
+            clearRoles,
+            rolesProvided,
+            collectedRoleIds: collectRoles(interaction),
+        }),
         messageTemplate: interaction.options.getString("message") ?? undefined,
         eventTypes,
     })
     if (!updated) {
         return interaction.editReply({ content: `No Upload Alert **#${id}** in this server.` })
+    }
+    const communityNewlyEnabled =
+        eventTypes?.includes("community") === true && !existing.eventTypes.includes("community")
+    if (communityNewlyEnabled) {
+        try {
+            await withYoutubeUploadChannelLock(watch.youtubeChannelId, async () => {
+                await seedYoutubeWatchSeenFromCommunity(watch)
+            })
+        } catch (error: unknown) {
+            client.warn("[yt-alerts] Failed to seed community posts after edit:", error)
+        }
     }
     return interaction.editReply({
         content:

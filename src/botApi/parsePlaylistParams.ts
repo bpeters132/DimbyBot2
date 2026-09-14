@@ -36,6 +36,35 @@ export function parseNewPosition(raw: unknown): number | null {
     return null
 }
 
+/**
+ * Parses the dashboard playlist-play JSON body.
+ * `playlistId` accepts a safe integer ≥ 1 or a digit string without leading zeros;
+ * values above `Number.MAX_SAFE_INTEGER` are rejected. `shuffle` is true only when
+ * the body field is strictly boolean `true`.
+ */
+export function parsePlaylistPlayBody(
+    raw: unknown
+): { playlistId: number; shuffle: boolean } | null {
+    const body = (typeof raw === "object" && raw !== null ? raw : {}) as {
+        playlistId?: unknown
+        shuffle?: unknown
+    }
+    let playlistId: number
+    if (typeof body.playlistId === "number") {
+        if (!Number.isSafeInteger(body.playlistId) || body.playlistId < 1) {
+            return null
+        }
+        playlistId = body.playlistId
+    } else if (typeof body.playlistId === "string") {
+        const parsed = parseStrictPositiveInt(body.playlistId)
+        if (parsed == null) return null
+        playlistId = parsed
+    } else {
+        return null
+    }
+    return { playlistId, shuffle: body.shuffle === true }
+}
+
 /** Validates a manual add-track body; trims strings and floors duration. */
 export function parseTrackBody(raw: unknown): AddPlaylistTrackBody | null {
     if (!raw || typeof raw !== "object") return null

@@ -16,6 +16,7 @@ import type BotClient from "../lib/BotClient.js"
 import type { LocalFile, QueryPlayResult } from "../types/index.js"
 import { downloadMetadataFileBelongsToGuild } from "./downloadMetadataKeys.js"
 import { getDownloadMetadataStore } from "./downloadMetadataStore.js"
+import { isExpectedPlayerMoveConfirm, isExpectedPlayerUpdateConfirm } from "./livePlayerIdentity.js"
 import {
     enqueueMusicManagerTracksAssumingSearchDone,
     resolveLivePlayerAfterReplacementConnectWaits,
@@ -23,7 +24,7 @@ import {
 } from "./musicManagerEnqueue.js"
 import { stampRequesterUserIdOnTracks } from "./rrqDisconnect.js"
 import { memberMayJoinOccupiedVoice, resolveOccupiedVoiceChannelId } from "./sameVoiceChannel.js"
-import { startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
+import { playbackStartLostLivePlayer, startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
 import { isPlaylistLoadType, schedulePrefetchWindow } from "./youtubePlaybackWindow.js"
 import {
     isBlockedUserMediaUrl,
@@ -71,17 +72,15 @@ export async function ensurePlayerConnected(
             ) => {
                 // Identity-gate: a successor's connect/move for the same guild must not
                 // complete this wait — that would let a cancelled request continue onto it.
-                if (movedPlayer === player && newChannelId === voiceChannel.id) {
+                if (
+                    isExpectedPlayerMoveConfirm(movedPlayer, player, newChannelId, voiceChannel.id)
+                ) {
                     disposeMoveWait?.()
                     resolve()
                 }
             }
             const onPlayerUpdate = (_oldPlayerJson: PlayerJson, updatedPlayer: Player) => {
-                if (
-                    updatedPlayer === player &&
-                    updatedPlayer.connected &&
-                    updatedPlayer.voiceChannelId === voiceChannel.id
-                ) {
+                if (isExpectedPlayerUpdateConfirm(updatedPlayer, player, voiceChannel.id)) {
                     disposeMoveWait?.()
                     resolve()
                 }
@@ -692,18 +691,26 @@ export async function handleQueryAndPlay(
                                 client.debug(
                                     `[MusicManager] Before play check: player.playing=${player.playing}, player.queue.tracks.length=${player.queue.tracks.length}`
                                 )
-                                await startPlaybackIfNeeded(player)
-                                schedulePrefetchWindow(
-                                    () => client.lavalink.getPlayer(guildId),
-                                    guildId
+                                const started = await startPlaybackIfNeeded(player, () =>
+                                    client.lavalink.getPlayer(guildId)
                                 )
-                                scheduleSaveIfPlayerStillLive(
-                                    () => client.lavalink.getPlayer(guildId),
-                                    player
-                                )
-                                client.debug(
-                                    `[MusicManager] Lavalink player started playing [${player.queue.current?.info?.title || "track from queue"}].`
-                                )
+                                if (playbackStartLostLivePlayer(started)) {
+                                    feedbackText = `${requester}, The player stopped before the track could be queued. Try again.`
+                                    success = false
+                                    errorResult = new Error("Player destroyed before play")
+                                } else {
+                                    schedulePrefetchWindow(
+                                        () => client.lavalink.getPlayer(guildId),
+                                        guildId
+                                    )
+                                    scheduleSaveIfPlayerStillLive(
+                                        () => client.lavalink.getPlayer(guildId),
+                                        player
+                                    )
+                                    client.debug(
+                                        `[MusicManager] Lavalink player started playing [${player.queue.current?.info?.title || "track from queue"}].`
+                                    )
+                                }
                             }
                         }
                     }

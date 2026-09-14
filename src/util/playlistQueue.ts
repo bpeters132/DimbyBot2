@@ -7,6 +7,7 @@ import {
     stampRequesterUserIdOnTracks,
 } from "./rrqDisconnect.js"
 import { startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
+import { playbackStartedFromStartResult } from "./playbackStartedFlag.js"
 import { scheduleSaveIfPlayerStillLive } from "./playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
 import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "./userMediaUrl.js"
@@ -225,8 +226,8 @@ async function finishPlaylistEnqueue(
     let playbackError = locked.playbackError
     if (!liveAfter.playing) {
         try {
-            const started = await startPlaybackIfNeeded(liveAfter)
-            playbackStarted = liveAfter.playing || started === "ok"
+            const started = await startPlaybackIfNeeded(liveAfter, getLivePlayer)
+            playbackStarted = playbackStartedFromStartResult(started, liveAfter.playing)
         } catch (error: unknown) {
             playbackError = error instanceof Error ? error.message : String(error)
         }

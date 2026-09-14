@@ -104,9 +104,21 @@ export function unwrapLavalinkSourcePrefix(query: string): string | null {
     return null
 }
 
-/** True when `query` looks like an HTTP(S) URL (user paste or dashboard play). */
+/**
+ * Lavaplayer `HttpAudioSourceManager.getAsHttpReference` rewrites `icy://` to `http://`
+ * before fetching. Treat the alias like HTTP at the user-media boundary so private hosts
+ * cannot bypass {@link isBlockedUserMediaUrl} when `defaultSearchPlatform` is `local`
+ * (lavalink-client sends the bare identifier with no search prefix).
+ */
+export function rewriteIcySchemeToHttp(query: string): string {
+    const trimmed = query.trim()
+    if (!/^icy:\/\//i.test(trimmed)) return trimmed
+    return `http://${trimmed.slice(trimmed.indexOf("://") + 3)}`
+}
+
+/** True when `query` looks like an HTTP(S) or lavaplayer `icy://` URL (user paste or dashboard play). */
 export function isHttpUrlQuery(query: string): boolean {
-    return /^https?:\/\//i.test(query.trim())
+    return /^(?:https?|icy):\/\//i.test(query.trim())
 }
 
 /**
@@ -121,10 +133,13 @@ export function unwrapDirectLinkSourcePrefix(query: string): string {
     return trimmed.slice(match[0].length).trim()
 }
 
-/** Trimmed HTTP(S) string for Lavalink `player.search`, or `null` when `query` is not an HTTP URL. */
+/**
+ * Trimmed HTTP(S) string for Lavalink `player.search`, or `null` when `query` is not an
+ * HTTP / icy URL. `icy://` is normalized to `http://` (same rewrite lavaplayer applies).
+ */
 export function trimmedHttpUrlQuery(query: string): string | null {
     if (!isHttpUrlQuery(query)) return null
-    return query.trim()
+    return rewriteIcySchemeToHttp(query)
 }
 
 /**
@@ -134,7 +149,8 @@ export function trimmedHttpUrlQuery(query: string): string | null {
  * Non-URLs (ytsearch text) are allowed.
  *
  * Also rejects `link:` / `uri:` / `yt:` / `sc:` / `local:` / … wrappers that
- * lavalink-client strips before treating the remainder as a raw HTTP identifier.
+ * lavalink-client strips before treating the remainder as a raw HTTP identifier,
+ * and lavaplayer `icy://` aliases that would otherwise skip the `https?://` gate.
  */
 export function isBlockedUserMediaUrl(query: string): boolean {
     const trimmed = query.trim()
@@ -147,7 +163,7 @@ export function isBlockedUserMediaUrl(query: string): boolean {
     for (const candidate of candidates) {
         if (!isHttpUrlQuery(candidate)) continue
         try {
-            const hostname = new URL(candidate.trim()).hostname
+            const hostname = new URL(rewriteIcySchemeToHttp(candidate)).hostname
             if (isBlockedUserMediaHost(hostname)) return true
         } catch {
             return true

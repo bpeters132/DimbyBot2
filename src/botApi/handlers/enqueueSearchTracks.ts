@@ -2,6 +2,7 @@ import type { Player, Track, UnresolvedTrack } from "lavalink-client"
 import { stampRequesterUserIdOnTracks } from "../../util/rrqDisconnect.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { startPlaybackIfNeeded } from "../../util/startPlaybackIfNeeded.js"
+import { playbackStartedFromStartResult } from "../../util/playbackStartedFlag.js"
 import { scheduleSaveIfPlayerStillLive } from "../../util/playerSessionPersistence.js"
 import { isSpotifyCatalogTrack, isYoutubeSourceTrack } from "../../util/youtubeCompanionPlayback.js"
 import { isPlaylistLoadType, schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
@@ -64,14 +65,15 @@ export async function enqueueSearchTracksAssumingSearchDone(
     if (!liveAfter || liveAfter !== locked.player) return { status: "no_player" }
 
     try {
-        const started = await startPlaybackIfNeeded(liveAfter)
+        const started = await startPlaybackIfNeeded(liveAfter, getLivePlayer)
         if (getLivePlayer() !== liveAfter) return { status: "no_player" }
         schedulePrefetchWindow(getLivePlayer, guildId)
         scheduleSaveIfPlayerStillLive(getLivePlayer, liveAfter)
         return {
             status: "ok",
             player: liveAfter,
-            playbackStarted: !locked.wasPlaying && (liveAfter.playing || started === "ok"),
+            playbackStarted:
+                !locked.wasPlaying && playbackStartedFromStartResult(started, liveAfter.playing),
         }
     } catch (error: unknown) {
         if (getLivePlayer() !== liveAfter) return { status: "no_player" }

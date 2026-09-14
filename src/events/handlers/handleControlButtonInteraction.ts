@@ -7,6 +7,11 @@ import { shuffleUpcomingOnLivePlayer } from "../../util/livePlayerQueueMutations
 import { getLivePlayerIfUnchanged } from "../../util/livePlayerIdentity.js"
 import { startPlaybackIfNeeded } from "../../util/startPlaybackIfNeeded.js"
 import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
+import { SKIP_DEFERRED_USER_MESSAGE } from "../../util/skipDeferredResult.js"
+import {
+    memberMayJoinOccupiedVoice,
+    resolveOccupiedVoiceChannelId,
+} from "../../util/sameVoiceChannel.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 import { updateControlMessage } from "./handleControlChannel.js"
 
@@ -109,42 +114,20 @@ export async function handleControlButtonInteraction(
         `[ControlButtonHandler] Found player for guild ${guildId}. Connected: ${player.connected}, Playing: ${player.playing}`
     )
 
-    // 4. Voice channel check (autoplay matches `/autoplay`; other controls require same VC as player when known)
-    if (customId === "control_autoplay") {
+    // 4. Voice channel check — same occupied-VC gate for autoplay and other controls.
+    // Autoplay previously used `player.connected &&`, which skipped the check while disconnected.
+    {
         const voiceChannel = member.voice?.channel
         if (!voiceChannel) {
-            client.debug(
-                `[ControlButtonHandler] User ${interaction.user.id} not in VC for autoplay toggle.`
-            )
-            try {
-                await interaction.followUp({
-                    content: "Join a voice channel first!",
-                    ephemeral: true,
-                })
-            } catch (e: unknown) {
-                client.error("Error sending VC check follow-up:", e)
-            }
-            return
-        }
-        if (player.connected && player.voiceChannelId !== voiceChannel.id) {
-            try {
-                await interaction.followUp({
-                    content: "You need to be in the same voice channel as the bot!",
-                    ephemeral: true,
-                })
-            } catch (e: unknown) {
-                client.error("Error sending VC mismatch follow-up:", e)
-            }
-            return
-        }
-    } else {
-        if (!member.voice?.channel) {
             client.debug(
                 `[ControlButtonHandler] User ${interaction.user.id} not in a voice channel.`
             )
             try {
                 await interaction.followUp({
-                    content: "You must be in a voice channel to use the controls!",
+                    content:
+                        customId === "control_autoplay"
+                            ? "Join a voice channel first!"
+                            : "You must be in a voice channel to use the controls!",
                     ephemeral: true,
                 })
             } catch (e: unknown) {
@@ -152,28 +135,17 @@ export async function handleControlButtonInteraction(
             }
             return
         }
-        if (!player.voiceChannelId) {
-            client.warn(
-                `[ControlButtonHandler] Player for guild ${guildId} exists but has no voiceChannelId. Cannot verify user channel.`
-            )
-            try {
-                await interaction.followUp({
-                    content: "Cannot verify player's voice channel. Controls unavailable.",
-                    ephemeral: true,
-                })
-            } catch (e: unknown) {
-                client.error("Error sending player VC check follow-up:", e)
-            }
-            return
-        }
-        if (member.voice.channel.id !== player.voiceChannelId) {
+        const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, player)
+        if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
             client.debug(
-                `[ControlButtonHandler] User ${interaction.user.id} in different VC (${member.voice.channel.id}) than player (${player.voiceChannelId}).`
+                `[ControlButtonHandler] User ${interaction.user.id} in different VC (${voiceChannel.id}) than occupied (${occupiedVoiceChannelId}).`
             )
             try {
                 await interaction.followUp({
                     content:
-                        "You must be in the same voice channel as the bot to use the controls!",
+                        customId === "control_autoplay"
+                            ? "You need to be in the same voice channel as the bot!"
+                            : "You must be in the same voice channel as the bot to use the controls!",
                     ephemeral: true,
                 })
             } catch (e: unknown) {
@@ -182,7 +154,7 @@ export async function handleControlButtonInteraction(
             return
         }
         client.debug(
-            `[ControlButtonHandler] User ${interaction.user.id} is in the correct voice channel (${player.voiceChannelId}).`
+            `[ControlButtonHandler] User ${interaction.user.id} is in the correct voice channel (${occupiedVoiceChannelId}).`
         )
     }
 
@@ -332,7 +304,9 @@ export async function handleControlButtonInteraction(
                                     break // Don't try to play
                                 }
                             }
-                            await startPlaybackIfNeeded(player)
+                            await startPlaybackIfNeeded(player, () =>
+                                client.lavalink?.getPlayer(guildId)
+                            )
                             client.debug("[ControlButtonHandler] Player started playing.")
                             actionTaken = true
                         } catch (playError) {
@@ -418,8 +392,7 @@ export async function handleControlButtonInteraction(
                     }
                     if (skipped === "deferred") {
                         await interaction.followUp({
-                            content:
-                                "Could not skip right now. The next track is still preparing. Try again in a moment.",
+                            content: SKIP_DEFERRED_USER_MESSAGE,
                             ephemeral: true,
                         })
                         break

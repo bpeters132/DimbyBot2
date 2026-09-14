@@ -1,9 +1,18 @@
 import type { Player } from "lavalink-client"
+import { getLivePlayerIfUnchanged } from "./livePlayerIdentity.js"
 import type { CompanionPlaybackConfig } from "./youtubeCompanionPlayback.js"
 import { ensureCurrentPlayable } from "./youtubePlaybackWindow.js"
 
 /** Outcome of {@link startPlaybackIfNeeded}; `deferred` means play was not started. */
 export type PlaybackStartResult = "ok" | "deferred" | "empty" | "no_player"
+
+/**
+ * True when a post-enqueue start must not be reported as success: companion prepare
+ * outlived `/stop` and the live guild slot is a successor (queued tracks are gone).
+ */
+export function playbackStartLostLivePlayer(result: PlaybackStartResult): boolean {
+    return result === "no_player"
+}
 
 const playerStartLocks = new WeakMap<Player, Promise<PlaybackStartResult>>()
 
@@ -11,10 +20,15 @@ const playerStartLocks = new WeakMap<Player, Promise<PlaybackStartResult>>()
  * Prevents concurrent check-then-play races by serializing start attempts per player.
  * After waiting on another caller’s lock, re-checks: that run may have left playback idle while
  * new tracks were enqueued, so we must not return without attempting start under our own lock.
- * Optional `config` is for tests / callers that inject companion fetch; production omits it.
+ *
+ * `getLivePlayer` must re-resolve the guild slot: companion prepare can outlive `/stop` + a
+ * successor, and destroyed `Player.play()` still issues guild-keyed `node.updatePlayer` (no
+ * destroy-status gate in lavalink-client). Optional `config` is for tests / callers that inject
+ * companion fetch; production omits it.
  */
 export async function startPlaybackIfNeeded(
     player: Player,
+    getLivePlayer: () => Player | undefined | null,
     config?: CompanionPlaybackConfig | null
 ): Promise<PlaybackStartResult> {
     for (;;) {
@@ -25,10 +39,17 @@ export async function startPlaybackIfNeeded(
         }
 
         const startPromise = (async (): Promise<PlaybackStartResult> => {
-            const prepared = await ensureCurrentPlayable(() => player, player.guildId, config)
+            if (!getLivePlayerIfUnchanged(getLivePlayer, player)) return "no_player"
+            const prepared = await ensureCurrentPlayable(
+                () => getLivePlayerIfUnchanged(getLivePlayer, player) ?? undefined,
+                player.guildId,
+                config
+            )
             if (prepared !== "ok") return prepared
-            if (!player.playing && (player.queue.current || player.queue.tracks.length > 0)) {
-                await player.play()
+            const live = getLivePlayerIfUnchanged(getLivePlayer, player)
+            if (!live) return "no_player"
+            if (!live.playing && (live.queue.current || live.queue.tracks.length > 0)) {
+                await live.play()
             }
             return "ok"
         })()

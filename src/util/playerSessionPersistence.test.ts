@@ -8,6 +8,7 @@ import {
     clearPlayerSessionRestoreInProgress,
     consumePlayerSessionClearSuppressLease,
     destroyPlayerSuppressingSessionClear,
+    enqueueGuildPersistenceTaskForTests,
     forceClearPlayerSession,
     forceClearPlayerSessionAfterDestroyIfSafe,
     forceClearPlayerSessionIfNoLivePlayer,
@@ -16,6 +17,8 @@ import {
     markPlayerSessionRestoreInProgress,
     resolvePlayerDestroySessionClearAction,
     schedulePlayerSessionSave,
+    setLivePlayerLookupForTests,
+    dropPendingPlayerSessionSaveIfPlayer,
     setPlayerSessionPersistenceDbForTests,
     shouldForceClearPlayerSessionAfterDestroy,
     shouldPreservePriorPlayerSessionSnapshot,
@@ -240,8 +243,10 @@ describe("forceClearPlayerSessionAfterDestroyIfSafe", () => {
                 if (id === guildId) deleted = true
             },
         })
-        await forceClearPlayerSessionAfterDestroyIfSafe(guildId, destroyed, null)
+        const epochBefore = getSessionClearEpochForTests(guildId)
+        await forceClearPlayerSessionAfterDestroyIfSafe(guildId, destroyed, () => null)
         assert.equal(deleted, true)
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
     })
 
     it("does not delete when a successor owns the guild", async () => {
@@ -254,8 +259,47 @@ describe("forceClearPlayerSessionAfterDestroyIfSafe", () => {
                 if (id === guildId) deleted = true
             },
         })
-        await forceClearPlayerSessionAfterDestroyIfSafe(guildId, destroyed, successor)
+        const epochBefore = getSessionClearEpochForTests(guildId)
+        await forceClearPlayerSessionAfterDestroyIfSafe(guildId, destroyed, () => successor)
         assert.equal(deleted, false)
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore)
+    })
+
+    it("skips delete and epoch bump when a successor appears while waiting for the lock", async () => {
+        const guildId = "guild-force-clear-after-destroy-race"
+        const destroyed = mockPlayer({})
+        let deleted = false
+        let live: object | null = null
+        let releaseHold!: () => void
+        const holdGate = new Promise<void>((resolve) => {
+            releaseHold = resolve
+        })
+
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async (id) => {
+                if (id === guildId) deleted = true
+            },
+        })
+
+        // Hold the persistence lock so after-destroy force-clear queues behind its entry check.
+        const holdP = enqueueGuildPersistenceTaskForTests(guildId, async () => {
+            await holdGate
+        })
+
+        const clearP = forceClearPlayerSessionAfterDestroyIfSafe(guildId, destroyed, () => live)
+        // Let the clear enqueue behind the hold.
+        await Promise.resolve()
+        await Promise.resolve()
+
+        // Successor /play lands while /stop waits for the lock (restore-in-progress path).
+        live = { id: "successor" }
+        const epochBefore = getSessionClearEpochForTests(guildId)
+
+        releaseHold()
+        await Promise.all([holdP, clearP])
+
+        assert.equal(deleted, false)
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore)
     })
 })
 
@@ -272,8 +316,10 @@ describe("forceClearPlayerSessionIfNoLivePlayer", () => {
                 if (id === guildId) deleted = true
             },
         })
+        const epochBefore = getSessionClearEpochForTests(guildId)
         await forceClearPlayerSessionIfNoLivePlayer(guildId, () => null)
         assert.equal(deleted, true)
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
     })
 
     it("skips delete when a successor is already live", async () => {
@@ -284,8 +330,46 @@ describe("forceClearPlayerSessionIfNoLivePlayer", () => {
                 if (id === guildId) deleted = true
             },
         })
+        const epochBefore = getSessionClearEpochForTests(guildId)
         await forceClearPlayerSessionIfNoLivePlayer(guildId, () => ({ id: "successor" }))
         assert.equal(deleted, false)
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore)
+    })
+
+    it("skips delete and epoch bump when a successor appears while waiting for the lock", async () => {
+        const guildId = "guild-force-clear-race-successor"
+        let deleted = false
+        let live: object | null = null
+        let releaseHold!: () => void
+        const holdGate = new Promise<void>((resolve) => {
+            releaseHold = resolve
+        })
+
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async (id) => {
+                if (id === guildId) deleted = true
+            },
+        })
+
+        // Hold the persistence lock so the force-clear queues behind after its entry null check.
+        const holdP = enqueueGuildPersistenceTaskForTests(guildId, async () => {
+            await holdGate
+        })
+
+        const clearP = forceClearPlayerSessionIfNoLivePlayer(guildId, () => live)
+        // Let the clear enqueue behind the hold.
+        await Promise.resolve()
+        await Promise.resolve()
+
+        // Successor /play lands while /leave waits for the lock.
+        live = { id: "successor" }
+        const epochBefore = getSessionClearEpochForTests(guildId)
+
+        releaseHold()
+        await Promise.all([holdP, clearP])
+
+        assert.equal(deleted, false)
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore)
     })
 })
 
@@ -749,5 +833,115 @@ describe("guild persistence serialization", () => {
         releaseDelete()
         await Promise.all([clearP, writeP])
         assert.deepEqual(events, ["delete-start", "delete-end", "upsert"])
+    })
+})
+
+describe("successor session overwrite guard", () => {
+    afterEach(() => {
+        setLivePlayerLookupForTests(null)
+        setPlayerSessionPersistenceDbForTests(null)
+    })
+
+    it("dropPendingPlayerSessionSaveIfPlayer cancels only when pending is the destroyed player", async () => {
+        const guildId = "guild-drop-pending-successor"
+        const destroyed = mockPlayer({})
+        destroyed.guildId = guildId
+        const successor = mockPlayer({ current: mockTrack({ title: "New" }) })
+        successor.guildId = guildId
+
+        const upserts: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async (_g, _v, _t, snapshot) => {
+                upserts.push(snapshot.current?.title ?? "none")
+            },
+        })
+
+        schedulePlayerSessionSave(destroyed)
+        // Successor already scheduled — drop must not cancel the successor's pending save.
+        schedulePlayerSessionSave(successor)
+        dropPendingPlayerSessionSaveIfPlayer(guildId, destroyed)
+
+        await new Promise((r) => setTimeout(r, 2100))
+        assert.deepEqual(upserts, ["New"])
+    })
+
+    it("writePlayerSession refuses a destroyed player when a live successor owns the guild", async () => {
+        const guildId = "guild-stale-write-successor"
+        const destroyed = mockPlayer({ current: mockTrack({ title: "OldQueue" }) })
+        destroyed.guildId = guildId
+        const successor = mockPlayer({ current: mockTrack({ title: "LiveQueue" }) })
+        successor.guildId = guildId
+
+        const upserts: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async (_g, _v, _t, snapshot) => {
+                upserts.push(snapshot.current?.title ?? "none")
+            },
+        })
+        setLivePlayerLookupForTests((id) => (id === guildId ? successor : null))
+
+        await writePlayerSessionForTests(destroyed, getSessionClearEpochForTests(guildId))
+        assert.deepEqual(upserts, [])
+
+        await writePlayerSessionForTests(successor, getSessionClearEpochForTests(guildId))
+        assert.deepEqual(upserts, ["LiveQueue"])
+    })
+
+    it("debounced save of a destroyed player is a no-op after successor takes the slot", async () => {
+        const guildId = "guild-debounce-zombie"
+        const destroyed = mockPlayer({ current: mockTrack({ title: "Zombie" }) })
+        destroyed.guildId = guildId
+        const successor = mockPlayer({ current: mockTrack({ title: "Successor" }) })
+        successor.guildId = guildId
+
+        const upserts: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async (_g, _v, _t, snapshot) => {
+                upserts.push(snapshot.current?.title ?? "none")
+            },
+        })
+
+        schedulePlayerSessionSave(destroyed)
+        // Mimic playerDestroy skip-successor: drop pending + live lookup is successor.
+        dropPendingPlayerSessionSaveIfPlayer(guildId, destroyed)
+        setLivePlayerLookupForTests((id) => (id === guildId ? successor : null))
+
+        await new Promise((r) => setTimeout(r, 2100))
+        assert.deepEqual(upserts, [])
+    })
+
+    it("in-flight write captured before drop still aborts when successor is live", async () => {
+        const guildId = "guild-inflight-zombie"
+        const destroyed = mockPlayer({ current: mockTrack({ title: "Stale" }) })
+        destroyed.guildId = guildId
+        const successor = mockPlayer({ current: mockTrack({ title: "Fresh" }) })
+        successor.guildId = guildId
+
+        const upserts: string[] = []
+        let releaseGate!: () => void
+        const gate = new Promise<void>((resolve) => {
+            releaseGate = resolve
+        })
+
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async (_g, _v, _t, snapshot) => {
+                upserts.push(snapshot.current?.title ?? "none")
+            },
+        })
+
+        // Occupy the persistence chain so the zombie write is queued, then flip live player.
+        const blocker = enqueueGuildPersistenceTaskForTests(guildId, async () => {
+            await gate
+        })
+        const staleWrite = writePlayerSessionForTests(
+            destroyed,
+            getSessionClearEpochForTests(guildId)
+        )
+        await Promise.resolve()
+        setLivePlayerLookupForTests((id) => (id === guildId ? successor : null))
+        releaseGate()
+        await blocker
+        await staleWrite
+        assert.deepEqual(upserts, [])
     })
 })

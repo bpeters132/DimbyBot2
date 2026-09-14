@@ -284,10 +284,50 @@ function cancelPendingPlayerSessionSave(guildId: string): void {
     pendingPlayers.delete(guildId)
 }
 
+type LivePlayerLookup = (guildId: string) => Player | null | undefined
+
+/** Test-only override for {@link getLivePlayerForSessionWrite}. Pass `null` to restore. */
+let livePlayerLookupForTests: LivePlayerLookup | null = null
+
+/** Test-only: replace live-player lookup used by session writes (pass `null` to clear). */
+export function setLivePlayerLookupForTests(lookup: LivePlayerLookup | null): void {
+    livePlayerLookupForTests = lookup
+}
+
+/**
+ * Live Lavalink player for this guild, if any.
+ * Used so a destroyed player's debounced/in-flight save cannot overwrite a successor.
+ */
+function getLivePlayerForSessionWrite(guildId: string): Player | null | undefined {
+    if (livePlayerLookupForTests) return livePlayerLookupForTests(guildId)
+    return tryGetBotClient()?.lavalink.getPlayer(guildId)
+}
+
+/**
+ * True when another player already owns the guild slot — writing `player` would corrupt
+ * the successor's session (or race a newer snapshot).
+ */
+function isStalePlayerForSessionWrite(player: Player): boolean {
+    const live = getLivePlayerForSessionWrite(player.guildId)
+    return live != null && live !== player
+}
+
+/**
+ * Cancels a debounced save only when it still references `player`.
+ * Call when destroy skips clear because a successor is live, so the destroyed player's
+ * pending flush cannot overwrite the successor's queue.
+ */
+export function dropPendingPlayerSessionSaveIfPlayer(guildId: string, player: Player): void {
+    if (pendingPlayers.get(guildId) !== player) return
+    cancelPendingPlayerSessionSave(guildId)
+}
+
 async function writePlayerSession(player: Player, saveEpoch: number): Promise<void> {
     if (getSessionClearEpoch(player.guildId) !== saveEpoch) return
     // Defense in depth: flush/shutdown paths must honor the same partial-restore guard.
     if (shouldPreservePriorPlayerSessionSnapshot(player.guildId)) return
+    // Successor already owns this guild — never persist a destroyed player's in-memory queue.
+    if (isStalePlayerForSessionWrite(player)) return
 
     const snapshot = snapshotFromPlayer(player)
     const voiceChannelId = player.voiceChannelId
@@ -302,6 +342,7 @@ async function writePlayerSession(player: Player, saveEpoch: number): Promise<vo
         // Re-check under the lock: a clear may have landed while we waited for the chain.
         if (getSessionClearEpoch(guildId) !== saveEpoch) return
         if (shouldPreservePriorPlayerSessionSnapshot(guildId)) return
+        if (isStalePlayerForSessionWrite(player)) return
 
         // Claim a persist generation before awaiting so a newer write/clear can outrank this undo.
         const writeGeneration = bumpSessionPersistGeneration(guildId)
@@ -581,24 +622,61 @@ export async function forceClearPlayerSession(guildId: string): Promise<void> {
  * Force-clears only when `getLivePlayer` is still empty at write time.
  * `/leave` with no Lavalink player can race a successor `/play` that persists a session
  * between the last absence check and this delete.
+ *
+ * Epoch bumps and pending-save cancellation must not run until the under-lock re-check
+ * confirms absence — otherwise a racing successor’s row/saves are wiped or invalidated.
  */
 export async function forceClearPlayerSessionIfNoLivePlayer(
     guildId: string,
     getLivePlayer: () => object | null | undefined
 ): Promise<void> {
+    if (persistenceShuttingDown) return
     if (getLivePlayer()) return
-    await forceClearPlayerSession(guildId)
+
+    await withGuildPersistenceLock(guildId, async () => {
+        // Write-time re-check: successor /play may have landed while waiting for the lock.
+        if (getLivePlayer()) return
+        if (persistenceShuttingDown) return
+
+        suppressLeaseCountByGuild.delete(guildId)
+        if (shouldPreservePriorPlayerSessionSnapshot(guildId)) {
+            clearPlayerSessionPreservePriorSnapshot(guildId)
+        }
+        bumpSessionClearEpoch(guildId)
+        bumpSessionPersistGeneration(guildId)
+        cancelPendingPlayerSessionSave(guildId)
+        await persistenceDb.deletePlayerSession(guildId)
+    })
 }
 
 /**
- * Force-clears only when {@link shouldForceClearPlayerSessionAfterDestroy} is true.
- * Call after `await player.destroy()` with a fresh `getPlayer(guildId)` read.
+ * Force-clears only when {@link shouldForceClearPlayerSessionAfterDestroy} is true
+ * at write time. Call after `await player.destroy()` with a live `getPlayer` getter.
+ *
+ * Epoch bumps and pending-save cancellation must not run until the under-lock re-check
+ * confirms no successor — otherwise a racing `/play` during restore-in-progress stop/leave
+ * loses its durable session (same TOCTOU class as {@link forceClearPlayerSessionIfNoLivePlayer}).
  */
 export async function forceClearPlayerSessionAfterDestroyIfSafe(
     guildId: string,
     destroyedPlayer: object,
-    livePlayer: object | null | undefined
+    getLivePlayer: () => object | null | undefined
 ): Promise<void> {
-    if (!shouldForceClearPlayerSessionAfterDestroy(destroyedPlayer, livePlayer)) return
-    await forceClearPlayerSession(guildId)
+    if (persistenceShuttingDown) return
+    if (!shouldForceClearPlayerSessionAfterDestroy(destroyedPlayer, getLivePlayer())) return
+
+    await withGuildPersistenceLock(guildId, async () => {
+        // Write-time re-check: successor /play may have landed while waiting for the lock.
+        if (!shouldForceClearPlayerSessionAfterDestroy(destroyedPlayer, getLivePlayer())) return
+        if (persistenceShuttingDown) return
+
+        suppressLeaseCountByGuild.delete(guildId)
+        if (shouldPreservePriorPlayerSessionSnapshot(guildId)) {
+            clearPlayerSessionPreservePriorSnapshot(guildId)
+        }
+        bumpSessionClearEpoch(guildId)
+        bumpSessionPersistGeneration(guildId)
+        cancelPendingPlayerSessionSave(guildId)
+        await persistenceDb.deletePlayerSession(guildId)
+    })
 }

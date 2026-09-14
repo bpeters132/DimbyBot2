@@ -3,6 +3,7 @@ import { describe, it } from "node:test"
 import {
     parseNewPosition,
     parsePlaylistId,
+    parsePlaylistPlayBody,
     parsePosition,
     parseStrictPositiveInt,
     parseTrackBody,
@@ -101,5 +102,44 @@ describe("parseTrackBody", () => {
         assert.equal(parseTrackBody({ ...valid, duration: Number.NaN }), null)
         assert.equal(parseTrackBody({ ...valid, addedAt: "not-a-date" }), null)
         assert.equal(parseTrackBody({ ...valid, addedAt: "" }), null)
+    })
+})
+
+describe("parsePlaylistPlayBody", () => {
+    it("accepts integer playlistId ≥ 1 and digit strings without leading zeros", () => {
+        assert.deepEqual(parsePlaylistPlayBody({ playlistId: 7 }), {
+            playlistId: 7,
+            shuffle: false,
+        })
+        assert.deepEqual(parsePlaylistPlayBody({ playlistId: "12", shuffle: true }), {
+            playlistId: 12,
+            shuffle: true,
+        })
+        assert.deepEqual(parsePlaylistPlayBody({ playlistId: " 3 ", shuffle: false }), {
+            playlistId: 3,
+            shuffle: false,
+        })
+    })
+
+    it("treats only strict boolean true as shuffle", () => {
+        assert.equal(parsePlaylistPlayBody({ playlistId: 1, shuffle: true })?.shuffle, true)
+        assert.equal(parsePlaylistPlayBody({ playlistId: 1, shuffle: false })?.shuffle, false)
+        assert.equal(parsePlaylistPlayBody({ playlistId: 1, shuffle: "true" })?.shuffle, false)
+        assert.equal(parsePlaylistPlayBody({ playlistId: 1, shuffle: 1 })?.shuffle, false)
+    })
+
+    it("rejects zero, floats, leading zeros, non-objects, and missing ids", () => {
+        assert.equal(parsePlaylistPlayBody(null), null)
+        assert.equal(parsePlaylistPlayBody({}), null)
+        assert.equal(parsePlaylistPlayBody({ playlistId: 0 }), null)
+        assert.equal(parsePlaylistPlayBody({ playlistId: 1.5 }), null)
+        assert.equal(parsePlaylistPlayBody({ playlistId: -2 }), null)
+        assert.equal(parsePlaylistPlayBody({ playlistId: "01" }), null)
+        assert.equal(parsePlaylistPlayBody({ playlistId: "0" }), null)
+        assert.equal(parsePlaylistPlayBody({ playlistId: "1e2" }), null)
+        assert.equal(parsePlaylistPlayBody({ playlistId: Number.NaN }), null)
+        assert.equal(parsePlaylistPlayBody({ playlistId: Number.POSITIVE_INFINITY }), null)
+        assert.equal(parsePlaylistPlayBody({ playlistId: Number.MAX_SAFE_INTEGER + 1 }), null)
+        assert.equal(parsePlaylistPlayBody({ playlistId: "9007199254740993" }), null)
     })
 })

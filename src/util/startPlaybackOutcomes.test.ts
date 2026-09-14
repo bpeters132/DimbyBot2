@@ -91,7 +91,7 @@ function configWithFetch(fetchImpl: CompanionFetch): CompanionPlaybackConfig {
 describe("startPlaybackIfNeeded prepare outcomes", () => {
     it("returns empty and does not play when the queue has no tracks", async () => {
         const player = mockPlayer({ playing: false, current: null, tracks: [] })
-        const result = await startPlaybackIfNeeded(player)
+        const result = await startPlaybackIfNeeded(player, () => player)
         assert.equal(result, "empty")
         assert.equal(player.playCalls, 0)
     })
@@ -102,7 +102,7 @@ describe("startPlaybackIfNeeded prepare outcomes", () => {
             current: nativeTrack("now"),
             tracks: [],
         })
-        const result = await startPlaybackIfNeeded(player)
+        const result = await startPlaybackIfNeeded(player, () => player)
         assert.equal(result, "ok")
         assert.equal(player.playCalls, 1)
         assert.equal(player.playing, true)
@@ -113,7 +113,7 @@ describe("startPlaybackIfNeeded prepare outcomes", () => {
             playing: true,
             current: nativeTrack("now"),
         })
-        const result = await startPlaybackIfNeeded(player)
+        const result = await startPlaybackIfNeeded(player, () => player)
         assert.equal(result, "ok")
         assert.equal(player.playCalls, 0)
     })
@@ -126,6 +126,7 @@ describe("startPlaybackIfNeeded prepare outcomes", () => {
         })
         const result = await startPlaybackIfNeeded(
             player,
+            () => player,
             configWithFetch(async () => {
                 throw new Error("fetch failed")
             })
@@ -145,6 +146,7 @@ describe("startPlaybackIfNeeded prepare outcomes", () => {
         })
         const result = await startPlaybackIfNeeded(
             player,
+            () => player,
             configWithFetch(async (_url, init) => {
                 if (init?.method === "POST") {
                     return new Response(
