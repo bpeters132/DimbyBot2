@@ -650,14 +650,33 @@ export async function forceClearPlayerSessionIfNoLivePlayer(
 }
 
 /**
- * Force-clears only when {@link shouldForceClearPlayerSessionAfterDestroy} is true.
- * Call after `await player.destroy()` with a fresh `getPlayer(guildId)` read.
+ * Force-clears only when {@link shouldForceClearPlayerSessionAfterDestroy} is true
+ * at write time. Call after `await player.destroy()` with a live `getPlayer` getter.
+ *
+ * Epoch bumps and pending-save cancellation must not run until the under-lock re-check
+ * confirms no successor — otherwise a racing `/play` during restore-in-progress stop/leave
+ * loses its durable session (same TOCTOU class as {@link forceClearPlayerSessionIfNoLivePlayer}).
  */
 export async function forceClearPlayerSessionAfterDestroyIfSafe(
     guildId: string,
     destroyedPlayer: object,
-    livePlayer: object | null | undefined
+    getLivePlayer: () => object | null | undefined
 ): Promise<void> {
-    if (!shouldForceClearPlayerSessionAfterDestroy(destroyedPlayer, livePlayer)) return
-    await forceClearPlayerSession(guildId)
+    if (persistenceShuttingDown) return
+    if (!shouldForceClearPlayerSessionAfterDestroy(destroyedPlayer, getLivePlayer())) return
+
+    await withGuildPersistenceLock(guildId, async () => {
+        // Write-time re-check: successor /play may have landed while waiting for the lock.
+        if (!shouldForceClearPlayerSessionAfterDestroy(destroyedPlayer, getLivePlayer())) return
+        if (persistenceShuttingDown) return
+
+        suppressLeaseCountByGuild.delete(guildId)
+        if (shouldPreservePriorPlayerSessionSnapshot(guildId)) {
+            clearPlayerSessionPreservePriorSnapshot(guildId)
+        }
+        bumpSessionClearEpoch(guildId)
+        bumpSessionPersistGeneration(guildId)
+        cancelPendingPlayerSessionSave(guildId)
+        await persistenceDb.deletePlayerSession(guildId)
+    })
 }

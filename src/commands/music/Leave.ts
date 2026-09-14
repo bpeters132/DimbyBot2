@@ -162,9 +162,7 @@ export default {
             // playerDestroy → clearPlayerSession is skipped while restore-in-progress;
             // force-clear so an intentional leave cannot resurrect on the next reconnect.
             // Skip when a successor was created during destroy (cache-delete window).
-            await forceClearPlayerSessionAfterDestroyIfSafe(
-                guild.id,
-                player,
+            await forceClearPlayerSessionAfterDestroyIfSafe(guild.id, player, () =>
                 client.lavalink.getPlayer(guild.id)
             )
             client.debug(`Player destroyed for guild ${guild.id}`)
