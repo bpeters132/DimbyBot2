@@ -332,7 +332,9 @@ async function handleEdit(
         eventTypes?.includes("community") === true && !existing.eventTypes.includes("community")
     if (communityNewlyEnabled) {
         try {
-            await seedYoutubeWatchSeenFromCommunity(watch)
+            await withYoutubeUploadChannelLock(watch.youtubeChannelId, async () => {
+                await seedYoutubeWatchSeenFromCommunity(watch)
+            })
         } catch (error: unknown) {
             client.warn("[yt-alerts] Failed to seed community posts after edit:", error)
         }

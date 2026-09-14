@@ -66,13 +66,16 @@ export function withYoutubeUploadChannelLock<T>(
 ): Promise<T> {
     const previous = channelPollChains.get(channelId) ?? Promise.resolve()
     const run = previous.then(work, work)
-    channelPollChains.set(
-        channelId,
-        run.then(
-            () => undefined,
-            () => undefined
-        )
+    const tail = run.then(
+        () => undefined,
+        () => undefined
     )
+    channelPollChains.set(channelId, tail)
+    void tail.then(() => {
+        if (channelPollChains.get(channelId) === tail) {
+            channelPollChains.delete(channelId)
+        }
+    })
     return run
 }
 
@@ -509,7 +512,7 @@ export function startYoutubeUploadMonitor(
     )
 }
 
-/** Clears monitor timers (tests / shutdown). */
+/** Clears monitor timers (tests / shutdown). In-flight per-channel locks stay so a restart cannot race the previous cycle. */
 export function stopYoutubeUploadMonitor(): void {
     if (rssTimer) clearInterval(rssTimer)
     if (communityTimer) clearInterval(communityTimer)
@@ -517,5 +520,4 @@ export function stopYoutubeUploadMonitor(): void {
     rssTimer = null
     communityTimer = null
     leaseTimer = null
-    channelPollChains.clear()
 }

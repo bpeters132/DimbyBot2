@@ -11,6 +11,7 @@ import {
 import {
     processYoutubeUploadEvent,
     resetYoutubeUploadChannelLocksForTests,
+    stopYoutubeUploadMonitor,
     withYoutubeUploadChannelLock,
     youtubeAlertDeliverySeenId,
     YOUTUBE_WATCH_SEED_MARKER,
@@ -315,5 +316,27 @@ describe("withYoutubeUploadChannelLock", () => {
         releaseA!()
         await Promise.all([first, second])
         assert.deepEqual(order, ["a-start", "b-start", "b-end", "a-end"])
+    })
+
+    it("keeps an in-flight channel lock across stopYoutubeUploadMonitor", async () => {
+        const order: string[] = []
+        let release: (() => void) | undefined
+        const gate = new Promise<void>((resolve) => {
+            release = resolve
+        })
+        const first = withYoutubeUploadChannelLock(CHANNEL_ID, async () => {
+            order.push("old-start")
+            await gate
+            order.push("old-end")
+        })
+        stopYoutubeUploadMonitor()
+        const second = withYoutubeUploadChannelLock(CHANNEL_ID, async () => {
+            order.push("new")
+        })
+        await new Promise((resolve) => setImmediate(resolve))
+        assert.deepEqual(order, ["old-start"])
+        release!()
+        await Promise.all([first, second])
+        assert.deepEqual(order, ["old-start", "old-end", "new"])
     })
 })
