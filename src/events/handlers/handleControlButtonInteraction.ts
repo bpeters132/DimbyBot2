@@ -4,6 +4,7 @@ import { getGuildSettings, isGuildSettingsInitialized } from "../../util/saveCon
 import { destroyLavalinkPlayerForStop } from "../../util/stopLavalinkPlayer.js"
 import { toggleAutoplay } from "../../util/autoplayHistory.js"
 import { shuffleUpcomingOnLivePlayer } from "../../util/livePlayerQueueMutations.js"
+import { resolveControlIdlePlayReconnect } from "../../util/controlIdlePlayReconnect.js"
 import { getLivePlayerIfUnchanged } from "../../util/livePlayerIdentity.js"
 import { startPlaybackIfNeeded } from "../../util/startPlaybackIfNeeded.js"
 import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
@@ -263,46 +264,49 @@ export async function handleControlButtonInteraction(
                             "[ControlButtonHandler] Player is stopped/idle. Attempting to play current track."
                         )
                         try {
-                            if (!player.connected) {
+                            const idleReconnect = resolveControlIdlePlayReconnect({
+                                playerConnected: player.connected,
+                                playerVoiceChannelId: player.voiceChannelId,
+                                memberVoiceChannelId: member.voice?.channel?.id,
+                            })
+                            if (idleReconnect === "refuse") {
+                                client.error(
+                                    `[ControlButtonHandler] Cannot play, player not connected. User VC: ${member.voice?.channel?.id ?? "None"}, Player expected VC: ${player.voiceChannelId}`
+                                )
+                                await interaction.followUp({
+                                    content:
+                                        "I seem to be disconnected or you're not in my channel. Please try adding a song again or use /join.",
+                                    ephemeral: true,
+                                })
+                                break // Don't try to play
+                            }
+                            if (idleReconnect === "reconnect") {
                                 client.warn(
                                     "[ControlButtonHandler] Play attempt when player not connected. Checking user VC."
                                 )
-                                const voiceChannel = member.voice?.channel
-                                if (voiceChannel && voiceChannel.id === player.voiceChannelId) {
-                                    client.debug(
-                                        "[ControlButtonHandler] User in correct VC, attempting player reconnect."
+                                client.debug(
+                                    "[ControlButtonHandler] User in correct VC, attempting player reconnect."
+                                )
+                                await player.connect()
+                                // connect() awaits Discord voice; a successor may own the slot now.
+                                // play() is guild-keyed — refuse to drive Lavalink for a replaced Player.
+                                if (
+                                    !getLivePlayerIfUnchanged(
+                                        () => client.lavalink?.getPlayer(guildId),
+                                        player
                                     )
-                                    await player.connect()
-                                    // connect() awaits Discord voice; a successor may own the slot now.
-                                    // play() is guild-keyed — refuse to drive Lavalink for a replaced Player.
-                                    if (
-                                        !getLivePlayerIfUnchanged(
-                                            () => client.lavalink?.getPlayer(guildId),
-                                            player
-                                        )
-                                    ) {
-                                        client.warn(
-                                            `[ControlButtonHandler] Aborting play after connect: player replaced for guild ${guildId}.`
-                                        )
-                                        await interaction.followUp({
-                                            content:
-                                                "The player was replaced during reconnect. Try the control again.",
-                                            ephemeral: true,
-                                        })
-                                        break
-                                    }
-                                    client.debug("[ControlButtonHandler] Reconnected player.")
-                                } else {
-                                    client.error(
-                                        `[ControlButtonHandler] Cannot play, player not connected. User VC: ${voiceChannel?.id ?? "None"}, Player expected VC: ${player.voiceChannelId}`
+                                ) {
+                                    client.warn(
+                                        `[ControlButtonHandler] Aborting play after connect: player replaced for guild ${guildId}.`
                                     )
                                     await interaction.followUp({
                                         content:
-                                            "I seem to be disconnected or you're not in my channel. Please try adding a song again or use /join.",
+                                            "The player was replaced during reconnect. Try the control again.",
                                         ephemeral: true,
                                     })
-                                    break // Don't try to play
+                                    break
                                 }
+                                client.debug("[ControlButtonHandler] Reconnected player.")
                             }
                             await startPlaybackIfNeeded(player, () =>
                                 client.lavalink?.getPlayer(guildId)
