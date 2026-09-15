@@ -118,6 +118,11 @@ export async function seedYoutubeWatchSeenFromCommunity(
     watch: YoutubeWatchEntry,
     fetchImpl: YoutubeFetch = defaultYoutubeFetch
 ): Promise<number | null> {
+    // Watch-level seed is shared across Alerts. Re-seeding when community is enabled on a
+    // second Alert (or re-added) would mark in-flight posts seen and permanently miss them.
+    if (isYoutubeVideoSeen(watch.id, YOUTUBE_WATCH_COMMUNITY_SEED_MARKER)) {
+        return 0
+    }
     const posts = await fetchYoutubeCommunityPosts(watch.youtubeChannelId, fetchImpl)
     if (posts.length === 0) return null
     const ids = [
