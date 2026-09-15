@@ -15,6 +15,7 @@ import {
     pollYoutubeCommunityOnce,
     processYoutubeUploadEvent,
     seedYoutubeWatchBacklog,
+    seedYoutubeWatchSeenFromCommunity,
     seedYoutubeWatchSeenFromRss,
     shouldMarkFeedFallbackNoMatch,
     shouldMarkUploadSeen,
@@ -252,6 +253,37 @@ describe("processYoutubeUploadEvent seed gate", () => {
             { classificationSource: "feed-fallback" }
         )
         assert.equal(isYoutubeVideoSeen(1, "upcoming111"), false)
+    })
+})
+
+describe("seedYoutubeWatchSeenFromCommunity", () => {
+    it("does not re-mark posts when the community seed marker already exists", async () => {
+        const persisted: string[] = []
+        const watch = watchEntry()
+        setYoutubeAlertStoreDbForTests({
+            getAllYoutubeWatchesFromDatabase: async () => ({
+                watches: [watch],
+                alerts: [],
+                seenByWatch: {
+                    1: [YOUTUBE_WATCH_COMMUNITY_SEED_MARKER, communitySeenId("UgOldPostAAA")],
+                },
+                leases: [],
+            }),
+            addYoutubeSeenVideos: async (_watchId, ids) => {
+                persisted.push(...ids)
+            },
+        })
+        await initializeYoutubeAlertStore({ info() {}, error() {} })
+
+        const count = await seedYoutubeWatchSeenFromCommunity(watch, async () => ({
+            ok: true,
+            status: 200,
+            text: `"postId":"UgOldPostAAA","postId":"UgPendingPostBBB"`,
+        }))
+
+        assert.equal(count, 0)
+        assert.deepEqual(persisted, [])
+        assert.equal(isYoutubeVideoSeen(1, communitySeenId("UgPendingPostBBB")), false)
     })
 })
 

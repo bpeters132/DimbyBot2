@@ -55,6 +55,7 @@ import {
 import { shouldApplicationSkipOnTrackStuck } from "../util/trackStuckAdvance.js"
 import { endCurrentTrackForAutoplay } from "../util/endCurrentTrackForAutoplay.js"
 import { safeIdlePlayerDestroy } from "../util/safeIdlePlayerDestroy.js"
+import { resolveTrackErrorRecoveryTarget } from "../util/trackErrorRecovery.js"
 
 /** Rate-limit `queueUpdate` websocket fan-out on Lavalink position ticks (pause/resume still immediate). */
 const lastQueueUpdateBroadcastAtMs = new Map<string, number>()
@@ -405,36 +406,49 @@ export default async (client: BotClient) => {
                 if (retried === "retried") {
                     return
                 }
-                if (player.queue.tracks.length > 0) {
+                // Companion remint awaits; refuse zombie skip/stopPlaying/idle paths that still
+                // speak guild-keyed Lavalink APIs after /stop+/play replaced this Player.
+                const recovery = resolveTrackErrorRecoveryTarget(
+                    () => client.lavalink.getPlayer(player.guildId),
+                    player
+                )
+                if (recovery.kind === "stale") {
+                    client.debug(
+                        `[LavaMgrEvents] Player replaced during trackError recovery for guild ${player.guildId}; skipping zombie advance.`
+                    )
+                    return
+                }
+                const livePlayer = recovery.player
+                if (recovery.kind === "skip") {
                     try {
-                        await skipCurrentTrack(player, undefined, () =>
-                            client.lavalink.getPlayer(player.guildId)
+                        await skipCurrentTrack(livePlayer, undefined, () =>
+                            client.lavalink.getPlayer(livePlayer.guildId)
                         )
                     } catch (e: unknown) {
                         client.error(
-                            `[LavaMgrEvents] Failed to skip after track error in guild ${player.guildId}:`,
+                            `[LavaMgrEvents] Failed to skip after track error in guild ${livePlayer.guildId}:`,
                             e
                         )
                     }
-                } else if (player.get("autoplay") === true) {
+                } else if (recovery.kind === "autoplay") {
                     // Library trackError does not advance to queueEnd; ending the current track
                     // lets onEmptyQueue.autoPlayFunction run instead of wiping the session.
                     // Prefer stopPlaying over skip(): skip sets internal_skipped and bypasses
                     // minAutoPlayMs, which can tight-loop autoplay when catalog picks keep erroring.
                     client.debug(
-                        `[LavaMgrEvents] Queue empty with autoplay on; ending current track for guild ${player.guildId}.`
+                        `[LavaMgrEvents] Queue empty with autoplay on; ending current track for guild ${livePlayer.guildId}.`
                     )
                     try {
-                        await endCurrentTrackForAutoplay(player)
+                        await endCurrentTrackForAutoplay(livePlayer)
                     } catch (e: unknown) {
                         client.error(
-                            `[LavaMgrEvents] Failed to end track for autoplay after error in guild ${player.guildId}:`,
+                            `[LavaMgrEvents] Failed to end track for autoplay after error in guild ${livePlayer.guildId}:`,
                             e
                         )
                     }
                 } else {
                     // Reservation-aware: in-flight dashboard search/enqueue must not be destroyed.
-                    const trackErrorGuildId = player.guildId
+                    const trackErrorGuildId = livePlayer.guildId
                     client.debug(
                         `[LavaMgrEvents] Queue is empty after track error in guild ${trackErrorGuildId}; attempting reservation-aware destroy.`
                     )
@@ -443,12 +457,12 @@ export default async (client: BotClient) => {
                         {
                             hasQueueContent: () => {
                                 const live = client.lavalink.getPlayer(trackErrorGuildId)
-                                if (!live) return true
+                                if (!live || live !== livePlayer) return true
                                 return playerHasQueueContent(live)
                             },
                             destroyPlayer: async () => {
                                 const live = client.lavalink.getPlayer(trackErrorGuildId)
-                                if (!live || playerHasQueueContent(live)) {
+                                if (!live || live !== livePlayer || playerHasQueueContent(live)) {
                                     client.debug(
                                         `[LavaMgrEvents] Player ${trackErrorGuildId} regained queue content after track error; not destroying.`
                                     )
