@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { classifyAuthSessionFailure } from "@/lib/auth-session-failure"
+import { classifyAuthSessionFailure } from "@/lib/auth-session-failure.js"
 
 describe("classifyAuthSessionFailure", () => {
     it("classifies database connectivity failures", () => {
@@ -52,5 +52,7 @@ describe("classifyAuthSessionFailure", () => {
         assert.equal(classifyAuthSessionFailure(""), "unknown")
         // "jwt" alone is not enough without "invalid"
         assert.equal(classifyAuthSessionFailure("jwt header parsed"), "unknown")
+        // Generic "timeout" is not a database connectivity signal (e.g. JWT validation timeout)
+        assert.equal(classifyAuthSessionFailure("JWT validation timeout"), "unknown")
     })
 })

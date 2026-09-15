@@ -20,7 +20,6 @@ export function classifyAuthSessionFailure(rawMessage: string): SessionReadFailu
         m.includes("connect econnrefused") ||
         m.includes("econnreset") ||
         m.includes("etimedout") ||
-        m.includes("timeout") ||
         /\benotfound\b/i.test(rawMessage)
     ) {
         return "database_connectivity"
