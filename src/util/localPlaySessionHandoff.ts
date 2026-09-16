@@ -1,4 +1,6 @@
 import type { Player } from "lavalink-client"
+import { getLivePlayerIfUnchanged } from "./livePlayerIdentity.js"
+import { shouldRunLocalHandoffLavalinkTeardown } from "./localPlayHandoffLeftover.js"
 import {
     acquirePlayerSessionClearSuppressLease,
     clearPlayerSession,
@@ -50,15 +52,21 @@ function handoffLeaseStillHeld(guildId: string, destroyEventSeen: boolean): bool
 }
 
 /**
- * Flushes the live snapshot, acquires a suppress lease, then runs `destroyLavalink`.
+ * Flushes the live snapshot, acquires a suppress lease, then runs `destroyLavalink`
+ * only while `player` still owns the guild slot.
  * On destroy failure the lease is kept so queueEnd idle teardown cannot wipe the flush.
  *
  * `destroyLavalink` may clear/stop the player — do that only inside the callback so the
  * flushed snapshot still includes upcoming tracks.
+ *
+ * `getLivePlayer` is required at production call sites: flush awaits DB I/O, and
+ * `stopPlaying` is guild-keyed. A successor created during the flush must not be
+ * stopped or destroyed by this zombie instance.
  */
 export async function beginLocalPlaySessionHandoff(
     player: Player,
-    destroyLavalink: () => Promise<void>
+    destroyLavalink: () => Promise<void>,
+    getLivePlayer?: () => Player | null | undefined
 ): Promise<LocalPlaySessionHandoff> {
     const guildId = player.guildId
     schedulePlayerSessionSave(player)
@@ -70,8 +78,12 @@ export async function beginLocalPlaySessionHandoff(
     let destroyedLavalink = false
 
     try {
-        await destroyLavalink()
-        destroyedLavalink = true
+        // No lookup → tests / callers that already hold exclusive access still teardown.
+        const stillLive = getLivePlayer ? getLivePlayerIfUnchanged(getLivePlayer, player) : player
+        if (shouldRunLocalHandoffLavalinkTeardown(player, stillLive)) {
+            await destroyLavalink()
+            destroyedLavalink = true
+        }
     } catch {
         // Keep lease: stopPlaying in the callback often schedules queueEnd idle destroy.
         destroyedLavalink = false
