@@ -62,10 +62,13 @@ function handoffLeaseStillHeld(guildId: string, destroyEventSeen: boolean): bool
  * `getLivePlayer` is required at production call sites: flush awaits DB I/O, and
  * `stopPlaying` is guild-keyed. A successor created during the flush must not be
  * stopped or destroyed by this zombie instance.
+ *
+ * `destroyLavalink` may return `false` when it skipped teardown after an await
+ * (e.g. successor during `stopPlaying`). `void` / `true` still means destroy ran.
  */
 export async function beginLocalPlaySessionHandoff(
     player: Player,
-    destroyLavalink: () => Promise<void>,
+    destroyLavalink: () => Promise<void | boolean>,
     getLivePlayer?: () => Player | null | undefined
 ): Promise<LocalPlaySessionHandoff> {
     const guildId = player.guildId
@@ -81,8 +84,7 @@ export async function beginLocalPlaySessionHandoff(
         // No lookup → tests / callers that already hold exclusive access still teardown.
         const stillLive = getLivePlayer ? getLivePlayerIfUnchanged(getLivePlayer, player) : player
         if (shouldRunLocalHandoffLavalinkTeardown(player, stillLive)) {
-            await destroyLavalink()
-            destroyedLavalink = true
+            destroyedLavalink = (await destroyLavalink()) !== false
         }
     } catch {
         // Keep lease: stopPlaying in the callback often schedules queueEnd idle destroy.

@@ -19,11 +19,11 @@ import type {
 } from "../types/index.js"
 import { shouldDeleteLavalinkPlayerAfterDestroy } from "./lavalinkManagerPlayerDelete.js"
 import {
+    runLocalHandoffLavalinkStopAndDestroy,
     shouldAbortLocalPlayForLivePlayerConflict,
     shouldClearSessionAfterFailedHandoffDestroy,
     shouldClearSessionAfterLocalHandoffReady,
     shouldDestroyLeftoverHandoffPlayer,
-    shouldRunLocalHandoffLavalinkTeardown,
 } from "./localPlayHandoffLeftover.js"
 import {
     beginLocalPlaySessionHandoff,
@@ -198,49 +198,56 @@ export async function playLocalFile(
                 sessionHandoff = await beginLocalPlaySessionHandoff(
                     lavalinkPlayer,
                     async () => {
-                        // Flush already awaited; re-check immediately before guild-keyed APIs.
-                        if (
-                            !shouldRunLocalHandoffLavalinkTeardown(
-                                lavalinkPlayer,
-                                client.lavalink.getPlayer(guildId)
-                            )
-                        ) {
-                            client.debug(
-                                `[LocalPlayer] Skipping Lavalink stop/destroy for guild ${guildId}: player replaced during session flush.`
-                            )
-                            return
-                        }
-                        if (lavalinkPlayer.playing) {
-                            try {
+                        const destroyed = await runLocalHandoffLavalinkStopAndDestroy({
+                            handoffPlayer: lavalinkPlayer,
+                            getLivePlayer: () => client.lavalink.getPlayer(guildId),
+                            isPlaying: lavalinkPlayer.playing,
+                            stopPlaying: async () => {
                                 await lavalinkPlayer.stopPlaying(true, false)
                                 client.debug(
                                     `[LocalPlayer] Stopped Lavalink player in guild ${guildId}.`
                                 )
-                            } catch (e: unknown) {
+                            },
+                            onStopError: (e: unknown) => {
                                 const msg = e instanceof Error ? e.message : String(e)
                                 client.warn(
                                     `[LocalPlayer] Failed to stop Lavalink player in guild ${guildId}: ${msg}`
                                 )
-                            }
-                        }
-                        destroyEventWait = waitForLavalinkPlayerDestroy(client, guildId, 2000)
-                        client.debug(
-                            `[LocalPlayer] Attempting to destroy existing Lavalink player for guild ${guildId}.`
-                        )
-                        await lavalinkPlayer.destroy()
-                        client.debug(
-                            `[LocalPlayer] Destroyed Lavalink player for guild ${guildId}.`
-                        )
-                        // Lavalink-client already removed this guild from the manager cache before
-                        // awaiting node.destroyPlayer. A successful Map.delete here would drop a
-                        // concurrent createPlayer successor without destroying it.
-                        if (
-                            shouldDeleteLavalinkPlayerAfterDestroy(
-                                client.lavalink.players.has(guildId)
+                            },
+                            beforeDestroy: () => {
+                                destroyEventWait = waitForLavalinkPlayerDestroy(
+                                    client,
+                                    guildId,
+                                    2000
+                                )
+                                client.debug(
+                                    `[LocalPlayer] Attempting to destroy existing Lavalink player for guild ${guildId}.`
+                                )
+                            },
+                            destroy: async () => {
+                                await lavalinkPlayer.destroy()
+                                client.debug(
+                                    `[LocalPlayer] Destroyed Lavalink player for guild ${guildId}.`
+                                )
+                                // Lavalink-client already removed this guild from the manager
+                                // cache before awaiting node.destroyPlayer. A successful
+                                // Map.delete here would drop a concurrent createPlayer successor
+                                // without destroying it.
+                                if (
+                                    shouldDeleteLavalinkPlayerAfterDestroy(
+                                        client.lavalink.players.has(guildId)
+                                    )
+                                ) {
+                                    client.lavalink.players.delete(guildId)
+                                }
+                            },
+                        })
+                        if (!destroyed) {
+                            client.debug(
+                                `[LocalPlayer] Skipping Lavalink stop/destroy for guild ${guildId}: player replaced during teardown.`
                             )
-                        ) {
-                            client.lavalink.players.delete(guildId)
                         }
+                        return destroyed
                     },
                     () => client.lavalink.getPlayer(guildId)
                 )
