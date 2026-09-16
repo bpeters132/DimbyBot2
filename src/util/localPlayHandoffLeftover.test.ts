@@ -5,6 +5,7 @@ import {
     shouldClearSessionAfterFailedHandoffDestroy,
     shouldClearSessionAfterLocalHandoffReady,
     shouldDestroyLeftoverHandoffPlayer,
+    shouldRunLocalHandoffLavalinkTeardown,
 } from "./localPlayHandoffLeftover.js"
 
 describe("localPlayHandoffLeftover", () => {
@@ -57,5 +58,15 @@ describe("localPlayHandoffLeftover", () => {
         // Live player with no handoff target — would steal voice without teardown.
         assert.equal(shouldAbortLocalPlayForLivePlayerConflict(null, successor), true)
         assert.equal(shouldAbortLocalPlayForLivePlayerConflict(undefined, successor), true)
+    })
+
+    it("refuses guild-keyed stop/destroy when the live player is not the handoff instance", () => {
+        const handoff = { id: "handoff" }
+        const successor = { id: "successor" }
+
+        assert.equal(shouldRunLocalHandoffLavalinkTeardown(handoff, handoff), true)
+        assert.equal(shouldRunLocalHandoffLavalinkTeardown(handoff, successor), false)
+        assert.equal(shouldRunLocalHandoffLavalinkTeardown(handoff, null), false)
+        assert.equal(shouldRunLocalHandoffLavalinkTeardown(handoff, undefined), false)
     })
 })

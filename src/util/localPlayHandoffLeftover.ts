@@ -9,12 +9,28 @@
  * `getPlayer(guildId)` during the later local VC join (up to 30s) can return a
  * successor created by concurrent `/play` or dashboard enqueue. Destroying that
  * player (and clearing the session on Ready) would drop the live + persisted queue.
+ *
+ * The same predicate gates guild-keyed `stopPlaying`/`destroy` after
+ * `flushPlayerSessionSave`: that flush awaits DB I/O, so `/stop`+`/play` can
+ * replace the Player before the destroy callback runs.
  */
 export function shouldDestroyLeftoverHandoffPlayer(
     handoffPlayer: object,
     livePlayer: object | null | undefined
 ): boolean {
     return livePlayer != null && livePlayer === handoffPlayer
+}
+
+/**
+ * True when local-handoff may call guild-keyed `stopPlaying`/`destroy` on `handoffPlayer`.
+ * False when the slot is empty or a successor owns it — `Player.stopPlaying` does not
+ * check destroy status and would null the live guild track.
+ */
+export function shouldRunLocalHandoffLavalinkTeardown(
+    handoffPlayer: object,
+    livePlayer: object | null | undefined
+): boolean {
+    return shouldDestroyLeftoverHandoffPlayer(handoffPlayer, livePlayer)
 }
 
 /**
