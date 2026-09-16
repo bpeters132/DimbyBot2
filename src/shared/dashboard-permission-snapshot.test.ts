@@ -45,6 +45,23 @@ describe("normalizeDashboardPermissionSnapshotResponse", () => {
         if (defaultStatus.ok === false) assert.equal(defaultStatus.status, 502)
     })
 
+    it("fail-closes ok:false statuses outside HTTP 400–599 to 502", () => {
+        for (const status of [200, 399, 0, -1, 600, 999]) {
+            const out = normalizeDashboardPermissionSnapshotResponse(
+                { ok: false, status, error: "x" },
+                404
+            )
+            assert.equal(out.ok, false)
+            if (out.ok === false) assert.equal(out.status, 502)
+        }
+        const nonFinite = normalizeDashboardPermissionSnapshotResponse(
+            { ok: false, status: Number.NaN, error: "x" },
+            200
+        )
+        assert.equal(nonFinite.ok, false)
+        if (nonFinite.ok === false) assert.equal(nonFinite.status, 502)
+    })
+
     it("accepts a valid success snapshot including optimisticBotUnavailable", () => {
         const result = normalizeDashboardPermissionSnapshotResponse(
             {
