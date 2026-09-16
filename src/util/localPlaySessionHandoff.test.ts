@@ -363,4 +363,24 @@ describe("beginLocalPlaySessionHandoff", () => {
         assert.equal(handoff.destroyedLavalink, true)
         handoff.releaseLeftoverSuppressLease()
     })
+
+    it("leaves destroyedLavalink false when the destroy callback skips after stopPlaying", async () => {
+        const guildId = "guild-local-handoff-skip-after-stop"
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => undefined,
+            deletePlayerSession: async () => undefined,
+        })
+
+        const player = mockPlayer(guildId)
+        const handoff = await beginLocalPlaySessionHandoff(
+            player,
+            async () => false,
+            () => player
+        )
+
+        assert.equal(handoff.destroyedLavalink, false)
+        assert.equal(shouldSkipPlayerSessionClear(guildId), true)
+        handoff.releaseLeftoverSuppressLease()
+        assert.equal(shouldSkipPlayerSessionClear(guildId), false)
+    })
 })

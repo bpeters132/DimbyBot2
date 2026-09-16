@@ -77,3 +77,44 @@ export function shouldAbortLocalPlayForLivePlayerConflict(
     if (handoffPlayer == null) return true
     return livePlayer !== handoffPlayer
 }
+
+/** Injectable stop → destroy steps for {@link runLocalHandoffLavalinkStopAndDestroy}. */
+export type LocalHandoffLavalinkStopAndDestroyHooks<T extends object> = {
+    handoffPlayer: T
+    getLivePlayer: () => T | null | undefined
+    isPlaying: boolean
+    stopPlaying: () => Promise<void>
+    /** Swallow `stopPlaying` failures so destroy can still run when ownership is unchanged. */
+    onStopError?: (error: unknown) => void
+    /** Arm `playerDestroy` listeners immediately before `destroy()`. */
+    beforeDestroy?: () => void
+    destroy: () => Promise<void>
+}
+
+/**
+ * Guild-keyed `stopPlaying` then `destroy`, re-checking live identity after each await.
+ *
+ * `Player.stopPlaying` issues a node update by `guildId` without checking that the
+ * receiver is still the cached instance. A successor created during that await must
+ * not be destroyed. Returns `true` only when `destroy()` ran.
+ */
+export async function runLocalHandoffLavalinkStopAndDestroy<T extends object>(
+    hooks: LocalHandoffLavalinkStopAndDestroyHooks<T>
+): Promise<boolean> {
+    if (!shouldRunLocalHandoffLavalinkTeardown(hooks.handoffPlayer, hooks.getLivePlayer())) {
+        return false
+    }
+    if (hooks.isPlaying) {
+        try {
+            await hooks.stopPlaying()
+        } catch (error: unknown) {
+            hooks.onStopError?.(error)
+        }
+    }
+    if (!shouldRunLocalHandoffLavalinkTeardown(hooks.handoffPlayer, hooks.getLivePlayer())) {
+        return false
+    }
+    hooks.beforeDestroy?.()
+    await hooks.destroy()
+    return true
+}
