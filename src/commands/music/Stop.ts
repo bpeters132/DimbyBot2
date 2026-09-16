@@ -14,6 +14,7 @@ import {
     resolveOccupiedVoiceChannelId,
 } from "../../util/sameVoiceChannel.js"
 import { destroyLavalinkPlayerForStop } from "../../util/stopLavalinkPlayer.js"
+import { resolveStopCommandReply } from "../../util/stopCommandReply.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -111,32 +112,16 @@ export default {
             }
         }
 
-        let replyContent = "Nothing was playing."
-        if (lavalinkDestroyFailed && stoppedLocal) {
-            replyContent =
-                "Local playback stopped, but clearing the online player failed. Try `/stop` or `/leave` again."
-        } else if (lavalinkDestroyFailed) {
-            replyContent = "Could not stop the player right now. Try again in a moment."
-        } else if (stoppedLocal && stoppedLavalink) {
-            replyContent = "All playback stopped and the queue was cleared."
-        } else if (stoppedLocal && lavalinkIdleCleaned) {
-            replyContent = "Local playback stopped and idle Lavalink resources were cleaned up."
-        } else if (stoppedLocal) {
-            replyContent = "Local playback stopped."
-        } else if (stoppedLavalink) {
-            replyContent = "Lavalink playback stopped and the queue was cleared."
-        } else if (lavalinkIdleCleaned) {
-            replyContent = "Lavalink player was idle; resources cleaned up."
-        } else if (cancelledPendingLocal) {
-            replyContent = "Local playback start was cancelled."
-        } else if (localPlayerWasActive && !stoppedLocal) {
-            replyContent = "Could not stop the local player. Please check logs."
-        }
-
-        const stoppedSomething =
-            stoppedLocal || stoppedLavalink || lavalinkIdleCleaned || cancelledPendingLocal
-        // Destroy failures still need a user-visible reply (ephemeral unless something else stopped).
-        const shouldConfirmPublicly = stoppedSomething && !lavalinkDestroyFailed
+        // Destroy failures stay ephemeral; public confirm only when something actually stopped.
+        const { content: replyContent, confirmPublicly: shouldConfirmPublicly } =
+            resolveStopCommandReply({
+                stoppedLocal,
+                stoppedLavalink,
+                lavalinkIdleCleaned,
+                lavalinkDestroyFailed,
+                cancelledPendingLocal,
+                localPlayerWasActive,
+            })
 
         let msg: Message<boolean> | undefined
         try {
