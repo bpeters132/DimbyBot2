@@ -17,7 +17,10 @@ import {
     tryDestroyOrphanGuildPlayer,
 } from "../../util/guildPlayerQueueLock.js"
 import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
-import { isSameLivePlayer } from "../../util/livePlayerIdentity.js"
+import {
+    createdPlayerOrphanSlotLooksOccupied,
+    isSameLivePlayer,
+} from "../../util/livePlayerIdentity.js"
 import { parsePlaylistPlayBody } from "../parsePlaylistParams.js"
 
 export async function playerPlaylistPlayPOST(
@@ -119,11 +122,12 @@ export async function playerPlaylistPlayPOST(
 
             if (resolved.length === 0) {
                 await tryDestroyOrphanGuildPlayer(guildId, {
-                    hasQueueContent: () => {
-                        const live = client.lavalink.getPlayer(guildId)
-                        if (!isSameLivePlayer(live, player)) return true
-                        return playerHasQueueContent(live)
-                    },
+                    hasQueueContent: () =>
+                        createdPlayerOrphanSlotLooksOccupied(
+                            client.lavalink.getPlayer(guildId),
+                            player,
+                            playerHasQueueContent
+                        ),
                     destroyPlayer: async () => {
                         const live = client.lavalink.getPlayer(guildId)
                         if (!isSameLivePlayer(live, player)) return

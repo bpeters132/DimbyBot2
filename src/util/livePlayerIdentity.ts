@@ -11,6 +11,22 @@ export function isSameLivePlayer<T extends object>(
 }
 
 /**
+ * `hasQueueContent` probe for orphan cleanup after this request created a player.
+ * Returning true skips destroy.
+ *
+ * A successor or empty manager slot must look occupied: `destroyPlayer(guildId)` is
+ * guild-keyed and would tear down a racing `/play` or Dashboard enqueue that replaced us.
+ */
+export function createdPlayerOrphanSlotLooksOccupied<T extends object>(
+    live: T | null | undefined,
+    createdPlayer: T,
+    liveHasQueueContent: (player: T) => boolean
+): boolean {
+    if (!isSameLivePlayer(live, createdPlayer)) return true
+    return liveHasQueueContent(live)
+}
+
+/**
  * After an await (e.g. Discord `deferReply` / `connect`), re-resolve the guild player and refuse
  * when the slot was destroyed or replaced. A stale `Player` can still mutate Lavalink / Discord
  * voice state via guild-keyed APIs (`Player.skip` → `node.updatePlayer({ guildId })`,

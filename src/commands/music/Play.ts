@@ -9,7 +9,10 @@ import {
 import { handleQueryAndPlay } from "../../util/musicManager.js"
 import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
 import { playerHasQueueContent } from "../../util/playlistQueue.js"
-import { isSameLivePlayer } from "../../util/livePlayerIdentity.js"
+import {
+    createdPlayerOrphanSlotLooksOccupied,
+    isSameLivePlayer,
+} from "../../util/livePlayerIdentity.js"
 import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
@@ -112,11 +115,12 @@ export default {
                 if (createdNewPlayer && !result.success) {
                     const createdPlayer = player
                     await tryDestroyOrphanGuildPlayer(guild.id, {
-                        hasQueueContent: () => {
-                            const live = client.lavalink.getPlayer(guild.id)
-                            if (!isSameLivePlayer(live, createdPlayer)) return true
-                            return playerHasQueueContent(live)
-                        },
+                        hasQueueContent: () =>
+                            createdPlayerOrphanSlotLooksOccupied(
+                                client.lavalink.getPlayer(guild.id),
+                                createdPlayer,
+                                playerHasQueueContent
+                            ),
                         destroyPlayer: async () => {
                             const live = client.lavalink.getPlayer(guild.id)
                             if (!isSameLivePlayer(live, createdPlayer)) return
