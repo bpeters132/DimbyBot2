@@ -203,4 +203,43 @@ describe("enqueueSearchTracksAssumingSearchDone", () => {
         assert.equal(playlist.status, "ok")
         assert.equal(live.queue.tracks.map((t) => t.info.title).join(","), "ok")
     })
+
+    it("enqueues URI-less YouTube and Spotify catalog tracks for just-in-time resolve", async () => {
+        const guildId = "guild-search-jit-empty-uri"
+        const live = mockMutablePlayer(guildId, [])
+        const youtube = mockTrack("yt-jit")
+        youtube.info.uri = ""
+        youtube.info.sourceName = "youtube"
+        const youtubeMusic = mockTrack("ytm-jit")
+        youtubeMusic.info.uri = "   "
+        youtubeMusic.info.sourceName = "youtubemusic"
+        const spotify = mockTrack("sp-jit")
+        spotify.info.uri = ""
+        spotify.info.sourceName = "spotify"
+        const soundcloud = mockTrack("sc-blank")
+        soundcloud.info.uri = ""
+        soundcloud.info.sourceName = "soundcloud"
+
+        const youtubeOnly = await enqueueSearchTracksAssumingSearchDone(
+            () => live,
+            guildId,
+            { loadType: "track", tracks: [youtube] },
+            "user-1"
+        )
+        assert.equal(youtubeOnly.status, "ok")
+        assert.equal(live.queue.tracks.map((t) => t.info.title).join(","), "yt-jit")
+
+        const playlistPlayer = mockMutablePlayer(`${guildId}-playlist`, [])
+        const playlist = await enqueueSearchTracksAssumingSearchDone(
+            () => playlistPlayer,
+            `${guildId}-playlist`,
+            { loadType: "PLAYLIST_LOADED", tracks: [soundcloud, youtubeMusic, spotify] },
+            "user-1"
+        )
+        assert.equal(playlist.status, "ok")
+        assert.equal(
+            playlistPlayer.queue.tracks.map((t) => t.info.title).join(","),
+            "ytm-jit,sp-jit"
+        )
+    })
 })
