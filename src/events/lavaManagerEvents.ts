@@ -56,6 +56,7 @@ import { shouldApplicationSkipOnTrackStuck } from "../util/trackStuckAdvance.js"
 import { endCurrentTrackForAutoplay } from "../util/endCurrentTrackForAutoplay.js"
 import { safeIdlePlayerDestroy } from "../util/safeIdlePlayerDestroy.js"
 import { resolveTrackErrorRecoveryTarget } from "../util/trackErrorRecovery.js"
+import { getLivePlayerIfUnchanged } from "../util/livePlayerIdentity.js"
 
 /** Rate-limit `queueUpdate` websocket fan-out on Lavalink position ticks (pause/resume still immediate). */
 const lastQueueUpdateBroadcastAtMs = new Map<string, number>()
@@ -399,7 +400,11 @@ export default async (client: BotClient) => {
                     `[LavaMgrEvents] Attempting to skip track after error in guild ${player.guildId}.`
                 )
                 const retried = await retryCompanionPlaybackOnce(
-                    () => client.lavalink.getPlayer(player.guildId),
+                    () =>
+                        getLivePlayerIfUnchanged(
+                            () => client.lavalink.getPlayer(player.guildId),
+                            player
+                        ) ?? undefined,
                     player.guildId,
                     track
                 )
