@@ -18,7 +18,10 @@ import {
 import { isMemberFetchNotFound } from "../../util/discordMemberFetchError.js"
 import { enqueueSearchTracksAssumingSearchDone } from "./enqueueSearchTracks.js"
 import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "../../util/userMediaUrl.js"
-import { isSameLivePlayer } from "../../util/livePlayerIdentity.js"
+import {
+    createdPlayerOrphanSlotLooksOccupied,
+    isSameLivePlayer,
+} from "../../util/livePlayerIdentity.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
 
@@ -186,11 +189,12 @@ export async function searchAndEnqueue(
             // Identity-gate destroy: never tear down a successor installed by /stop+/play.
             const createdPlayer = player
             await tryDestroyOrphanGuildPlayer(guildId, {
-                hasQueueContent: () => {
-                    const live = client.lavalink.getPlayer(guildId)
-                    if (!isSameLivePlayer(live, createdPlayer)) return true
-                    return playerHasQueueContent(live)
-                },
+                hasQueueContent: () =>
+                    createdPlayerOrphanSlotLooksOccupied(
+                        client.lavalink.getPlayer(guildId),
+                        createdPlayer,
+                        playerHasQueueContent
+                    ),
                 destroyPlayer: async () => {
                     const live = client.lavalink.getPlayer(guildId)
                     if (!isSameLivePlayer(live, createdPlayer)) return

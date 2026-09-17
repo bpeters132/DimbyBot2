@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
+    createdPlayerOrphanSlotLooksOccupied,
     getLivePlayerIfUnchanged,
     isExpectedPlayerMoveConfirm,
     isExpectedPlayerUpdateConfirm,
@@ -19,6 +20,39 @@ describe("isSameLivePlayer", () => {
         assert.equal(isSameLivePlayer(null, expected), false)
         assert.equal(isSameLivePlayer(undefined, expected), false)
         assert.equal(isSameLivePlayer(successor, expected), false)
+    })
+})
+
+describe("createdPlayerOrphanSlotLooksOccupied", () => {
+    const empty = () => false
+    const occupied = () => true
+
+    it("skips destroy when the created player was replaced or the slot is empty", () => {
+        const created = { id: "created" }
+        const successor = { id: "successor" }
+        assert.equal(createdPlayerOrphanSlotLooksOccupied(successor, created, empty), true)
+        assert.equal(createdPlayerOrphanSlotLooksOccupied(null, created, empty), true)
+        assert.equal(createdPlayerOrphanSlotLooksOccupied(undefined, created, empty), true)
+    })
+
+    it("destroys only the created player when it is still live and empty", () => {
+        const created = { id: "created" }
+        assert.equal(createdPlayerOrphanSlotLooksOccupied(created, created, empty), false)
+        assert.equal(createdPlayerOrphanSlotLooksOccupied(created, created, occupied), true)
+    })
+
+    it("does not inspect queue content on a successor instance", () => {
+        const created = { id: "created" }
+        const successor = { id: "successor" }
+        let inspected = false
+        assert.equal(
+            createdPlayerOrphanSlotLooksOccupied(successor, created, () => {
+                inspected = true
+                return false
+            }),
+            true
+        )
+        assert.equal(inspected, false)
     })
 })
 

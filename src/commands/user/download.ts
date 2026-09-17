@@ -12,7 +12,10 @@ import {
 import { handleQueryAndPlay } from "../../util/musicManager.js"
 import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
 import { playerHasQueueContent } from "../../util/playlistQueue.js"
-import { isSameLivePlayer } from "../../util/livePlayerIdentity.js"
+import {
+    createdPlayerOrphanSlotLooksOccupied,
+    isSameLivePlayer,
+} from "../../util/livePlayerIdentity.js"
 import { getGuildSettings } from "../../util/saveControlChannel.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import {
@@ -799,11 +802,12 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                             if (createdHere && !result.success) {
                                 const createdPlayer = player
                                 await tryDestroyOrphanGuildPlayer(guildId, {
-                                    hasQueueContent: () => {
-                                        const live = client.lavalink.getPlayer(guildId)
-                                        if (!isSameLivePlayer(live, createdPlayer)) return true
-                                        return playerHasQueueContent(live)
-                                    },
+                                    hasQueueContent: () =>
+                                        createdPlayerOrphanSlotLooksOccupied(
+                                            client.lavalink.getPlayer(guildId),
+                                            createdPlayer,
+                                            playerHasQueueContent
+                                        ),
                                     destroyPlayer: async () => {
                                         const live = client.lavalink.getPlayer(guildId)
                                         if (!isSameLivePlayer(live, createdPlayer)) return
