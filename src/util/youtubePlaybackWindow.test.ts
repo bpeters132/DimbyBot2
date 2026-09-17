@@ -735,6 +735,74 @@ describe("skip upcoming + companion retry", () => {
         assert.equal(player.queue.tracks[0]?.info.identifier, VIDEO_A)
     })
 
+    it("does not remint-apply or play() a same-URI successor during companion retry", async () => {
+        const current = youtubeTrack(VIDEO_A)
+        ;(current as { userData?: Record<string, unknown> }).userData = {
+            invidiousCompanionResolved: true,
+        }
+        const original = mockWindowPlayer("g-retry-same-uri", [], current)
+        const successorCurrent = youtubeTrack(VIDEO_A)
+        const successor = mockWindowPlayer("g-retry-same-uri", [], successorCurrent)
+        let originalPlays = 0
+        let successorPlays = 0
+        ;(original as { play: () => Promise<void> }).play = async () => {
+            originalPlays += 1
+        }
+        ;(successor as { play: () => Promise<void> }).play = async () => {
+            successorPlays += 1
+        }
+        let live: Player | undefined = original
+        const innerFetch = companionOkFetch()
+        const result = await retryCompanionPlaybackOnce(
+            () => live,
+            "g-retry-same-uri",
+            current,
+            configWithFetch(async (url, init) => {
+                live = successor
+                return innerFetch(url, init)
+            })
+        )
+        assert.equal(result, "skip")
+        assert.equal(originalPlays, 0)
+        assert.equal(successorPlays, 0)
+        assert.equal(successor.queue.current, successorCurrent)
+        assert.equal(isCompanionResolvedTrack(successorCurrent), false)
+    })
+
+    it("does not play() a successor after remint applies to a replaced player", async () => {
+        const current = youtubeTrack(VIDEO_A)
+        ;(current as { userData?: Record<string, unknown> }).userData = {
+            invidiousCompanionResolved: true,
+        }
+        const original = mockWindowPlayer("g-retry-replaced", [], current)
+        const successor = mockWindowPlayer("g-retry-replaced", [], youtubeTrack(VIDEO_B))
+        let originalPlays = 0
+        let successorPlays = 0
+        ;(original as { play: () => Promise<void> }).play = async () => {
+            originalPlays += 1
+        }
+        ;(successor as { play: () => Promise<void> }).play = async () => {
+            successorPlays += 1
+        }
+        let lookups = 0
+        const result = await retryCompanionPlaybackOnce(
+            () => {
+                lookups += 1
+                // snapshot + lock apply still see the original; the post-apply play() lookup
+                // must not drive the successor (`Player.play` is guild-keyed).
+                return lookups >= 3 ? successor : original
+            },
+            "g-retry-replaced",
+            current,
+            configWithFetch(companionOkFetch())
+        )
+        assert.equal(result, "skip")
+        assert.equal(originalPlays, 0)
+        assert.equal(successorPlays, 0)
+        assert.equal(successor.queue.current?.info.identifier, VIDEO_B)
+        assert.equal(isCompanionResolvedTrack(successor.queue.current as Track), false)
+    })
+
     it("skips companion retry when live current no longer matches the failed track", async () => {
         const failed = youtubeTrack(VIDEO_A)
         ;(failed as { userData?: Record<string, unknown> }).userData = {
