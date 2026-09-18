@@ -130,6 +130,25 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("HTTP://10.0.0.5.NIP.IO/"), true)
         // Embedded blocked IPv4 labels even under an unfamiliar suffix
         assert.equal(isBlockedUserMediaUrl("http://172.16.0.2.attacker.example/"), true)
+        // traefik.me / localho.st: public bounce services omitted from the original suffix list.
+        // Dash-octet form (`10-0-0-1.traefik.me` → 10.0.0.1) is not four decimal DNS labels.
+        assert.equal(isBlockedUserMediaUrl("http://traefik.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.traefik.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://10-0-0-1.traefik.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://10-0-0-1.traefik.me:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://192-168-0-1.traefik.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://172-16-0-2.traefik.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://127-0-0-1.traefik.me/"), true)
+        assert.equal(
+            isBlockedUserMediaUrl("http://169-254-169-254.traefik.me/latest/meta-data/"),
+            true
+        )
+        assert.equal(isBlockedUserMediaUrl("http://localho.st/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://www.localho.st/"), true)
+        // Dash-encoded blocked IPv4 on an unfamiliar suffix (same encoding sslip/traefik use)
+        assert.equal(isBlockedUserMediaUrl("http://10-0-0-1.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://192-168-1-10.attacker.example/audio.mp3"), true)
+        assert.equal(isBlockedUserMediaUrl("http://8-8-8-8.attacker.example/"), false)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {
