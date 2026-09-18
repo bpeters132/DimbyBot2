@@ -24,3 +24,42 @@ export function shouldTearDownAbsentLavalinkOnLeave(
 ): boolean {
     return livePlayer == null
 }
+
+/**
+ * Destructive Lavalink/session steps on `/leave` when command start saw no player.
+ * `destroyPlayerByGuildId` is always false: `lavalink.destroyPlayer(guildId)` is
+ * guild-keyed and would tear down a racing `/play` successor.
+ */
+export type LeaveAbsentLavalinkPlan = {
+    destroyPlayerByGuildId: false
+    disconnectOrphanVoice: boolean
+    forceClearSession: boolean
+}
+
+/**
+ * Snapshot of absent-path `/leave` actions. Re-evaluate after each await: a successor
+ * can appear between orphan disconnect and session force-clear.
+ */
+export function planLeaveAbsentLavalinkActions(input: {
+    livePlayer: object | null | undefined
+    botInVoice: boolean
+    stoppedLocal: boolean
+}): LeaveAbsentLavalinkPlan {
+    const none: LeaveAbsentLavalinkPlan = {
+        destroyPlayerByGuildId: false,
+        disconnectOrphanVoice: false,
+        forceClearSession: false,
+    }
+    // "I'm not in a voice channel" path: no local leftover and no orphan Discord VC.
+    if (!input.stoppedLocal && !input.botInVoice) {
+        return none
+    }
+    if (!shouldTearDownAbsentLavalinkOnLeave(input.livePlayer)) {
+        return none
+    }
+    return {
+        destroyPlayerByGuildId: false,
+        disconnectOrphanVoice: shouldDisconnectOrphanVoice(false, input.botInVoice),
+        forceClearSession: true,
+    }
+}
