@@ -1,4 +1,5 @@
 import { headers } from "next/headers"
+import { resolveBotApiFetchFailure } from "@/lib/bot-api-fetch-failure"
 import { resolveFetchTimeoutMs } from "@/lib/bot-api-timeout"
 import { getBotApiOrigin } from "@/server/bot-api-origin"
 import { isBotApiVerbose, logBotApiVerbose } from "@/server/bot-api-verbose"
@@ -115,14 +116,12 @@ export async function serverFetchBot(
         }
         return res
     } catch (e) {
+        const failure = resolveBotApiFetchFailure(e)
         const message = e instanceof Error ? e.message : "Fetch failed"
-        const isAbort =
-            (e instanceof Error && (e.name === "AbortError" || /aborted|abort/i.test(message))) ||
-            (typeof DOMException !== "undefined" &&
-                e instanceof DOMException &&
-                e.name === "AbortError")
         logBotApiVerbose(
-            isAbort ? "serverFetchBot ✖ fetch timed out" : "serverFetchBot ✖ fetch threw",
+            failure.kind === "timeout"
+                ? "serverFetchBot ✖ fetch timed out"
+                : "serverFetchBot ✖ fetch threw",
             {
                 method,
                 url,
@@ -134,13 +133,11 @@ export async function serverFetchBot(
             JSON.stringify({
                 ok: false,
                 error: {
-                    error: isAbort ? "Bot API request timed out" : "Bot API unreachable",
-                    details: isAbort
-                        ? "Upstream bot did not respond before the timeout."
-                        : "Unable to reach Bot API",
+                    error: failure.error,
+                    details: failure.details,
                 },
             }),
-            { status: isAbort ? 504 : 502, headers: { "content-type": "application/json" } }
+            { status: failure.status, headers: { "content-type": "application/json" } }
         )
     } finally {
         if (timeoutId !== undefined) {
