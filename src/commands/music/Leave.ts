@@ -11,10 +11,7 @@ import {
     forceClearPlayerSessionIfNoLivePlayer,
     forceClearPlayerSessionAfterDestroyIfSafe,
 } from "../../util/playerSessionPersistence.js"
-import {
-    shouldDisconnectOrphanVoice,
-    shouldTearDownAbsentLavalinkOnLeave,
-} from "../../util/leaveOrphanVoice.js"
+import { planLeaveAbsentLavalinkActions } from "../../util/leaveOrphanVoice.js"
 import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
@@ -99,28 +96,31 @@ export default {
                 `Leave command check: No Lavalink player for guild ${guild.id}. Checking bot voice / local cleanup.`
             )
             const botVoiceState = guild.members.me?.voice
-            if (stoppedLocal || botVoiceState?.channel) {
+            const botInVoice = Boolean(botVoiceState?.channel)
+            if (stoppedLocal || botInVoice) {
                 try {
                     // Re-read before each destructive step: concurrent /play can install a
                     // successor after the initial null check (and between awaits below).
-                    const liveStillAbsent = () =>
-                        shouldTearDownAbsentLavalinkOnLeave(client.lavalink.getPlayer(guild.id))
-                    if (!liveStillAbsent()) {
+                    const planNow = () =>
+                        planLeaveAbsentLavalinkActions({
+                            livePlayer: client.lavalink.getPlayer(guild.id),
+                            botInVoice,
+                            stoppedLocal,
+                        })
+                    const initial = planNow()
+                    if (!initial.disconnectOrphanVoice && !initial.forceClearSession) {
                         client.debug(
                             `Leave: skipping Lavalink teardown for guild ${guild.id}; successor player already live`
                         )
                     } else {
-                        // Do not destroyPlayer(guildId) here — null means nothing to destroy;
-                        // a racing createPlayer would be torn down incorrectly.
-                        if (
-                            liveStillAbsent() &&
-                            shouldDisconnectOrphanVoice(false, Boolean(botVoiceState?.channel))
-                        ) {
+                        // Never destroyPlayer(guildId): plan.destroyPlayerByGuildId is always false.
+                        if (initial.disconnectOrphanVoice) {
                             await botVoiceState?.disconnect()
                         }
-                        // Re-check at write time: a successor can persist between the last
-                        // liveStillAbsent() read and this delete.
-                        if (liveStillAbsent()) {
+                        // Re-check at write time: a successor can persist between disconnect
+                        // and this delete.
+                        const afterDisconnect = planNow()
+                        if (afterDisconnect.forceClearSession) {
                             await forceClearPlayerSessionIfNoLivePlayer(guild.id, () =>
                                 client.lavalink.getPlayer(guild.id)
                             )
