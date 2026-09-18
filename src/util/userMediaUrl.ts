@@ -150,7 +150,8 @@ export function trimmedHttpUrlQuery(query: string): string | null {
  *
  * Also rejects `link:` / `uri:` / `yt:` / `sc:` / `local:` / … wrappers that
  * lavalink-client strips before treating the remainder as a raw HTTP identifier,
- * and lavaplayer `icy://` aliases that would otherwise skip the `https?://` gate.
+ * lavaplayer `icy://` aliases that would otherwise skip the `https?://` gate,
+ * and hyphen-encoded IPv4 labels (`10-0-0-1.example`) used by bounce DNS.
  */
 export function isBlockedUserMediaUrl(query: string): boolean {
     const trimmed = query.trim()
@@ -184,6 +185,8 @@ const DNS_BOUNCE_SUFFIXES = [
     "localtest.me",
     "lvh.me",
     "vcap.me",
+    "traefik.me",
+    "localho.st",
 ] as const
 
 function isBlockedUserMediaHost(hostname: string): boolean {
@@ -206,14 +209,29 @@ function isDnsBounceHost(host: string): boolean {
     return false
 }
 
-/** `10.0.0.1.evil.example` style: four consecutive decimal labels forming a blocked IPv4. */
+/**
+ * Hostnames that encode a blocked IPv4 without using a literal / known bounce suffix:
+ * - `10.0.0.1.evil.example` — four consecutive decimal labels
+ * - `10-0-0-1.evil.example` — one label of four hyphen-separated octets (sslip/traefik dash form)
+ */
 function hostnameEmbedsBlockedIpv4(host: string): boolean {
     const labels = host.split(".")
     for (let i = 0; i + 3 < labels.length; i++) {
         const candidate = `${labels[i]}.${labels[i + 1]}.${labels[i + 2]}.${labels[i + 3]}`
         if (isBlockedIpv4(candidate)) return true
     }
+    for (const label of labels) {
+        const dashed = hyphenLabelToIpv4(label)
+        if (dashed && isBlockedIpv4(dashed)) return true
+    }
     return false
+}
+
+/** `10-0-0-1` → `10.0.0.1`, or null when the label is not four hyphen-separated octets. */
+function hyphenLabelToIpv4(label: string): string | null {
+    const parts = label.split("-")
+    if (parts.length !== 4) return null
+    return `${parts[0]}.${parts[1]}.${parts[2]}.${parts[3]}`
 }
 
 function isBlockedIpLiteral(host: string): boolean {
