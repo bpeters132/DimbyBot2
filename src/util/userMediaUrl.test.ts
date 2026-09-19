@@ -149,6 +149,24 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://10-0-0-1.attacker.example/"), true)
         assert.equal(isBlockedUserMediaUrl("http://192-168-1-10.attacker.example/audio.mp3"), true)
         assert.equal(isBlockedUserMediaUrl("http://8-8-8-8.attacker.example/"), false)
+        // Loopback-only bounce aliases omitted from the original suffix list.
+        assert.equal(isBlockedUserMediaUrl("http://lacolhost.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.lacolhost.com:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://www.lacolhost.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://localh.st/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://localh.st:2333/"), true)
+        // 1u.ms `make-{ip}-rr` encodes RFC1918 / loopback inside a longer hyphen label.
+        assert.equal(isBlockedUserMediaUrl("http://make-127-0-0-1-rr.1u.ms/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://make-10-0-0-1-rr.1u.ms:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://make-192-168-0-1-rr.1u.ms/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://make-172-16-0-2-rr.1u.ms/"), true)
+        assert.equal(
+            isBlockedUserMediaUrl("http://make-169-254-169-254-rr.1u.ms/latest/meta-data/"),
+            true
+        )
+        // Same wrapping on an unfamiliar suffix (consecutive hyphen octets, not a 4-part label).
+        assert.equal(isBlockedUserMediaUrl("http://make-10-0-0-1-rr.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://make-8-8-8-8-rr.attacker.example/"), false)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {
