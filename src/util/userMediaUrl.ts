@@ -151,7 +151,7 @@ export function trimmedHttpUrlQuery(query: string): string | null {
  * Also rejects `link:` / `uri:` / `yt:` / `sc:` / `local:` / … wrappers that
  * lavalink-client strips before treating the remainder as a raw HTTP identifier,
  * lavaplayer `icy://` aliases that would otherwise skip the `https?://` gate,
- * and hyphen-encoded IPv4 labels (`10-0-0-1.example`) used by bounce DNS.
+ * and hyphen-encoded IPv4 labels (`10-0-0-1` or `make-10-0-0-1-rr`) used by bounce DNS.
  */
 export function isBlockedUserMediaUrl(query: string): boolean {
     const trimmed = query.trim()
@@ -187,6 +187,9 @@ const DNS_BOUNCE_SUFFIXES = [
     "vcap.me",
     "traefik.me",
     "localho.st",
+    "lacolhost.com",
+    "localh.st",
+    "1u.ms",
 ] as const
 
 function isBlockedUserMediaHost(hostname: string): boolean {
@@ -213,6 +216,7 @@ function isDnsBounceHost(host: string): boolean {
  * Hostnames that encode a blocked IPv4 without using a literal / known bounce suffix:
  * - `10.0.0.1.evil.example` — four consecutive decimal labels
  * - `10-0-0-1.evil.example` — one label of four hyphen-separated octets (sslip/traefik dash form)
+ * - `make-10-0-0-1-rr.1u.ms` — four consecutive hyphen octets inside a longer label
  */
 function hostnameEmbedsBlockedIpv4(host: string): boolean {
     const labels = host.split(".")
@@ -221,17 +225,13 @@ function hostnameEmbedsBlockedIpv4(host: string): boolean {
         if (isBlockedIpv4(candidate)) return true
     }
     for (const label of labels) {
-        const dashed = hyphenLabelToIpv4(label)
-        if (dashed && isBlockedIpv4(dashed)) return true
+        const parts = label.split("-")
+        for (let i = 0; i + 3 < parts.length; i++) {
+            const candidate = `${parts[i]}.${parts[i + 1]}.${parts[i + 2]}.${parts[i + 3]}`
+            if (isBlockedIpv4(candidate)) return true
+        }
     }
     return false
-}
-
-/** `10-0-0-1` → `10.0.0.1`, or null when the label is not four hyphen-separated octets. */
-function hyphenLabelToIpv4(label: string): string | null {
-    const parts = label.split("-")
-    if (parts.length !== 4) return null
-    return `${parts[0]}.${parts[1]}.${parts[2]}.${parts[3]}`
 }
 
 function isBlockedIpLiteral(host: string): boolean {
