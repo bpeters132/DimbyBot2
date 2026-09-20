@@ -11,7 +11,6 @@ import { dashboardPermissionsGET } from "./handlers/dashboardPermissions.js"
 import { adminMetricsGET } from "./handlers/admin/metrics.js"
 import { adminErrorsDELETE, adminErrorsGET } from "./handlers/admin/errors.js"
 import { adminDbCleanupPOST, adminDbStatsGET } from "./handlers/admin/database.js"
-import { BotClientNotInitializedError } from "../lib/botClientRegistry.js"
 import {
     playlistTrackMovePATCH,
     playlistTracksDELETE,
@@ -23,6 +22,7 @@ import {
     playlistsPOST,
 } from "./handlers/playlists.js"
 import { playerPlaylistPlayPOST } from "./handlers/playlistPlay.js"
+import { classifyBotApiErrorResponse } from "./classifyBotApiErrorResponse.js"
 import { sanitizeBotApiError } from "./sanitizeBotApiError.js"
 
 /**
@@ -333,76 +333,16 @@ export function createBotApiApp(): express.Express {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Express error middleware requires a 4-arg signature
             _next: express.NextFunction
         ) => {
+            const classified = classifyBotApiErrorResponse(err)
             const safeError = sanitizeBotApiError(err)
             const pathOnly = (req.originalUrl ?? req.url ?? "").split("?")[0]
-            const parseError =
-                err instanceof SyntaxError &&
-                typeof err === "object" &&
-                err !== null &&
-                "status" in err &&
-                "type" in err &&
-                (err as { status?: unknown; type?: unknown }).status === 400 &&
-                (err as { type?: unknown }).type === "entity.parse.failed"
-            const errObj = err as { status?: unknown; statusCode?: unknown }
-            const fromStatus = typeof errObj.status === "number" ? errObj.status : undefined
-            const fromStatusCode =
-                typeof errObj.statusCode === "number" ? errObj.statusCode : undefined
-            const preferredStatus =
-                fromStatus !== undefined
-                    ? fromStatus
-                    : fromStatusCode !== undefined
-                      ? fromStatusCode
-                      : undefined
-            const numericClientError =
-                preferredStatus !== undefined &&
-                Number.isFinite(preferredStatus) &&
-                preferredStatus >= 400 &&
-                preferredStatus < 500
-                    ? Math.floor(preferredStatus)
-                    : undefined
-            let responseStatus = 500
-            if (parseError) {
-                responseStatus = 400
-            } else if (err instanceof BotClientNotInitializedError) {
-                responseStatus = 503
-            } else if (numericClientError !== undefined) {
-                responseStatus = numericClientError
-            }
             console.error("[botApi] request failed", {
                 method: req.method,
                 path: pathOnly,
-                status: responseStatus,
+                status: classified.status,
                 error: safeError,
             })
-            if (parseError) {
-                res.status(400).json({
-                    ok: false,
-                    error: {
-                        error: "Malformed JSON",
-                        details: sanitizeBotApiError(err).message,
-                    },
-                })
-                return
-            }
-            if (err instanceof BotClientNotInitializedError) {
-                res.status(503).json({
-                    ok: false,
-                    error: {
-                        error: "Bot is not ready",
-                        details: err.message,
-                    },
-                })
-                return
-            }
-            if (numericClientError !== undefined) {
-                const details = sanitizeBotApiError(err).message || "Bad request"
-                res.status(numericClientError).json({
-                    ok: false,
-                    error: { error: "Request error", details },
-                })
-                return
-            }
-            res.status(500).json({ ok: false, error: { error: "Internal server error" } })
+            res.status(classified.status).json(classified.body)
         }
     )
 

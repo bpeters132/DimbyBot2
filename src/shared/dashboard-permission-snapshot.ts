@@ -110,3 +110,22 @@ export function normalizeDashboardPermissionSnapshotResponse(
         discordUserId,
     }
 }
+
+/**
+ * Fail-closed when the bot HTTP snapshot is for a different Discord user than this session.
+ * Upstream failures pass through unchanged so a 503 is not rewritten as Forbidden.
+ */
+export function applyPermissionSnapshotSessionCheck(
+    sessionDiscordUserId: string,
+    upstream: GuildDashboardSnapshotResult
+): GuildDashboardSnapshotResult {
+    if (upstream.ok === true && upstream.discordUserId !== sessionDiscordUserId) {
+        return {
+            ok: false,
+            status: 403,
+            error: "Forbidden",
+            details: "Permission snapshot could not be verified for this session.",
+        }
+    }
+    return upstream
+}
