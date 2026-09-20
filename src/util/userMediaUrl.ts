@@ -182,6 +182,8 @@ const DNS_BOUNCE_SUFFIXES = [
     "sslip.io",
     "xip.io",
     "localtest.me",
+    "localtest.org",
+    "localtest.dev",
     "lvh.me",
     "vcap.me",
 ] as const
