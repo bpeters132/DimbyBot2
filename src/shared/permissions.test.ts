@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { afterEach, describe, it } from "node:test"
+import { PermissionFlagsBits } from "discord.js"
 import {
     WebPermission,
     hasRequiredPermissions,
@@ -7,6 +8,8 @@ import {
     parseEnvBotOwnerId,
     resolveOauthGuildPermissionFallback,
     resolveUserPermissions,
+    selectApiGuardPermissionResolution,
+    type PermissionResolution,
 } from "./permissions.js"
 
 type MockVoiceState = { channelId?: string | null; member?: unknown }
@@ -24,6 +27,15 @@ function mockLavalinkPlayer(voiceChannelId: string | null, guildId = "guild-1") 
 
 /** Duck-typed client accepted by permission helpers (avoids full discord.js GuildMemberManager). */
 type MockPermissionClient = NonNullable<Parameters<typeof resolveOauthGuildPermissionFallback>[0]>
+
+function mockMemberBits(flags: bigint[]) {
+    const allowed = new Set(flags)
+    return {
+        permissions: {
+            has: (flag: bigint) => allowed.has(flag),
+        },
+    }
+}
 
 function mockPermissionClient(opts: {
     guildId: string
@@ -120,6 +132,101 @@ describe("hasRequiredPermissions", () => {
                 [WebPermission.VIEW_PLAYER],
                 [WebPermission.VIEW_PLAYER, WebPermission.MANAGE_QUEUE]
             ),
+            false
+        )
+    })
+})
+
+function resolution(permissions: WebPermission[], inVoiceWithBot = false): PermissionResolution {
+    return { permissions, inVoiceWithBot }
+}
+
+describe("selectApiGuardPermissionResolution", () => {
+    const view = resolution([WebPermission.VIEW_PLAYER])
+    const empty = resolution([])
+    const oauthQueue = resolution([WebPermission.VIEW_PLAYER, WebPermission.MANAGE_QUEUE], true)
+    const primaryPartial = resolution([WebPermission.VIEW_PLAYER])
+
+    it("uses OAuth fallback when no bot client is in-process", () => {
+        assert.equal(
+            selectApiGuardPermissionResolution({
+                hasBotClient: false,
+                memberResolved: false,
+                primary: empty,
+                fallback: view,
+                requiredPerms: [WebPermission.VIEW_PLAYER],
+            }),
+            view
+        )
+    })
+
+    it("keeps primary when it already grants every required perm", () => {
+        const primary = resolution([WebPermission.VIEW_PLAYER, WebPermission.MANAGE_QUEUE], true)
+        assert.equal(
+            selectApiGuardPermissionResolution({
+                hasBotClient: true,
+                memberResolved: false,
+                primary,
+                fallback: oauthQueue,
+                requiredPerms: [WebPermission.MANAGE_QUEUE],
+            }),
+            primary
+        )
+    })
+
+    it("applies OAuth fallback when membership was not a GuildMember and primary lacks the perm", () => {
+        assert.equal(
+            selectApiGuardPermissionResolution({
+                hasBotClient: true,
+                memberResolved: false,
+                primary: empty,
+                fallback: oauthQueue,
+                requiredPerms: [WebPermission.MANAGE_QUEUE],
+            }),
+            oauthQueue
+        )
+    })
+
+    it("does not apply OAuth fallback after the bot resolved a GuildMember", () => {
+        assert.equal(
+            selectApiGuardPermissionResolution({
+                hasBotClient: true,
+                memberResolved: true,
+                primary: empty,
+                fallback: oauthQueue,
+                requiredPerms: [WebPermission.MANAGE_QUEUE],
+            }),
+            empty
+        )
+    })
+
+    it("keeps primary when fallback also lacks a required perm", () => {
+        assert.equal(
+            selectApiGuardPermissionResolution({
+                hasBotClient: true,
+                memberResolved: false,
+                primary: empty,
+                fallback: view,
+                requiredPerms: [WebPermission.CONTROL_PLAYBACK],
+            }),
+            empty
+        )
+    })
+
+    it("does not mix primary and fallback lists for AND of multiple required perms", () => {
+        const selected = selectApiGuardPermissionResolution({
+            hasBotClient: true,
+            memberResolved: false,
+            primary: primaryPartial,
+            fallback: resolution([WebPermission.MANAGE_QUEUE]),
+            requiredPerms: [WebPermission.VIEW_PLAYER, WebPermission.MANAGE_QUEUE],
+        })
+        assert.equal(selected, primaryPartial)
+        assert.equal(
+            hasRequiredPermissions(selected.permissions, [
+                WebPermission.VIEW_PLAYER,
+                WebPermission.MANAGE_QUEUE,
+            ]),
             false
         )
     })
@@ -253,6 +360,73 @@ describe("resolveUserPermissions", () => {
         })
         const result = await resolveUserPermissions(client, guildId, "member-2")
         assert.deepEqual(result, { permissions: [], inVoiceWithBot: false })
+    })
+
+    it("maps Administrator and ManageGuild members to guild-settings entitlements", async () => {
+        const adminClient = mockPermissionClient({
+            guildId,
+            ownerId,
+            memberFetch: async () => mockMemberBits([PermissionFlagsBits.Administrator]),
+        })
+        const admin = await resolveUserPermissions(adminClient, guildId, "admin-1", {
+            applyVoiceGating: false,
+        })
+        assert.deepEqual(admin.permissions, [
+            WebPermission.VIEW_PLAYER,
+            WebPermission.CONTROL_PLAYBACK,
+            WebPermission.MANAGE_QUEUE,
+            WebPermission.MANAGE_GUILD_SETTINGS,
+            WebPermission.MANAGE_MESSAGES,
+        ])
+
+        const manageGuildClient = mockPermissionClient({
+            guildId,
+            ownerId,
+            memberFetch: async () => mockMemberBits([PermissionFlagsBits.ManageGuild]),
+        })
+        const manageGuild = await resolveUserPermissions(manageGuildClient, guildId, "mod-1", {
+            applyVoiceGating: false,
+        })
+        assert.deepEqual(manageGuild.permissions, admin.permissions)
+        assert.equal(manageGuild.permissions.includes(WebPermission.DEVELOPER_ACCESS), false)
+    })
+
+    it("maps ManageMessages without ManageGuild to message+queue entitlements", async () => {
+        const client = mockPermissionClient({
+            guildId,
+            ownerId,
+            memberFetch: async () => mockMemberBits([PermissionFlagsBits.ManageMessages]),
+        })
+        const result = await resolveUserPermissions(client, guildId, "mod-msg", {
+            applyVoiceGating: false,
+        })
+        assert.deepEqual(result.permissions, [
+            WebPermission.VIEW_PLAYER,
+            WebPermission.CONTROL_PLAYBACK,
+            WebPermission.MANAGE_QUEUE,
+            WebPermission.MANAGE_MESSAGES,
+        ])
+        assert.equal(result.permissions.includes(WebPermission.MANAGE_GUILD_SETTINGS), false)
+    })
+
+    it("maps ordinary members to player and queue entitlements only", async () => {
+        const client = mockPermissionClient({
+            guildId,
+            ownerId,
+            memberFetch: async () => mockMemberBits([]),
+        })
+        const ungated = await resolveUserPermissions(client, guildId, "member-2", {
+            applyVoiceGating: false,
+        })
+        assert.deepEqual(ungated.permissions, [
+            WebPermission.VIEW_PLAYER,
+            WebPermission.CONTROL_PLAYBACK,
+            WebPermission.MANAGE_QUEUE,
+        ])
+
+        const gated = await resolveUserPermissions(client, guildId, "member-3")
+        assert.deepEqual(gated.permissions, [WebPermission.VIEW_PLAYER])
+        assert.equal(gated.inVoiceWithBot, false)
     })
 })
 
