@@ -98,13 +98,43 @@ export interface PermissionResolution {
 
 export function hasRequiredPermissions(
     available: WebPermission[],
-    required: WebPermission[]
+    required: readonly WebPermission[]
 ): boolean {
     if (required.length === 0) {
         return true
     }
     const availableSet = new Set(available)
     return required.every((permission) => availableSet.has(permission))
+}
+
+/**
+ * Primary vs OAuth-fallback merge for Bot API permission guards (`requirePermissions`).
+ *
+ * Unlike dashboard per-permission OR of primary/oauth lists, this swaps the **entire** resolution:
+ * fallback is used only when a bot client exists, membership was not resolved to a GuildMember,
+ * primary lacks a required perm, and fallback grants every required perm. When the bot resolved a
+ * member, OAuth entitlements must not override a role deny.
+ */
+export function selectApiGuardPermissionResolution(args: {
+    hasBotClient: boolean
+    memberResolved: boolean
+    primary: PermissionResolution
+    fallback: PermissionResolution
+    requiredPerms: readonly WebPermission[]
+}): PermissionResolution {
+    if (!args.hasBotClient) {
+        return args.fallback
+    }
+    if (hasRequiredPermissions(args.primary.permissions, args.requiredPerms)) {
+        return args.primary
+    }
+    if (
+        args.memberResolved === false &&
+        hasRequiredPermissions(args.fallback.permissions, args.requiredPerms)
+    ) {
+        return args.fallback
+    }
+    return args.primary
 }
 
 function addVoiceGatedPermissions(
