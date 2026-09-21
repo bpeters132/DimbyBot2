@@ -6,6 +6,7 @@ import {
     resolveGuildMemberForPermissions,
     resolveOauthGuildPermissionFallback,
     resolveUserPermissions,
+    selectApiGuardPermissionResolution,
 } from "./permissions.js"
 import type { GuildDashboardSnapshotResult } from "../types/web.js"
 import type BotClient from "../lib/BotClient.js"
@@ -505,24 +506,23 @@ export async function requirePermissions(
     const botClient = tryGetBotClient()
     let permissionResolution: PermissionResolution
     try {
-        permissionResolution = botClient
+        const primary = botClient
             ? await resolveUserPermissions(botClient, guildId, ctx.discordUserId)
             : resolveOauthGuildPermissionFallback(null, guildId, ctx.discordUserId)
-
-        if (
-            botClient &&
-            !hasRequiredPermissions(permissionResolution.permissions, requiredPerms) &&
-            ctx.memberResolved === false
-        ) {
-            const fallback = resolveOauthGuildPermissionFallback(
-                botClient,
-                guildId,
-                ctx.discordUserId
-            )
-            if (hasRequiredPermissions(fallback.permissions, requiredPerms)) {
-                permissionResolution = fallback
-            }
-        }
+        const shouldConsiderFallback =
+            Boolean(botClient) &&
+            ctx.memberResolved === false &&
+            !hasRequiredPermissions(primary.permissions, requiredPerms)
+        const fallback = shouldConsiderFallback
+            ? resolveOauthGuildPermissionFallback(botClient, guildId, ctx.discordUserId)
+            : primary
+        permissionResolution = selectApiGuardPermissionResolution({
+            hasBotClient: Boolean(botClient),
+            memberResolved: ctx.memberResolved,
+            primary,
+            fallback,
+            requiredPerms,
+        })
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error)
         console.error("[api-auth] requirePermissions permission resolution failed:", msg)
