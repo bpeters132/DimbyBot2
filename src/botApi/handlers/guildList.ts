@@ -6,6 +6,7 @@ import { getAuthenticatedSession } from "../../shared/api-auth.js"
 import { resolveDiscordUserSnowflake } from "../../shared/discord-user-id.js"
 import { snapshotGuildListPlayer } from "../../shared/player-state.js"
 import { tryGetBotClient } from "../../lib/botClientRegistry.js"
+import { mapDiscordGuildListFailureStatus } from "../guildListDiscordStatus.js"
 import type { ApiResponse } from "../../types/index.js"
 import type { GuildListResponse } from "../../types/web.js"
 
@@ -82,9 +83,8 @@ export async function guildListGET(
         }
     }
     if (discordGuilds.ok === false) {
-        const upstreamStatus = Number.isFinite(discordGuilds.status) ? discordGuilds.status : 502
         return {
-            status: upstreamStatus >= 400 && upstreamStatus <= 599 ? upstreamStatus : 502,
+            status: mapDiscordGuildListFailureStatus(discordGuilds.status),
             body: {
                 ok: false,
                 error: {
