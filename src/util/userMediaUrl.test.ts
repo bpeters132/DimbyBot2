@@ -128,6 +128,21 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://lvh.me/"), true)
         assert.equal(isBlockedUserMediaUrl("http://vcap.me/"), true)
         assert.equal(isBlockedUserMediaUrl("HTTP://10.0.0.5.NIP.IO/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.local.gd/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.local.gd:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://localhost.direct/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.localhost.direct:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.lcl.host/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://app.lcl.host:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://plex.direct/"), true)
+        assert.equal(
+            isBlockedUserMediaUrl(
+                "http://10-0-0-1.0123456789abcdef0123456789abcdef.plex.direct:5432/"
+            ),
+            true
+        )
+        assert.equal(isBlockedUserMediaUrl("link:http://foo.local.gd/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://foo.localhost.direct/"), true)
         // Embedded blocked IPv4 labels even under an unfamiliar suffix
         assert.equal(isBlockedUserMediaUrl("http://172.16.0.2.attacker.example/"), true)
     })
