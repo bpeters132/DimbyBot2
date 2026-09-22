@@ -192,6 +192,10 @@ const DNS_BOUNCE_SUFFIXES = [
     "lacolhost.com",
     "localh.st",
     "1u.ms",
+    "local.gd",
+    "localhost.direct",
+    "lcl.host",
+    "plex.direct",
 ] as const
 
 function isBlockedUserMediaHost(hostname: string): boolean {
