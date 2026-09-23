@@ -196,6 +196,9 @@ const DNS_BOUNCE_SUFFIXES = [
     "localhost.direct",
     "lcl.host",
     "plex.direct",
+    "yoogle.com",
+    "localhost.tv",
+    "localhst.dev",
 ] as const
 
 function isBlockedUserMediaHost(hostname: string): boolean {
