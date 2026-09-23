@@ -22,6 +22,41 @@ export function rewriteLocalDevPlayerWsUrl(wsUrl: string, isDev: boolean): strin
 }
 
 /**
+ * Public player WebSocket URL advertised by `GET /api/ws-config`.
+ * Empty `configuredUrl` uses a localhost fallback in development and `null` in production.
+ * Rejects non-ws(s) schemes, userinfo (credentials in the URL), plaintext `ws:` outside
+ * development, and invalid URLs so this unauthenticated route never ships a dangerous target.
+ */
+export function resolvePublicPlayerWsConfigUrl(opts: {
+    configuredUrl: string
+    isDev: boolean
+    devFallbackPort: number
+}): string | null {
+    const raw = opts.configuredUrl.trim()
+    if (!raw) {
+        if (opts.isDev) {
+            return `ws://localhost:${opts.devFallbackPort}/ws`
+        }
+        return null
+    }
+    try {
+        const parsed = new URL(raw)
+        if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") {
+            return null
+        }
+        if (parsed.protocol === "ws:" && !opts.isDev) {
+            return null
+        }
+        if (parsed.username || parsed.password) {
+            return null
+        }
+        return rewriteLocalDevPlayerWsUrl(parsed.toString(), opts.isDev)
+    } catch {
+        return null
+    }
+}
+
+/**
  * Protocol for the client fallback URL when `/api/ws-config` is empty.
  * Loopback in development always uses `ws` even if the dashboard tab is `https:`.
  */
