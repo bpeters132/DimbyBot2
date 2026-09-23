@@ -8,7 +8,7 @@ import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { scheduleSaveIfPlayerStillLive } from "../../util/playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
-import { parseQueueIndex } from "../parseBotApiParams.js"
+import { parseQueueIndex, parseQueueReorderNewIndex } from "../parseBotApiParams.js"
 import { clampQueueReorderInsertIndex } from "../queueReorderInsert.js"
 
 export async function queueIndexDELETE(
@@ -113,12 +113,9 @@ export async function queueIndexPATCH(
         const body = (typeof rawBody === "object" && rawBody !== null ? rawBody : {}) as {
             newIndex?: unknown
         }
-        const destinationIndex =
-            typeof body.newIndex === "number" && Number.isInteger(body.newIndex)
-                ? body.newIndex
-                : null
+        const destinationIndex = parseQueueReorderNewIndex(body.newIndex)
 
-        if (sourceIndex === null || destinationIndex === null || destinationIndex < 0) {
+        if (sourceIndex === null || destinationIndex === null) {
             return {
                 status: 400,
                 body: {
