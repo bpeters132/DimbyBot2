@@ -148,6 +148,14 @@ describe("isBlockedUserMediaUrl", () => {
         )
         assert.equal(isBlockedUserMediaUrl("link:http://foo.local.gd/"), true)
         assert.equal(isBlockedUserMediaUrl("icy://foo.localhost.direct/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://yoogle.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.yoogle.com:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.localhost.tv/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://app.localhost.tv:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://localhst.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.localhst.dev:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://yoogle.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://foo.localhost.tv/"), true)
         // Embedded blocked IPv4 labels even under an unfamiliar suffix
         assert.equal(isBlockedUserMediaUrl("http://172.16.0.2.attacker.example/"), true)
         // traefik.me / localho.st: public bounce services omitted from the original suffix list.
