@@ -3,6 +3,14 @@ import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import type { AuthenticatedSession } from "@/lib/api-auth"
 import { createWsConnectToken } from "@/lib/ws-connect-token"
+import { mapWsTicketAuthFailure, type WsTicketAuthFailureKind } from "@/lib/ws-ticket-auth-failure"
+
+const noStore = { "Cache-Control": "no-store" }
+
+function ticketAuthFailureResponse(kind: WsTicketAuthFailureKind): NextResponse {
+    const failure = mapWsTicketAuthFailure(kind)
+    return NextResponse.json(failure.body, { status: failure.status, headers: noStore })
+}
 
 /**
  * Issues a short-lived HMAC token for opening `ws://…/ws` on the bot port (different origin than Next),
@@ -14,10 +22,7 @@ export async function GET(): Promise<NextResponse> {
         console.error(
             "[api/ws-ticket] server misconfigured: BETTER_AUTH_SECRET is missing (set in src/web/.env or environment)"
         )
-        return NextResponse.json(
-            { error: "Server misconfigured" },
-            { status: 503, headers: { "Cache-Control": "no-store" } }
-        )
+        return ticketAuthFailureResponse("missing_secret")
     }
 
     try {
@@ -26,20 +31,14 @@ export async function GET(): Promise<NextResponse> {
         })) as AuthenticatedSession | null
 
         if (!session?.user?.id) {
-            return NextResponse.json(
-                { error: "Unauthorized" },
-                { status: 401, headers: { "Cache-Control": "no-store" } }
-            )
+            return ticketAuthFailureResponse("unauthorized")
         }
 
         const token = createWsConnectToken(session.user.id, secret, 60)
-        return NextResponse.json({ token }, { headers: { "Cache-Control": "no-store" } })
+        return NextResponse.json({ token }, { headers: noStore })
     } catch (error: unknown) {
         const errName = error instanceof Error ? error.name : typeof error
         console.error("[api/ws-ticket] session resolution failed", { errName })
-        return NextResponse.json(
-            { error: "Auth service temporarily unavailable" },
-            { status: 503, headers: { "Cache-Control": "no-store" } }
-        )
+        return ticketAuthFailureResponse("auth_unavailable")
     }
 }

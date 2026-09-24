@@ -16,6 +16,16 @@ export function parsePlaylistId(playlistId: string): number | null {
     return parseStrictPositiveInt(playlistId)
 }
 
+/**
+ * Parses a playlist create-name from JSON.
+ * Non-strings, empty strings, and whitespace-only values are rejected.
+ */
+export function parsePlaylistCreateName(raw: unknown): string | null {
+    if (typeof raw !== "string") return null
+    const name = raw.trim()
+    return name || null
+}
+
 /** 1-based track position path segment. */
 export function parsePosition(position: string): number | null {
     return parseStrictPositiveInt(position)

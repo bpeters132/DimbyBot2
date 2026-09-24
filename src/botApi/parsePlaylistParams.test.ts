@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
     parseNewPosition,
+    parsePlaylistCreateName,
     parsePlaylistId,
     parsePlaylistPlayBody,
     parsePosition,
@@ -26,6 +27,24 @@ describe("parseStrictPositiveInt", () => {
         assert.equal(parseStrictPositiveInt("abc"), null)
         assert.equal(parseStrictPositiveInt("9007199254740992"), null)
         assert.equal(parseStrictPositiveInt(String(Number.MAX_SAFE_INTEGER + 1)), null)
+    })
+})
+
+describe("parsePlaylistCreateName", () => {
+    it("accepts trimmed non-empty names", () => {
+        assert.equal(parsePlaylistCreateName("Favorites"), "Favorites")
+        assert.equal(parsePlaylistCreateName("  Late Night  "), "Late Night")
+    })
+
+    it("rejects empty, whitespace-only, and non-string values", () => {
+        assert.equal(parsePlaylistCreateName(""), null)
+        assert.equal(parsePlaylistCreateName("   "), null)
+        assert.equal(parsePlaylistCreateName("\n"), null)
+        assert.equal(parsePlaylistCreateName(null), null)
+        assert.equal(parsePlaylistCreateName(undefined), null)
+        assert.equal(parsePlaylistCreateName(12), null)
+        assert.equal(parsePlaylistCreateName({ name: "Favorites" }), null)
+        assert.equal(parsePlaylistCreateName(["Favorites"]), null)
     })
 })
 
