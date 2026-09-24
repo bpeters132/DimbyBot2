@@ -195,6 +195,30 @@ describe("isBlockedUserMediaUrl", () => {
         // Same wrapping on an unfamiliar suffix (consecutive hyphen octets, not a 4-part label).
         assert.equal(isBlockedUserMediaUrl("http://make-10-0-0-1-rr.attacker.example/"), true)
         assert.equal(isBlockedUserMediaUrl("http://make-8-8-8-8-rr.attacker.example/"), false)
+        // qip.sh: localhost zone, dash-IP, and compact qip-notation (not four dotted labels)
+        assert.equal(isBlockedUserMediaUrl("http://i.qip.sh/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://app.i.qip.sh:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://10-0-0-1.qip.sh/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://127-0-0-1.qip.sh:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://192-168-0-1.qip.sh/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://172-16-0-2.qip.sh/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://169-254-169-254.qip.sh/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://zozizs.x.qip.sh/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://app-zozizs.x.qip.sh/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://aobo.v.qip.sh/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://i.qip.sh/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://foo.i.qip.sh/"), true)
+        // Public loopback aliases (apex/subdomain) that do not embed dotted IPv4 labels
+        assert.equal(isBlockedUserMediaUrl("http://localhst.co.uk/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.localhst.co.uk:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://local.sisteminha.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.local.sisteminha.com:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://fbi.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.fbi.com:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://mouse-potato.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://www.mouse-potato.com/"), true)
+        // Apex sisteminha.com is a public site; only local.sisteminha.com is the bounce zone
+        assert.equal(isBlockedUserMediaUrl("http://sisteminha.com/"), false)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {
