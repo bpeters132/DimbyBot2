@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
     clampInt,
+    parseEnqueueQuery,
     parsePlayerAction,
     parsePlayerSeekMs,
     parseQueueIndex,
@@ -116,5 +117,27 @@ describe("parseQueueReorderNewIndex", () => {
         assert.equal(parseQueueReorderNewIndex(undefined), null)
         assert.equal(parseQueueReorderNewIndex(true), null)
         assert.equal(parseQueueReorderNewIndex({ newIndex: 1 }), null)
+    })
+})
+
+describe("parseEnqueueQuery", () => {
+    it("accepts trimmed non-empty search strings", () => {
+        assert.equal(parseEnqueueQuery("never gonna"), "never gonna")
+        assert.equal(parseEnqueueQuery("  never gonna  "), "never gonna")
+        assert.equal(
+            parseEnqueueQuery("https://youtu.be/dQw4w9WgXcQ"),
+            "https://youtu.be/dQw4w9WgXcQ"
+        )
+    })
+
+    it("rejects empty, whitespace-only, and non-string values so Lavalink is not searched", () => {
+        assert.equal(parseEnqueueQuery(""), null)
+        assert.equal(parseEnqueueQuery("   "), null)
+        assert.equal(parseEnqueueQuery("\n\t"), null)
+        assert.equal(parseEnqueueQuery(null), null)
+        assert.equal(parseEnqueueQuery(undefined), null)
+        assert.equal(parseEnqueueQuery(1), null)
+        assert.equal(parseEnqueueQuery({ query: "song" }), null)
+        assert.equal(parseEnqueueQuery(["song"]), null)
     })
 })
