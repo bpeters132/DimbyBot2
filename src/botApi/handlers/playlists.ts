@@ -33,8 +33,10 @@ import {
     searchTracksForPlaylist,
 } from "../../util/playlistQueue.js"
 import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "../../util/userMediaUrl.js"
+import { parseEnqueueQuery } from "../parseBotApiParams.js"
 import {
     parseNewPosition,
+    parsePlaylistCreateName,
     parsePlaylistId,
     parsePosition,
     parseStrictPositiveInt,
@@ -209,8 +211,8 @@ export async function playlistsPOST(
             },
         }
     }
-    const name = (rawBody as { name?: unknown }).name
-    if (typeof name !== "string" || !name.trim()) {
+    const name = parsePlaylistCreateName((rawBody as { name?: unknown }).name)
+    if (name === null) {
         return {
             status: 400,
             body: {
@@ -221,7 +223,7 @@ export async function playlistsPOST(
     }
 
     try {
-        const playlist = await createPlaylist(auth.discordUserId, name.trim())
+        const playlist = await createPlaylist(auth.discordUserId, name)
         return { status: 201, body: { ok: true, data: serializePlaylistForApi(playlist) } }
     } catch (error: unknown) {
         if (error instanceof PlaylistDuplicateNameError) {
@@ -419,7 +421,7 @@ export async function playlistTracksFromQueryPOST(
         }
     }
     const body = rawBody as { query?: unknown; guildId?: unknown }
-    const query = typeof body.query === "string" ? body.query.trim() : ""
+    const query = parseEnqueueQuery(body.query)
     if (!query) {
         return {
             status: 400,

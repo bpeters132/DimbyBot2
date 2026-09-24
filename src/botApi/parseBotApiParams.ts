@@ -65,3 +65,14 @@ export function parseQueueReorderNewIndex(value: unknown): number | null {
     }
     return value
 }
+
+/**
+ * Parses a play/enqueue search query from JSON.
+ * Non-strings, empty strings, and whitespace-only values are rejected so Lavalink never
+ * searches an empty query from dashboard play or queue POST.
+ */
+export function parseEnqueueQuery(raw: unknown): string | null {
+    if (typeof raw !== "string") return null
+    const query = raw.trim()
+    return query || null
+}
