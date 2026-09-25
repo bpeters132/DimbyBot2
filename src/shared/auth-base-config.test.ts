@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
+    betterAuthUsesSecureCookies,
     parseDiscordOAuthRefreshPayload,
     redactTokenLikeString,
     safeJsonSnippet,
@@ -57,6 +58,25 @@ describe("safeJsonSnippet", () => {
         assert.match(snippet, /\[redacted\]/)
         assert.equal(snippet.includes("leaked"), false)
         assert.equal(snippet.includes("Bearer tok"), false)
+    })
+})
+
+describe("betterAuthUsesSecureCookies", () => {
+    it("enables Secure cookies only for a lowercase https:// public origin", () => {
+        assert.equal(betterAuthUsesSecureCookies("https://dashboard.example.com"), true)
+        assert.equal(betterAuthUsesSecureCookies("https://dashboard.example.com/auth"), true)
+        assert.equal(betterAuthUsesSecureCookies("http://localhost:3000"), false)
+        assert.equal(betterAuthUsesSecureCookies("http://dashboard.example.com"), false)
+    })
+
+    it("does not treat https in a query or an uppercase scheme as a secure origin", () => {
+        assert.equal(
+            betterAuthUsesSecureCookies(
+                "http://localhost:3000/?next=https://dashboard.example.com"
+            ),
+            false
+        )
+        assert.equal(betterAuthUsesSecureCookies("HTTPS://dashboard.example.com"), false)
     })
 })
 
