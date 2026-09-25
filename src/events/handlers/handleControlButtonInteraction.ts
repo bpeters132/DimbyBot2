@@ -14,6 +14,7 @@ import {
     resolveOccupiedVoiceChannelId,
 } from "../../util/sameVoiceChannel.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
+import { nextPlayerRepeatMode } from "../../util/playerRepeatMode.js"
 import { updateControlMessage } from "./handleControlChannel.js"
 
 export async function handleControlButtonInteraction(
@@ -490,19 +491,12 @@ export async function handleControlButtonInteraction(
                 break
             }
             case "control_loop": {
-                const current = player.repeatMode
-                let newMode: "off" | "track" | "queue"
-                let feedback = ""
-
-                if (current === "off") {
-                    newMode = "track"
+                const newMode = nextPlayerRepeatMode(player.repeatMode)
+                let feedback = "Loop disabled."
+                if (newMode === "track") {
                     feedback = "Track loop enabled."
-                } else if (current === "track") {
-                    newMode = "queue"
+                } else if (newMode === "queue") {
                     feedback = "Queue loop enabled."
-                } else {
-                    newMode = "off"
-                    feedback = "Loop disabled."
                 }
 
                 try {

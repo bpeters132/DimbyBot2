@@ -1,6 +1,10 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { isAdminDbCleanupTarget, parseAdminErrorsLimit } from "./adminRequestParams.js"
+import {
+    isAdminDbCleanupTarget,
+    parseAdminErrorsGuildId,
+    parseAdminErrorsLimit,
+} from "./adminRequestParams.js"
 
 describe("isAdminDbCleanupTarget", () => {
     it("accepts only sessions, verifications, and all", () => {
@@ -16,6 +20,19 @@ describe("isAdminDbCleanupTarget", () => {
         assert.equal(isAdminDbCleanupTarget(null), false)
         assert.equal(isAdminDbCleanupTarget(undefined), false)
         assert.equal(isAdminDbCleanupTarget(["all"]), false)
+    })
+})
+
+describe("parseAdminErrorsGuildId", () => {
+    it("returns a trimmed snowflake when present", () => {
+        assert.equal(parseAdminErrorsGuildId("123456789012345678"), "123456789012345678")
+        assert.equal(parseAdminErrorsGuildId("  123456789012345678  "), "123456789012345678")
+    })
+
+    it("treats missing, empty, and whitespace-only values as unfiltered recent errors", () => {
+        assert.equal(parseAdminErrorsGuildId(null), undefined)
+        assert.equal(parseAdminErrorsGuildId(""), undefined)
+        assert.equal(parseAdminErrorsGuildId("   "), undefined)
     })
 })
 

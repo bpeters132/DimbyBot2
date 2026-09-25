@@ -132,6 +132,17 @@ export function parseDiscordOAuthRefreshPayload(
 }
 
 /**
+ * Session cookie `Secure` flag for Better Auth.
+ * Derived from the public dashboard URL scheme, not `NODE_ENV`, because the bot container often
+ * omits `NODE_ENV` while still sharing the same cookie policy as the Dashboard.
+ * Only a lowercase `https://` prefix counts so an `http://` origin with `https://` in a query
+ * cannot flip cookies to Secure.
+ */
+export function betterAuthUsesSecureCookies(betterAuthUrl: string): boolean {
+    return betterAuthUrl.startsWith("https://")
+}
+
+/**
  * Better Auth options shared by Next and the bot. Call this when constructing `betterAuth(...)`, not at module load,
  * so `next build` can import route modules without real `BETTER_AUTH_*` / Discord env (values are read on first use).
  */
@@ -141,7 +152,7 @@ export function getBetterAuthBaseConfig() {
     const discordOAuthClientId = getRequiredEnv("CLIENT_ID")
     const discordOAuthClientSecret = getRequiredEnv("DISCORD_CLIENT_SECRET")
     /** Match web and bot: derive from public dashboard URL, not NODE_ENV (bot container often omits it). */
-    const useSecureCookies = betterAuthUrl.startsWith("https://")
+    const useSecureCookies = betterAuthUsesSecureCookies(betterAuthUrl)
 
     return {
         secret: betterAuthSecret,
