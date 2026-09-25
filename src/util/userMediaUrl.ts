@@ -184,6 +184,8 @@ const DNS_BOUNCE_SUFFIXES = [
     "localtest.me",
     "lvh.me",
     "vcap.me",
+    "nar0.com",
+    "127001.it",
 ] as const
 
 function isBlockedUserMediaHost(hostname: string): boolean {
