@@ -64,6 +64,32 @@ export function shouldAbandonRestoreForConcurrentQueue(player: {
     return Boolean(player.queue.current) || player.queue.tracks.length > 0
 }
 
+type RestoreLivePlayer = {
+    queue: { current?: unknown; tracks: { length: number } }
+}
+
+/**
+ * True when restore must not hydrate onto an existing manager player because a concurrent
+ * `/play` / Dashboard enqueue already owns a queue. Empty shells (createPlayer before search
+ * finished, or a failed search that has not been torn down) must still be hydrated — an
+ * existence-only skip leaves the persisted snapshot unapplied.
+ */
+export function shouldSkipRestoreHydrateForLivePlayer(
+    live: RestoreLivePlayer | null | undefined
+): boolean {
+    return live != null && shouldAbandonRestoreForConcurrentQueue(live)
+}
+
+/**
+ * Guilds whose DB snapshots must not be overwritten by concurrent `/play` saves until the
+ * sequential restore pass finishes — including guilds not yet reached in the loop.
+ */
+export function guildIdsNeedingRestoreSaveGuard(
+    sessions: readonly { guildId: string }[]
+): string[] {
+    return [...new Set(sessions.map((session) => session.guildId))]
+}
+
 /**
  * True when the hydrate Player is still the guild's live manager entry.
  * Intentional `/stop` + `/play` during companion/decode resolve can destroy the
@@ -208,8 +234,15 @@ function resolveTextChannelId(session: PlayerSessionData): string | null {
 async function restoreSingleSession(client: BotClient, session: PlayerSessionData): Promise<void> {
     const { guildId, voiceChannelId, snapshot } = session
 
-    if (client.lavalink.getPlayer(guildId)) {
-        client.debug(`[playerSession] restore skipped for ${guildId}: player already exists`)
+    const existingBeforeRestore = client.lavalink.getPlayer(guildId)
+    if (shouldSkipRestoreHydrateForLivePlayer(existingBeforeRestore)) {
+        // Same contract as concurrent-abandon during resolve (#240): skipping hydrate
+        // without preserve-prior lets schedulePlayerSessionSave replace a multi-track
+        // snapshot. Existence-only skip is wrong for an empty createPlayer shell.
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        client.debug(
+            `[playerSession] restore skipped for ${guildId}: live player already has queue content`
+        )
         return
     }
 
@@ -253,20 +286,24 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
     try {
         await withGuildPlayerLifecycleReservation(guildId, async () => {
             // Re-check under the reservation: a concurrent create may have won the race.
-            if (client.lavalink.getPlayer(guildId)) {
+            const liveBeforeCreate = client.lavalink.getPlayer(guildId)
+            if (shouldSkipRestoreHydrateForLivePlayer(liveBeforeCreate)) {
+                markPlayerSessionPreservePriorSnapshot(guildId)
                 client.debug(
                     `[playerSession] restore skipped for ${guildId}: player appeared before hydrate`
                 )
                 return
             }
 
-            const player = await client.lavalink.createPlayer({
-                guildId,
-                voiceChannelId,
-                textChannelId: textChannelId ?? undefined,
-                selfDeaf: true,
-                volume: snapshot.volume,
-            })
+            const player =
+                liveBeforeCreate ??
+                (await client.lavalink.createPlayer({
+                    guildId,
+                    voiceChannelId,
+                    textChannelId: textChannelId ?? undefined,
+                    selfDeaf: true,
+                    volume: snapshot.volume,
+                }))
             restorePlayer = player
 
             await ensurePlayerConnected(client, player, voiceChannel)
@@ -496,8 +533,21 @@ export async function restorePlayerSessions(client: BotClient): Promise<boolean>
     }
 
     client.info(`[playerSession] attempting restore for ${sessions.length} persisted session(s)`)
-    for (const session of sessions) {
-        await restoreSingleSession(client, session)
+    // Mark every guild before the sequential loop. restore-in-progress is otherwise set
+    // only after voice fetch inside restoreSingleSession, so a concurrent /play on a
+    // later guild can persist a thin live queue over the fuller snapshot (#240 hole).
+    const restoreGuildIds = guildIdsNeedingRestoreSaveGuard(sessions)
+    for (const id of restoreGuildIds) {
+        markPlayerSessionRestoreInProgress(id)
     }
-    return true
+    try {
+        for (const session of sessions) {
+            await restoreSingleSession(client, session)
+        }
+        return true
+    } finally {
+        for (const id of restoreGuildIds) {
+            clearPlayerSessionRestoreInProgress(id)
+        }
+    }
 }
