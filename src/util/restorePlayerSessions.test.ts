@@ -3,10 +3,12 @@ import { describe, it } from "node:test"
 import {
     isRestoreHydratePlayerStillLive,
     isStaleSessionDiscordError,
+    guildIdsNeedingRestoreSaveGuard,
     shouldAbandonRestoreForConcurrentQueue,
     shouldDeleteStaleRestoredSession,
     shouldPersistConcurrentAbandonSession,
     shouldPersistRestoredPlayerSession,
+    shouldSkipRestoreHydrateForLivePlayer,
 } from "./restorePlayerSessions.js"
 
 describe("isStaleSessionDiscordError", () => {
@@ -62,6 +64,49 @@ describe("shouldPersistConcurrentAbandonSession", () => {
             shouldPersistConcurrentAbandonSession({ playableCount: 0, transientFailures: 0 }),
             true
         )
+    })
+})
+
+describe("shouldSkipRestoreHydrateForLivePlayer", () => {
+    it("skips hydrate when the live player already has a current track or upcoming queue", () => {
+        assert.equal(
+            shouldSkipRestoreHydrateForLivePlayer({
+                queue: { current: { id: "now" }, tracks: [] },
+            }),
+            true
+        )
+        assert.equal(
+            shouldSkipRestoreHydrateForLivePlayer({
+                queue: { current: null, tracks: [{ id: "a" }] },
+            }),
+            true
+        )
+    })
+
+    it("does not skip an empty manager shell (createPlayer before search finished)", () => {
+        assert.equal(
+            shouldSkipRestoreHydrateForLivePlayer({
+                queue: { current: null, tracks: [] },
+            }),
+            false
+        )
+        assert.equal(shouldSkipRestoreHydrateForLivePlayer(null), false)
+        assert.equal(shouldSkipRestoreHydrateForLivePlayer(undefined), false)
+    })
+})
+
+describe("guildIdsNeedingRestoreSaveGuard", () => {
+    it("marks every persisted guild before sequential restore (not only the current one)", () => {
+        assert.deepEqual(guildIdsNeedingRestoreSaveGuard([{ guildId: "a" }, { guildId: "b" }]), [
+            "a",
+            "b",
+        ])
+    })
+
+    it("dedupes guild ids so a guild is guarded once", () => {
+        assert.deepEqual(guildIdsNeedingRestoreSaveGuard([{ guildId: "g" }, { guildId: "g" }]), [
+            "g",
+        ])
     })
 })
 
