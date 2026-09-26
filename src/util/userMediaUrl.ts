@@ -206,6 +206,7 @@ const DNS_BOUNCE_SUFFIXES = [
     "mouse-potato.com",
     "nar0.com",
     "127001.it",
+    "domaincontrol.com",
 ] as const
 
 function isBlockedUserMediaHost(hostname: string): boolean {
