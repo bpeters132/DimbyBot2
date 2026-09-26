@@ -649,7 +649,12 @@ export default async (client: BotClient) => {
                                                     )
                                                 }
                                             )
-                                            await live.destroy()
+                                            // Tag AloneInVoice so preserve-prior can skip the DB
+                                            // delete after concurrent/partial restore (same idle
+                                            // contract as queueEnd/trackError QueueEmpty). Bare
+                                            // destroy() would wipe the fuller snapshot while the
+                                            // concurrent thin queue was still playing.
+                                            await live.destroy("AloneInVoice")
                                         },
                                     },
                                     0
