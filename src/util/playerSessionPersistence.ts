@@ -15,10 +15,11 @@ const pendingSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const pendingPlayers = new Map<string, Player>()
 const restoreInProgressGuilds = new Set<string>()
 /**
- * After a partial restore with transient resolve failures, keep the prior full DB snapshot.
- * Event-driven / shutdown saves must not overwrite that row with the hydrated subset.
- * Idle `QueueEmpty` destroy skips the DB delete once; user-intent destroys (/stop, /leave)
- * still delete so explicitly cleared queues do not resurrect on restart.
+ * After a partial restore with transient resolve failures (or concurrent-abandon keep),
+ * keep the prior full DB snapshot. Event-driven / shutdown saves must not overwrite that
+ * row with the hydrated/thin subset. Idle `QueueEmpty` / `AloneInVoice` destroys skip the
+ * DB delete once; user-intent destroys (/stop, /leave) still delete so explicitly cleared
+ * queues do not resurrect on restart.
  */
 const preservePriorSnapshotGuilds = new Set<string>()
 /** Bumped on intentional clear so in-flight debounced writes cannot resurrect deleted rows. */
@@ -244,14 +245,25 @@ export function shouldPreservePriorPlayerSessionSnapshot(guildId: string): boole
 }
 
 /**
- * Idle QueueEmpty after a partial restore must not delete the fuller DB row.
- * Other destroy reasons (typical app `/stop` / `/leave` with no reason) still delete.
+ * Idle teardown reasons that must not delete a preserve-prior DB row.
+ * `QueueEmpty` — post-queueEnd / trackError idle destroy.
+ * `AloneInVoice` — bot left alone in VC (same idle class; not `/stop` / `/leave`).
+ */
+export const IDLE_PRESERVE_SESSION_DESTROY_REASONS = new Set(["QueueEmpty", "AloneInVoice"])
+
+/**
+ * Idle teardown after a partial/concurrent restore must not delete the fuller DB row.
+ * User-intent destroys (`/stop` / `/leave` with no reason) still delete.
  */
 export function shouldSkipPlayerSessionDeleteForPreserve(
     guildId: string,
     destroyReason?: unknown
 ): boolean {
-    return shouldPreservePriorPlayerSessionSnapshot(guildId) && destroyReason === "QueueEmpty"
+    return (
+        shouldPreservePriorPlayerSessionSnapshot(guildId) &&
+        typeof destroyReason === "string" &&
+        IDLE_PRESERVE_SESSION_DESTROY_REASONS.has(destroyReason)
+    )
 }
 
 /**
@@ -465,8 +477,8 @@ export async function flushAllPlayerSessionSaves(): Promise<void> {
 
 /**
  * Library / infrastructure destroy reasons that must not wipe persisted sessions.
- * Intentional app destroys (`player.destroy()` with no reason, alone-in-VC, /stop, etc.)
- * still clear so queues do not resurrect after an explicit teardown.
+ * Intentional app destroys (`player.destroy()` with no reason, /stop, /leave) still clear.
+ * Alone-in-VC uses reason `AloneInVoice` so preserve-prior can skip like `QueueEmpty`.
  */
 const PRESERVE_SESSION_DESTROY_REASONS = new Set([
     "Disconnected",
@@ -537,8 +549,9 @@ export function consumePlayerSessionClearSuppressLease(guildId: string): boolean
 /** Options for {@link clearPlayerSession}. */
 export type ClearPlayerSessionOptions = {
     /**
-     * Destroy reason from playerDestroy. Only "QueueEmpty" skips the DB delete while
-     * the preserve-prior guard is set (idle end after partial restore).
+     * Destroy reason from playerDestroy. Idle reasons in
+     * {@link IDLE_PRESERVE_SESSION_DESTROY_REASONS} skip the DB delete while
+     * the preserve-prior guard is set (idle end after partial/concurrent restore).
      */
     destroyReason?: unknown
 }
@@ -580,9 +593,9 @@ export async function clearPlayerSession(
         return
     }
 
-    // Partial restore left a fuller DB snapshot than the live player. Idle QueueEmpty must
-    // not delete that row — empty live saves are already no-ops, so clear was the only wipe
-    // path for unresolved transient tracks. User-intent destroys still delete.
+    // Partial/concurrent restore left a fuller DB snapshot than the live player. Idle
+    // QueueEmpty / AloneInVoice must not delete that row — empty live saves are already
+    // no-ops, so clear was the only wipe path. User-intent destroys still delete.
     // Clear the guard under the persistence lock and bump the clear epoch first so an
     // in-flight writePlayerSession (snapshot already captured) fails its under-lock epoch
     // check instead of upserting a thinner hydrated subset over the preserved row.
