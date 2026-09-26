@@ -5,6 +5,7 @@ import {
     isYoutubePubsubPath,
     verifyYoutubePubsubSignature,
     youtubePubsubCallbackUrlFromEnv,
+    youtubePubsubHubSecretFromEnv,
     youtubePubsubVerifyResponse,
 } from "./youtubePubsub.js"
 
@@ -33,6 +34,39 @@ describe("youtubePubsubCallbackUrlFromEnv", () => {
             }),
             null
         )
+    })
+
+    it("rejects missing, blank, invalid, and non-https schemes", () => {
+        assert.equal(youtubePubsubCallbackUrlFromEnv({}), null)
+        assert.equal(youtubePubsubCallbackUrlFromEnv({ YOUTUBE_PUBSUB_CALLBACK_URL: "   " }), null)
+        assert.equal(
+            youtubePubsubCallbackUrlFromEnv({ YOUTUBE_PUBSUB_CALLBACK_URL: "not a url" }),
+            null
+        )
+        assert.equal(
+            youtubePubsubCallbackUrlFromEnv({
+                YOUTUBE_PUBSUB_CALLBACK_URL: "javascript:alert(1)",
+            }),
+            null
+        )
+        assert.equal(
+            youtubePubsubCallbackUrlFromEnv({
+                YOUTUBE_PUBSUB_CALLBACK_URL: "  https://bot.example.com/youtube/pubsub  ",
+            }),
+            "https://bot.example.com/youtube/pubsub"
+        )
+    })
+})
+
+describe("youtubePubsubHubSecretFromEnv", () => {
+    it("returns a trimmed secret and treats blank as unset (POST verification fail-closed)", () => {
+        assert.equal(
+            youtubePubsubHubSecretFromEnv({ YOUTUBE_PUBSUB_HUB_SECRET: "  hub-secret  " }),
+            "hub-secret"
+        )
+        assert.equal(youtubePubsubHubSecretFromEnv({ YOUTUBE_PUBSUB_HUB_SECRET: "" }), null)
+        assert.equal(youtubePubsubHubSecretFromEnv({ YOUTUBE_PUBSUB_HUB_SECRET: "   " }), null)
+        assert.equal(youtubePubsubHubSecretFromEnv({}), null)
     })
 })
 

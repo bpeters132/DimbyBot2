@@ -68,4 +68,19 @@ describe("renderUploadAlertMessage", () => {
         assert.equal(content, "<@&11> go watch Hello")
         assert.ok(!content.includes(DEFAULT_UPLOAD_ALERT_TEMPLATE))
     })
+
+    it("omits the Watch link button for non-http(s) video URLs", () => {
+        for (const url of ["javascript:alert(1)", "data:text/html,hi", "ftp://example.com/v"]) {
+            const { components, embed } = renderUploadAlertMessage({
+                title: "Unsafe",
+                url,
+                creator: "LTT",
+                type: "video",
+                mentionRoleIds: [],
+                template: null,
+            })
+            assert.equal(components.length, 0, url)
+            assert.equal(embed.data.url, undefined, url)
+        }
+    })
 })
