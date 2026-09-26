@@ -128,6 +128,12 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://lvh.me/"), true)
         assert.equal(isBlockedUserMediaUrl("http://vcap.me/"), true)
         assert.equal(isBlockedUserMediaUrl("HTTP://10.0.0.5.NIP.IO/"), true)
+        // Apex-only public DNS loopback sink (GoDaddy unused apex); wildcard is empty
+        assert.equal(isBlockedUserMediaUrl("http://domaincontrol.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://domaincontrol.com:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://DOMAINCONTROL.COM/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://domaincontrol.com:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://domaincontrol.com/"), true)
         // Embedded blocked IPv4 labels even under an unfamiliar suffix
         assert.equal(isBlockedUserMediaUrl("http://172.16.0.2.attacker.example/"), true)
     })
