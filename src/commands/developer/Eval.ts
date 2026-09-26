@@ -3,6 +3,7 @@ import type { ChatInputCommandInteraction } from "discord.js"
 import type BotClient from "../../lib/BotClient.js"
 import type { Command } from "../../types/index.js"
 import { toCodeBlock, DISCORD_EMBED_FIELD_MAX_LENGTH } from "../../util/discordCodeBlock.js"
+import { collectEvalRedactionMap, redactEvalOutput } from "../../util/evalOutputRedact.js"
 
 import { Buffer } from "node:buffer" // For creating file buffers
 import { createHash } from "node:crypto"
@@ -38,25 +39,7 @@ function evalCodeLogFingerprint(code: string, userTag: string): string {
 
 /** Collects sensitive values from the client and environment for redaction. */
 function getSensitiveValues(client: BotClient): Map<string, string> {
-    const sensitive = new Map<string, string>()
-
-    // Add bot token
-    if (client.token && typeof client.token === "string") {
-        sensitive.set(client.token, "[REDACTED TOKEN]")
-    }
-
-    const sensitiveKey =
-        /(?:^|_)(PASS|PWD|PASSWORD|SECRET|TOKEN|CRED|CREDENTIAL|API|KEY|PRIVATE|ACCESS)(?:_|$)/i
-    for (const key in process.env) {
-        if (!sensitiveKey.test(key)) continue
-        const value = process.env[key]
-        if (value && typeof value === "string") {
-            if (!sensitive.has(value)) {
-                sensitive.set(value, `[REDACTED ENV: ${key}]`)
-            }
-        }
-    }
-    return sensitive
+    return collectEvalRedactionMap(client.token, process.env)
 }
 
 type EvalWorkerMessage = { ok: true; result: string } | { ok: false; error: string }
@@ -148,14 +131,7 @@ const evalCommand: Command = {
         }
 
         const sensitiveValues = getSensitiveValues(client)
-        const redact = (str: string): string => {
-            let redactedStr = str
-            const entries = [...sensitiveValues.entries()].sort((a, b) => b[0].length - a[0].length)
-            for (const [value, placeholder] of entries) {
-                redactedStr = redactedStr.replaceAll(value, placeholder)
-            }
-            return redactedStr
-        }
+        const redact = (str: string): string => redactEvalOutput(str, sensitiveValues)
 
         let workerOut: EvalWorkerMessage
         try {
