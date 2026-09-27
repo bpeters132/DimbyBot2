@@ -8,6 +8,18 @@ export function isDiscordSnowflake(id: string): boolean {
 }
 
 /**
+ * Trims and validates a dashboard guild id (path param or server-action argument).
+ * Non-strings, blanks, and non-snowflakes return null so permission snapshots fail closed
+ * instead of calling Discord with an attacker-controlled id.
+ */
+export function parseDashboardGuildId(guildId: unknown): string | null {
+    if (typeof guildId !== "string") return null
+    const trimmed = guildId.trim()
+    if (!trimmed || !isDiscordSnowflake(trimmed)) return null
+    return trimmed
+}
+
+/**
  * Better Auth uses an internal `user.id`; Discord (voice states, `GuildMember`, `ownerId`) expects
  * the OAuth account snowflake stored on `account.accountId` for the linked Discord provider.
  */
