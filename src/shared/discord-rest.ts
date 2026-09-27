@@ -9,6 +9,20 @@ export {
 } from "../util/discordUserGuilds.js"
 
 const DISCORD_USER_API_UA = "DimbyBotDashboard/1.0 (OAuth user token)"
+const DISCORD_USERS_ME_SNOWFLAKE_RE = /^\d{17,22}$/
+
+/**
+ * Parses `GET /users/@me` JSON for a Discord snowflake.
+ * Ids must be strings — JSON numbers cannot represent snowflakes above `Number.MAX_SAFE_INTEGER`.
+ */
+export function parseDiscordUsersMeId(data: unknown): string | null {
+    if (!data || typeof data !== "object" || Array.isArray(data)) return null
+    const raw = (data as { id?: unknown }).id
+    if (typeof raw !== "string") return null
+    const id = raw.trim()
+    if (!id || !DISCORD_USERS_ME_SNOWFLAKE_RE.test(id)) return null
+    return id
+}
 
 /** Resolves the Discord snowflake for the bearer token (`identify` scope). */
 export async function fetchDiscordCurrentUserId(accessToken: string): Promise<string | null> {
@@ -23,12 +37,7 @@ export async function fetchDiscordCurrentUserId(accessToken: string): Promise<st
             signal: controller.signal,
         })
         if (!response.ok) return null
-        const data = (await response.json()) as { id?: string }
-        const id = typeof data.id === "string" ? data.id.trim() : ""
-        if (!id || !/^\d{17,22}$/.test(id)) {
-            return null
-        }
-        return id
+        return parseDiscordUsersMeId(await response.json())
     } catch {
         return null
     } finally {
