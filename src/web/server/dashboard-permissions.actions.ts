@@ -4,15 +4,14 @@ import type { GuildDashboardSnapshotResult } from "@/types/web"
 import { headers } from "next/headers"
 import { sanitizeErrorText } from "@/lib/sanitize-log-text"
 import { getGuildDashboardPermissionSnapshot } from "@/lib/api-auth"
-
-const DISCORD_SNOWFLAKE_RE = /^\d{17,22}$/
+import { parseDashboardGuildId } from "@/shared/discord-user-id"
 
 /** Loads primary + OAuth-fallback web permission lists for dashboard UI gating. */
 export async function getGuildDashboardSnapshotAction(
     guildId: string
 ): Promise<GuildDashboardSnapshotResult> {
-    const trimmed = typeof guildId === "string" ? guildId.trim() : ""
-    if (!trimmed || !DISCORD_SNOWFLAKE_RE.test(trimmed)) {
+    const trimmed = parseDashboardGuildId(guildId)
+    if (!trimmed) {
         return {
             ok: false,
             status: 400,
