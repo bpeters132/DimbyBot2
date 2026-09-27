@@ -181,6 +181,32 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("HTTP://DOMAINCONTROL.COM/"), true)
         assert.equal(isBlockedUserMediaUrl("link:http://domaincontrol.com:2333/"), true)
         assert.equal(isBlockedUserMediaUrl("icy://domaincontrol.com/"), true)
+        // anyip.dev dash-IP encoder (dotted 10.0.0.1.anyip.dev already caught by label embed)
+        assert.equal(isBlockedUserMediaUrl("http://10-0-0-1.anyip.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://127-0-0-1.anyip.dev:5432/"), true)
+        assert.equal(
+            isBlockedUserMediaUrl("http://169-254-169-254.anyip.dev/latest/meta-data/"),
+            true
+        )
+        assert.equal(isBlockedUserMediaUrl("http://myapp-10-0-0-1.anyip.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://preview.127-0-0-1.anyip.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://10-0-0-1.anyip.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://127-0-0-1.anyip.dev/"), true)
+        // Apex/www public DNS loopback; wildcard foo.localhost.cloud is a public parking IP
+        assert.equal(isBlockedUserMediaUrl("http://localhost.cloud/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://localhost.cloud:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://www.localhost.cloud/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://LOCALHOST.CLOUD/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://localhost.cloud:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://localhost.cloud/"), true)
+        // Apex/www/wildcard public DNS loopback (distinct from denied localh.st)
+        assert.equal(isBlockedUserMediaUrl("http://localh.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://localh.net:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.localh.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://www.localh.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://LOCALH.NET/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://localh.net:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://localh.net/"), true)
         // Embedded blocked IPv4 labels even under an unfamiliar suffix
         assert.equal(isBlockedUserMediaUrl("http://172.16.0.2.attacker.example/"), true)
         // traefik.me / localho.st: public bounce services omitted from the original suffix list.
