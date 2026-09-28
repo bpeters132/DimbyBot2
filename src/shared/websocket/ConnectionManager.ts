@@ -11,6 +11,8 @@ import {
     isStaleSubscribeAttempt,
     type SubscribeLastAttempt,
 } from "./wsSubscribeDecision.js"
+import { parseWsClientMessage } from "./wsClientMessage.js"
+import { resolveWsUpgradeAuth } from "./wsUpgradeAuth.js"
 import { webPlayerTrace, webPlayerWarn } from "../web-player-debug-log.js"
 
 interface SocketMeta {
@@ -73,64 +75,30 @@ export class ConnectionManager {
             }
         }
 
-        try {
-            const parsed = new URL(rawUrl, "http://127.0.0.1")
-            const ticket = parsed.searchParams.get("ticket")
-            if (ticket && secret) {
-                try {
-                    const betterAuthUserId = parseWsConnectToken(ticket, secret)
-                    if (betterAuthUserId) {
-                        const discordUserId = await resolveDiscordUserSnowflake(
-                            betterAuthUserId,
-                            headers
-                        )
-                        if (discordUserId) {
-                            return { userId: discordUserId }
-                        }
-                    }
-                } catch (error: unknown) {
-                    webPlayerWarn(
-                        "WS ticket auth failed",
-                        error instanceof Error
-                            ? { name: error.name, message: error.message }
-                            : { message: "auth_error" }
-                    )
-                }
-            }
-        } catch {
-            // ignore malformed upgrade URL
+        const warnAuth = (label: string, error: unknown): void => {
+            webPlayerWarn(
+                label,
+                error instanceof Error
+                    ? { name: error.name, message: error.message }
+                    : { message: "auth_error" }
+            )
         }
 
-        let session: { user?: { id?: string } } | null
-        try {
-            session = (await auth.api.getSession({
-                headers,
-            })) as { user?: { id?: string } } | null
-        } catch (error: unknown) {
-            webPlayerWarn(
-                "WS fallback session auth failed",
-                error instanceof Error
-                    ? { name: error.name, message: error.message }
-                    : { message: "auth_error" }
-            )
-            return null
-        }
-        if (!session?.user?.id) {
-            return null
-        }
-        const betterAuthUserId = session.user.id
-        try {
-            const discordUserId = await resolveDiscordUserSnowflake(betterAuthUserId, headers)
-            return discordUserId ? { userId: discordUserId } : null
-        } catch (error: unknown) {
-            webPlayerWarn(
-                "WS fallback discord snowflake resolve failed",
-                error instanceof Error
-                    ? { name: error.name, message: error.message }
-                    : { message: "auth_error" }
-            )
-            return null
-        }
+        return resolveWsUpgradeAuth(rawUrl, secret, {
+            parseTicket: parseWsConnectToken,
+            resolveDiscordUserId: (betterAuthUserId) =>
+                resolveDiscordUserSnowflake(betterAuthUserId, headers),
+            getSessionUserId: async () => {
+                const session = (await auth.api.getSession({
+                    headers,
+                })) as { user?: { id?: string } } | null
+                return session?.user?.id ?? null
+            },
+            onTicketError: (error) => warnAuth("WS ticket auth failed", error),
+            onSessionError: (error) => warnAuth("WS fallback session auth failed", error),
+            onDiscordError: (error) =>
+                warnAuth("WS fallback discord snowflake resolve failed", error),
+        })
     }
 
     registerConnection(socket: WebSocket, userId: string): void {
@@ -263,26 +231,21 @@ export class ConnectionManager {
         const meta = this.socketMeta.get(socket)
         if (!meta) return
 
-        let parsed: Record<string, unknown>
-        try {
-            parsed = JSON.parse(raw) as Record<string, unknown>
-        } catch {
-            socket.send(JSON.stringify({ type: "error", message: "Invalid message JSON." }))
+        const parsed = parseWsClientMessage(raw)
+        if (parsed.kind === "error") {
+            socket.send(JSON.stringify({ type: "error", message: parsed.message }))
             return
         }
-        if (parsed.type === "ping") {
+        if (parsed.kind === "ignore") {
+            return
+        }
+        if (parsed.kind === "ping") {
             socket.send(JSON.stringify({ type: "pong" }))
             return
         }
 
-        if (parsed.type === "subscribe") {
-            const guildId = parsed.guildId
-            if (!guildId || typeof guildId !== "string") {
-                socket.send(
-                    JSON.stringify({ type: "error", message: "Invalid guildId for subscribe." })
-                )
-                return
-            }
+        if (parsed.kind === "subscribe") {
+            const { guildId } = parsed
 
             const botClient = tryGetBotClient()
             if (!botClient) {
@@ -404,14 +367,8 @@ export class ConnectionManager {
             return
         }
 
-        if (parsed.type === "unsubscribe") {
-            const guildId = parsed.guildId
-            if (!guildId || typeof guildId !== "string") {
-                socket.send(
-                    JSON.stringify({ type: "error", message: "Invalid guildId for unsubscribe." })
-                )
-                return
-            }
+        if (parsed.kind === "unsubscribe") {
+            const { guildId } = parsed
             this.unsubscribe(socket, guildId)
             socket.send(JSON.stringify({ type: "unsubscribed", guildId }))
         }
