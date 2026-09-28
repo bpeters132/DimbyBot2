@@ -244,14 +244,25 @@ export function shouldPreservePriorPlayerSessionSnapshot(guildId: string): boole
 }
 
 /**
- * Idle QueueEmpty after a partial restore must not delete the fuller DB row.
+ * Destroy / clear reasons that must not delete the fuller DB row while preserve-prior is set.
+ * Idle QueueEmpty and local-handoff Ready are not user intent to discard the restore snapshot;
+ * `/stop` / `/leave` (no reason) still delete.
+ */
+const PRESERVE_PRIOR_SKIP_DELETE_REASONS = new Set(["QueueEmpty", "LocalHandoffReady"])
+
+/**
+ * Idle QueueEmpty / local-handoff Ready after a partial restore must not delete the fuller DB row.
  * Other destroy reasons (typical app `/stop` / `/leave` with no reason) still delete.
  */
 export function shouldSkipPlayerSessionDeleteForPreserve(
     guildId: string,
     destroyReason?: unknown
 ): boolean {
-    return shouldPreservePriorPlayerSessionSnapshot(guildId) && destroyReason === "QueueEmpty"
+    return (
+        shouldPreservePriorPlayerSessionSnapshot(guildId) &&
+        typeof destroyReason === "string" &&
+        PRESERVE_PRIOR_SKIP_DELETE_REASONS.has(destroyReason)
+    )
 }
 
 /**
@@ -537,8 +548,9 @@ export function consumePlayerSessionClearSuppressLease(guildId: string): boolean
 /** Options for {@link clearPlayerSession}. */
 export type ClearPlayerSessionOptions = {
     /**
-     * Destroy reason from playerDestroy. Only "QueueEmpty" skips the DB delete while
-     * the preserve-prior guard is set (idle end after partial restore).
+     * Destroy / clear reason from playerDestroy or local-handoff Ready.
+     * "QueueEmpty" and "LocalHandoffReady" skip the DB delete while the preserve-prior
+     * guard is set (idle end / local take-over after partial restore).
      */
     destroyReason?: unknown
 }
@@ -580,9 +592,9 @@ export async function clearPlayerSession(
         return
     }
 
-    // Partial restore left a fuller DB snapshot than the live player. Idle QueueEmpty must
-    // not delete that row — empty live saves are already no-ops, so clear was the only wipe
-    // path for unresolved transient tracks. User-intent destroys still delete.
+    // Partial restore left a fuller DB snapshot than the live player. Idle QueueEmpty and
+    // local-handoff Ready must not delete that row — empty/preserve-blocked live saves are
+    // already no-ops, so clear was the only wipe path. User-intent destroys still delete.
     // Clear the guard under the persistence lock and bump the clear epoch first so an
     // in-flight writePlayerSession (snapshot already captured) fails its under-lock epoch
     // check instead of upserting a thinner hydrated subset over the preserved row.
