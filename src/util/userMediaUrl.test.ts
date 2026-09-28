@@ -130,6 +130,21 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("HTTP://10.0.0.5.NIP.IO/"), true)
         // Embedded blocked IPv4 labels even under an unfamiliar suffix
         assert.equal(isBlockedUserMediaUrl("http://172.16.0.2.attacker.example/"), true)
+        // rbndr.us: public hex-IP bounce (taviso). Apex has no public A record.
+        assert.equal(isBlockedUserMediaUrl("http://rbndr.us/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://7f000001.c0a80001.rbndr.us/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://0a000001.c0a80001.rbndr.us:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://a9fea9fe.08080808.rbndr.us/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://0a000001.c0a80001.rbndr.us:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://7f000001.c0a80001.rbndr.us/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://0a000001.c0a80001.rbndr.us/"), true)
+        // Hex-label embed under an unfamiliar suffix (same encoder class as rbndr.us)
+        assert.equal(isBlockedUserMediaUrl("http://0a000001.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://7f000001.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://c0a80001.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://a9fea9fe.attacker.example/"), true)
+        // Public hex IPv4 8.8.8.8 must stay allowed
+        assert.equal(isBlockedUserMediaUrl("http://08080808.attacker.example/"), false)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {
