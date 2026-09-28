@@ -786,6 +786,36 @@ describe("preserve prior snapshot after partial restore", () => {
         assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
         assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), false)
     })
+
+    it("skips DB delete on LocalHandoffReady so preserve-prior snapshot survives", async () => {
+        // Local handoff flush is a no-op under preserve-prior; Ready clear must not wipe the
+        // fuller restore row the thin live queue never represented.
+        const guildId = "guild-partial-restore"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        assert.equal(shouldSkipPlayerSessionDeleteForPreserve(guildId, "LocalHandoffReady"), true)
+
+        const epochBefore = getSessionClearEpochForTests(guildId)
+        await clearPlayerSession(guildId, { destroyReason: "LocalHandoffReady" })
+
+        assert.deepEqual(events, [])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), false)
+        assert.equal(shouldSkipPlayerSessionDeleteForPreserve(guildId, "LocalHandoffReady"), false)
+
+        // A later intentional clear (fresh session) still deletes.
+        await clearPlayerSession(guildId)
+        assert.deepEqual(events, ["delete"])
+    })
 })
 
 describe("guild persistence serialization", () => {

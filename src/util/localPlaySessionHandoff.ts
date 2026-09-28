@@ -114,7 +114,10 @@ export async function beginLocalPlaySessionHandoff(
                 }
                 lease = null
             }
-            await clearPlayerSession(guildId)
+            // Tag LocalHandoffReady so preserve-prior can skip the DB delete. Handoff flush is a
+            // no-op while that guard is set; a bare clear would wipe the fuller restore snapshot
+            // the thin live queue never represented. Without preserve-prior, clear still deletes.
+            await clearPlayerSession(guildId, { destroyReason: "LocalHandoffReady" })
         },
     }
 }

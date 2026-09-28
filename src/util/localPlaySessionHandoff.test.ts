@@ -5,10 +5,13 @@ import type { PlayerSessionSnapshotV1 } from "../types/index.js"
 import {
     acquirePlayerSessionClearSuppressLease,
     clearPlayerSession,
+    clearPlayerSessionPreservePriorSnapshot,
     clearPlayerSessionRestoreInProgress,
     hasActiveSuppressLease,
+    markPlayerSessionPreservePriorSnapshot,
     markPlayerSessionRestoreInProgress,
     setPlayerSessionPersistenceDbForTests,
+    shouldPreservePriorPlayerSessionSnapshot,
     shouldSkipPlayerSessionClear,
 } from "./playerSessionPersistence.js"
 import { beginLocalPlaySessionHandoff } from "./localPlaySessionHandoff.js"
@@ -154,6 +157,44 @@ describe("beginLocalPlaySessionHandoff", () => {
 
         assert.deepEqual(deletes, [])
         await handoff.clearSessionAfterLocalReady()
+        assert.deepEqual(deletes, [guildId])
+    })
+
+    it("keeps preserve-prior snapshot on Ready (flush was a no-op)", async () => {
+        // Concurrent restore abandon marks preserve-prior; handoff flush cannot overwrite the
+        // fuller DB row. Ready clear must not delete that row (same contract as QueueEmpty).
+        const guildId = "guild-local-handoff-preserve-prior"
+        const deletes: string[] = []
+        const upserts: string[] = []
+
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async (id) => {
+                upserts.push(id)
+            },
+            deletePlayerSession: async (id) => {
+                deletes.push(id)
+            },
+        })
+
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        const player = mockPlayer(guildId)
+        const handoff = await beginLocalPlaySessionHandoff(player, async () => {
+            await clearPlayerSession(guildId)
+        })
+        handoff.markDestroyEventSeen()
+
+        // Flush skipped while preserve-prior is set; destroy suppress kept the row.
+        assert.deepEqual(upserts, [])
+        assert.deepEqual(deletes, [])
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), true)
+
+        await handoff.clearSessionAfterLocalReady()
+        assert.deepEqual(deletes, [])
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), false)
+
+        clearPlayerSessionPreservePriorSnapshot(guildId)
+        // Later intentional clear (e.g. /stop) can still delete.
+        await clearPlayerSession(guildId)
         assert.deepEqual(deletes, [guildId])
     })
 
