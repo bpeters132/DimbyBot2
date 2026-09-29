@@ -62,21 +62,22 @@ describe("safeJsonSnippet", () => {
 })
 
 describe("betterAuthUsesSecureCookies", () => {
-    it("enables Secure cookies only for a lowercase https:// public origin", () => {
+    it("enables Secure cookies for https origins, including an uppercase scheme", () => {
         assert.equal(betterAuthUsesSecureCookies("https://dashboard.example.com"), true)
         assert.equal(betterAuthUsesSecureCookies("https://dashboard.example.com/auth"), true)
+        assert.equal(betterAuthUsesSecureCookies("HTTPS://dashboard.example.com"), true)
         assert.equal(betterAuthUsesSecureCookies("http://localhost:3000"), false)
         assert.equal(betterAuthUsesSecureCookies("http://dashboard.example.com"), false)
     })
 
-    it("does not treat https in a query or an uppercase scheme as a secure origin", () => {
+    it("does not treat https in a query or an unparseable value as a secure origin", () => {
         assert.equal(
             betterAuthUsesSecureCookies(
                 "http://localhost:3000/?next=https://dashboard.example.com"
             ),
             false
         )
-        assert.equal(betterAuthUsesSecureCookies("HTTPS://dashboard.example.com"), false)
+        assert.equal(betterAuthUsesSecureCookies("not a url"), false)
     })
 })
 

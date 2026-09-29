@@ -135,11 +135,15 @@ export function parseDiscordOAuthRefreshPayload(
  * Session cookie `Secure` flag for Better Auth.
  * Derived from the public dashboard URL scheme, not `NODE_ENV`, because the bot container often
  * omits `NODE_ENV` while still sharing the same cookie policy as the Dashboard.
- * Only a lowercase `https://` prefix counts so an `http://` origin with `https://` in a query
- * cannot flip cookies to Secure.
+ * WHATWG URL parsing lowercases the scheme, so `HTTPS://` still counts. An `http://` origin
+ * with `https://` only in a query cannot flip cookies to Secure. Unparseable input is insecure.
  */
 export function betterAuthUsesSecureCookies(betterAuthUrl: string): boolean {
-    return betterAuthUrl.startsWith("https://")
+    try {
+        return new URL(betterAuthUrl).protocol === "https:"
+    } catch {
+        return false
+    }
 }
 
 /**
