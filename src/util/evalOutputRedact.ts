@@ -1,13 +1,20 @@
 /**
  * Env keys whose values are stripped from `/eval` output and error text before Discord replies.
  * Matches token/secret/password-style suffixes used across Discord, Better Auth, and API credentials.
+ * `DATABASE_URL` and `*_AUTH_CONFIG` are included because they carry embedded passwords or
+ * registry credentials without those suffixes. Public origins such as `BETTER_AUTH_URL` stay visible.
  */
 const SENSITIVE_EVAL_ENV_KEY =
     /(?:^|_)(PASS|PWD|PASSWORD|SECRET|TOKEN|CRED|CREDENTIAL|API|KEY|PRIVATE|ACCESS)(?:_|$)/i
 
+const DATABASE_URL_KEY = /^DATABASE_URL$/i
+const AUTH_CONFIG_KEY = /(?:^|_)AUTH_CONFIG$/i
+
 /** True when an environment variable name looks like a credential (not `OWNER_ID` / `NODE_ENV`). */
 export function isSensitiveEvalEnvKey(key: string): boolean {
-    return SENSITIVE_EVAL_ENV_KEY.test(key)
+    return (
+        SENSITIVE_EVAL_ENV_KEY.test(key) || DATABASE_URL_KEY.test(key) || AUTH_CONFIG_KEY.test(key)
+    )
 }
 
 /**

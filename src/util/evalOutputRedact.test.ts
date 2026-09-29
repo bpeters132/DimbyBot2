@@ -21,6 +21,9 @@ describe("isSensitiveEvalEnvKey", () => {
             "PRIVATE_KEY",
             "ACCESS_TOKEN",
             "CLIENT_CREDENTIAL",
+            "DATABASE_URL",
+            "NPM_AUTH_CONFIG",
+            "DOCKER_AUTH_CONFIG",
         ]) {
             assert.equal(isSensitiveEvalEnvKey(key), true, key)
         }
@@ -33,7 +36,6 @@ describe("isSensitiveEvalEnvKey", () => {
             "GUILD_ID",
             "PORT",
             "BETTER_AUTH_URL",
-            "DATABASE_URL",
             "CLIENT_ID",
             "PATH",
             "HOME",
@@ -99,5 +101,24 @@ describe("redactEvalOutput", () => {
     it("returns the original string when there is nothing to redact", () => {
         assert.equal(redactEvalOutput("harmless", new Map()), "harmless")
         assert.equal(redactEvalOutput("", collectEvalRedactionMap("tok", {})), "")
+    })
+
+    it("redacts DATABASE_URL and AUTH_CONFIG values from eval output", () => {
+        const databaseUrl = "postgresql://bot_user:s3cret@postgres-db:5432/bot_db"
+        const authConfig = "registry.example.com:_authToken=npm-token"
+        const map = collectEvalRedactionMap(undefined, {
+            DATABASE_URL: databaseUrl,
+            NPM_AUTH_CONFIG: authConfig,
+            BETTER_AUTH_URL: "https://dashboard.example.com",
+        })
+        const output = redactEvalOutput(
+            `db=${databaseUrl} npm=${authConfig} dash=https://dashboard.example.com`,
+            map
+        )
+        assert.equal(output.includes(databaseUrl), false)
+        assert.equal(output.includes(authConfig), false)
+        assert.equal(output.includes("https://dashboard.example.com"), true)
+        assert.match(output, /\[REDACTED ENV: DATABASE_URL]/)
+        assert.match(output, /\[REDACTED ENV: NPM_AUTH_CONFIG]/)
     })
 })
