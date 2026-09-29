@@ -65,4 +65,26 @@ describe("controlButtonPresentation", () => {
         assert.equal(upcomingOnly.loopDisabled, false)
         assert.equal(upcomingOnly.autoplayDisabled, false)
     })
+
+    it("disables shuffle until two upcoming tracks exist and keeps loop independent", () => {
+        const oneUpcoming = controlButtonPresentation(
+            playerView({ current: { title: "A" }, upcoming: 1 })
+        )
+        assert.equal(oneUpcoming.shuffleDisabled, true)
+        assert.equal(oneUpcoming.loopDisabled, false)
+
+        const upcomingOnly = controlButtonPresentation(playerView({ upcoming: 1 }))
+        assert.equal(upcomingOnly.shuffleDisabled, true)
+        assert.equal(upcomingOnly.loopDisabled, false)
+    })
+
+    it("treats a missing tracks array as an empty queue", () => {
+        const presentation = controlButtonPresentation({
+            playing: true,
+            queue: { current: { title: "A" } },
+        })
+        assert.equal(presentation.shuffleDisabled, true)
+        assert.equal(presentation.loopDisabled, false)
+        assert.equal(presentation.playPauseDisabled, false)
+    })
 })

@@ -24,15 +24,17 @@ export type ControlButtonPresentation = {
 
 /**
  * Labels and disabled flags for the persistent control-channel action rows.
- * Play/pause/stop/skip require a current track; shuffle requires upcoming tracks;
- * loop is enabled when either exists; autoplay is enabled whenever a player object exists.
+ * Play/pause/stop/skip require a current track; shuffle requires two upcoming tracks
+ * (the control_shuffle handler rejects fewer); loop is enabled when either a current
+ * track or any upcoming track exists; autoplay is enabled whenever a player object exists.
+ * A missing `tracks` array counts as an empty queue instead of throwing.
  */
 export function controlButtonPresentation(
     player: ControlButtonPlayerView | undefined
 ): ControlButtonPresentation {
     const isPlaying = Boolean(player && player.playing)
     const hasCurrent = Boolean(player && player.queue && player.queue.current)
-    const hasQueue = Boolean(player && player.queue && player.queue.tracks.length > 0)
+    const upcomingCount = player?.queue?.tracks?.length ?? 0
     const autoplayOn = Boolean(player?.get?.("autoplay"))
 
     return {
@@ -40,8 +42,8 @@ export function controlButtonPresentation(
         playPauseDisabled: !hasCurrent,
         stopDisabled: !hasCurrent,
         skipDisabled: !hasCurrent,
-        shuffleDisabled: !hasQueue,
-        loopDisabled: !hasCurrent && !hasQueue,
+        shuffleDisabled: upcomingCount < 2,
+        loopDisabled: !hasCurrent && upcomingCount === 0,
         autoplayLabel: autoplayOn ? "Autoplay: On" : "Autoplay: Off",
         autoplayDisabled: !player,
     }
