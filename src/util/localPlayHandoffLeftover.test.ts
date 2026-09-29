@@ -1,6 +1,10 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
+    acquireGuildPlayerLifecycleReservation,
+    waitForPendingOrphanDestroyForTests,
+} from "./guildPlayerQueueLock.js"
+import {
     runLocalHandoffLavalinkStopAndDestroy,
     shouldAbortLocalPlayForLivePlayerConflict,
     shouldClearSessionAfterFailedHandoffDestroy,
@@ -81,6 +85,7 @@ describe("runLocalHandoffLavalinkStopAndDestroy", () => {
 
         const destroyed = await runLocalHandoffLavalinkStopAndDestroy({
             handoffPlayer: handoff,
+            guildId: "handoff-already-successor",
             getLivePlayer: () => successor,
             isPlaying: true,
             stopPlaying: async () => {
@@ -103,6 +108,7 @@ describe("runLocalHandoffLavalinkStopAndDestroy", () => {
 
         const destroyed = await runLocalHandoffLavalinkStopAndDestroy({
             handoffPlayer: handoff,
+            guildId: "handoff-empty-slot",
             getLivePlayer: () => undefined,
             isPlaying: true,
             stopPlaying: async () => {
@@ -127,6 +133,7 @@ describe("runLocalHandoffLavalinkStopAndDestroy", () => {
 
         const destroyed = await runLocalHandoffLavalinkStopAndDestroy({
             handoffPlayer: handoff,
+            guildId: "handoff-during-stop",
             getLivePlayer: () => live,
             isPlaying: true,
             stopPlaying: async () => {
@@ -153,6 +160,7 @@ describe("runLocalHandoffLavalinkStopAndDestroy", () => {
 
         const destroyed = await runLocalHandoffLavalinkStopAndDestroy({
             handoffPlayer: handoff,
+            guildId: "handoff-same-owner",
             getLivePlayer: () => handoff,
             isPlaying: true,
             stopPlaying: async () => {
@@ -179,6 +187,7 @@ describe("runLocalHandoffLavalinkStopAndDestroy", () => {
 
         const destroyed = await runLocalHandoffLavalinkStopAndDestroy({
             handoffPlayer: handoff,
+            guildId: "handoff-stop-throws",
             getLivePlayer: () => handoff,
             isPlaying: true,
             stopPlaying: async () => {
@@ -195,5 +204,56 @@ describe("runLocalHandoffLavalinkStopAndDestroy", () => {
         assert.equal(destroyed, true)
         assert.equal(stopErrors, 1)
         assert.equal(destroyCalls, 1)
+    })
+
+    it("holds the queue lock through destroy so successor creation waits", async () => {
+        const guildId = "handoff-destroy-serialize"
+        const handoff = { id: "handoff" }
+        const successor = { id: "successor" }
+        let live: { id: string } | null = handoff
+        let releaseDestroy!: () => void
+        const destroyGate = new Promise<void>((resolve) => {
+            releaseDestroy = resolve
+        })
+        let destroyEntered = false
+        let sawSuccessorDuringDestroy = false
+        let successorCreate!: Promise<void>
+
+        const run = runLocalHandoffLavalinkStopAndDestroy({
+            handoffPlayer: handoff,
+            guildId,
+            getLivePlayer: () => live,
+            isPlaying: false,
+            stopPlaying: async () => {
+                throw new Error("stop should not run")
+            },
+            destroy: async () => {
+                destroyEntered = true
+                // Library destroy deletes the guild cache before awaiting node.destroyPlayer.
+                live = null
+                successorCreate = acquireGuildPlayerLifecycleReservation(guildId).then((lease) => {
+                    live = successor
+                    lease.release()
+                })
+                await Promise.resolve()
+                await Promise.resolve()
+                sawSuccessorDuringDestroy = live === successor
+                await destroyGate
+            },
+        })
+
+        while (!destroyEntered) {
+            await Promise.resolve()
+        }
+
+        releaseDestroy()
+        const destroyed = await run
+        assert.equal(destroyed, true)
+        assert.equal(sawSuccessorDuringDestroy, false)
+        // Cache slot stays empty until the reservation blocked on the lock can create.
+        assert.equal(live, null)
+        await successorCreate
+        await waitForPendingOrphanDestroyForTests(guildId)
+        assert.equal(live?.id, "successor")
     })
 })

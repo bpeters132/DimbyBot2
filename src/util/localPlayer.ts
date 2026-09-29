@@ -200,6 +200,7 @@ export async function playLocalFile(
                     async () => {
                         const destroyed = await runLocalHandoffLavalinkStopAndDestroy({
                             handoffPlayer: lavalinkPlayer,
+                            guildId,
                             getLivePlayer: () => client.lavalink.getPlayer(guildId),
                             isPlaying: lavalinkPlayer.playing,
                             stopPlaying: async () => {
