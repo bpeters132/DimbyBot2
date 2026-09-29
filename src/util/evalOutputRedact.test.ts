@@ -106,19 +106,15 @@ describe("redactEvalOutput", () => {
     it("redacts DATABASE_URL and AUTH_CONFIG values from eval output", () => {
         const databaseUrl = "postgresql://bot_user:s3cret@postgres-db:5432/bot_db"
         const authConfig = "registry.example.com:_authToken=npm-token"
+        const dashboardUrl = "https://dashboard.example.com"
         const map = collectEvalRedactionMap(undefined, {
             DATABASE_URL: databaseUrl,
             NPM_AUTH_CONFIG: authConfig,
-            BETTER_AUTH_URL: "https://dashboard.example.com",
+            BETTER_AUTH_URL: dashboardUrl,
         })
-        const output = redactEvalOutput(
-            `db=${databaseUrl} npm=${authConfig} dash=https://dashboard.example.com`,
-            map
+        assert.equal(
+            redactEvalOutput(`db=${databaseUrl} npm=${authConfig} dash=${dashboardUrl}`, map),
+            "db=[REDACTED ENV: DATABASE_URL] npm=[REDACTED ENV: NPM_AUTH_CONFIG] dash=https://dashboard.example.com"
         )
-        assert.equal(output.includes(databaseUrl), false)
-        assert.equal(output.includes(authConfig), false)
-        assert.equal(output.includes("https://dashboard.example.com"), true)
-        assert.match(output, /\[REDACTED ENV: DATABASE_URL]/)
-        assert.match(output, /\[REDACTED ENV: NPM_AUTH_CONFIG]/)
     })
 })
