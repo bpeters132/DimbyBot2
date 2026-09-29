@@ -4,6 +4,10 @@ import {
     finishGuildDashboardPermissionSnapshot,
     resolveAuthenticatedGuildAccess,
 } from "../../shared/api-auth.js"
+import {
+    mapDashboardPermissionsAccessDenied,
+    mapDashboardPermissionsBotNotReady,
+} from "../dashboardPermissionsFailure.js"
 
 /**
  * Resolves dashboard permission lists using the in-process Discord bot (same logic as the Next
@@ -15,30 +19,14 @@ export async function dashboardPermissionsGET(
 ): Promise<{ status: number; body: GuildDashboardSnapshotResult }> {
     const ctx = await resolveAuthenticatedGuildAccess(headers, guildId)
     if (ctx.ok === false) {
-        return {
-            status: ctx.status,
-            body: {
-                ok: false,
-                status: ctx.status,
-                error: ctx.error,
-                details: ctx.details,
-            },
-        }
+        return mapDashboardPermissionsAccessDenied(ctx)
     }
 
     let botClient
     try {
         botClient = getBotClient()
     } catch {
-        return {
-            status: 503,
-            body: {
-                ok: false,
-                status: 503,
-                error: "Bot not ready",
-                details: "The Discord bot is still starting; try again in a few seconds.",
-            },
-        }
+        return mapDashboardPermissionsBotNotReady()
     }
 
     const body = await finishGuildDashboardPermissionSnapshot(ctx, botClient, guildId)

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getServiceStatusPayload } from "@/server/service-status.js"
+import { mapServiceStatusProbeCrash } from "@/lib/service-status-probes"
 
 export const dynamic = "force-dynamic"
 
@@ -17,14 +18,9 @@ export async function GET(): Promise<NextResponse> {
         const name = error instanceof Error ? error.name : "Error"
         console.error("[api/status] status probe failed", { name })
         const checkedAt = new Date().toISOString()
-        return NextResponse.json(
-            {
-                ok: false,
-                checkedAt,
-                database: { ok: false, message: "Status check failed" },
-                botApi: { ok: false, message: "Status check failed" },
-            },
-            { status: 503, headers: noStore }
-        )
+        return NextResponse.json(mapServiceStatusProbeCrash(checkedAt), {
+            status: 503,
+            headers: noStore,
+        })
     }
 }

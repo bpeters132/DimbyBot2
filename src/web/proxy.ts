@@ -1,43 +1,26 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { normalizeAuthHost } from "@/shared/normalize-auth-host.js"
+import { resolveAuthHostAlignment } from "@/lib/auth-host-alignment.js"
 
 /**
  * Logs when the incoming Host does not match `BETTER_AUTH_URL` (www/scheme drift breaks OAuth cookies).
  * Does not block requests — only surfaces misconfiguration in server logs.
  */
 export function proxy(request: NextRequest): NextResponse {
-    const configuredUrl = process.env.BETTER_AUTH_URL?.trim()
-    if (!configuredUrl) {
-        return NextResponse.next()
-    }
-
     try {
-        const expected = new URL(configuredUrl)
-        const forwardedHost = request.headers.get("x-forwarded-host")
-        const host =
-            forwardedHost?.split(",")[0]?.trim() ||
-            request.headers.get("host")?.trim() ||
-            request.nextUrl.host
-
-        const forwardedProto = request.headers
-            .get("x-forwarded-proto")
-            ?.split(",")[0]
-            ?.trim()
-            .toLowerCase()
-        const requestProtocol =
-            forwardedProto === "http"
-                ? "http:"
-                : forwardedProto === "https"
-                  ? "https:"
-                  : request.nextUrl.protocol
-
-        const normalizedHost = host ? normalizeAuthHost(host, requestProtocol) : null
-        const normalizedExpectedHost = normalizeAuthHost(expected.host, expected.protocol)
-
-        if (normalizedHost && normalizedHost !== normalizedExpectedHost) {
+        const alignment = resolveAuthHostAlignment({
+            configuredUrl: process.env.BETTER_AUTH_URL,
+            forwardedHost: request.headers.get("x-forwarded-host"),
+            hostHeader: request.headers.get("host"),
+            fallbackHost: request.nextUrl.host,
+            forwardedProto: request.headers.get("x-forwarded-proto"),
+            fallbackProtocol: request.nextUrl.protocol,
+        })
+        if (alignment.kind === "invalid_config") {
+            console.warn("[proxy] BETTER_AUTH_URL is not a valid URL; host alignment check skipped")
+        } else if (alignment.kind === "mismatch") {
             console.warn(
-                `[proxy] Host mismatch: normalizedHost=${normalizedHost} normalizedExpectedHost=${normalizedExpectedHost} path=${request.nextUrl.pathname}`
+                `[proxy] Host mismatch: normalizedHost=${alignment.normalizedHost} normalizedExpectedHost=${alignment.normalizedExpectedHost} path=${request.nextUrl.pathname}`
             )
         }
     } catch {
