@@ -9,6 +9,7 @@ import {
     selectBestVoiceContextCandidate,
     type VoiceContextCandidate,
 } from "../voiceContextCandidate.js"
+import { mapVoiceContextIdentityFailure } from "../voiceContextIdentity.js"
 
 /** Guild where the viewer shares a VC with the bot and the bot has an active player session. */
 export async function voiceContextGET(
@@ -26,28 +27,19 @@ export async function voiceContextGET(
     }
 
     const discordUserId = await resolveDiscordUserSnowflake(sessionResult.session.user.id, headers)
-    if (!discordUserId) {
-        return {
-            status: 403,
-            body: {
-                ok: false,
-                error: {
-                    error: "Discord account required",
-                    details: "Could not resolve your Discord user id.",
-                },
-            },
-        }
-    }
-
     const client = tryGetBotClient()
-    if (!client) {
+    const identity = mapVoiceContextIdentityFailure({
+        discordUserId,
+        botReady: Boolean(client),
+    })
+    if (identity.ok === false) {
         return {
-            status: 503,
+            status: identity.status,
             body: {
                 ok: false,
                 error: {
-                    error: "Bot is starting up",
-                    details: "The Discord bot is not connected yet.",
+                    error: identity.error,
+                    details: identity.details,
                 },
             },
         }

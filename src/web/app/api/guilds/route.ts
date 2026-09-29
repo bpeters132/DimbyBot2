@@ -2,6 +2,7 @@ import { headers } from "next/headers"
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import type { AuthenticatedSession } from "@/lib/api-auth"
+import { mapGuildsRouteAuthLookupFailure } from "@/lib/guilds-route-auth-failure"
 import { proxyBotApi } from "@/server/bot-api-proxy"
 
 /**
@@ -16,25 +17,17 @@ export async function GET(request: Request) {
             headers: await headers(),
         })) as AuthenticatedSession | null
     } catch (err: unknown) {
-        const status =
-            typeof err === "object" && err !== null && "status" in err
-                ? (err as { status?: unknown }).status
-                : undefined
-        const statusCode =
-            typeof err === "object" && err !== null && "statusCode" in err
-                ? (err as { statusCode?: unknown }).statusCode
-                : undefined
-        const numericStatus = typeof status === "number" ? status : statusCode
-        if (numericStatus === 401 || numericStatus === 403) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        const mapped = mapGuildsRouteAuthLookupFailure(err)
+        if (mapped.status === 401) {
+            return NextResponse.json(mapped.body, { status: mapped.status })
         }
         const safeMessage = err instanceof Error ? err.message.slice(0, 500) : "unknown"
         console.error("[api/guilds] auth session lookup failed", {
             name: err instanceof Error ? err.name : typeof err,
             message: safeMessage,
-            numericStatus,
+            numericStatus: mapped.lookupStatus,
         })
-        return NextResponse.json({ error: "Auth service unavailable" }, { status: 502 })
+        return NextResponse.json(mapped.body, { status: mapped.status })
     }
 
     if (!session?.user?.id) {

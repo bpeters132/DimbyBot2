@@ -8,7 +8,7 @@ import { toQueueResponse } from "../../shared/player-state.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { searchAndEnqueue } from "./searchAndEnqueue.js"
 import { clearUpcomingOnLivePlayer } from "../../util/livePlayerQueueMutations.js"
-import { parseQueueQueryNumber } from "../parseBotApiParams.js"
+import { parseEnqueueQuery, parseQueueQueryNumber } from "../parseBotApiParams.js"
 
 const MAX_QUEUE_PAGE_LIMIT = 100
 
@@ -64,7 +64,7 @@ export async function queuePOST(
     const body = (typeof rawBody === "object" && rawBody !== null ? rawBody : {}) as {
         query?: unknown
     }
-    const query = typeof body.query === "string" ? body.query.trim() : ""
+    const query = parseEnqueueQuery(body.query)
     if (!query) {
         return {
             status: 400,

@@ -6,6 +6,7 @@ import {
     resolveGuildMemberForPermissions,
     resolveOauthGuildPermissionFallback,
     resolveUserPermissions,
+    selectApiGuardPermissionResolution,
 } from "./permissions.js"
 import type { GuildDashboardSnapshotResult } from "../types/web.js"
 import type BotClient from "../lib/BotClient.js"
@@ -15,8 +16,12 @@ import { auth } from "./auth-node.js"
 import { tryGetBotClient } from "../lib/botClientRegistry.js"
 import { webPlayerDebug, webPlayerWarn } from "./web-player-debug-log.js"
 import { getBotApiOrigin } from "./bot-api-origin.js"
-import { normalizeDashboardPermissionSnapshotResponse } from "./dashboard-permission-snapshot.js"
+import {
+    applyPermissionSnapshotSessionCheck,
+    normalizeDashboardPermissionSnapshotResponse,
+} from "./dashboard-permission-snapshot.js"
 import { decideAdminAccess } from "./admin-access-decision.js"
+import { mapGuildAccessFailureToHttp } from "./guild-access-http.js"
 
 export interface AuthenticatedSession {
     user: {
@@ -259,16 +264,7 @@ export async function resolveAuthenticatedGuildAccess(
         discordUserId
     )
     if (guildAccess.ok === false) {
-        const retryable = guildAccess.retryable === true
-        return {
-            ok: false,
-            status: retryable ? 503 : 403,
-            error: retryable ? "Service temporarily unavailable" : "Forbidden",
-            details: retryable
-                ? (guildAccess.error ??
-                  "Could not verify Discord membership right now. Try again in a moment.")
-                : "Could not verify access to this server. The bot may not be in this guild, or your membership could not be confirmed (try re-logging in with Discord).",
-        }
+        return mapGuildAccessFailureToHttp(guildAccess)
     }
 
     return {
@@ -467,26 +463,22 @@ export async function getGuildDashboardPermissionSnapshot(
     }
 
     const upstream = await fetchGuildDashboardPermissionSnapshotFromBot(headers, guildId)
-    if (upstream.ok === true) {
-        if (upstream.discordUserId !== ctx.discordUserId) {
-            webPlayerWarn("dashboard permission snapshot discordUserId mismatch", {
-                guildId,
-                ctxDiscordUserId: ctx.discordUserId,
-                upstreamDiscordUserId: upstream.discordUserId,
-            })
-            return {
-                ok: false,
-                status: 403,
-                error: "Forbidden",
-                details: "Permission snapshot could not be verified for this session.",
-            }
-        }
+    const verified = applyPermissionSnapshotSessionCheck(ctx.discordUserId, upstream)
+    if (upstream.ok === true && verified.ok === false) {
+        webPlayerWarn("dashboard permission snapshot discordUserId mismatch", {
+            guildId,
+            ctxDiscordUserId: ctx.discordUserId,
+            upstreamDiscordUserId: upstream.discordUserId,
+        })
+        return verified
+    }
+    if (verified.ok === true) {
         webPlayerDebug("getGuildDashboardPermissionSnapshot via bot HTTP", {
             guildId,
             discordUserIdPrefix: ctx.discordUserId.slice(0, 8),
         })
     }
-    return upstream
+    return verified
 }
 
 /**
@@ -505,24 +497,23 @@ export async function requirePermissions(
     const botClient = tryGetBotClient()
     let permissionResolution: PermissionResolution
     try {
-        permissionResolution = botClient
+        const primary = botClient
             ? await resolveUserPermissions(botClient, guildId, ctx.discordUserId)
             : resolveOauthGuildPermissionFallback(null, guildId, ctx.discordUserId)
-
-        if (
-            botClient &&
-            !hasRequiredPermissions(permissionResolution.permissions, requiredPerms) &&
-            ctx.memberResolved === false
-        ) {
-            const fallback = resolveOauthGuildPermissionFallback(
-                botClient,
-                guildId,
-                ctx.discordUserId
-            )
-            if (hasRequiredPermissions(fallback.permissions, requiredPerms)) {
-                permissionResolution = fallback
-            }
-        }
+        const shouldConsiderFallback =
+            Boolean(botClient) &&
+            ctx.memberResolved === false &&
+            !hasRequiredPermissions(primary.permissions, requiredPerms)
+        const fallback = shouldConsiderFallback
+            ? resolveOauthGuildPermissionFallback(botClient, guildId, ctx.discordUserId)
+            : primary
+        permissionResolution = selectApiGuardPermissionResolution({
+            hasBotClient: Boolean(botClient),
+            memberResolved: ctx.memberResolved,
+            primary,
+            fallback,
+            requiredPerms,
+        })
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error)
         console.error("[api-auth] requirePermissions permission resolution failed:", msg)

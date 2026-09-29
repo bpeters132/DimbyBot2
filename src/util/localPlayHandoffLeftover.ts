@@ -1,3 +1,5 @@
+import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
+
 /**
  * After a failed Lavalink → local handoff destroy, decide whether the guild's
  * live player is still the original handoff target (safe to tear down) or a
@@ -9,12 +11,28 @@
  * `getPlayer(guildId)` during the later local VC join (up to 30s) can return a
  * successor created by concurrent `/play` or dashboard enqueue. Destroying that
  * player (and clearing the session on Ready) would drop the live + persisted queue.
+ *
+ * The same predicate gates guild-keyed `stopPlaying`/`destroy` after
+ * `flushPlayerSessionSave`: that flush awaits DB I/O, so `/stop`+`/play` can
+ * replace the Player before the destroy callback runs.
  */
 export function shouldDestroyLeftoverHandoffPlayer(
     handoffPlayer: object,
     livePlayer: object | null | undefined
 ): boolean {
     return livePlayer != null && livePlayer === handoffPlayer
+}
+
+/**
+ * True when local-handoff may call guild-keyed `stopPlaying`/`destroy` on `handoffPlayer`.
+ * False when the slot is empty or a successor owns it — `Player.stopPlaying` does not
+ * check destroy status and would null the live guild track.
+ */
+export function shouldRunLocalHandoffLavalinkTeardown(
+    handoffPlayer: object,
+    livePlayer: object | null | undefined
+): boolean {
+    return shouldDestroyLeftoverHandoffPlayer(handoffPlayer, livePlayer)
 }
 
 /**
@@ -60,4 +78,60 @@ export function shouldAbortLocalPlayForLivePlayerConflict(
     if (livePlayer == null) return false
     if (handoffPlayer == null) return true
     return livePlayer !== handoffPlayer
+}
+
+/** Injectable stop → destroy steps for {@link runLocalHandoffLavalinkStopAndDestroy}. */
+export type LocalHandoffLavalinkStopAndDestroyHooks<T extends object> = {
+    handoffPlayer: T
+    /**
+     * Guild whose queue lock covers the final identity check and `destroy()`.
+     * Successor creation acquires a lifecycle reservation on that lock, so it waits
+     * until `Player.destroy()` finishes instead of taking the slot mid-destroy.
+     */
+    guildId: string
+    getLivePlayer: () => T | null | undefined
+    isPlaying: boolean
+    stopPlaying: () => Promise<void>
+    /** Swallow `stopPlaying` failures so destroy can still run when ownership is unchanged. */
+    onStopError?: (error: unknown) => void
+    /** Arm `playerDestroy` listeners immediately before `destroy()`. */
+    beforeDestroy?: () => void
+    destroy: () => Promise<void>
+}
+
+/**
+ * Guild-keyed `stopPlaying` then `destroy`, re-checking live identity after each await.
+ *
+ * `Player.stopPlaying` issues a node update by `guildId` without checking that the
+ * receiver is still the cached instance. A successor created during that await must
+ * not be destroyed.
+ *
+ * The final identity check and `destroy()` run under the guild queue lock.
+ * `Player.destroy()` removes the guild from the manager cache and then awaits the
+ * guild-keyed node destroy. A successor `createPlayer` (which first acquires a
+ * lifecycle reservation on that lock) waits until destroy finishes, so it cannot
+ * occupy the slot and then be deleted from the cache. Returns `true` only when
+ * `destroy()` ran.
+ */
+export async function runLocalHandoffLavalinkStopAndDestroy<T extends object>(
+    hooks: LocalHandoffLavalinkStopAndDestroyHooks<T>
+): Promise<boolean> {
+    if (!shouldRunLocalHandoffLavalinkTeardown(hooks.handoffPlayer, hooks.getLivePlayer())) {
+        return false
+    }
+    if (hooks.isPlaying) {
+        try {
+            await hooks.stopPlaying()
+        } catch (error: unknown) {
+            hooks.onStopError?.(error)
+        }
+    }
+    return withGuildPlayerQueueLock(hooks.guildId, async () => {
+        if (!shouldRunLocalHandoffLavalinkTeardown(hooks.handoffPlayer, hooks.getLivePlayer())) {
+            return false
+        }
+        hooks.beforeDestroy?.()
+        await hooks.destroy()
+        return true
+    })
 }

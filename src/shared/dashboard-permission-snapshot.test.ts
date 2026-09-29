@@ -1,7 +1,10 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { WebPermission } from "./permissions.js"
-import { normalizeDashboardPermissionSnapshotResponse } from "./dashboard-permission-snapshot.js"
+import {
+    applyPermissionSnapshotSessionCheck,
+    normalizeDashboardPermissionSnapshotResponse,
+} from "./dashboard-permission-snapshot.js"
 
 describe("normalizeDashboardPermissionSnapshotResponse", () => {
     it("rejects non-object and missing-ok payloads", () => {
@@ -43,6 +46,23 @@ describe("normalizeDashboardPermissionSnapshotResponse", () => {
         const defaultStatus = normalizeDashboardPermissionSnapshotResponse({ ok: false }, 200)
         assert.equal(defaultStatus.ok, false)
         if (defaultStatus.ok === false) assert.equal(defaultStatus.status, 502)
+    })
+
+    it("fail-closes ok:false statuses outside HTTP 400–599 to 502", () => {
+        for (const status of [200, 399, 0, -1, 600, 999]) {
+            const out = normalizeDashboardPermissionSnapshotResponse(
+                { ok: false, status, error: "x" },
+                404
+            )
+            assert.equal(out.ok, false)
+            if (out.ok === false) assert.equal(out.status, 502)
+        }
+        const nonFinite = normalizeDashboardPermissionSnapshotResponse(
+            { ok: false, status: Number.NaN, error: "x" },
+            200
+        )
+        assert.equal(nonFinite.ok, false)
+        if (nonFinite.ok === false) assert.equal(nonFinite.status, 502)
     })
 
     it("accepts a valid success snapshot including optimisticBotUnavailable", () => {
@@ -107,5 +127,47 @@ describe("normalizeDashboardPermissionSnapshotResponse", () => {
             ).details ?? "",
             /invalid permission arrays/i
         )
+    })
+})
+
+describe("applyPermissionSnapshotSessionCheck", () => {
+    const snapshot = {
+        memberResolved: false,
+        primaryPermissions: [WebPermission.VIEW_PLAYER],
+        oauthPermissions: [],
+    }
+
+    it("returns the upstream snapshot when discordUserId matches the session", () => {
+        const upstream = {
+            ok: true as const,
+            discordUserId: "111",
+            snapshot,
+        }
+        assert.equal(applyPermissionSnapshotSessionCheck("111", upstream), upstream)
+    })
+
+    it("fail-closes to 403 when the snapshot is for a different Discord user", () => {
+        assert.deepEqual(
+            applyPermissionSnapshotSessionCheck("111", {
+                ok: true,
+                discordUserId: "222",
+                snapshot,
+            }),
+            {
+                ok: false,
+                status: 403,
+                error: "Forbidden",
+                details: "Permission snapshot could not be verified for this session.",
+            }
+        )
+    })
+
+    it("does not rewrite an upstream failure as Forbidden", () => {
+        const upstream = {
+            ok: false as const,
+            status: 503,
+            error: "Bot API unreachable",
+        }
+        assert.equal(applyPermissionSnapshotSessionCheck("111", upstream), upstream)
     })
 })

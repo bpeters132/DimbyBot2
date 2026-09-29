@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { resolvedBotApiPort } from "../../../../lib/botApiPortEnv.js"
-import { rewriteLocalDevPlayerWsUrl } from "@/shared/player-ws-url.js"
+import { resolvePublicPlayerWsConfigUrl } from "@/shared/player-ws-url.js"
 
 /**
  * **Public by design:** `GET` returns only a non-sensitive WebSocket URL string (or null) so the
@@ -15,26 +15,10 @@ export function GET(): NextResponse {
     const isDev = process.env.NODE_ENV === "development"
     const raw =
         process.env.WEBSOCKET_CLIENT_URL?.trim() || process.env.NEXT_PUBLIC_WS_URL?.trim() || ""
-    if (!raw) {
-        if (isDev) {
-            const port = resolvedBotApiPort()
-            return NextResponse.json({ wsUrl: `ws://localhost:${port}/ws` as string })
-        }
-        return NextResponse.json({ wsUrl: null as string | null })
-    }
-    try {
-        const u = new URL(raw)
-        if (u.protocol !== "ws:" && u.protocol !== "wss:") {
-            return NextResponse.json({ wsUrl: null as string | null })
-        }
-        if (u.protocol === "ws:" && !isDev) {
-            return NextResponse.json({ wsUrl: null as string | null })
-        }
-        if (u.username || u.password) {
-            return NextResponse.json({ wsUrl: null as string | null })
-        }
-        return NextResponse.json({ wsUrl: rewriteLocalDevPlayerWsUrl(u.toString(), isDev) })
-    } catch {
-        return NextResponse.json({ wsUrl: null as string | null })
-    }
+    const wsUrl = resolvePublicPlayerWsConfigUrl({
+        configuredUrl: raw,
+        isDev,
+        devFallbackPort: resolvedBotApiPort(),
+    })
+    return NextResponse.json({ wsUrl })
 }

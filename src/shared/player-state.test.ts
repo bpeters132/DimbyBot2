@@ -3,7 +3,9 @@ import { describe, it } from "node:test"
 import {
     applyDashboardRequesterFallback,
     composePlayerStateResponse,
+    evictOldestRequesterMissCacheEntries,
     isActivePlayerSession,
+    isFreshRequesterMissCacheEntry,
     isPlayer,
     resolveBotVoiceChannelId,
     snapshotGuildListPlayer,
@@ -396,5 +398,46 @@ describe("applyDashboardRequesterFallback", () => {
             applyDashboardRequesterFallback(mockPlayer({}) as never, baseSummary),
             baseSummary
         )
+    })
+})
+
+describe("isFreshRequesterMissCacheEntry", () => {
+    it("skips Discord fetch only while the miss timestamp is strictly in the future", () => {
+        assert.equal(isFreshRequesterMissCacheEntry(1_000, 999), true)
+        assert.equal(isFreshRequesterMissCacheEntry(1_000, 1_000), false)
+        assert.equal(isFreshRequesterMissCacheEntry(1_000, 1_001), false)
+        assert.equal(isFreshRequesterMissCacheEntry(undefined, 1_000), false)
+        assert.equal(isFreshRequesterMissCacheEntry(0, 1_000), false)
+    })
+})
+
+describe("evictOldestRequesterMissCacheEntries", () => {
+    it("removes oldest Map keys first when over capacity", () => {
+        const cache = new Map<string, number>([
+            ["a", 1],
+            ["b", 2],
+            ["c", 3],
+        ])
+        evictOldestRequesterMissCacheEntries(cache, 2)
+        assert.deepEqual([...cache.keys()], ["b", "c"])
+        assert.equal(cache.get("b"), 2)
+        assert.equal(cache.get("c"), 3)
+    })
+
+    it("is a no-op at or under capacity, including empty and zero max", () => {
+        const under = new Map<string, number>([
+            ["a", 1],
+            ["b", 2],
+        ])
+        evictOldestRequesterMissCacheEntries(under, 2)
+        assert.deepEqual([...under.keys()], ["a", "b"])
+
+        const empty = new Map<string, number>()
+        evictOldestRequesterMissCacheEntries(empty, 0)
+        assert.equal(empty.size, 0)
+
+        const overZero = new Map<string, number>([["a", 1]])
+        evictOldestRequesterMissCacheEntries(overZero, 0)
+        assert.equal(overZero.size, 0)
     })
 })

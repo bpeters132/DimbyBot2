@@ -145,12 +145,13 @@ export function trimmedHttpUrlQuery(query: string): string | null {
 /**
  * True when a User media URL must not be sent to Lavalink: loopback, RFC1918,
  * link-local, single-label Docker DNS names, DNS-bounce hosts that encode a private
- * IP in the name (e.g. `10.0.0.1.nip.io`), or known bounce-service suffixes.
- * Non-URLs (ytsearch text) are allowed.
+ * IP in the name (e.g. `10.0.0.1.nip.io` or `0a000001.rbndr.us`), or known
+ * bounce-service suffixes. Non-URLs (ytsearch text) are allowed.
  *
  * Also rejects `link:` / `uri:` / `yt:` / `sc:` / `local:` / … wrappers that
  * lavalink-client strips before treating the remainder as a raw HTTP identifier,
- * and lavaplayer `icy://` aliases that would otherwise skip the `https?://` gate.
+ * lavaplayer `icy://` aliases that would otherwise skip the `https?://` gate,
+ * and hyphen-encoded IPv4 labels (`10-0-0-1` or `make-10-0-0-1-rr`) used by bounce DNS.
  */
 export function isBlockedUserMediaUrl(query: string): boolean {
     const trimmed = query.trim()
@@ -182,8 +183,34 @@ const DNS_BOUNCE_SUFFIXES = [
     "sslip.io",
     "xip.io",
     "localtest.me",
+    "localtest.org",
+    "localtest.dev",
     "lvh.me",
     "vcap.me",
+    "traefik.me",
+    "localho.st",
+    "lacolhost.com",
+    "localh.st",
+    "1u.ms",
+    "local.gd",
+    "localhost.direct",
+    "lcl.host",
+    "plex.direct",
+    "yoogle.com",
+    "localhost.tv",
+    "localhst.dev",
+    "qip.sh",
+    "localhst.co.uk",
+    "local.sisteminha.com",
+    "fbi.com",
+    "mouse-potato.com",
+    "nar0.com",
+    "127001.it",
+    "domaincontrol.com",
+    "anyip.dev",
+    "localhost.cloud",
+    "localh.net",
+    "rbndr.us",
 ] as const
 
 function isBlockedUserMediaHost(hostname: string): boolean {
@@ -196,6 +223,7 @@ function isBlockedUserMediaHost(hostname: string): boolean {
     if (!host.includes(".") && !host.includes(":")) return true
     if (isDnsBounceHost(host)) return true
     if (hostnameEmbedsBlockedIpv4(host)) return true
+    if (hostnameEmbedsBlockedHexIpv4(host)) return true
     return false
 }
 
@@ -206,12 +234,40 @@ function isDnsBounceHost(host: string): boolean {
     return false
 }
 
-/** `10.0.0.1.evil.example` style: four consecutive decimal labels forming a blocked IPv4. */
+/**
+ * Hostnames that encode a blocked IPv4 without using a literal / known bounce suffix:
+ * - `10.0.0.1.evil.example` — four consecutive decimal labels
+ * - `10-0-0-1.evil.example` — one label of four hyphen-separated octets (sslip/traefik dash form)
+ * - `make-10-0-0-1-rr.1u.ms` — four consecutive hyphen octets inside a longer label
+ */
 function hostnameEmbedsBlockedIpv4(host: string): boolean {
     const labels = host.split(".")
     for (let i = 0; i + 3 < labels.length; i++) {
         const candidate = `${labels[i]}.${labels[i + 1]}.${labels[i + 2]}.${labels[i + 3]}`
         if (isBlockedIpv4(candidate)) return true
+    }
+    for (const label of labels) {
+        const parts = label.split("-")
+        for (let i = 0; i + 3 < parts.length; i++) {
+            const candidate = `${parts[i]}.${parts[i + 1]}.${parts[i + 2]}.${parts[i + 3]}`
+            if (isBlockedIpv4(candidate)) return true
+        }
+    }
+    return false
+}
+
+/**
+ * `0a000001.evil.example` / `7f000001.c0a80001.rbndr.us` style: an 8-char hex label
+ * that decodes to a blocked IPv4 (taviso rbndr and similar encoders).
+ */
+function hostnameEmbedsBlockedHexIpv4(host: string): boolean {
+    const labels = host.split(".")
+    for (const label of labels) {
+        if (!/^[0-9a-f]{8}$/i.test(label)) continue
+        const n = Number.parseInt(label, 16)
+        if (!Number.isInteger(n) || n < 0 || n > 0xffffffff) continue
+        const ip = `${(n >>> 24) & 255}.${(n >>> 16) & 255}.${(n >>> 8) & 255}.${n & 255}`
+        if (isBlockedIpv4(ip)) return true
     }
     return false
 }

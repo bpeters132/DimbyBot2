@@ -32,6 +32,29 @@ function getRequesterMissCache(): Map<string, number> {
     return missPurgeGlobal.__dimbyRequesterMissCache
 }
 
+/** True when a miss-cache timestamp is still in the future (skip Discord `members.fetch`). */
+export function isFreshRequesterMissCacheEntry(
+    expiresAt: number | undefined,
+    now: number
+): boolean {
+    return typeof expiresAt === "number" && expiresAt > now
+}
+
+/**
+ * FIFO eviction when the miss cache exceeds `maxEntries`.
+ * Relies on `Map` insertion order so the oldest key is removed first.
+ */
+export function evictOldestRequesterMissCacheEntries(
+    cache: Map<string, number>,
+    maxEntries: number
+): void {
+    while (cache.size > maxEntries) {
+        const oldest = cache.keys().next()
+        if (oldest.done) break
+        cache.delete(oldest.value)
+    }
+}
+
 function purgeExpiredRequesterMissCache(): void {
     const requesterMissCache = getRequesterMissCache()
     const now = Date.now()
@@ -47,11 +70,7 @@ function setRequesterMissCacheEntry(key: string, expiresAt: number): void {
     requesterMissCache.set(key, expiresAt)
     // Intentionally FIFO eviction by insertion order: capacity is bounded by
     // REQUESTER_MISS_CACHE_MAX_ENTRIES, and freshness is handled by TTL expiry.
-    while (requesterMissCache.size > REQUESTER_MISS_CACHE_MAX_ENTRIES) {
-        const oldest = requesterMissCache.keys().next()
-        if (oldest.done) break
-        requesterMissCache.delete(oldest.value)
-    }
+    evictOldestRequesterMissCacheEntries(requesterMissCache, REQUESTER_MISS_CACHE_MAX_ENTRIES)
 }
 
 if (typeof setInterval !== "undefined" && !missPurgeGlobal.__dimbyRequesterMissPurgeTimer) {
@@ -188,7 +207,7 @@ async function buildRequesterDisplayMap(
         } else {
             const missCacheKey = `${guildId}:${id}`
             const missExpiresAt = getRequesterMissCache().get(missCacheKey)
-            if (missExpiresAt && missExpiresAt > Date.now()) {
+            if (isFreshRequesterMissCacheEntry(missExpiresAt, Date.now())) {
                 continue
             }
             getRequesterMissCache().delete(missCacheKey)

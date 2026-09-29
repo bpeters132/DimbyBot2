@@ -3,6 +3,7 @@ import { describe, it } from "node:test"
 import {
     isLoopbackWsHost,
     playerWsFallbackProtocol,
+    resolvePublicPlayerWsConfigUrl,
     rewriteLocalDevPlayerWsUrl,
 } from "./player-ws-url.js"
 
@@ -64,5 +65,118 @@ describe("playerWsFallbackProtocol", () => {
             "ws"
         )
         assert.equal(isLoopbackWsHost("LOCALHOST"), true)
+    })
+})
+
+describe("resolvePublicPlayerWsConfigUrl", () => {
+    it("uses a localhost fallback in development when no URL is configured", () => {
+        assert.equal(
+            resolvePublicPlayerWsConfigUrl({
+                configuredUrl: "",
+                isDev: true,
+                devFallbackPort: 3001,
+            }),
+            "ws://localhost:3001/ws"
+        )
+        assert.equal(
+            resolvePublicPlayerWsConfigUrl({
+                configuredUrl: "   ",
+                isDev: true,
+                devFallbackPort: 8080,
+            }),
+            "ws://localhost:8080/ws"
+        )
+    })
+
+    it("returns null in production when no URL is configured", () => {
+        assert.equal(
+            resolvePublicPlayerWsConfigUrl({
+                configuredUrl: "",
+                isDev: false,
+                devFallbackPort: 3001,
+            }),
+            null
+        )
+    })
+
+    it("accepts wss URLs and allows plaintext ws only in development", () => {
+        assert.equal(
+            resolvePublicPlayerWsConfigUrl({
+                configuredUrl: "wss://bot.example.com/ws",
+                isDev: false,
+                devFallbackPort: 3001,
+            }),
+            "wss://bot.example.com/ws"
+        )
+        assert.equal(
+            resolvePublicPlayerWsConfigUrl({
+                configuredUrl: "ws://bot.example.com/ws",
+                isDev: true,
+                devFallbackPort: 3001,
+            }),
+            "ws://bot.example.com/ws"
+        )
+        assert.equal(
+            resolvePublicPlayerWsConfigUrl({
+                configuredUrl: "ws://bot.example.com/ws",
+                isDev: false,
+                devFallbackPort: 3001,
+            }),
+            null
+        )
+    })
+
+    it("rejects credentials, non-ws schemes, and invalid URLs", () => {
+        assert.equal(
+            resolvePublicPlayerWsConfigUrl({
+                configuredUrl: "wss://user:pass@bot.example.com/ws",
+                isDev: false,
+                devFallbackPort: 3001,
+            }),
+            null
+        )
+        assert.equal(
+            resolvePublicPlayerWsConfigUrl({
+                configuredUrl: "wss://user@bot.example.com/ws",
+                isDev: false,
+                devFallbackPort: 3001,
+            }),
+            null
+        )
+        assert.equal(
+            resolvePublicPlayerWsConfigUrl({
+                configuredUrl: "https://bot.example.com/ws",
+                isDev: false,
+                devFallbackPort: 3001,
+            }),
+            null
+        )
+        assert.equal(
+            resolvePublicPlayerWsConfigUrl({
+                configuredUrl: "http://bot.example.com/ws",
+                isDev: true,
+                devFallbackPort: 3001,
+            }),
+            null
+        )
+        assert.equal(
+            resolvePublicPlayerWsConfigUrl({
+                configuredUrl: "not a url",
+                isDev: true,
+                devFallbackPort: 3001,
+            }),
+            null
+        )
+    })
+
+    it("downgrades wss://localhost in development via rewriteLocalDevPlayerWsUrl", () => {
+        assert.equal(
+            resolvePublicPlayerWsConfigUrl({
+                configuredUrl: "wss://localhost:3001/ws",
+                isDev: true,
+                devFallbackPort: 3001,
+            }),
+            "ws://localhost:3001/ws"
+        )
     })
 })

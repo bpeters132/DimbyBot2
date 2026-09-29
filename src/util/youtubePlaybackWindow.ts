@@ -1,6 +1,7 @@
 import type { Player, Track, UnresolvedTrack } from "lavalink-client"
 import { tryGetBotClient } from "../lib/botClientRegistry.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
+import { isSameLivePlayer } from "./livePlayerIdentity.js"
 import { loggerFromPartial } from "./loggerFromPartial.js"
 import { isBlockedUserMediaUrl } from "./userMediaUrl.js"
 import {
@@ -383,6 +384,11 @@ export function schedulePrefetchWindow(
 
 /**
  * On companion HTTP trackError: re-mint that item once, then skip-and-refill.
+ *
+ * Remint awaits companion HTTP and Lavalink `search`. Destroyed `Player.play()` still
+ * issues guild-keyed `node.updatePlayer` (no destroy-status gate), so a `/stop` + `/play`
+ * successor that lands in that window would restart or replace the new session. Apply and
+ * play only while the same Player instance still owns the guild slot.
  */
 export async function retryCompanionPlaybackOnce(
     getLivePlayer: () => Player | undefined,
@@ -407,7 +413,7 @@ export async function retryCompanionPlaybackOnce(
         const resolved = await prepareTrack(snapshot, failedTrack, config, { force: true })
         const applied = await withGuildPlayerQueueLock(guildId, async () => {
             const live = livePlayer(getLivePlayer, guildId)
-            if (!live) return false
+            if (!isSameLivePlayer(live, snapshot)) return false
             if (
                 live.queue.current &&
                 queueTrackIdentity(live.queue.current) === queueTrackIdentity(failedTrack)
@@ -423,7 +429,7 @@ export async function retryCompanionPlaybackOnce(
             return "skip"
         }
         const live = livePlayer(getLivePlayer, guildId)
-        if (!live) {
+        if (!isSameLivePlayer(live, snapshot)) {
             demoteCompanionResolvedTrack(failedTrack)
             return "skip"
         }

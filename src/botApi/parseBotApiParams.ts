@@ -40,3 +40,39 @@ export function parsePlayerAction(value: unknown): PlayerAction | null {
     if (typeof value !== "string") return null
     return (PLAYER_ACTIONS as readonly string[]).includes(value) ? (value as PlayerAction) : null
 }
+
+/**
+ * Parses a dashboard player `seek` body value as milliseconds.
+ * Rejects non-numbers (including numeric strings), non-finite values, and negatives;
+ * truncates toward zero via `Math.floor` so fractional ms cannot seek past the intended point.
+ * `0` is valid (start of track) even though the HTTP error copy says "positive".
+ */
+export function parsePlayerSeekMs(value: unknown): number | null {
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+        return null
+    }
+    return Math.floor(value)
+}
+
+/**
+ * Parses `newIndex` from a queue-reorder JSON body.
+ * Requires a non-negative integer number (not a digit string) so PATCH cannot coerce
+ * `"1.5"` / `"1"` into unintended slots the way `Number(value)` would.
+ */
+export function parseQueueReorderNewIndex(value: unknown): number | null {
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+        return null
+    }
+    return value
+}
+
+/**
+ * Parses a play/enqueue search query from JSON.
+ * Non-strings, empty strings, and whitespace-only values are rejected so Lavalink never
+ * searches an empty query from dashboard play or queue POST.
+ */
+export function parseEnqueueQuery(raw: unknown): string | null {
+    if (typeof raw !== "string") return null
+    const query = raw.trim()
+    return query || null
+}

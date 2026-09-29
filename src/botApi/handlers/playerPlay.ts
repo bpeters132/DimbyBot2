@@ -6,6 +6,7 @@ import { requirePermissions } from "../../shared/api-auth.js"
 import { getBotClient } from "../../lib/botClientRegistry.js"
 import { toPlayerStateResponse } from "../../shared/player-state.js"
 import { searchAndEnqueue } from "./searchAndEnqueue.js"
+import { parseEnqueueQuery } from "../parseBotApiParams.js"
 
 export async function playerPlayPOST(
     headers: Headers,
@@ -35,7 +36,7 @@ export async function playerPlayPOST(
         const body = (typeof rawBody === "object" && rawBody !== null ? rawBody : {}) as {
             query?: unknown
         }
-        const query = typeof body.query === "string" ? body.query.trim() : ""
+        const query = parseEnqueueQuery(body.query)
         if (!query) {
             return {
                 status: 400,

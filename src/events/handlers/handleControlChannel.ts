@@ -13,6 +13,7 @@ import type BotClient from "../../lib/BotClient.js"
 import { getDiscordErrorCode } from "../../util/discordErrorDetails.js"
 import { getGuildSettings, ensureStorageDir } from "../../util/saveControlChannel.js"
 import { guildWebPlayerPageUrl } from "../../util/webDashboardUrl.js"
+import { controlButtonPresentation } from "../../util/controlButtonPresentation.js"
 
 /**
  * Formats milliseconds into HH:MM:SS or MM:SS string.
@@ -138,39 +139,37 @@ export function createControlButtons(
     client.debug(
         `[ControlHandler] Creating control buttons. Player state: ${player ? `Playing: ${player.playing}, Current: ${!!player.queue?.current}, Queue Size: ${player.queue?.tracks?.length ?? 0}` : "null"}`
     )
-    const isPlaying = player && player.playing
-    const hasCurrent = player && player.queue && player.queue.current
-    const hasQueue = player && player.queue && player.queue.tracks.length > 0
+    const buttons = controlButtonPresentation(player)
 
     const playPauseButton = new ButtonBuilder()
         .setCustomId("control_play_pause")
-        .setLabel(isPlaying ? "Pause" : "Play")
-        .setStyle(isPlaying ? ButtonStyle.Secondary : ButtonStyle.Primary)
-        .setDisabled(!hasCurrent)
+        .setLabel(buttons.playPauseLabel)
+        .setStyle(buttons.playPauseLabel === "Pause" ? ButtonStyle.Secondary : ButtonStyle.Primary)
+        .setDisabled(buttons.playPauseDisabled)
 
     const stopButton = new ButtonBuilder()
         .setCustomId("control_stop")
         .setLabel("Stop")
         .setStyle(ButtonStyle.Danger)
-        .setDisabled(!hasCurrent)
+        .setDisabled(buttons.stopDisabled)
 
     const skipButton = new ButtonBuilder()
         .setCustomId("control_skip")
         .setLabel("Skip")
         .setStyle(ButtonStyle.Secondary)
-        .setDisabled(!hasCurrent)
+        .setDisabled(buttons.skipDisabled)
 
     const shuffleButton = new ButtonBuilder()
         .setCustomId("control_shuffle")
         .setLabel("Shuffle")
         .setStyle(ButtonStyle.Secondary)
-        .setDisabled(!hasQueue)
+        .setDisabled(buttons.shuffleDisabled)
 
     const loopButton = new ButtonBuilder()
         .setCustomId("control_loop")
         .setLabel("Loop")
         .setStyle(ButtonStyle.Secondary)
-        .setDisabled(!hasCurrent && !hasQueue)
+        .setDisabled(buttons.loopDisabled)
 
     const mainRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         playPauseButton,
@@ -180,12 +179,13 @@ export function createControlButtons(
         loopButton
     )
 
-    const autoplayOn = Boolean(player?.get?.("autoplay"))
     const autoplayButton = new ButtonBuilder()
         .setCustomId("control_autoplay")
-        .setLabel(autoplayOn ? "Autoplay: On" : "Autoplay: Off")
-        .setStyle(autoplayOn ? ButtonStyle.Success : ButtonStyle.Secondary)
-        .setDisabled(!player)
+        .setLabel(buttons.autoplayLabel)
+        .setStyle(
+            buttons.autoplayLabel === "Autoplay: On" ? ButtonStyle.Success : ButtonStyle.Secondary
+        )
+        .setDisabled(buttons.autoplayDisabled)
 
     const autoplayRow = new ActionRowBuilder<ButtonBuilder>().addComponents(autoplayButton)
 

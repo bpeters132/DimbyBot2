@@ -11,7 +11,7 @@ import { skipCurrentTrack } from "../../util/skipCurrentTrack.js"
 import { shuffleUpcomingOnLivePlayer } from "../../util/livePlayerQueueMutations.js"
 import { playerHttpResultForSkip } from "../../util/skipDeferredResult.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
-import { parsePlayerAction } from "../parseBotApiParams.js"
+import { parsePlayerAction, parsePlayerSeekMs } from "../parseBotApiParams.js"
 import { destroyLavalinkPlayerForStop } from "../../util/stopLavalinkPlayer.js"
 
 export async function playerGET(
@@ -123,12 +123,9 @@ export async function playerPOST(
             case "stop":
                 await destroyLavalinkPlayerForStop(player, () => client.lavalink.getPlayer(guildId))
                 break
-            case "seek":
-                if (
-                    typeof body.value !== "number" ||
-                    !Number.isFinite(body.value) ||
-                    body.value < 0
-                ) {
+            case "seek": {
+                const seekMs = parsePlayerSeekMs(body.value)
+                if (seekMs === null) {
                     return {
                         status: 400,
                         body: {
@@ -137,8 +134,9 @@ export async function playerPOST(
                         },
                     }
                 }
-                await player.seek(Math.floor(body.value))
+                await player.seek(seekMs)
                 break
+            }
             case "loop": {
                 const current = player.repeatMode
                 const nextMode = current === "off" ? "track" : current === "track" ? "queue" : "off"

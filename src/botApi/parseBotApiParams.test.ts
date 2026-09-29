@@ -2,9 +2,12 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
     clampInt,
+    parseEnqueueQuery,
     parsePlayerAction,
+    parsePlayerSeekMs,
     parseQueueIndex,
     parseQueueQueryNumber,
+    parseQueueReorderNewIndex,
 } from "./parseBotApiParams.js"
 
 describe("clampInt", () => {
@@ -68,5 +71,73 @@ describe("parsePlayerAction", () => {
         assert.equal(parsePlayerAction(null), null)
         assert.equal(parsePlayerAction(1), null)
         assert.equal(parsePlayerAction({ action: "skip" }), null)
+    })
+})
+
+describe("parsePlayerSeekMs", () => {
+    it("accepts finite non-negative numbers and floors fractional milliseconds", () => {
+        assert.equal(parsePlayerSeekMs(0), 0)
+        assert.equal(parsePlayerSeekMs(1), 1)
+        assert.equal(parsePlayerSeekMs(1000.9), 1000)
+        assert.equal(parsePlayerSeekMs(59_999.1), 59_999)
+    })
+
+    it("rejects negatives, non-finite numbers, numeric strings, and other types", () => {
+        assert.equal(parsePlayerSeekMs(-1), null)
+        assert.equal(parsePlayerSeekMs(-0.1), null)
+        assert.equal(parsePlayerSeekMs(Number.NaN), null)
+        assert.equal(parsePlayerSeekMs(Number.POSITIVE_INFINITY), null)
+        assert.equal(parsePlayerSeekMs(Number.NEGATIVE_INFINITY), null)
+        assert.equal(parsePlayerSeekMs("1000"), null)
+        assert.equal(parsePlayerSeekMs("0"), null)
+        assert.equal(parsePlayerSeekMs(null), null)
+        assert.equal(parsePlayerSeekMs(undefined), null)
+        assert.equal(parsePlayerSeekMs(true), null)
+        assert.equal(parsePlayerSeekMs({ value: 1 }), null)
+        assert.equal(parsePlayerSeekMs([1000]), null)
+    })
+})
+
+describe("parseQueueReorderNewIndex", () => {
+    it("accepts non-negative integer numbers including zero", () => {
+        assert.equal(parseQueueReorderNewIndex(0), 0)
+        assert.equal(parseQueueReorderNewIndex(1), 1)
+        assert.equal(parseQueueReorderNewIndex(12), 12)
+    })
+
+    it("rejects floats, negatives, digit strings, and other types", () => {
+        assert.equal(parseQueueReorderNewIndex(1.5), null)
+        assert.equal(parseQueueReorderNewIndex(-1), null)
+        assert.equal(parseQueueReorderNewIndex(Number.NaN), null)
+        assert.equal(parseQueueReorderNewIndex(Number.POSITIVE_INFINITY), null)
+        assert.equal(parseQueueReorderNewIndex("1"), null)
+        assert.equal(parseQueueReorderNewIndex("0"), null)
+        assert.equal(parseQueueReorderNewIndex("1.5"), null)
+        assert.equal(parseQueueReorderNewIndex(null), null)
+        assert.equal(parseQueueReorderNewIndex(undefined), null)
+        assert.equal(parseQueueReorderNewIndex(true), null)
+        assert.equal(parseQueueReorderNewIndex({ newIndex: 1 }), null)
+    })
+})
+
+describe("parseEnqueueQuery", () => {
+    it("accepts trimmed non-empty search strings", () => {
+        assert.equal(parseEnqueueQuery("never gonna"), "never gonna")
+        assert.equal(parseEnqueueQuery("  never gonna  "), "never gonna")
+        assert.equal(
+            parseEnqueueQuery("https://youtu.be/dQw4w9WgXcQ"),
+            "https://youtu.be/dQw4w9WgXcQ"
+        )
+    })
+
+    it("rejects empty, whitespace-only, and non-string values so Lavalink is not searched", () => {
+        assert.equal(parseEnqueueQuery(""), null)
+        assert.equal(parseEnqueueQuery("   "), null)
+        assert.equal(parseEnqueueQuery("\n\t"), null)
+        assert.equal(parseEnqueueQuery(null), null)
+        assert.equal(parseEnqueueQuery(undefined), null)
+        assert.equal(parseEnqueueQuery(1), null)
+        assert.equal(parseEnqueueQuery({ query: "song" }), null)
+        assert.equal(parseEnqueueQuery(["song"]), null)
     })
 })

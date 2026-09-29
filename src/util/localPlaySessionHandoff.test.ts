@@ -5,10 +5,13 @@ import type { PlayerSessionSnapshotV1 } from "../types/index.js"
 import {
     acquirePlayerSessionClearSuppressLease,
     clearPlayerSession,
+    clearPlayerSessionPreservePriorSnapshot,
     clearPlayerSessionRestoreInProgress,
     hasActiveSuppressLease,
+    markPlayerSessionPreservePriorSnapshot,
     markPlayerSessionRestoreInProgress,
     setPlayerSessionPersistenceDbForTests,
+    shouldPreservePriorPlayerSessionSnapshot,
     shouldSkipPlayerSessionClear,
 } from "./playerSessionPersistence.js"
 import { beginLocalPlaySessionHandoff } from "./localPlaySessionHandoff.js"
@@ -157,6 +160,44 @@ describe("beginLocalPlaySessionHandoff", () => {
         assert.deepEqual(deletes, [guildId])
     })
 
+    it("keeps preserve-prior snapshot on Ready (flush was a no-op)", async () => {
+        // Concurrent restore abandon marks preserve-prior; handoff flush cannot overwrite the
+        // fuller DB row. Ready clear must not delete that row (same contract as QueueEmpty).
+        const guildId = "guild-local-handoff-preserve-prior"
+        const deletes: string[] = []
+        const upserts: string[] = []
+
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async (id) => {
+                upserts.push(id)
+            },
+            deletePlayerSession: async (id) => {
+                deletes.push(id)
+            },
+        })
+
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        const player = mockPlayer(guildId)
+        const handoff = await beginLocalPlaySessionHandoff(player, async () => {
+            await clearPlayerSession(guildId)
+        })
+        handoff.markDestroyEventSeen()
+
+        // Flush skipped while preserve-prior is set; destroy suppress kept the row.
+        assert.deepEqual(upserts, [])
+        assert.deepEqual(deletes, [])
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), true)
+
+        await handoff.clearSessionAfterLocalReady()
+        assert.deepEqual(deletes, [])
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), false)
+
+        clearPlayerSessionPreservePriorSnapshot(guildId)
+        // Later intentional clear (e.g. /stop) can still delete.
+        await clearPlayerSession(guildId)
+        assert.deepEqual(deletes, [guildId])
+    })
+
     it("clears the session on Ready even when handoff destroy threw", async () => {
         const guildId = "guild-local-handoff-ready-after-destroy-fail"
         const deletes: string[] = []
@@ -292,6 +333,95 @@ describe("beginLocalPlaySessionHandoff", () => {
         handoff.releaseLeftoverSuppressLease()
         assert.equal(shouldSkipPlayerSessionClear(guildId), true)
         other.release()
+        assert.equal(shouldSkipPlayerSessionClear(guildId), false)
+    })
+
+    it("does not run destroy callback when a successor owns the guild after flush", async () => {
+        const guildId = "guild-local-handoff-successor-after-flush"
+        let destroyCalls = 0
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => undefined,
+            deletePlayerSession: async () => undefined,
+        })
+
+        const player = mockPlayer(guildId)
+        const successor = mockPlayer(guildId)
+        const handoff = await beginLocalPlaySessionHandoff(
+            player,
+            async () => {
+                destroyCalls += 1
+            },
+            () => successor
+        )
+
+        assert.equal(destroyCalls, 0)
+        assert.equal(handoff.destroyedLavalink, false)
+        assert.equal(shouldSkipPlayerSessionClear(guildId), true)
+        handoff.releaseLeftoverSuppressLease()
+        assert.equal(shouldSkipPlayerSessionClear(guildId), false)
+    })
+
+    it("does not run destroy callback when the guild slot is empty after flush", async () => {
+        const guildId = "guild-local-handoff-empty-after-flush"
+        let destroyCalls = 0
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => undefined,
+            deletePlayerSession: async () => undefined,
+        })
+
+        const player = mockPlayer(guildId)
+        const handoff = await beginLocalPlaySessionHandoff(
+            player,
+            async () => {
+                destroyCalls += 1
+            },
+            () => undefined
+        )
+
+        assert.equal(destroyCalls, 0)
+        assert.equal(handoff.destroyedLavalink, false)
+        handoff.releaseLeftoverSuppressLease()
+    })
+
+    it("still runs destroy callback when getLivePlayer returns the same instance", async () => {
+        const guildId = "guild-local-handoff-same-after-flush"
+        let destroyCalls = 0
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => undefined,
+            deletePlayerSession: async () => undefined,
+        })
+
+        const player = mockPlayer(guildId)
+        const handoff = await beginLocalPlaySessionHandoff(
+            player,
+            async () => {
+                destroyCalls += 1
+            },
+            () => player
+        )
+
+        assert.equal(destroyCalls, 1)
+        assert.equal(handoff.destroyedLavalink, true)
+        handoff.releaseLeftoverSuppressLease()
+    })
+
+    it("leaves destroyedLavalink false when the destroy callback skips after stopPlaying", async () => {
+        const guildId = "guild-local-handoff-skip-after-stop"
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => undefined,
+            deletePlayerSession: async () => undefined,
+        })
+
+        const player = mockPlayer(guildId)
+        const handoff = await beginLocalPlaySessionHandoff(
+            player,
+            async () => false,
+            () => player
+        )
+
+        assert.equal(handoff.destroyedLavalink, false)
+        assert.equal(shouldSkipPlayerSessionClear(guildId), true)
+        handoff.releaseLeftoverSuppressLease()
         assert.equal(shouldSkipPlayerSessionClear(guildId), false)
     })
 })
