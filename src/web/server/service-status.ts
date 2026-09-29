@@ -4,6 +4,11 @@ import type { StatusPayload } from "@/types/web"
 import { getBotApiOrigin } from "@/server/bot-api-origin"
 import { isBotApiVerbose, logBotApiVerbose } from "@/server/bot-api-verbose"
 import { tryGetBotClient } from "@/lib/botClient"
+import {
+    DATABASE_PROBE_UNREACHABLE,
+    mapBotApiOriginProbeMessage,
+    mapBotHealthProbeFailure,
+} from "@/lib/service-status-probes"
 
 /** Safe structured error info for logs (no raw credentials). */
 function sanitizeError(e: unknown): {
@@ -41,7 +46,7 @@ export async function getServiceStatusPayload(): Promise<StatusPayload> {
         await Promise.race([getWebPrismaClient().$queryRaw`SELECT 1`, timeoutPromise])
         database.ok = true
     } catch (e) {
-        database.message = "Database unreachable"
+        database.message = DATABASE_PROBE_UNREACHABLE
         console.error("[service-status] Database probe failed", sanitizeError(e))
     } finally {
         if (dbProbeTimer !== undefined) {
@@ -59,12 +64,11 @@ export async function getServiceStatusPayload(): Promise<StatusPayload> {
         try {
             origin = getBotApiOrigin()
         } catch (e) {
-            botApi.message = "API_PROXY_TARGET is invalid; cannot probe bot /health."
+            botApi.message = mapBotApiOriginProbeMessage("invalid_parse")
             console.error("[service-status] API_PROXY_TARGET parse failed", sanitizeError(e))
         }
         if (!origin && !botApi.message) {
-            botApi.message =
-                "API_PROXY_TARGET is not set; cannot probe bot /health in this environment."
+            botApi.message = mapBotApiOriginProbeMessage("unset")
             logBotApiVerbose("getServiceStatusPayload: bot probe skipped (no origin)")
         } else if (origin) {
             let healthUrl = ""
@@ -74,7 +78,7 @@ export async function getServiceStatusPayload(): Promise<StatusPayload> {
                 healthUrl = parsed.toString()
                 healthTarget = { host: parsed.host, pathname: parsed.pathname }
             } catch (e) {
-                botApi.message = "API_PROXY_TARGET is not a valid origin; cannot probe bot /health."
+                botApi.message = mapBotApiOriginProbeMessage("invalid_origin")
                 console.error(
                     "[service-status] Invalid bot API origin for /health URL",
                     sanitizeError(e)
@@ -102,7 +106,10 @@ export async function getServiceStatusPayload(): Promise<StatusPayload> {
                             status: res.status,
                         })
                     } else {
-                        botApi.message = `Bot /health returned HTTP ${res.status}`
+                        botApi.message = mapBotHealthProbeFailure({
+                            kind: "http",
+                            status: res.status,
+                        })
                         logBotApiVerbose("getServiceStatusPayload: bot /health non-ok", {
                             ms: Date.now() - started,
                             status: res.status,
@@ -110,9 +117,9 @@ export async function getServiceStatusPayload(): Promise<StatusPayload> {
                     }
                 } catch (e) {
                     if (e instanceof Error && e.name === "AbortError") {
-                        botApi.message = "Timed out connecting to bot /health"
+                        botApi.message = mapBotHealthProbeFailure({ kind: "timeout" })
                     } else {
-                        botApi.message = "Bot /health request failed"
+                        botApi.message = mapBotHealthProbeFailure({ kind: "request_failed" })
                         console.error(
                             "[service-status] Bot /health request failed",
                             sanitizeError(e)
