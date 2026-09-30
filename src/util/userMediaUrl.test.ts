@@ -285,6 +285,36 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://a9fea9fe.attacker.example/"), true)
         // Public hex IPv4 8.8.8.8 must stay allowed
         assert.equal(isBlockedUserMediaUrl("http://08080808.attacker.example/"), false)
+        // lndo.site: Lando public wildcard loopback (apex is a public AWS site)
+        assert.equal(isBlockedUserMediaUrl("http://app.lndo.site/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.lndo.site:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://mysite.lndo.site/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://lndo.site/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://APP.LNDO.SITE/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://app.lndo.site:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://foo.lndo.site/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://app.lndo.site/"), true)
+        // backname.io IPv6 dash (`--` → `::`) is not four hyphen octets
+        assert.equal(isBlockedUserMediaUrl("http://0--1.backname.io/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://0--ffff-a00-1.backname.io/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://0--ffff-7f00-1.backname.io:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://fc00--1.backname.io/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://0--ffff-a00-1.backname.io/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://0--1.backname.io/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://0--ffff-a00-1.backname.io/"), true)
+        // Same IPv6 dash encoder under an unfamiliar suffix
+        assert.equal(isBlockedUserMediaUrl("http://0--1.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://0--ffff-a00-1.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://0--ffff-7f00-1.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://fc00--1.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://fd12-3456-789a-1--1.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://fe80--1.attacker.example/"), true)
+        // GCP IMDS hostname (A 169.254.169.254); not IP-in-name
+        assert.equal(isBlockedUserMediaUrl("http://metadata.goog/"), true)
+        assert.equal(isBlockedUserMediaUrl("https://metadata.goog/computeMetadata/v1/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://metadata.goog/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://metadata.goog/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://metadata.google.internal/"), true)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {
