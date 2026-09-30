@@ -22,6 +22,7 @@ import {
     isSameLivePlayer,
 } from "../../util/livePlayerIdentity.js"
 import { parsePlaylistPlayBody } from "../parsePlaylistParams.js"
+import { mapLivePlayerRaceToHttp } from "../livePlayerRaceHttp.js"
 
 export async function playerPlaylistPlayPOST(
     headers: Headers,
@@ -155,15 +156,8 @@ export async function playerPlaylistPlayPOST(
             // Identity-gate: /stop+/play during resolve installs a successor — never add
             // on that new session (existence-only getPlayer would return it).
             if (!isSameLivePlayer(client.lavalink.getPlayer(guildId), player)) {
-                return {
-                    status: 409,
-                    body: {
-                        ok: false,
-                        error: {
-                            error: "Player stopped before the playlist could be queued. Try again.",
-                        },
-                    },
-                }
+                const race = mapLivePlayerRaceToHttp("playlist")
+                return { status: race.status, body: { ok: false, error: race.error } }
             }
             const enqueue = await enqueueResolvedPlaylistTracks(
                 () => {
@@ -176,15 +170,8 @@ export async function playerPlaylistPlayPOST(
                 shuffle
             )
             if (enqueue === "no_player") {
-                return {
-                    status: 409,
-                    body: {
-                        ok: false,
-                        error: {
-                            error: "Player stopped before the playlist could be queued. Try again.",
-                        },
-                    },
-                }
+                const race = mapLivePlayerRaceToHttp("playlist")
+                return { status: race.status, body: { ok: false, error: race.error } }
             }
 
             const livePlayer = client.lavalink.getPlayer(guildId)
