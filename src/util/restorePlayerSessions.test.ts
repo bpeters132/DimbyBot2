@@ -8,6 +8,7 @@ import {
     shouldDeleteStaleRestoredSession,
     shouldPersistConcurrentAbandonSession,
     shouldPersistRestoredPlayerSession,
+    shouldPreservePriorSnapshotAfterRestoreDefer,
     shouldSkipRestoreHydrateForLivePlayer,
 } from "./restorePlayerSessions.js"
 
@@ -92,6 +93,34 @@ describe("shouldSkipRestoreHydrateForLivePlayer", () => {
         )
         assert.equal(shouldSkipRestoreHydrateForLivePlayer(null), false)
         assert.equal(shouldSkipRestoreHydrateForLivePlayer(undefined), false)
+    })
+})
+
+describe("shouldPreservePriorSnapshotAfterRestoreDefer", () => {
+    it("preserves the fuller snapshot when a concurrent /play filled the player during a deferred voice fetch", () => {
+        assert.equal(
+            shouldPreservePriorSnapshotAfterRestoreDefer({
+                queue: { current: { id: "thin" }, tracks: [] },
+            }),
+            true
+        )
+        assert.equal(
+            shouldPreservePriorSnapshotAfterRestoreDefer({
+                queue: { current: null, tracks: [{ id: "a" }] },
+            }),
+            true
+        )
+    })
+
+    it("does not mark preserve-prior when nothing concurrent landed (later /play may persist)", () => {
+        assert.equal(shouldPreservePriorSnapshotAfterRestoreDefer(null), false)
+        assert.equal(shouldPreservePriorSnapshotAfterRestoreDefer(undefined), false)
+        assert.equal(
+            shouldPreservePriorSnapshotAfterRestoreDefer({
+                queue: { current: null, tracks: [] },
+            }),
+            false
+        )
     })
 })
 

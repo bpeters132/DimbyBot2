@@ -16,6 +16,7 @@ import {
     PREFETCH_UPCOMING_COUNT,
     queueMetadataTrackFromFields,
     queueTrackIdentity,
+    companionRetryApplyMissedFailedTrack,
     retryCompanionPlaybackOnce,
 } from "./youtubePlaybackWindow.js"
 import { isCompanionResolvedTrack } from "./youtubeCompanionPlayback.js"
@@ -803,22 +804,64 @@ describe("skip upcoming + companion retry", () => {
         assert.equal(isCompanionResolvedTrack(successor.queue.current as Track), false)
     })
 
-    it("skips companion retry when live current no longer matches the failed track", async () => {
+    it("returns moved when live current no longer matches the failed track", async () => {
         const failed = youtubeTrack(VIDEO_A)
         ;(failed as { userData?: Record<string, unknown> }).userData = {
             invidiousCompanionResolved: true,
         }
-        const player = mockWindowPlayer("g-retry-mismatch", [], youtubeTrack(VIDEO_B))
+        const next = youtubeTrack(VIDEO_B)
+        const player = mockWindowPlayer("g-retry-mismatch", [], next)
+        let plays = 0
+        ;(player as { play: () => Promise<void> }).play = async () => {
+            plays += 1
+        }
         const result = await retryCompanionPlaybackOnce(
             () => player,
             "g-retry-mismatch",
             failed,
             configWithFetch(companionOkFetch())
         )
-        assert.equal(result, "skip")
+        assert.equal(result, "moved")
+        assert.equal(plays, 0)
         assert.equal(isCompanionRetryUsed(failed), true)
+        assert.equal(player.queue.current, next)
         assert.equal(player.queue.current?.info.identifier, VIDEO_B)
         assert.equal(isCompanionResolvedTrack(player.queue.current as Track), false)
+    })
+
+    it("classifies remint apply miss as moved only when the same player already advanced", () => {
+        assert.equal(
+            companionRetryApplyMissedFailedTrack({
+                sameLivePlayer: true,
+                currentIdentity: "https://youtu.be/b",
+                failedIdentity: "https://youtu.be/a",
+            }),
+            "moved"
+        )
+        assert.equal(
+            companionRetryApplyMissedFailedTrack({
+                sameLivePlayer: true,
+                currentIdentity: "https://youtu.be/a",
+                failedIdentity: "https://youtu.be/a",
+            }),
+            "skip"
+        )
+        assert.equal(
+            companionRetryApplyMissedFailedTrack({
+                sameLivePlayer: true,
+                currentIdentity: null,
+                failedIdentity: "https://youtu.be/a",
+            }),
+            "skip"
+        )
+        assert.equal(
+            companionRetryApplyMissedFailedTrack({
+                sameLivePlayer: false,
+                currentIdentity: "https://youtu.be/b",
+                failedIdentity: "https://youtu.be/a",
+            }),
+            "skip"
+        )
     })
 
     it("marks retry used without affecting a fresh track", () => {
