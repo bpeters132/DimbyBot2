@@ -22,6 +22,11 @@ import {
     createdPlayerOrphanSlotLooksOccupied,
     isSameLivePlayer,
 } from "../../util/livePlayerIdentity.js"
+import {
+    isLiveSearchEnqueueOnExpectedPlayer,
+    mapLivePlayerRaceToHttp,
+} from "../livePlayerRaceHttp.js"
+import { mapSearchAndEnqueuePreflightFailure } from "../searchAndEnqueuePreflight.js"
 
 export type SearchAndEnqueueGuard = Pick<PermissionGuardSuccess, "session">
 
@@ -73,11 +78,7 @@ export async function searchAndEnqueue(
     }
     const guild = client.guilds.cache.get(guildId)
     if (!guild) {
-        return {
-            ok: false,
-            status: 404,
-            error: { error: "Guild not found in bot cache." },
-        }
+        return mapSearchAndEnqueuePreflightFailure("guild_missing")
     }
 
     let member = null
@@ -90,46 +91,26 @@ export async function searchAndEnqueue(
                 requesterId,
                 error,
             })
-            return {
-                ok: false,
-                status: 503,
-                error: { error: "Unable to verify voice state, please try again." },
-            }
+            return mapSearchAndEnqueuePreflightFailure("member_fetch_transient")
         }
     }
     const voiceChannel = member?.voice?.channel
     if (!voiceChannel) {
-        return {
-            ok: false,
-            status: 400,
-            error: { error: "Join a voice channel first." },
-        }
+        return mapSearchAndEnqueuePreflightFailure("not_in_voice")
     }
 
     const textChannelId = await resolveWebDashboardTextChannelId(guild, voiceChannel)
 
     const botUser = client.user
     if (!botUser) {
-        return {
-            ok: false,
-            status: 503,
-            error: { error: "Bot not ready; cannot verify voice permissions." },
-        }
+        return mapSearchAndEnqueuePreflightFailure("bot_not_ready")
     }
     const joinPerms = voiceChannel.permissionsFor(botUser)
     if (!joinPerms) {
-        return {
-            ok: false,
-            status: 403,
-            error: { error: "Could not determine bot permissions for this voice channel." },
-        }
+        return mapSearchAndEnqueuePreflightFailure("join_perms_unknown")
     }
     if (!joinPerms.has(PermissionFlagsBits.Connect) || !joinPerms.has(PermissionFlagsBits.Speak)) {
-        return {
-            ok: false,
-            status: 403,
-            error: { error: "Bot lacks permission to join this voice channel." },
-        }
+        return mapSearchAndEnqueuePreflightFailure("join_perms_denied")
     }
 
     // Refuse takeover while bot occupies another VC (incl. local playback with no Lavalink player).
@@ -137,11 +118,7 @@ export async function searchAndEnqueue(
         const existingPlayer = client.lavalink.getPlayer(guildId)
         const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, existingPlayer)
         if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
-            return {
-                ok: false,
-                status: 403,
-                error: { error: "You need to be in the same voice channel as the bot." },
-            }
+            return mapSearchAndEnqueuePreflightFailure("occupied_voice_mismatch")
         }
     }
 
@@ -221,20 +198,12 @@ export async function searchAndEnqueue(
                             error,
                         }
                     )
-                    return {
-                        ok: false,
-                        status: 503,
-                        error: { error: "Unable to verify voice state, please try again." },
-                    }
+                    return mapSearchAndEnqueuePreflightFailure("member_fetch_transient")
                 }
             }
             const refreshedVoiceEarly = refreshedMemberEarly?.voice?.channel
             if (!refreshedVoiceEarly || refreshedVoiceEarly.id !== voiceChannel.id) {
-                return {
-                    ok: false,
-                    status: 400,
-                    error: { error: "Join a voice channel first." },
-                }
+                return mapSearchAndEnqueuePreflightFailure("not_in_voice")
             }
         }
 
@@ -242,13 +211,7 @@ export async function searchAndEnqueue(
             await ensurePlayerConnected(client, player, voiceChannel)
             if (!isSameLivePlayer(client.lavalink.getPlayer(guildId), player)) {
                 await cleanupCreatedPlayer()
-                return {
-                    ok: false,
-                    status: 409,
-                    error: {
-                        error: "Player stopped before the track could be queued. Try again.",
-                    },
-                }
+                return { ok: false, ...mapLivePlayerRaceToHttp("track") }
             }
             if (createdHere) {
                 let refreshedMember = null
@@ -262,21 +225,13 @@ export async function searchAndEnqueue(
                             error,
                         })
                         await cleanupCreatedPlayer()
-                        return {
-                            ok: false,
-                            status: 503,
-                            error: { error: "Unable to verify voice state, please try again." },
-                        }
+                        return mapSearchAndEnqueuePreflightFailure("member_fetch_transient")
                     }
                 }
                 const refreshedVoiceChannel = refreshedMember?.voice?.channel
                 if (!refreshedVoiceChannel || refreshedVoiceChannel.id !== voiceChannel.id) {
                     await cleanupCreatedPlayer()
-                    return {
-                        ok: false,
-                        status: 400,
-                        error: { error: "Join a voice channel first." },
-                    }
+                    return mapSearchAndEnqueuePreflightFailure("not_in_voice")
                 }
             }
         } catch (err: unknown) {
@@ -295,13 +250,7 @@ export async function searchAndEnqueue(
         if (options?.connectOnly) {
             if (!isSameLivePlayer(client.lavalink.getPlayer(guildId), player)) {
                 await cleanupCreatedPlayer()
-                return {
-                    ok: false,
-                    status: 409,
-                    error: {
-                        error: "Player stopped before the track could be queued. Try again.",
-                    },
-                }
+                return { ok: false, ...mapLivePlayerRaceToHttp("track") }
             }
             return { ok: true, player, playbackStarted: false }
         }
@@ -341,13 +290,7 @@ export async function searchAndEnqueue(
         // Same Player that searched must still own the guild slot — a successor from /stop+/play
         // during search must not receive this request's tracks (existence-only getPlayer is unsafe).
         if (!isSameLivePlayer(client.lavalink.getPlayer(guildId), player)) {
-            return {
-                ok: false,
-                status: 409,
-                error: {
-                    error: "Player stopped before the track could be queued. Try again.",
-                },
-            }
+            return { ok: false, ...mapLivePlayerRaceToHttp("track") }
         }
 
         // Re-resolve under the lock: /stop, Leave, control stop, or web stop can destroy
@@ -378,17 +321,8 @@ export async function searchAndEnqueue(
                 error: { error: "Could not resolve YouTube playback.", details: message },
             }
         }
-        if (
-            enqueued.status === "no_player" ||
-            (enqueued.status === "ok" && !isSameLivePlayer(enqueued.player, searchPlayer))
-        ) {
-            return {
-                ok: false,
-                status: 409,
-                error: {
-                    error: "Player stopped before the track could be queued. Try again.",
-                },
-            }
+        if (!isLiveSearchEnqueueOnExpectedPlayer(enqueued, searchPlayer)) {
+            return { ok: false, ...mapLivePlayerRaceToHttp("track") }
         }
         return {
             ok: true,
