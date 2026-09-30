@@ -408,7 +408,7 @@ export default async (client: BotClient) => {
                     player.guildId,
                     track
                 )
-                if (retried === "retried") {
+                if (retried === "retried" || retried === "moved") {
                     return
                 }
                 // Companion remint awaits; refuse zombie skip/stopPlaying/idle paths that still

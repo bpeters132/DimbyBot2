@@ -81,6 +81,21 @@ export function shouldSkipRestoreHydrateForLivePlayer(
 }
 
 /**
+ * Transient Discord VC fetch defers restore without hydrating. Concurrent `/play` saves are
+ * no-ops until restore-in-progress clears; if the live player already has queue content, the
+ * next save would replace the fuller snapshot unless preserve-prior is set (same contract as
+ * {@link shouldSkipRestoreHydrateForLivePlayer} / #240).
+ *
+ * Do not mark when nothing concurrent landed — a later `/play` after restore has given up
+ * is new user intent and must be allowed to persist.
+ */
+export function shouldPreservePriorSnapshotAfterRestoreDefer(
+    live: RestoreLivePlayer | null | undefined
+): boolean {
+    return shouldSkipRestoreHydrateForLivePlayer(live)
+}
+
+/**
  * Guilds whose DB snapshots must not be overwritten by concurrent `/play` saves until the
  * sequential restore pass finishes — including guilds not yet reached in the loop.
  */
@@ -231,7 +246,10 @@ function resolveTextChannelId(session: PlayerSessionData): string | null {
     return settings?.controlChannelId ?? null
 }
 
-async function restoreSingleSession(client: BotClient, session: PlayerSessionData): Promise<void> {
+async function restoreSingleSession(
+    client: BotClient,
+    session: PlayerSessionData
+): Promise<"completed" | "deferred"> {
     const { guildId, voiceChannelId, snapshot } = session
 
     const existingBeforeRestore = client.lavalink.getPlayer(guildId)
@@ -243,7 +261,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
         client.debug(
             `[playerSession] restore skipped for ${guildId}: live player already has queue content`
         )
-        return
+        return "completed"
     }
 
     const voiceResult = await fetchVoiceChannel(client, guildId, voiceChannelId)
@@ -251,14 +269,20 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
         client.warn(
             `[playerSession] restore deferred for ${guildId}: transient Discord error fetching voice channel ${voiceChannelId}`
         )
-        return
+        // `/play` during this fetch (or during later guilds in the batch) is a no-op save
+        // while restore-in-progress. Mark preserve-prior when a thin live queue already
+        // exists so clearing that guard cannot persist it over the fuller snapshot.
+        if (shouldPreservePriorSnapshotAfterRestoreDefer(client.lavalink.getPlayer(guildId))) {
+            markPlayerSessionPreservePriorSnapshot(guildId)
+        }
+        return "deferred"
     }
     if (voiceResult.status === "missing") {
         client.info(
             `[playerSession] stale session removed for ${guildId}: voice channel ${voiceChannelId} not found`
         )
         await safeDeleteStaleSession(client, session)
-        return
+        return "completed"
     }
     const voiceChannel = voiceResult.channel
 
@@ -268,13 +292,13 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
             `[playerSession] stale session removed for ${guildId}: no humans in VC ${voiceChannelId}`
         )
         await safeDeleteStaleSession(client, session)
-        return
+        return "completed"
     }
 
     const tracksToRestore = [...(snapshot.current ? [snapshot.current] : []), ...snapshot.queue]
     if (tracksToRestore.length === 0) {
         await safeDeleteStaleSession(client, session)
-        return
+        return "completed"
     }
 
     const textChannelId = resolveTextChannelId(session)
@@ -507,6 +531,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
             schedulePlayerSessionSave(playerToPersist)
         }
     }
+    return "completed"
 }
 
 function scheduleControlMessageUpdate(client: BotClient, guildId: string): void {
@@ -540,13 +565,27 @@ export async function restorePlayerSessions(client: BotClient): Promise<boolean>
     for (const id of restoreGuildIds) {
         markPlayerSessionRestoreInProgress(id)
     }
+    const deferredGuildIds: string[] = []
     try {
         for (const session of sessions) {
-            await restoreSingleSession(client, session)
+            const result = await restoreSingleSession(client, session)
+            if (result === "deferred") deferredGuildIds.push(session.guildId)
         }
         return true
     } finally {
+        // `/play` can land after a transient defer but while later guilds are still
+        // restoring (outer restore-in-progress still blocks saves). Re-check live
+        // queues before dropping that guard so a thin session cannot overwrite the
+        // fuller snapshot. Successor `/stop`+`/play` is not this path — forceClear
+        // already deleted the row and must be allowed to persist the new queue.
+        const deferred = new Set(deferredGuildIds)
         for (const id of restoreGuildIds) {
+            if (
+                deferred.has(id) &&
+                shouldPreservePriorSnapshotAfterRestoreDefer(client.lavalink.getPlayer(id))
+            ) {
+                markPlayerSessionPreservePriorSnapshot(id)
+            }
             clearPlayerSessionRestoreInProgress(id)
         }
     }
