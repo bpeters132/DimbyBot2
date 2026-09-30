@@ -151,7 +151,9 @@ export function trimmedHttpUrlQuery(query: string): string | null {
  * Also rejects `link:` / `uri:` / `yt:` / `sc:` / `local:` / … wrappers that
  * lavalink-client strips before treating the remainder as a raw HTTP identifier,
  * lavaplayer `icy://` aliases that would otherwise skip the `https?://` gate,
- * and hyphen-encoded IPv4 labels (`10-0-0-1` or `make-10-0-0-1-rr`) used by bounce DNS.
+ * hyphen-encoded IPv4 labels (`10-0-0-1` or `make-10-0-0-1-rr`) used by bounce DNS,
+ * IPv6 dash-compressed labels (`0--1` → `::1`, `0--ffff-a00-1` → `::ffff:10.0.0.1`),
+ * and well-known IMDS hostnames (`metadata.goog`).
  */
 export function isBlockedUserMediaUrl(query: string): boolean {
     const trimmed = query.trim()
@@ -174,9 +176,12 @@ export function isBlockedUserMediaUrl(query: string): boolean {
 }
 
 /**
- * Public DNS services that resolve `{ip}.service` (or the bare apex) to that IP /
- * loopback. Hostname-string denylists alone miss these; Lavalink `http:true` would
- * still fetch the private destination. Full resolve-and-pin is out of scope (ADR 0004).
+ * Public DNS services that resolve `{ip}.service` (or the bare apex / a wildcard) to
+ * that IP / loopback. Hostname-string denylists alone miss these; Lavalink `http:true`
+ * would still fetch the private destination. Full resolve-and-pin is out of scope
+ * (ADR 0004). `lndo.site` is Lando's public `*.lndo.site` → 127.0.0.1 zone (apex is a
+ * public site). `backname.io` IPv4 hyphen/dot forms are also caught by generic IP
+ * embed checks; the suffix still covers IPv6 dash labels.
  */
 const DNS_BOUNCE_SUFFIXES = [
     "nip.io",
@@ -211,7 +216,12 @@ const DNS_BOUNCE_SUFFIXES = [
     "localhost.cloud",
     "localh.net",
     "rbndr.us",
+    "lndo.site",
+    "backname.io",
 ] as const
+
+/** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
+const IMDS_HOSTS = ["metadata.goog", "metadata.google.internal"] as const
 
 function isBlockedUserMediaHost(hostname: string): boolean {
     const host = hostname
@@ -221,9 +231,18 @@ function isBlockedUserMediaHost(hostname: string): boolean {
     if (host === "localhost" || host.endsWith(".localhost")) return true
     if (isBlockedIpLiteral(host)) return true
     if (!host.includes(".") && !host.includes(":")) return true
+    if (isImdsHost(host)) return true
     if (isDnsBounceHost(host)) return true
     if (hostnameEmbedsBlockedIpv4(host)) return true
     if (hostnameEmbedsBlockedHexIpv4(host)) return true
+    if (hostnameEmbedsBlockedDashIpv6(host)) return true
+    return false
+}
+
+function isImdsHost(host: string): boolean {
+    for (const name of IMDS_HOSTS) {
+        if (host === name || host.endsWith(`.${name}`)) return true
+    }
     return false
 }
 
@@ -251,6 +270,26 @@ function hostnameEmbedsBlockedIpv4(host: string): boolean {
         for (let i = 0; i + 3 < parts.length; i++) {
             const candidate = `${parts[i]}.${parts[i + 1]}.${parts[i + 2]}.${parts[i + 3]}`
             if (isBlockedIpv4(candidate)) return true
+        }
+    }
+    return false
+}
+
+/**
+ * sslip/backname IPv6 dash form: `--` is `::` and remaining `-` are `:`.
+ * `0--1` → `::1`; `0--ffff-a00-1` → `::ffff:10.0.0.1`. IPv4 hyphen octets
+ * (`10-0-0-1`) have no `--` and stay on {@link hostnameEmbedsBlockedIpv4}.
+ */
+function hostnameEmbedsBlockedDashIpv6(host: string): boolean {
+    const labels = host.split(".")
+    for (const label of labels) {
+        if (!label.includes("--")) continue
+        const rebuilt = label.replaceAll("--", "::").replaceAll("-", ":")
+        try {
+            const canonical = new URL(`http://[${rebuilt}]/`).hostname.replace(/^\[|\]$/g, "")
+            if (isBlockedIpLiteral(canonical)) return true
+        } catch {
+            continue
         }
     }
     return false
