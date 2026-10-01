@@ -245,6 +245,12 @@ describe("playlist load type + metadata helpers", () => {
             false
         )
         assert.equal(isPermanentYoutubePlaybackFailure(new Error("fetch failed")), false)
+        assert.equal(
+            isPermanentYoutubePlaybackFailure(
+                new Error("YouTube search failed for Spotify catalog track abc")
+            ),
+            false
+        )
     })
 
     it("normalizes queue track identity for case and trailing slashes", () => {
@@ -328,6 +334,28 @@ describe("ensureCurrentPlayable + prefetch window", () => {
         )
         assert.equal(result, "empty")
         assert.equal(player.queue.current, null)
+    })
+
+    it("defers Spotify catalog current when Lavalink YouTube search throws", async () => {
+        const meta = queueMetadataTrackFromFields({
+            title: "Worth it",
+            author: "Outr3ach",
+            uri: "https://open.spotify.com/track/4hqIKGKzDVJXCnD80y2fyn",
+            duration: 259000,
+            isrc: "USRC17600001",
+        })
+        assert.ok(meta)
+        const player = mockWindowPlayer("g-spotify-throw", [], meta)
+        player.search = async () => {
+            throw new Error("ECONNRESET")
+        }
+        const result = await ensureCurrentPlayable(
+            () => player,
+            "g-spotify-throw",
+            configWithFetch(companionOkFetch())
+        )
+        assert.equal(result, "deferred")
+        assert.equal(player.queue.current, meta)
     })
 
     it("skips permanently unplayable head items and starts the next playable", async () => {

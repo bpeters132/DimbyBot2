@@ -29,11 +29,27 @@ import {
 import { countHumanMembers } from "./voiceChannelMembers.js"
 
 /**
- * Whether a successful partial hydrate may overwrite the persisted session snapshot.
- * Transient resolve failures must keep the prior full snapshot on disk.
+ * Live current + upcoming length. Used so restore persist can detect JIT prepare drops.
  */
-export function shouldPersistRestoredPlayerSession(transientFailures: number): boolean {
-    return transientFailures <= 0
+export function restoredLiveTrackCount(player: {
+    queue: { current?: unknown; tracks: { length: number } }
+}): number {
+    return (player.queue.current ? 1 : 0) + player.queue.tracks.length
+}
+
+/**
+ * Whether a successful hydrate may overwrite the persisted session snapshot.
+ * Transient resolve failures and JIT playback-window drops (thinned live queue)
+ * must keep the prior full snapshot on disk.
+ */
+export function shouldPersistRestoredPlayerSession(options: {
+    transientFailures: number
+    storedPlayableCount: number
+    liveTrackCount: number
+}): boolean {
+    if (options.transientFailures > 0) return false
+    if (options.liveTrackCount < options.storedPlayableCount) return false
+    return true
 }
 
 /**
@@ -474,17 +490,30 @@ async function restoreSingleSession(
             scheduleControlMessageUpdate(client, guildId)
             playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
             // schedulePlayerSessionSave is a no-op while restore-in-progress; persist after clear.
-            // Skip save when some tracks failed transiently — otherwise a partial hydrate would
-            // permanently drop those entries from the session snapshot. Mark preserve *before*
+            // Skip save when some tracks failed transiently OR JIT prepare dropped heads
+            // (false-permanent catalog/search misses during node warmup). Otherwise a
+            // thinned live queue would replace the fuller DB row. Mark preserve *before*
             // clearPlayerSessionRestoreInProgress so trackStart/trackEnd/shutdown/idle clear
             // cannot race and wipe the prior full row.
-            if (shouldPersistRestoredPlayerSession(transientTotal)) {
+            const liveCount = restoredLiveTrackCount(player)
+            if (
+                shouldPersistRestoredPlayerSession({
+                    transientFailures: transientTotal,
+                    storedPlayableCount: playable.length,
+                    liveTrackCount: liveCount,
+                })
+            ) {
                 clearPlayerSessionPreservePriorSnapshot(guildId)
                 playerToPersist = player
             } else {
                 markPlayerSessionPreservePriorSnapshot(guildId)
+                const dropped = Math.max(0, playable.length - liveCount)
                 client.warn(
-                    `[playerSession] restore for ${guildId}: skipping session save after ${transientTotal} transient failure(s); preserving prior snapshot`
+                    `[playerSession] restore for ${guildId}: skipping session save` +
+                        (transientTotal > 0
+                            ? ` after ${transientTotal} transient failure(s)`
+                            : ` after JIT prepare dropped ${dropped} track(s)`) +
+                        "; preserving prior snapshot"
                 )
             }
         })

@@ -7,6 +7,7 @@ import {
     shouldAbandonRestoreForConcurrentQueue,
     shouldDeleteStaleRestoredSession,
     shouldPersistConcurrentAbandonSession,
+    restoredLiveTrackCount,
     shouldPersistRestoredPlayerSession,
     shouldPreservePriorSnapshotAfterRestoreDefer,
     shouldSkipRestoreHydrateForLivePlayer,
@@ -29,15 +30,67 @@ describe("isStaleSessionDiscordError", () => {
     })
 })
 
+describe("restoredLiveTrackCount", () => {
+    it("counts current plus upcoming", () => {
+        assert.equal(
+            restoredLiveTrackCount({ queue: { current: { id: "now" }, tracks: [{}, {}] } }),
+            3
+        )
+        assert.equal(restoredLiveTrackCount({ queue: { current: null, tracks: [{}, {}] } }), 2)
+        assert.equal(restoredLiveTrackCount({ queue: { current: { id: "now" }, tracks: [] } }), 1)
+        assert.equal(restoredLiveTrackCount({ queue: { current: null, tracks: [] } }), 0)
+    })
+})
+
 describe("shouldPersistRestoredPlayerSession", () => {
-    it("allows save when every track resolved (no transient failures)", () => {
-        assert.equal(shouldPersistRestoredPlayerSession(0), true)
+    it("allows save when every stored track is still on the live player", () => {
+        assert.equal(
+            shouldPersistRestoredPlayerSession({
+                transientFailures: 0,
+                storedPlayableCount: 5,
+                liveTrackCount: 5,
+            }),
+            true
+        )
     })
 
     it("blocks save when at least one track failed transiently (partial hydrate)", () => {
         // One resolved + one transient failure must not overwrite the full prior snapshot.
-        assert.equal(shouldPersistRestoredPlayerSession(1), false)
-        assert.equal(shouldPersistRestoredPlayerSession(2), false)
+        assert.equal(
+            shouldPersistRestoredPlayerSession({
+                transientFailures: 1,
+                storedPlayableCount: 5,
+                liveTrackCount: 4,
+            }),
+            false
+        )
+        assert.equal(
+            shouldPersistRestoredPlayerSession({
+                transientFailures: 2,
+                storedPlayableCount: 5,
+                liveTrackCount: 5,
+            }),
+            false
+        )
+    })
+
+    it("blocks save when JIT prepare dropped heads (thinned live queue must not wipe DB)", () => {
+        assert.equal(
+            shouldPersistRestoredPlayerSession({
+                transientFailures: 0,
+                storedPlayableCount: 50,
+                liveTrackCount: 49,
+            }),
+            false
+        )
+        assert.equal(
+            shouldPersistRestoredPlayerSession({
+                transientFailures: 0,
+                storedPlayableCount: 50,
+                liveTrackCount: 0,
+            }),
+            false
+        )
     })
 })
 
