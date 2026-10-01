@@ -151,7 +151,8 @@ export function trimmedHttpUrlQuery(query: string): string | null {
  * Also rejects `link:` / `uri:` / `yt:` / `sc:` / `local:` / … wrappers that
  * lavalink-client strips before treating the remainder as a raw HTTP identifier,
  * lavaplayer `icy://` aliases that would otherwise skip the `https?://` gate,
- * and hyphen-encoded IPv4 labels (`10-0-0-1` or `make-10-0-0-1-rr`) used by bounce DNS.
+ * hyphen-encoded IPv4 labels (`10-0-0-1` or `make-10-0-0-1-rr`) used by bounce DNS,
+ * and compact IPv4-mapped labels (`ffff-0a000001` → 10.0.0.1) used by sslip-style bounce DNS.
  */
 export function isBlockedUserMediaUrl(query: string): boolean {
     const trimmed = query.trim()
@@ -174,9 +175,13 @@ export function isBlockedUserMediaUrl(query: string): boolean {
 }
 
 /**
- * Public DNS services that resolve `{ip}.service` (or the bare apex) to that IP /
- * loopback. Hostname-string denylists alone miss these; Lavalink `http:true` would
- * still fetch the private destination. Full resolve-and-pin is out of scope (ADR 0004).
+ * Public DNS services that resolve `{ip}.service` (or the bare apex / a wildcard) to
+ * that IP / loopback. Hostname-string denylists alone miss these; Lavalink `http:true`
+ * would still fetch the private destination. Full resolve-and-pin is out of scope
+ * (ADR 0004). `ddev.site` is DDEV's public `*.ddev.site` → 127.0.0.1 zone. `docksal.site`
+ * wildcards resolve to 192.168.64.100 (apex is a public site). `docker.amazee.io` is
+ * Lagoon/Pygmy's loopback zone (do not deny `amazee.io`). `lagoon.cloud` wildcards
+ * resolve to 192.168.10.11.
  */
 const DNS_BOUNCE_SUFFIXES = [
     "nip.io",
@@ -211,6 +216,10 @@ const DNS_BOUNCE_SUFFIXES = [
     "localhost.cloud",
     "localh.net",
     "rbndr.us",
+    "ddev.site",
+    "docksal.site",
+    "docker.amazee.io",
+    "lagoon.cloud",
 ] as const
 
 function isBlockedUserMediaHost(hostname: string): boolean {
@@ -224,6 +233,7 @@ function isBlockedUserMediaHost(hostname: string): boolean {
     if (isDnsBounceHost(host)) return true
     if (hostnameEmbedsBlockedIpv4(host)) return true
     if (hostnameEmbedsBlockedHexIpv4(host)) return true
+    if (hostnameEmbedsBlockedMappedHexIpv4(host)) return true
     return false
 }
 
@@ -251,6 +261,28 @@ function hostnameEmbedsBlockedIpv4(host: string): boolean {
         for (let i = 0; i + 3 < parts.length; i++) {
             const candidate = `${parts[i]}.${parts[i + 1]}.${parts[i + 2]}.${parts[i + 3]}`
             if (isBlockedIpv4(candidate)) return true
+        }
+    }
+    return false
+}
+
+/**
+ * sslip-style compact IPv4-mapped label: `ffff-` plus 8 hex digits
+ * (`ffff-0a000001` → 10.0.0.1). Not four decimal hyphen-octets and not a
+ * standalone 8-char hex DNS label, so the other embed checks miss it.
+ */
+function hostnameEmbedsBlockedMappedHexIpv4(host: string): boolean {
+    const labels = host.split(".")
+    for (const label of labels) {
+        const parts = label.split("-")
+        for (let i = 0; i + 1 < parts.length; i++) {
+            if (parts[i]!.toLowerCase() !== "ffff") continue
+            const hex = parts[i + 1]!
+            if (!/^[0-9a-f]{8}$/i.test(hex)) continue
+            const n = Number.parseInt(hex, 16)
+            if (!Number.isInteger(n) || n < 0 || n > 0xffffffff) continue
+            const ip = `${(n >>> 24) & 255}.${(n >>> 16) & 255}.${(n >>> 8) & 255}.${n & 255}`
+            if (isBlockedIpv4(ip)) return true
         }
     }
     return false
