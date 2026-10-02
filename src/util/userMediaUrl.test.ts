@@ -296,6 +296,18 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("link:http://bs-local.com/"), true)
         assert.equal(isBlockedUserMediaUrl("icy://bs-local.com/"), true)
         assert.equal(isBlockedUserMediaUrl("ytsearch:http://bs-local.com/"), true)
+
+        // backloop.dev: public wildcard loopback. Apex is a public website
+        // (suffix-deny tradeoff like localhost.tv).
+        assert.equal(isBlockedUserMediaUrl("http://foo.backloop.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://www.backloop.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://app.backloop.dev:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://api.backloop.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://backloop.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://FOO.BACKLOOP.DEV/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://foo.backloop.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://foo.backloop.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://foo.backloop.dev/"), true)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {
