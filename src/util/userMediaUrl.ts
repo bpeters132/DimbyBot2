@@ -211,6 +211,8 @@ const DNS_BOUNCE_SUFFIXES = [
     "localhost.cloud",
     "localh.net",
     "rbndr.us",
+    // BrowserStack Local: documented localhost alias (apex → 127.0.0.1 on public DNS).
+    "bs-local.com",
 ] as const
 
 function isBlockedUserMediaHost(hostname: string): boolean {
