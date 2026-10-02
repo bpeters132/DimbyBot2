@@ -33,7 +33,7 @@ import {
     searchTracksForPlaylist,
 } from "../../util/playlistQueue.js"
 import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "../../util/userMediaUrl.js"
-import { parseEnqueueQuery } from "../parseBotApiParams.js"
+import { parseEnqueueQuery, parsePreferredGuildId } from "../parseBotApiParams.js"
 import {
     parseNewPosition,
     parsePlaylistCreateName,
@@ -431,8 +431,7 @@ export async function playlistTracksFromQueryPOST(
             },
         }
     }
-    const preferredGuildId =
-        typeof body.guildId === "string" && body.guildId.trim() ? body.guildId.trim() : undefined
+    const preferredGuildId = parsePreferredGuildId(body.guildId)
 
     const client = getBotClient()
     const player = pickPlayerForPlaylistSearch(client.lavalink, preferredGuildId)

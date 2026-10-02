@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { randomUUID } from "node:crypto"
+import { resolveBotApiProxyFetchFailure } from "@/lib/bot-api-proxy-fetch-failure"
 import { readBotApiProxyTimeoutMs } from "@/lib/bot-api-timeout"
 import { getBotApiOrigin } from "@/server/bot-api-origin"
 import { isBotApiVerbose, logBotApiVerbose } from "@/server/bot-api-verbose"
@@ -106,28 +107,16 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
         }
         return new NextResponse(body, { status: upstream.status, headers: responseHeaders })
     } catch (e) {
-        const isAbort =
-            e instanceof DOMException
-                ? e.name === "AbortError"
-                : e instanceof Error && e.name === "AbortError"
+        const failure = resolveBotApiProxyFetchFailure(e)
         const message = e instanceof Error ? e.message : "Fetch failed"
         logBotApiVerbose("proxyBotApi ✖ fetch threw", {
             method,
             targetUrl,
             ms: Date.now() - started,
             error: message,
-            timeout: isAbort,
+            timeout: failure.kind === "timeout",
         })
-        return NextResponse.json(
-            {
-                ok: false,
-                error: isAbort ? "Bot API timeout" : "Bot API unreachable",
-                details: isAbort
-                    ? "Upstream bot API request timed out."
-                    : "Upstream bot API request failed.",
-            },
-            { status: isAbort ? 504 : 502 }
-        )
+        return NextResponse.json(failure.body, { status: failure.status })
     } finally {
         clearTimeout(timeoutHandle)
     }
