@@ -211,6 +211,11 @@ const DNS_BOUNCE_SUFFIXES = [
     "localhost.cloud",
     "localh.net",
     "rbndr.us",
+    // BrowserStack Local: documented localhost alias (apex → 127.0.0.1 on public DNS).
+    "bs-local.com",
+    // backloop.dev: public wildcard loopback. Apex is a public website
+    // (suffix-deny tradeoff like localhost.tv).
+    "backloop.dev",
 ] as const
 
 function isBlockedUserMediaHost(hostname: string): boolean {
