@@ -228,6 +228,9 @@ const DNS_BOUNCE_SUFFIXES = [
     "lagoon.cloud",
     // BrowserStack Local: documented localhost alias (apex → 127.0.0.1 on public DNS).
     "bs-local.com",
+    // backloop.dev: public wildcard loopback. Apex is a public website
+    // (suffix-deny tradeoff like localhost.tv).
+    "backloop.dev",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
