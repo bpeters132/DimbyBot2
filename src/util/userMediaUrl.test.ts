@@ -360,6 +360,16 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://ffff-a9fea9fe.attacker.example/"), true)
         // Public compact-mapped 8.8.8.8 must stay allowed
         assert.equal(isBlockedUserMediaUrl("http://ffff-08080808.attacker.example/"), false)
+        // BrowserStack Local: documented localhost alias (apex → 127.0.0.1 on public DNS).
+        // Wildcards under bs-local.com are empty today; suffix deny still covers them.
+        assert.equal(isBlockedUserMediaUrl("http://bs-local.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://bs-local.com:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://www.bs-local.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.bs-local.com:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://BS-LOCAL.COM/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://bs-local.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://bs-local.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://bs-local.com/"), true)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {

@@ -226,6 +226,8 @@ const DNS_BOUNCE_SUFFIXES = [
     "docksal.site",
     "docker.amazee.io",
     "lagoon.cloud",
+    // BrowserStack Local: documented localhost alias (apex → 127.0.0.1 on public DNS).
+    "bs-local.com",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
