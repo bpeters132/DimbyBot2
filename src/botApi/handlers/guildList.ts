@@ -7,6 +7,7 @@ import { resolveDiscordUserSnowflake } from "../../shared/discord-user-id.js"
 import { snapshotGuildListPlayer } from "../../shared/player-state.js"
 import { tryGetBotClient } from "../../lib/botClientRegistry.js"
 import { mapDiscordGuildListFailureStatus } from "../guildListDiscordStatus.js"
+import { mapGuildListSetupFailure } from "../guildListSetupFailure.js"
 import type { ApiResponse } from "../../types/index.js"
 import type { GuildListResponse } from "../../types/web.js"
 
@@ -38,24 +39,26 @@ export async function guildListGET(
         } else {
             console.error("[guildListGET] getAccessToken threw", { message })
         }
+        const mapped = mapGuildListSetupFailure("access_token_threw")
         return {
-            status: 500,
+            status: mapped.status,
             body: {
                 ok: false,
                 error: {
-                    error: "Failed to retrieve Discord access token.",
-                    details: "Internal server error.",
+                    error: mapped.error,
+                    details: mapped.details,
                 },
             },
         }
     }
     const accessToken = accessTokenResult?.accessToken
     if (!accessToken) {
+        const mapped = mapGuildListSetupFailure("access_token_missing")
         return {
-            status: 403,
+            status: mapped.status,
             body: {
                 ok: false,
-                error: { error: "Forbidden", details: "Missing Discord access token." },
+                error: { error: mapped.error, details: mapped.details },
             },
         }
     }
@@ -71,13 +74,14 @@ export async function guildListGET(
         } else {
             console.error("[guildListGET] fetchDiscordUserGuilds threw", { message })
         }
+        const mapped = mapGuildListSetupFailure("discord_guilds_threw")
         return {
-            status: 502,
+            status: mapped.status,
             body: {
                 ok: false,
                 error: {
-                    error: "Discord API request failed.",
-                    details: "Discord API request failed.",
+                    error: mapped.error,
+                    details: mapped.details,
                 },
             },
         }
@@ -97,14 +101,14 @@ export async function guildListGET(
 
     const botClient = tryGetBotClient()
     if (!botClient) {
+        const mapped = mapGuildListSetupFailure("bot_not_ready")
         return {
-            status: 503,
+            status: mapped.status,
             body: {
                 ok: false,
                 error: {
-                    error: "Bot is starting up",
-                    details:
-                        "The Discord bot is not connected yet, so mutual servers cannot be listed. Try again in a moment.",
+                    error: mapped.error,
+                    details: mapped.details,
                 },
             },
         }
