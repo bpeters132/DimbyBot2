@@ -285,6 +285,17 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://a9fea9fe.attacker.example/"), true)
         // Public hex IPv4 8.8.8.8 must stay allowed
         assert.equal(isBlockedUserMediaUrl("http://08080808.attacker.example/"), false)
+        // devlocal.me: public wildcard loopback (apex has no A; www/foo/app → 127.0.0.1)
+        assert.equal(isBlockedUserMediaUrl("http://foo.devlocal.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://www.devlocal.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://app.devlocal.me:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://api.devlocal.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://mysite.devlocal.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://bar.foo.devlocal.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://devlocal.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://foo.devlocal.me:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://www.devlocal.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://foo.devlocal.me/"), true)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {

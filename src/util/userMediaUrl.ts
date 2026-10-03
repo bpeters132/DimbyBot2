@@ -211,6 +211,8 @@ const DNS_BOUNCE_SUFFIXES = [
     "localhost.cloud",
     "localh.net",
     "rbndr.us",
+    // Public wildcard loopback (apex has no A record today; suffix still covers it).
+    "devlocal.me",
 ] as const
 
 function isBlockedUserMediaHost(hostname: string): boolean {
