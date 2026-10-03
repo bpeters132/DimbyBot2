@@ -29,6 +29,11 @@ import {
     beginLocalPlaySessionHandoff,
     type LocalPlaySessionHandoff,
 } from "./localPlaySessionHandoff.js"
+import {
+    isLocalPlayCancelledByEpoch,
+    nextLocalPlayCancelEpoch,
+    readLocalPlayCancelEpoch,
+} from "./localPlayCancelEpoch.js"
 
 const activeLocalPlayers = new Map<string, ActiveLocalPlayer>()
 const pendingLocalPlayGuildIds = new Set<string>()
@@ -42,7 +47,7 @@ const pendingLocalPlayCancelEpochByGuild = new Map<string, number>()
 export function cancelPendingLocalPlay(guildId: string): void {
     pendingLocalPlayCancelEpochByGuild.set(
         guildId,
-        (pendingLocalPlayCancelEpochByGuild.get(guildId) ?? 0) + 1
+        nextLocalPlayCancelEpoch(pendingLocalPlayCancelEpochByGuild.get(guildId))
     )
 }
 
@@ -128,7 +133,9 @@ export async function playLocalFile(
     }
 
     pendingLocalPlayGuildIds.add(guildId)
-    const cancelEpochAtStart = pendingLocalPlayCancelEpochByGuild.get(guildId) ?? 0
+    const cancelEpochAtStart = readLocalPlayCancelEpoch(
+        pendingLocalPlayCancelEpochByGuild.get(guildId)
+    )
 
     // Handoff (flush/destroy) can throw before the join try — keep the pending clear in
     // finally so a DB blip cannot permanently poison local play for this guild.
@@ -139,7 +146,12 @@ export async function playLocalFile(
         const abortIfCancelled = async (
             connection?: VoiceConnection
         ): Promise<QueryPlayResult | null> => {
-            if ((pendingLocalPlayCancelEpochByGuild.get(guildId) ?? 0) === cancelEpochAtStart) {
+            if (
+                !isLocalPlayCancelledByEpoch(
+                    pendingLocalPlayCancelEpochByGuild.get(guildId),
+                    cancelEpochAtStart
+                )
+            ) {
                 return null
             }
             if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
