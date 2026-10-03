@@ -10,6 +10,7 @@ import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 import { parseQueueIndex, parseQueueReorderNewIndex } from "../parseBotApiParams.js"
 import { clampQueueReorderInsertIndex } from "../queueReorderInsert.js"
+import { mapQueueIndexLockFailure } from "../queueIndexLockFailure.js"
 
 export async function queueIndexDELETE(
     headers: Headers,
@@ -49,15 +50,13 @@ export async function queueIndexDELETE(
             return { ok: true as const }
         })
         if (!removeResult.ok) {
+            const mapped = mapQueueIndexLockFailure(removeResult.reason)
             return {
-                status: 404,
+                status: mapped.status,
                 body: {
                     ok: false,
                     error: {
-                        error:
-                            removeResult.reason === "no_player"
-                                ? "No active player for this guild."
-                                : "Queue index out of range.",
+                        error: mapped.error,
                     },
                 },
             }
@@ -129,16 +128,16 @@ export async function queueIndexPATCH(
         const reorderResult = await withGuildPlayerQueueLock(guildId, async () => {
             const live = client.lavalink.getPlayer(guildId)
             if (!live) {
-                return { ok: false as const, error: "No active player for this guild." }
+                return { ok: false as const, reason: "no_player" as const }
             }
             const trackCount = live.queue.tracks.length
             if (sourceIndex >= trackCount || destinationIndex >= trackCount) {
-                return { ok: false as const, error: "Queue index out of range." }
+                return { ok: false as const, reason: "out_of_range" as const }
             }
 
             const [track] = await live.queue.splice(sourceIndex, 1)
             if (!track) {
-                return { ok: false as const, error: "Queue index out of range." }
+                return { ok: false as const, reason: "out_of_range" as const }
             }
             const lenAfterRemove = live.queue.tracks.length
             const insertIndex = clampQueueReorderInsertIndex(destinationIndex, lenAfterRemove)
@@ -177,9 +176,10 @@ export async function queueIndexPATCH(
         })
 
         if (!reorderResult.ok) {
+            const mapped = mapQueueIndexLockFailure(reorderResult.reason)
             return {
-                status: 404,
-                body: { ok: false, error: { error: reorderResult.error } },
+                status: mapped.status,
+                body: { ok: false, error: { error: mapped.error } },
             }
         }
 
