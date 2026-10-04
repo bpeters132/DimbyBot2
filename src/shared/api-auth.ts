@@ -18,6 +18,11 @@ import { webPlayerDebug, webPlayerWarn } from "./web-player-debug-log.js"
 import { getBotApiOrigin } from "./bot-api-origin.js"
 import {
     applyPermissionSnapshotSessionCheck,
+    mapDashboardPermissionSnapshotMalformedJson,
+    mapDashboardPermissionSnapshotNonJsonResponse,
+    mapDashboardPermissionSnapshotOriginFailure,
+    mapDashboardPermissionSnapshotResolutionFailure,
+    mapDashboardPermissionSnapshotUnreachable,
     normalizeDashboardPermissionSnapshotResponse,
 } from "./dashboard-permission-snapshot.js"
 import { decideAdminAccess } from "./admin-access-decision.js"
@@ -316,13 +321,7 @@ export async function finishGuildDashboardPermissionSnapshot(
             "[api-auth] finishGuildDashboardPermissionSnapshot permission resolution failed:",
             msg
         )
-        return {
-            ok: false,
-            status: 503,
-            error: "Permission check unavailable",
-            details:
-                "Could not load dashboard permissions for this server. Try again shortly or refresh the page.",
-        }
+        return mapDashboardPermissionSnapshotResolutionFailure()
     }
 }
 
@@ -343,23 +342,11 @@ async function fetchGuildDashboardPermissionSnapshotFromBot(
             guildId,
             message: msg,
         })
-        return {
-            ok: false,
-            status: 503,
-            error: "Bot API misconfigured",
-            details:
-                "API_PROXY_TARGET is invalid. Set it to the bot HTTP origin (origin only, no path).",
-        }
+        return mapDashboardPermissionSnapshotOriginFailure("invalid")
     }
 
     if (!origin) {
-        return {
-            ok: false,
-            status: 503,
-            error: "Bot API not configured",
-            details:
-                "Set API_PROXY_TARGET to your bot HTTP origin (e.g. http://localhost:3001 locally, or http://dimbybot:3001 in Docker).",
-        }
+        return mapDashboardPermissionSnapshotOriginFailure("unset")
     }
 
     const url = `${origin}/api/guilds/${encodeURIComponent(guildId)}/dashboard-permissions`
@@ -384,13 +371,7 @@ async function fetchGuildDashboardPermissionSnapshotFromBot(
             guildId,
             message: msg,
         })
-        return {
-            ok: false,
-            status: 503,
-            error: "Bot API unreachable",
-            details:
-                "Could not reach the bot HTTP server for permission data. Confirm the bot is running and API_PROXY_TARGET matches BOT_API_PORT.",
-        }
+        return mapDashboardPermissionSnapshotUnreachable()
     }
 
     const ct = res.headers.get("content-type") ?? ""
@@ -400,18 +381,7 @@ async function fetchGuildDashboardPermissionSnapshotFromBot(
             status: res.status,
             contentType: ct || undefined,
         })
-        return {
-            ok: false,
-            status: res.status >= 400 ? res.status : 502,
-            error:
-                res.status === 404
-                    ? "Dashboard permission route not found"
-                    : "Invalid bot response",
-            details:
-                res.status === 404
-                    ? "The bot process may be running an older build without GET /api/guilds/:guildId/dashboard-permissions — rebuild the bot (yarn build:bot) and restart it."
-                    : "Expected JSON from the bot API for dashboard permissions.",
-        }
+        return mapDashboardPermissionSnapshotNonJsonResponse(res.status)
     }
 
     let parsed: unknown
@@ -422,12 +392,7 @@ async function fetchGuildDashboardPermissionSnapshotFromBot(
             guildId,
             status: res.status,
         })
-        return {
-            ok: false,
-            status: res.status >= 400 ? res.status : 502,
-            error: "Invalid bot response",
-            details: "The bot API returned malformed JSON for dashboard permissions.",
-        }
+        return mapDashboardPermissionSnapshotMalformedJson(res.status)
     }
 
     const normalized = normalizeDashboardPermissionSnapshotResponse(parsed, res.status)

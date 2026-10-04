@@ -3,6 +3,12 @@ import { describe, it } from "node:test"
 import { WebPermission } from "./permissions.js"
 import {
     applyPermissionSnapshotSessionCheck,
+    dashboardPermissionSnapshotUpstreamStatus,
+    mapDashboardPermissionSnapshotMalformedJson,
+    mapDashboardPermissionSnapshotNonJsonResponse,
+    mapDashboardPermissionSnapshotOriginFailure,
+    mapDashboardPermissionSnapshotResolutionFailure,
+    mapDashboardPermissionSnapshotUnreachable,
     normalizeDashboardPermissionSnapshotResponse,
 } from "./dashboard-permission-snapshot.js"
 
@@ -169,5 +175,109 @@ describe("applyPermissionSnapshotSessionCheck", () => {
             error: "Bot API unreachable",
         }
         assert.equal(applyPermissionSnapshotSessionCheck("111", upstream), upstream)
+    })
+})
+
+describe("mapDashboardPermissionSnapshotOriginFailure", () => {
+    it("maps invalid vs unset API_PROXY_TARGET to distinct 503 copy", () => {
+        assert.deepEqual(mapDashboardPermissionSnapshotOriginFailure("invalid"), {
+            ok: false,
+            status: 503,
+            error: "Bot API misconfigured",
+            details:
+                "API_PROXY_TARGET is invalid. Set it to the bot HTTP origin (origin only, no path).",
+        })
+        const unset = mapDashboardPermissionSnapshotOriginFailure("unset")
+        assert.deepEqual(unset, {
+            ok: false,
+            status: 503,
+            error: "Bot API not configured",
+            details:
+                "Set API_PROXY_TARGET to your bot HTTP origin (e.g. http://localhost:3001 locally, or http://dimbybot:3001 in Docker).",
+        })
+        assert.notEqual(mapDashboardPermissionSnapshotOriginFailure("invalid").error, unset.error)
+    })
+})
+
+describe("mapDashboardPermissionSnapshotUnreachable", () => {
+    it("keeps a thrown upstream fetch as 503, not the serverFetchBot 502", () => {
+        const out = mapDashboardPermissionSnapshotUnreachable()
+        assert.deepEqual(out, {
+            ok: false,
+            status: 503,
+            error: "Bot API unreachable",
+            details:
+                "Could not reach the bot HTTP server for permission data. Confirm the bot is running and API_PROXY_TARGET matches BOT_API_PORT.",
+        })
+        assert.notEqual(out.status, 502)
+        assert.notEqual(out.error, "Bot API misconfigured")
+        assert.notEqual(out.error, "Bot API not configured")
+    })
+})
+
+describe("dashboardPermissionSnapshotUpstreamStatus", () => {
+    it("preserves 4xx/5xx and collapses success-range statuses to 502", () => {
+        assert.equal(dashboardPermissionSnapshotUpstreamStatus(404), 404)
+        assert.equal(dashboardPermissionSnapshotUpstreamStatus(500), 500)
+        assert.equal(dashboardPermissionSnapshotUpstreamStatus(200), 502)
+        assert.equal(dashboardPermissionSnapshotUpstreamStatus(0), 502)
+    })
+})
+
+describe("mapDashboardPermissionSnapshotNonJsonResponse", () => {
+    it("keeps HTTP 404 copy for an older bot build missing the route", () => {
+        assert.deepEqual(mapDashboardPermissionSnapshotNonJsonResponse(404), {
+            ok: false,
+            status: 404,
+            error: "Dashboard permission route not found",
+            details:
+                "The bot process may be running an older build without GET /api/guilds/:guildId/dashboard-permissions — rebuild the bot (yarn build:bot) and restart it.",
+        })
+    })
+
+    it("maps other non-JSON responses to Invalid bot response and 502 when HTTP is ok", () => {
+        assert.deepEqual(mapDashboardPermissionSnapshotNonJsonResponse(200), {
+            ok: false,
+            status: 502,
+            error: "Invalid bot response",
+            details: "Expected JSON from the bot API for dashboard permissions.",
+        })
+        const serverError = mapDashboardPermissionSnapshotNonJsonResponse(500)
+        assert.equal(serverError.status, 500)
+        assert.equal(serverError.error, "Invalid bot response")
+        assert.notEqual(serverError.error, "Dashboard permission route not found")
+    })
+})
+
+describe("mapDashboardPermissionSnapshotMalformedJson", () => {
+    it("keeps the HTTP status when it is an error and uses 502 otherwise", () => {
+        assert.deepEqual(mapDashboardPermissionSnapshotMalformedJson(502), {
+            ok: false,
+            status: 502,
+            error: "Invalid bot response",
+            details: "The bot API returned malformed JSON for dashboard permissions.",
+        })
+        assert.equal(mapDashboardPermissionSnapshotMalformedJson(200).status, 502)
+        assert.equal(mapDashboardPermissionSnapshotMalformedJson(404).status, 404)
+        assert.notEqual(
+            mapDashboardPermissionSnapshotMalformedJson(404).error,
+            "Dashboard permission route not found"
+        )
+    })
+})
+
+describe("mapDashboardPermissionSnapshotResolutionFailure", () => {
+    it("maps an in-process permission throw to 503 Permission check unavailable", () => {
+        const out = mapDashboardPermissionSnapshotResolutionFailure()
+        assert.deepEqual(out, {
+            ok: false,
+            status: 503,
+            error: "Permission check unavailable",
+            details:
+                "Could not load dashboard permissions for this server. Try again shortly or refresh the page.",
+        })
+        assert.notEqual(out.error, "Bot not ready")
+        assert.notEqual(out.error, "Service unavailable")
+        assert.notEqual(out.error, "Bot API unreachable")
     })
 })
