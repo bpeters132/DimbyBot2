@@ -1,6 +1,102 @@
 import { WebPermission } from "./permissions.js"
 import type { GuildDashboardSnapshotResult } from "../types/web.js"
 
+type SnapshotFailure = Extract<GuildDashboardSnapshotResult, { ok: false }>
+
+export type DashboardPermissionSnapshotOriginKind = "invalid" | "unset"
+
+/** Upstream HTTP status when the bot answered but the body cannot be used as JSON. */
+export function dashboardPermissionSnapshotUpstreamStatus(httpStatus: number): number {
+    return httpStatus >= 400 ? httpStatus : 502
+}
+
+/**
+ * Maps a missing vs invalid `API_PROXY_TARGET` when the Dashboard loads permissions from the bot.
+ * Both are 503; copy must stay distinct from {@link mapDashboardPermissionSnapshotUnreachable}
+ * and from `serverFetchBot`'s nested origin envelope.
+ */
+export function mapDashboardPermissionSnapshotOriginFailure(
+    kind: DashboardPermissionSnapshotOriginKind
+): SnapshotFailure {
+    if (kind === "invalid") {
+        return {
+            ok: false,
+            status: 503,
+            error: "Bot API misconfigured",
+            details:
+                "API_PROXY_TARGET is invalid. Set it to the bot HTTP origin (origin only, no path).",
+        }
+    }
+    return {
+        ok: false,
+        status: 503,
+        error: "Bot API not configured",
+        details:
+            "Set API_PROXY_TARGET to your bot HTTP origin (e.g. http://localhost:3001 locally, or http://dimbybot:3001 in Docker).",
+    }
+}
+
+/**
+ * Maps a thrown upstream `fetch` while loading the permission snapshot.
+ * Stays 503 (retryable) — not the 502 `serverFetchBot` / `proxyBotApi` unreachable status.
+ */
+export function mapDashboardPermissionSnapshotUnreachable(): SnapshotFailure {
+    return {
+        ok: false,
+        status: 503,
+        error: "Bot API unreachable",
+        details:
+            "Could not reach the bot HTTP server for permission data. Confirm the bot is running and API_PROXY_TARGET matches BOT_API_PORT.",
+    }
+}
+
+/**
+ * Maps a non-JSON bot response. HTTP 404 keeps the "older bot build" copy; other statuses
+ * stay "Invalid bot response". Statuses below 400 collapse to 502.
+ */
+export function mapDashboardPermissionSnapshotNonJsonResponse(httpStatus: number): SnapshotFailure {
+    const status = dashboardPermissionSnapshotUpstreamStatus(httpStatus)
+    if (httpStatus === 404) {
+        return {
+            ok: false,
+            status,
+            error: "Dashboard permission route not found",
+            details:
+                "The bot process may be running an older build without GET /api/guilds/:guildId/dashboard-permissions — rebuild the bot (yarn build:bot) and restart it.",
+        }
+    }
+    return {
+        ok: false,
+        status,
+        error: "Invalid bot response",
+        details: "Expected JSON from the bot API for dashboard permissions.",
+    }
+}
+
+/** Maps a JSON parse failure on an otherwise received bot response. */
+export function mapDashboardPermissionSnapshotMalformedJson(httpStatus: number): SnapshotFailure {
+    return {
+        ok: false,
+        status: dashboardPermissionSnapshotUpstreamStatus(httpStatus),
+        error: "Invalid bot response",
+        details: "The bot API returned malformed JSON for dashboard permissions.",
+    }
+}
+
+/**
+ * In-process permission resolution threw. Distinct from bot-not-ready and from the
+ * Dashboard action crash ("Service unavailable").
+ */
+export function mapDashboardPermissionSnapshotResolutionFailure(): SnapshotFailure {
+    return {
+        ok: false,
+        status: 503,
+        error: "Permission check unavailable",
+        details:
+            "Could not load dashboard permissions for this server. Try again shortly or refresh the page.",
+    }
+}
+
 function snapshotErrorMessageFromPayload(body: Record<string, unknown>): string {
     if (typeof body.error === "string") return body.error
     const nested = body.error

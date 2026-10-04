@@ -1,5 +1,9 @@
 import { headers } from "next/headers"
 import { resolveBotApiFetchFailure } from "@/lib/bot-api-fetch-failure"
+import {
+    mapServerFetchBotOriginFailure,
+    type ServerFetchBotOriginFailureKind,
+} from "@/lib/bot-api-origin-failure"
 import { resolveFetchTimeoutMs } from "@/lib/bot-api-timeout"
 import { getBotApiOrigin } from "@/server/bot-api-origin"
 import { isBotApiVerbose, logBotApiVerbose } from "@/server/bot-api-verbose"
@@ -8,6 +12,14 @@ import { getOriginFallback } from "@/server/origin-fallback"
 /**
  * Calls the bot REST API from the Next server using the current request cookies (session).
  */
+
+function serverFetchBotOriginFailureResponse(kind: ServerFetchBotOriginFailureKind): Response {
+    const failure = mapServerFetchBotOriginFailure(kind)
+    return new Response(JSON.stringify(failure.body), {
+        status: failure.status,
+        headers: { "content-type": "application/json" },
+    })
+}
 
 export async function serverFetchBot(
     pathnameAndSearch: string,
@@ -28,32 +40,13 @@ export async function serverFetchBot(
             path: pathnameAndSearch,
             message,
         })
-        return new Response(
-            JSON.stringify({
-                ok: false,
-                error: {
-                    error: "Bot API misconfigured",
-                    details: "Bot API misconfigured",
-                },
-            }),
-            { status: 503, headers: { "content-type": "application/json" } }
-        )
+        return serverFetchBotOriginFailureResponse("invalid")
     }
     if (!origin) {
         logBotApiVerbose("serverFetchBot: no origin (set API_PROXY_TARGET or use dev default)", {
             path: pathnameAndSearch,
         })
-        return new Response(
-            JSON.stringify({
-                ok: false,
-                error: {
-                    error: "Bot API not configured",
-                    details:
-                        "Set API_PROXY_TARGET to the bot HTTP origin (e.g. http://localhost:3001).",
-                },
-            }),
-            { status: 503, headers: { "content-type": "application/json" } }
-        )
+        return serverFetchBotOriginFailureResponse("unset")
     }
 
     const path = pathnameAndSearch.startsWith("/") ? pathnameAndSearch : `/${pathnameAndSearch}`
