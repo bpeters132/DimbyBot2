@@ -8,6 +8,7 @@ import {
     shouldDeleteStaleRestoredSession,
     shouldPersistConcurrentAbandonSession,
     restoredLiveTrackCount,
+    releaseDeferredRestoreGuards,
     retainedRestoredTrackCount,
     shouldMarkPreservePriorAfterDeferredRestore,
     shouldPersistRestoredPlayerSession,
@@ -238,6 +239,29 @@ describe("shouldMarkPreservePriorAfterDeferredRestore", () => {
             }),
             false
         )
+    })
+})
+
+describe("releaseDeferredRestoreGuards", () => {
+    it("clears later guilds when the middle session lookup throws and does not mark that guild", async () => {
+        const cleared: string[] = []
+        const marked: string[] = []
+        const errors: string[] = []
+        await releaseDeferredRestoreGuards({
+            guildIds: ["a", "b", "c"],
+            deferredGuildIds: new Set(["a", "b", "c"]),
+            readSession: async (guildId) => {
+                if (guildId === "b") throw new Error("db down")
+                return { guildId }
+            },
+            liveHasQueue: () => true,
+            markPreservePrior: (guildId) => marked.push(guildId),
+            clearRestoreInProgress: (guildId) => cleared.push(guildId),
+            onLookupError: (guildId) => errors.push(guildId),
+        })
+        assert.deepEqual(cleared, ["a", "b", "c"])
+        assert.deepEqual(marked, ["a", "c"])
+        assert.deepEqual(errors, ["b"])
     })
 })
 

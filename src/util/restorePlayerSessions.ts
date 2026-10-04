@@ -155,6 +155,46 @@ export function shouldMarkPreservePriorAfterDeferredRestore(options: {
 }
 
 /**
+ * Drops restore-in-progress for every guild in the batch. A failed session read
+ * must not skip this guild or later ones, and must not mark preserve-prior:
+ * a throw is not proof the row is still there.
+ */
+export async function releaseDeferredRestoreGuards(args: {
+    guildIds: readonly string[]
+    deferredGuildIds: ReadonlySet<string>
+    readSession: (guildId: string) => Promise<unknown | null>
+    liveHasQueue: (guildId: string) => boolean
+    markPreservePrior: (guildId: string) => void
+    clearRestoreInProgress: (guildId: string) => void
+    onLookupError: (guildId: string, err: unknown) => void
+}): Promise<void> {
+    for (const id of args.guildIds) {
+        try {
+            if (!args.deferredGuildIds.has(id)) continue
+            let row: unknown | null = null
+            let lookupFailed = false
+            try {
+                row = await args.readSession(id)
+            } catch (err: unknown) {
+                lookupFailed = true
+                args.onLookupError(id, err)
+            }
+            if (
+                !lookupFailed &&
+                shouldMarkPreservePriorAfterDeferredRestore({
+                    sessionRowExists: row != null,
+                    liveHasQueue: args.liveHasQueue(id),
+                })
+            ) {
+                args.markPreservePrior(id)
+            }
+        } finally {
+            args.clearRestoreInProgress(id)
+        }
+    }
+}
+
+/**
  * Guilds whose DB snapshots must not be overwritten by concurrent `/play` saves until the
  * sequential restore pass finishes — including guilds not yet reached in the loop.
  */
@@ -659,21 +699,18 @@ export async function restorePlayerSessions(client: BotClient): Promise<boolean>
         // fuller snapshot. `/stop` deletes that row first; do not mark preserve-prior
         // then, or the successor queue cannot be saved after this guard clears.
         const deferred = new Set(deferredGuildIds)
-        for (const id of restoreGuildIds) {
-            if (deferred.has(id)) {
-                const row = await getPlayerSession(id)
-                if (
-                    shouldMarkPreservePriorAfterDeferredRestore({
-                        sessionRowExists: row != null,
-                        liveHasQueue: shouldPreservePriorSnapshotAfterRestoreDefer(
-                            client.lavalink.getPlayer(id)
-                        ),
-                    })
-                ) {
-                    markPlayerSessionPreservePriorSnapshot(id)
-                }
-            }
-            clearPlayerSessionRestoreInProgress(id)
-        }
+        await releaseDeferredRestoreGuards({
+            guildIds: restoreGuildIds,
+            deferredGuildIds: deferred,
+            readSession: (id) => getPlayerSession(id),
+            liveHasQueue: (id) =>
+                shouldPreservePriorSnapshotAfterRestoreDefer(client.lavalink.getPlayer(id)),
+            markPreservePrior: markPlayerSessionPreservePriorSnapshot,
+            clearRestoreInProgress: clearPlayerSessionRestoreInProgress,
+            onLookupError: (id, err) => {
+                const msg = err instanceof Error ? err.message : String(err)
+                client.error(`[playerSession] restore session lookup failed for ${id}: ${msg}`)
+            },
+        })
     }
 }
