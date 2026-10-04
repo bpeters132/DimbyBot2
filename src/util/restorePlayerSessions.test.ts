@@ -8,6 +8,8 @@ import {
     shouldDeleteStaleRestoredSession,
     shouldPersistConcurrentAbandonSession,
     restoredLiveTrackCount,
+    retainedRestoredTrackCount,
+    shouldMarkPreservePriorAfterDeferredRestore,
     shouldPersistRestoredPlayerSession,
     shouldPreservePriorSnapshotAfterRestoreDefer,
     shouldSkipRestoreHydrateForLivePlayer,
@@ -42,6 +44,20 @@ describe("restoredLiveTrackCount", () => {
     })
 })
 
+describe("retainedRestoredTrackCount", () => {
+    it("does not count a newly enqueued track as a retained restored track", () => {
+        const restored = [
+            { info: { uri: "https://youtu.be/a" } },
+            { info: { uri: "https://youtu.be/b" } },
+        ]
+        const live = [
+            { info: { uri: "https://youtu.be/a" } },
+            { info: { uri: "https://youtu.be/c" } },
+        ]
+        assert.equal(retainedRestoredTrackCount(restored, live), 1)
+    })
+})
+
 describe("shouldPersistRestoredPlayerSession", () => {
     it("allows save when every stored track is still on the live player", () => {
         assert.equal(
@@ -49,6 +65,7 @@ describe("shouldPersistRestoredPlayerSession", () => {
                 transientFailures: 0,
                 storedPlayableCount: 5,
                 liveTrackCount: 5,
+                retainedRestoredCount: 5,
             }),
             true
         )
@@ -61,6 +78,7 @@ describe("shouldPersistRestoredPlayerSession", () => {
                 transientFailures: 1,
                 storedPlayableCount: 5,
                 liveTrackCount: 4,
+                retainedRestoredCount: 4,
             }),
             false
         )
@@ -69,6 +87,7 @@ describe("shouldPersistRestoredPlayerSession", () => {
                 transientFailures: 2,
                 storedPlayableCount: 5,
                 liveTrackCount: 5,
+                retainedRestoredCount: 5,
             }),
             false
         )
@@ -80,6 +99,7 @@ describe("shouldPersistRestoredPlayerSession", () => {
                 transientFailures: 0,
                 storedPlayableCount: 50,
                 liveTrackCount: 49,
+                retainedRestoredCount: 49,
             }),
             false
         )
@@ -88,6 +108,19 @@ describe("shouldPersistRestoredPlayerSession", () => {
                 transientFailures: 0,
                 storedPlayableCount: 50,
                 liveTrackCount: 0,
+                retainedRestoredCount: 0,
+            }),
+            false
+        )
+    })
+
+    it("blocks save when a dropped restored track is replaced by a new track", () => {
+        assert.equal(
+            shouldPersistRestoredPlayerSession({
+                transientFailures: 0,
+                storedPlayableCount: 2,
+                liveTrackCount: 2,
+                retainedRestoredCount: 1,
             }),
             false
         )
@@ -171,6 +204,35 @@ describe("shouldPreservePriorSnapshotAfterRestoreDefer", () => {
         assert.equal(
             shouldPreservePriorSnapshotAfterRestoreDefer({
                 queue: { current: null, tracks: [] },
+            }),
+            false
+        )
+    })
+})
+
+describe("shouldMarkPreservePriorAfterDeferredRestore", () => {
+    it("marks preserve-prior when the session row is still there and the live player has a queue", () => {
+        assert.equal(
+            shouldMarkPreservePriorAfterDeferredRestore({
+                sessionRowExists: true,
+                liveHasQueue: true,
+            }),
+            true
+        )
+    })
+
+    it("does not mark preserve-prior after /stop deleted the session row", () => {
+        assert.equal(
+            shouldMarkPreservePriorAfterDeferredRestore({
+                sessionRowExists: false,
+                liveHasQueue: true,
+            }),
+            false
+        )
+        assert.equal(
+            shouldMarkPreservePriorAfterDeferredRestore({
+                sessionRowExists: true,
+                liveHasQueue: false,
             }),
             false
         )

@@ -715,6 +715,27 @@ describe("skip upcoming + companion retry", () => {
         assert.equal(isYoutubePlaybackReady(track), false)
     })
 
+    it("returns moved when remint throws after the live track advanced", async () => {
+        const failed = youtubeTrack(VIDEO_A)
+        ;(failed as { userData?: Record<string, unknown> }).userData = {
+            invidiousCompanionResolved: true,
+        }
+        const next = youtubeTrack(VIDEO_B)
+        const player = mockWindowPlayer("g-retry-throw-moved", [], failed)
+        const result = await retryCompanionPlaybackOnce(
+            () => player,
+            "g-retry-throw-moved",
+            failed,
+            configWithFetch(async () => {
+                player.queue.current = next
+                throw new Error("companion down")
+            })
+        )
+        assert.equal(result, "moved")
+        assert.equal(player.queue.current, next)
+        assert.equal(isCompanionRetryUsed(failed), true)
+    })
+
     it("demotes on a failed remint so queue-repeat cannot skip-loop the same HTTP item", async () => {
         const current = youtubeTrack(VIDEO_A)
         ;(current as { userData?: Record<string, unknown> }).userData = {

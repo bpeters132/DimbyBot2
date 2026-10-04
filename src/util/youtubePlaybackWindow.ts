@@ -470,6 +470,13 @@ export async function retryCompanionPlaybackOnce(
         const msg = err instanceof Error ? err.message : String(err)
         windowLogger(config).warn(`${LOG_PREFIX} companion retry failed: ${msg}`)
         demoteCompanionResolvedTrack(failedTrack)
-        return "skip"
+        const liveAfterError = livePlayer(getLivePlayer, guildId)
+        return companionRetryApplyMissedFailedTrack({
+            sameLivePlayer: isSameLivePlayer(liveAfterError, snapshot),
+            currentIdentity: liveAfterError?.queue.current
+                ? queueTrackIdentity(liveAfterError.queue.current)
+                : null,
+            failedIdentity: queueTrackIdentity(failedTrack),
+        })
     }
 }

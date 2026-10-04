@@ -21,7 +21,7 @@ import {
     schedulePlayerSessionSave,
 } from "./playerSessionPersistence.js"
 import { resolvePersistedTracks } from "./playerSessionTracks.js"
-import { schedulePrefetchWindow } from "./youtubePlaybackWindow.js"
+import { queueTrackIdentity, schedulePrefetchWindow } from "./youtubePlaybackWindow.js"
 import {
     withGuildPlayerLifecycleReservation,
     withGuildPlayerQueueLock,
@@ -37,18 +37,48 @@ export function restoredLiveTrackCount(player: {
     return (player.queue.current ? 1 : 0) + player.queue.tracks.length
 }
 
+type QueueIdentityTrack = Parameters<typeof queueTrackIdentity>[0]
+
+/**
+ * How many restored tracks are still on the live queue, matched by URI identity.
+ * A concurrent `/play` can replace a dropped restored track and keep the counts equal.
+ */
+export function retainedRestoredTrackCount(
+    restored: readonly { info?: { uri?: string | null } }[],
+    live: readonly { info?: { uri?: string | null } }[]
+): number {
+    const available = new Map<string, number>()
+    for (const track of live) {
+        const id = queueTrackIdentity(track as QueueIdentityTrack)
+        if (!id) continue
+        available.set(id, (available.get(id) ?? 0) + 1)
+    }
+    let retained = 0
+    for (const track of restored) {
+        const id = queueTrackIdentity(track as QueueIdentityTrack)
+        const left = id ? (available.get(id) ?? 0) : 0
+        if (left <= 0) continue
+        available.set(id, left - 1)
+        retained += 1
+    }
+    return retained
+}
+
 /**
  * Whether a successful hydrate may overwrite the persisted session snapshot.
- * Transient resolve failures and JIT playback-window drops (thinned live queue)
- * must keep the prior full snapshot on disk.
+ * Transient resolve failures, JIT playback-window drops (thinned live queue),
+ * and a live queue that no longer contains every restored track must keep the
+ * prior full snapshot on disk.
  */
 export function shouldPersistRestoredPlayerSession(options: {
     transientFailures: number
     storedPlayableCount: number
     liveTrackCount: number
+    retainedRestoredCount: number
 }): boolean {
     if (options.transientFailures > 0) return false
     if (options.liveTrackCount < options.storedPlayableCount) return false
+    if (options.retainedRestoredCount < options.storedPlayableCount) return false
     return true
 }
 
@@ -109,6 +139,19 @@ export function shouldPreservePriorSnapshotAfterRestoreDefer(
     live: RestoreLivePlayer | null | undefined
 ): boolean {
     return shouldSkipRestoreHydrateForLivePlayer(live)
+}
+
+/**
+ * After a deferred restore, mark preserve-prior only while the persisted session
+ * row is still there and the live player already has a queue. `/stop` deletes
+ * the row; the successor queue must be allowed to persist once restore-in-progress
+ * clears. A concurrent `/play` leaves the row in place.
+ */
+export function shouldMarkPreservePriorAfterDeferredRestore(options: {
+    sessionRowExists: boolean
+    liveHasQueue: boolean
+}): boolean {
+    return options.sessionRowExists && options.liveHasQueue
 }
 
 /**
@@ -495,12 +538,18 @@ async function restoreSingleSession(
             // thinned live queue would replace the fuller DB row. Mark preserve *before*
             // clearPlayerSessionRestoreInProgress so trackStart/trackEnd/shutdown/idle clear
             // cannot race and wipe the prior full row.
-            const liveCount = restoredLiveTrackCount(player)
+            const liveTracks = [
+                ...(player.queue.current ? [player.queue.current] : []),
+                ...player.queue.tracks,
+            ]
+            const liveCount = liveTracks.length
+            const retained = retainedRestoredTrackCount(playable, liveTracks)
             if (
                 shouldPersistRestoredPlayerSession({
                     transientFailures: transientTotal,
                     storedPlayableCount: playable.length,
                     liveTrackCount: liveCount,
+                    retainedRestoredCount: retained,
                 })
             ) {
                 clearPlayerSessionPreservePriorSnapshot(guildId)
@@ -508,11 +557,14 @@ async function restoreSingleSession(
             } else {
                 markPlayerSessionPreservePriorSnapshot(guildId)
                 const dropped = Math.max(0, playable.length - liveCount)
+                const missing = Math.max(0, playable.length - retained)
                 client.warn(
                     `[playerSession] restore for ${guildId}: skipping session save` +
                         (transientTotal > 0
                             ? ` after ${transientTotal} transient failure(s)`
-                            : ` after JIT prepare dropped ${dropped} track(s)`) +
+                            : missing > 0
+                              ? ` after ${missing} restored track(s) left the live queue`
+                              : ` after JIT prepare dropped ${dropped} track(s)`) +
                         "; preserving prior snapshot"
                 )
             }
@@ -605,15 +657,22 @@ export async function restorePlayerSessions(client: BotClient): Promise<boolean>
         // `/play` can land after a transient defer but while later guilds are still
         // restoring (outer restore-in-progress still blocks saves). Re-check live
         // queues before dropping that guard so a thin session cannot overwrite the
-        // fuller snapshot. Successor `/stop`+`/play` is not this path — forceClear
-        // already deleted the row and must be allowed to persist the new queue.
+        // fuller snapshot. `/stop` deletes that row first; do not mark preserve-prior
+        // then, or the successor queue cannot be saved after this guard clears.
         const deferred = new Set(deferredGuildIds)
         for (const id of restoreGuildIds) {
-            if (
-                deferred.has(id) &&
-                shouldPreservePriorSnapshotAfterRestoreDefer(client.lavalink.getPlayer(id))
-            ) {
-                markPlayerSessionPreservePriorSnapshot(id)
+            if (deferred.has(id)) {
+                const row = await getPlayerSession(id)
+                if (
+                    shouldMarkPreservePriorAfterDeferredRestore({
+                        sessionRowExists: row != null,
+                        liveHasQueue: shouldPreservePriorSnapshotAfterRestoreDefer(
+                            client.lavalink.getPlayer(id)
+                        ),
+                    })
+                ) {
+                    markPlayerSessionPreservePriorSnapshot(id)
+                }
             }
             clearPlayerSessionRestoreInProgress(id)
         }
