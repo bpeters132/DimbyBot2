@@ -413,6 +413,19 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("link:http://foo.devlocal.me:2333/"), true)
         assert.equal(isBlockedUserMediaUrl("icy://www.devlocal.me/"), true)
         assert.equal(isBlockedUserMediaUrl("ytsearch:http://foo.devlocal.me/"), true)
+        // lhst.net: public wildcard RFC1918 bounce (apex/www/foo → 192.168.10.128).
+        // Distinct from denied localh.net / localh.st / localhst.dev.
+        assert.equal(isBlockedUserMediaUrl("http://lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://lhst.net:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://www.lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://app.lhst.net:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://LHST.NET/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("uri:http://foo.lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("local:http://lhst.net/"), true)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {

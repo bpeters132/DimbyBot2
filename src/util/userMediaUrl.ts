@@ -265,6 +265,7 @@ const DNS_BOUNCE_SUFFIXES = [
     "backloop.dev",
     // Public wildcard loopback (apex has no A record today; suffix still covers it).
     "devlocal.me",
+    "lhst.net",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
