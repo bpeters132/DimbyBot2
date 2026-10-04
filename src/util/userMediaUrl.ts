@@ -154,7 +154,9 @@ export function trimmedHttpUrlQuery(query: string): string | null {
  * hyphen-encoded IPv4 labels (`10-0-0-1` or `make-10-0-0-1-rr`) used by bounce DNS,
  * IPv6 dash-compressed labels (`0--1` → `::1`, `0--ffff-a00-1` → `::ffff:10.0.0.1`),
  * well-known IMDS hostnames (`metadata.goog`),
- * and compact IPv4-mapped labels (`ffff-0a000001` → 10.0.0.1) used by sslip-style bounce DNS.
+ * compact IPv4-mapped labels (`ffff-0a000001` → 10.0.0.1) used by sslip-style bounce DNS,
+ * and leading-zero IPv4 literals (`010.0.0.1`, `172.017.0.1`) that WHATWG rewrites
+ * to a public address while Java `InetAddress` (Lavaplayer) still connects privately.
  */
 export function isBlockedUserMediaUrl(query: string): boolean {
     const trimmed = query.trim()
@@ -167,13 +169,43 @@ export function isBlockedUserMediaUrl(query: string): boolean {
     for (const candidate of candidates) {
         if (!isHttpUrlQuery(candidate)) continue
         try {
-            const hostname = new URL(rewriteIcySchemeToHttp(candidate)).hostname
+            const httpUrl = rewriteIcySchemeToHttp(candidate)
+            const hostname = new URL(httpUrl).hostname
             if (isBlockedUserMediaHost(hostname)) return true
+            // WHATWG canonicalizes IPv4 with octal/dword/short forms. Lavalink search
+            // still receives the original identifier; Java parses leading-zero octets
+            // as decimal (`010.0.0.1` → 10.0.0.1, not 8.0.0.1).
+            const rawHost = rawHttpUrlHostname(httpUrl)
+            if (rawHost && rawHost !== hostname && isBlockedUserMediaHost(rawHost)) return true
         } catch {
             return true
         }
     }
     return false
+}
+
+/**
+ * Authority hostname as written in the URL, before WHATWG IPv4 canonicalization.
+ * `new URL(...).hostname` rewrites `010.0.0.1` to `8.0.0.1`; this returns `010.0.0.1`
+ * so {@link isBlockedIpv4} can apply Java-style decimal octet parsing.
+ */
+export function rawHttpUrlHostname(url: string): string | null {
+    const rewritten = rewriteIcySchemeToHttp(url.trim())
+    const match = /^(?:https?):\/\/([^/?#]+)/i.exec(rewritten)
+    if (!match) return null
+    let authority = match[1]!
+    const at = authority.lastIndexOf("@")
+    if (at !== -1) authority = authority.slice(at + 1)
+    if (authority.startsWith("[")) {
+        const end = authority.indexOf("]")
+        if (end === -1) return null
+        return authority.slice(0, end + 1)
+    }
+    const colon = authority.lastIndexOf(":")
+    if (colon !== -1 && /^\d*$/.test(authority.slice(colon + 1))) {
+        authority = authority.slice(0, colon)
+    }
+    return authority || null
 }
 
 /**

@@ -3,6 +3,7 @@ import { describe, it } from "node:test"
 import {
     isBlockedUserMediaUrl,
     isHttpUrlQuery,
+    rawHttpUrlHostname,
     rewriteIcySchemeToHttp,
     trimmedHttpUrlQuery,
     unwrapDirectLinkSourcePrefix,
@@ -109,6 +110,25 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://[fd12:3456:789a:1::1]/"), true)
         assert.equal(isBlockedUserMediaUrl("http://[fe90::1]/"), true)
         assert.equal(isBlockedUserMediaUrl("http://[febf::1]/"), true) // still fe80::/10
+    })
+
+    it("rejects leading-zero IPv4 literals that WHATWG rewrites to a public host", () => {
+        // Node URL hostname is octal (`010.0.0.1` → `8.0.0.1`); Java InetAddress is decimal
+        // (`10.0.0.1`). player.search sends the original identifier to Lavalink/Lavaplayer.
+        assert.equal(isBlockedUserMediaUrl("http://010.0.0.1:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://172.017.0.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://0172.017.0.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://user:pass@010.0.0.1:5432/secret"), true)
+        assert.equal(isBlockedUserMediaUrl("http://010.0.0.1./"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://010.0.0.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://010.0.0.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("uri:http://172.017.0.1/audio.mp3"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://010.0.0.1/stream"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://010.0.0.1:5432/"), true)
+        // Public dotted-decimal (including WHATWG's rewritten form) must stay allowed.
+        assert.equal(isBlockedUserMediaUrl("http://8.8.8.8/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://172.15.0.1/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://8.0.0.1/"), false)
     })
 
     it("rejects Docker-internal single-label hosts", () => {
@@ -436,6 +456,20 @@ describe("isBlockedUserMediaUrl", () => {
         )
         assert.equal(isBlockedUserMediaUrl("uri:https://soundcloud.com/artist/track"), false)
         assert.equal(isBlockedUserMediaUrl("ytsearch:http://127.0.0.1/"), true)
+    })
+})
+
+describe("rawHttpUrlHostname", () => {
+    it("keeps leading-zero IPv4 octets instead of WHATWG octal rewrite", () => {
+        assert.equal(rawHttpUrlHostname("http://010.0.0.1:5432/"), "010.0.0.1")
+        assert.equal(rawHttpUrlHostname("http://172.017.0.1/"), "172.017.0.1")
+        assert.equal(rawHttpUrlHostname("http://user:pass@0172.017.0.1:2333/x"), "0172.017.0.1")
+        assert.equal(rawHttpUrlHostname("icy://010.0.0.1/stream"), "010.0.0.1")
+        assert.equal(rawHttpUrlHostname("http://[::1]/"), "[::1]")
+        assert.equal(
+            rawHttpUrlHostname("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
+            "www.youtube.com"
+        )
     })
 })
 
