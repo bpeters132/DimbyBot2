@@ -211,6 +211,7 @@ const DNS_BOUNCE_SUFFIXES = [
     "localhost.cloud",
     "localh.net",
     "rbndr.us",
+    "lhst.net",
 ] as const
 
 function isBlockedUserMediaHost(hostname: string): boolean {

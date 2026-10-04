@@ -285,6 +285,19 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://a9fea9fe.attacker.example/"), true)
         // Public hex IPv4 8.8.8.8 must stay allowed
         assert.equal(isBlockedUserMediaUrl("http://08080808.attacker.example/"), false)
+        // lhst.net: public wildcard RFC1918 bounce (apex/www/foo → 192.168.10.128).
+        // Distinct from denied localh.net / localh.st / localhst.dev.
+        assert.equal(isBlockedUserMediaUrl("http://lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://lhst.net:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://www.lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://app.lhst.net:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://LHST.NET/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("uri:http://foo.lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("local:http://lhst.net/"), true)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {
