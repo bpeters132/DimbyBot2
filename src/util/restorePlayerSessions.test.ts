@@ -222,6 +222,8 @@ describe("shouldMarkPreservePriorAfterDeferredRestore", () => {
     })
 
     it("does not mark preserve-prior after /stop deleted the session row", () => {
+        // Transient voice fetch must not mark before this check. An early mark
+        // would stick after the batch finally sees no row and block successor saves.
         assert.equal(
             shouldMarkPreservePriorAfterDeferredRestore({
                 sessionRowExists: false,

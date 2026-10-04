@@ -328,12 +328,11 @@ async function restoreSingleSession(
         client.warn(
             `[playerSession] restore deferred for ${guildId}: transient Discord error fetching voice channel ${voiceChannelId}`
         )
-        // `/play` during this fetch (or during later guilds in the batch) is a no-op save
-        // while restore-in-progress. Mark preserve-prior when a thin live queue already
-        // exists so clearing that guard cannot persist it over the fuller snapshot.
-        if (shouldPreservePriorSnapshotAfterRestoreDefer(client.lavalink.getPlayer(guildId))) {
-            markPlayerSessionPreservePriorSnapshot(guildId)
-        }
+        // Do not mark preserve-prior here. `/stop` can delete the session row while
+        // this fetch is in flight, and a successor `/play` can fill the live queue
+        // before we return. An early mark would stick after the batch finally sees
+        // no row and skips its own mark, blocking successor saves. The finally applies
+        // shouldMarkPreservePriorAfterDeferredRestore before restore-in-progress clears.
         return "deferred"
     }
     if (voiceResult.status === "missing") {
