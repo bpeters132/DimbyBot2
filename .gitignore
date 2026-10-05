@@ -29,7 +29,10 @@ storage/
 downloads/
 
 # Cursor
-.cursor/
+.cursor/*
+!.cursor/rules/
+.cursor/rules/*
+!.cursor/rules/tests-before-commit.mdc
 
 # VSCode
 .vscode/

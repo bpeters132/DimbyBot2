@@ -20,7 +20,7 @@ RUN apk add --no-cache \
     && ln -sf /opt/venv/bin/yt-dlp /usr/bin/yt-dlp
 
 COPY package.json yarn.lock ./
-COPY scripts/postinstall-prisma.mjs scripts/postinstall-prisma.mjs
+COPY scripts/postinstall-prisma.mjs scripts/prepare-husky.mjs scripts/
 RUN yarn install --frozen-lockfile
 
 COPY . .

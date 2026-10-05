@@ -58,6 +58,10 @@ Bring-up, Compose, and Node-on-host details: [README.md](README.md).
 
 Typecheck, lint, Prettier, and tests apply to **both** the Bot and the Dashboard.
 
+`yarn test` runs before every commit. The Husky `pre-commit` hook blocks the commit, and the CI validate job runs the same script on pull requests and on `main` (image build and push stay on `main` and `workflow_dispatch`). Do not commit when the suite is red, and do not skip the hook.
+
+A new feature ships with a unit test in the same change: one colocated assertion per distinct reply, status, or security decision of a slash command, Discord or Lavalink event, Bot API handler, Dashboard action, background job, or helper. A change to an existing feature, a bug fix, or a security fix adds or updates the assertion that would have failed on the old behavior. A refactor that does not change a reply, status, or security decision does not require a test edit.
+
 - Colocate `*.test.ts` next to the code: Bot under `src/` except `src/web/`; Dashboard under `src/web/`.
 - Style: Node `node:test` + `tsx` + `node:assert/strict`.
 - New features get tests. Touching untested modules should add tests. Do not skip the Dashboard because a suite is thin.

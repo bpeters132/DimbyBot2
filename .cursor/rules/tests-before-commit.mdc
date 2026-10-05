@@ -1,0 +1,14 @@
+---
+description: Run the test suite before every commit and require tests for behavior changes
+alwaysApply: true
+---
+
+# Tests before every commit
+
+`yarn test` runs before every commit. The Husky `pre-commit` hook is what blocks the commit. Do not commit when the suite is red, and do not skip the hook.
+
+A new feature ships with a unit test in the same change. A new feature is a new reply, status, or security decision of a slash command, Discord or Lavalink event, Bot API handler, Dashboard action, background job, or helper. Add one colocated `*.test.ts` assertion for each distinct outcome.
+
+A change to an existing feature, a bug fix, or a security fix adds or updates the test that asserts the changed reply, status, or security decision. That assertion would have failed on the old behavior. A refactor that does not change a reply, status, or security decision does not require a test edit.
+
+React components and thin `app/api` proxies are not features under this rule. Dashboard tests stay unit tests of `server/`, `lib/`, and shared helpers.

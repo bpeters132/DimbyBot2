@@ -12,7 +12,7 @@ RUN apk add --no-cache \
     python3
 
 COPY package.json yarn.lock ./
-COPY scripts/postinstall-prisma.mjs scripts/postinstall-prisma.mjs
+COPY scripts/postinstall-prisma.mjs scripts/prepare-husky.mjs scripts/
 RUN yarn install --frozen-lockfile
 
 COPY . .
