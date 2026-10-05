@@ -17,6 +17,7 @@ import {
     clearPlayerSessionPreservePriorSnapshot,
     clearPlayerSessionRestoreInProgress,
     markPlayerSessionPreservePriorSnapshot,
+    getPlayerSessionClearEpoch,
     markPlayerSessionRestoreInProgress,
     schedulePlayerSessionSave,
 } from "./playerSessionPersistence.js"
@@ -154,44 +155,97 @@ export function shouldMarkPreservePriorAfterDeferredRestore(options: {
     return options.sessionRowExists && options.liveHasQueue
 }
 
+export type DeferredSessionLookup =
+    | { status: "resolved"; row: unknown | null }
+    | { status: "failed" }
+
+export type DeferredRestoreGuardAction = "mark-and-clear" | "clear" | "keep-guard"
+
+/** Attempts before a deferred session read is treated as failed. */
+export const DEFERRED_SESSION_READ_ATTEMPTS = 3
+
 /**
- * Drops restore-in-progress for every guild in the batch. A failed session read
- * must not skip this guild or later ones, and must not mark preserve-prior:
- * a throw is not proof the row is still there.
+ * Whether to drop restore-in-progress after a deferred restore.
+ * A failed read is not preserve-prior. If `/stop` or `/leave` already advanced
+ * the clear epoch, the successor may save. Otherwise the guard stays so a thin
+ * live queue cannot replace the fuller snapshot.
+ */
+export function deferredRestoreGuardAction(options: {
+    lookup: DeferredSessionLookup
+    liveHasQueue: boolean
+    clearEpochAtStart: number
+    clearEpochNow: number
+}): DeferredRestoreGuardAction {
+    if (options.lookup.status === "failed") {
+        if (options.clearEpochNow !== options.clearEpochAtStart) return "clear"
+        return "keep-guard"
+    }
+    if (
+        shouldMarkPreservePriorAfterDeferredRestore({
+            sessionRowExists: options.lookup.row != null,
+            liveHasQueue: options.liveHasQueue,
+        })
+    ) {
+        return "mark-and-clear"
+    }
+    return "clear"
+}
+
+/**
+ * Drops restore-in-progress per guild after the batch. A thrown session read
+ * cannot skip later guilds. A failed read keeps the guard only when the clear
+ * epoch has not moved.
  */
 export async function releaseDeferredRestoreGuards(args: {
     guildIds: readonly string[]
     deferredGuildIds: ReadonlySet<string>
     readSession: (guildId: string) => Promise<unknown | null>
     liveHasQueue: (guildId: string) => boolean
+    clearEpochAtStart: (guildId: string) => number
+    clearEpochNow: (guildId: string) => number
     markPreservePrior: (guildId: string) => void
     clearRestoreInProgress: (guildId: string) => void
     onLookupError: (guildId: string, err: unknown) => void
+    sessionReadAttempts?: number
 }): Promise<void> {
+    const attempts = args.sessionReadAttempts ?? DEFERRED_SESSION_READ_ATTEMPTS
     for (const id of args.guildIds) {
+        let action: DeferredRestoreGuardAction = "clear"
         try {
             if (!args.deferredGuildIds.has(id)) continue
-            let row: unknown | null = null
-            let lookupFailed = false
-            try {
-                row = await args.readSession(id)
-            } catch (err: unknown) {
-                lookupFailed = true
-                args.onLookupError(id, err)
-            }
-            if (
-                !lookupFailed &&
-                shouldMarkPreservePriorAfterDeferredRestore({
-                    sessionRowExists: row != null,
-                    liveHasQueue: args.liveHasQueue(id),
-                })
-            ) {
-                args.markPreservePrior(id)
-            }
+            const lookup = await readDeferredSessionWithRetry(id, args.readSession, attempts)
+            if (lookup.status === "failed") args.onLookupError(id, lookup.error)
+            action = deferredRestoreGuardAction({
+                lookup:
+                    lookup.status === "failed"
+                        ? { status: "failed" }
+                        : { status: "resolved", row: lookup.row },
+                liveHasQueue: args.liveHasQueue(id),
+                clearEpochAtStart: args.clearEpochAtStart(id),
+                clearEpochNow: args.clearEpochNow(id),
+            })
+            if (action === "mark-and-clear") args.markPreservePrior(id)
         } finally {
-            args.clearRestoreInProgress(id)
+            if (action !== "keep-guard") args.clearRestoreInProgress(id)
         }
     }
+}
+
+async function readDeferredSessionWithRetry(
+    guildId: string,
+    readSession: (guildId: string) => Promise<unknown | null>,
+    attempts: number
+): Promise<{ status: "resolved"; row: unknown | null } | { status: "failed"; error: unknown }> {
+    let lastError: unknown
+    const tries = Math.max(1, attempts)
+    for (let attempt = 0; attempt < tries; attempt++) {
+        try {
+            return { status: "resolved", row: await readSession(guildId) }
+        } catch (err: unknown) {
+            lastError = err
+        }
+    }
+    return { status: "failed", error: lastError }
 }
 
 /**
@@ -682,8 +736,10 @@ export async function restorePlayerSessions(client: BotClient): Promise<boolean>
     // only after voice fetch inside restoreSingleSession, so a concurrent /play on a
     // later guild can persist a thin live queue over the fuller snapshot (#240 hole).
     const restoreGuildIds = guildIdsNeedingRestoreSaveGuard(sessions)
+    const clearEpochAtStart = new Map<string, number>()
     for (const id of restoreGuildIds) {
         markPlayerSessionRestoreInProgress(id)
+        clearEpochAtStart.set(id, getPlayerSessionClearEpoch(id))
     }
     const deferredGuildIds: string[] = []
     try {
@@ -705,6 +761,8 @@ export async function restorePlayerSessions(client: BotClient): Promise<boolean>
             readSession: (id) => getPlayerSession(id),
             liveHasQueue: (id) =>
                 shouldPreservePriorSnapshotAfterRestoreDefer(client.lavalink.getPlayer(id)),
+            clearEpochAtStart: (id) => clearEpochAtStart.get(id) ?? 0,
+            clearEpochNow: getPlayerSessionClearEpoch,
             markPreservePrior: markPlayerSessionPreservePriorSnapshot,
             clearRestoreInProgress: clearPlayerSessionRestoreInProgress,
             onLookupError: (id, err) => {

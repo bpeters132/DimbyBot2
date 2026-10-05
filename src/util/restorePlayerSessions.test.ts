@@ -8,6 +8,7 @@ import {
     shouldDeleteStaleRestoredSession,
     shouldPersistConcurrentAbandonSession,
     restoredLiveTrackCount,
+    deferredRestoreGuardAction,
     releaseDeferredRestoreGuards,
     retainedRestoredTrackCount,
     shouldMarkPreservePriorAfterDeferredRestore,
@@ -242,8 +243,34 @@ describe("shouldMarkPreservePriorAfterDeferredRestore", () => {
     })
 })
 
+describe("deferredRestoreGuardAction", () => {
+    it("keeps the guard when the read fails and nothing cleared the session", () => {
+        assert.equal(
+            deferredRestoreGuardAction({
+                lookup: { status: "failed" },
+                liveHasQueue: true,
+                clearEpochAtStart: 1,
+                clearEpochNow: 1,
+            }),
+            "keep-guard"
+        )
+    })
+
+    it("clears without marking when the read fails after /stop advanced the epoch", () => {
+        assert.equal(
+            deferredRestoreGuardAction({
+                lookup: { status: "failed" },
+                liveHasQueue: true,
+                clearEpochAtStart: 1,
+                clearEpochNow: 2,
+            }),
+            "clear"
+        )
+    })
+})
+
 describe("releaseDeferredRestoreGuards", () => {
-    it("clears later guilds when the middle session lookup throws and does not mark that guild", async () => {
+    it("keeps the failed guild guarded when the epoch is unchanged and still clears the next guild", async () => {
         const cleared: string[] = []
         const marked: string[] = []
         const errors: string[] = []
@@ -255,13 +282,62 @@ describe("releaseDeferredRestoreGuards", () => {
                 return { guildId }
             },
             liveHasQueue: () => true,
+            clearEpochAtStart: () => 0,
+            clearEpochNow: () => 0,
             markPreservePrior: (guildId) => marked.push(guildId),
             clearRestoreInProgress: (guildId) => cleared.push(guildId),
             onLookupError: (guildId) => errors.push(guildId),
+            sessionReadAttempts: 1,
         })
-        assert.deepEqual(cleared, ["a", "b", "c"])
+        assert.deepEqual(cleared, ["a", "c"])
         assert.deepEqual(marked, ["a", "c"])
         assert.deepEqual(errors, ["b"])
+    })
+
+    it("clears the failed guild without marking when the epoch advanced", async () => {
+        const cleared: string[] = []
+        const marked: string[] = []
+        await releaseDeferredRestoreGuards({
+            guildIds: ["a", "b"],
+            deferredGuildIds: new Set(["a", "b"]),
+            readSession: async (guildId) => {
+                if (guildId === "b") throw new Error("db down")
+                return { guildId }
+            },
+            liveHasQueue: () => true,
+            clearEpochAtStart: (guildId) => (guildId === "b" ? 1 : 0),
+            clearEpochNow: (guildId) => (guildId === "b" ? 2 : 0),
+            markPreservePrior: (guildId) => marked.push(guildId),
+            clearRestoreInProgress: (guildId) => cleared.push(guildId),
+            onLookupError: () => undefined,
+            sessionReadAttempts: 1,
+        })
+        assert.deepEqual(cleared, ["a", "b"])
+        assert.deepEqual(marked, ["a"])
+    })
+
+    it("treats a later successful read as resolved", async () => {
+        const marked: string[] = []
+        const cleared: string[] = []
+        let tries = 0
+        await releaseDeferredRestoreGuards({
+            guildIds: ["a"],
+            deferredGuildIds: new Set(["a"]),
+            readSession: async () => {
+                tries += 1
+                if (tries < 3) throw new Error("blip")
+                return { guildId: "a" }
+            },
+            liveHasQueue: () => true,
+            clearEpochAtStart: () => 0,
+            clearEpochNow: () => 0,
+            markPreservePrior: (guildId) => marked.push(guildId),
+            clearRestoreInProgress: (guildId) => cleared.push(guildId),
+            onLookupError: () => undefined,
+        })
+        assert.equal(tries, 3)
+        assert.deepEqual(marked, ["a"])
+        assert.deepEqual(cleared, ["a"])
     })
 })
 

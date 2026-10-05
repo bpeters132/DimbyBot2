@@ -72,8 +72,13 @@ export function enqueueGuildPersistenceTaskForTests<T>(
     return withGuildPersistenceLock(guildId, work)
 }
 
-function getSessionClearEpoch(guildId: string): number {
+/** Current clear epoch. Advances when `/stop` or `/leave` deletes the session row. */
+export function getPlayerSessionClearEpoch(guildId: string): number {
     return sessionClearEpochByGuild.get(guildId) ?? 0
+}
+
+function getSessionClearEpoch(guildId: string): number {
+    return getPlayerSessionClearEpoch(guildId)
 }
 
 function bumpSessionClearEpoch(guildId: string): number {
@@ -393,7 +398,7 @@ export async function writePlayerSessionForTests(player: Player, saveEpoch: numb
 
 /** Test-only: current clear epoch for a guild (for scheduling writes in race tests). */
 export function getSessionClearEpochForTests(guildId: string): number {
-    return getSessionClearEpoch(guildId)
+    return getPlayerSessionClearEpoch(guildId)
 }
 
 /** Debounced upsert of the player session snapshot (~2s per guild). */
