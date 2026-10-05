@@ -60,13 +60,13 @@ Typecheck, lint, Prettier, and tests apply to **both** the Bot and the Dashboard
 
 `yarn test` runs before every commit. The Husky `pre-commit` hook blocks the commit, and the CI validate job runs the same script on pull requests and on `main` (image build and push stay on `main` and `workflow_dispatch`). Do not commit when the suite is red, and do not skip the hook.
 
-A new feature ships with a unit test in the same change: one colocated assertion per distinct reply, status, or security decision of a slash command, Discord or Lavalink event, Bot API handler, Dashboard action, background job, or helper. A change to an existing feature, a bug fix, or a security fix adds or updates the assertion that would have failed on the old behavior. A refactor that does not change a reply, status, or security decision does not require a test edit.
+A new feature ships with a unit test in the same change: one assertion per distinct reply, status, or security decision of a slash command, Discord or Lavalink event, Bot API handler, Dashboard action, background job, or helper. A change to an existing feature, a bug fix, or a security fix adds or updates the assertion that would have failed on the old behavior. A refactor that does not change a reply, status, or security decision does not require a test edit.
 
-- Colocate `*.test.ts` next to the code: Bot under `src/` except `src/web/`; Dashboard under `src/web/`.
+- Put `*.test.ts` under `tests/`, mirroring the source path (`src/commands/music/Skip.ts` → `tests/commands/music/Skip.test.ts`). Dashboard tests go in `tests/web/`. Shared fakes live in `tests/test-support/`. Do not place tests next to production files.
 - Style: Node `node:test` + `tsx` + `node:assert/strict`.
 - New features get tests. Touching untested modules should add tests. Do not skip the Dashboard because a suite is thin.
 - Dashboard tests are unit tests of `server/` / `lib/` / shared helpers, not a React Testing Library suite unless asked.
-- `yarn test:bot` excludes `src/web/`. `yarn test:web` uses the Dashboard tsconfig so `@/*` and `@/shared/*` resolve.
+- `yarn test:bot` runs `tests/` except `tests/web/`. `yarn test:web` uses the Dashboard tsconfig so `@/*` and `@/shared/*` resolve.
 
 ## Pull requests
 

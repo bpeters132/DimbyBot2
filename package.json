@@ -12,7 +12,7 @@
         "build": "yarn build:bot && yarn build:web",
         "build:bot": "tsc",
         "build:web": "yarn web:install && yarn --cwd src/web build",
-        "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json && yarn web:install && yarn --cwd src/web typecheck",
+        "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json && yarn web:install && yarn --cwd src/web typecheck && tsc --noEmit -p src/web/tsconfig.tests.json",
         "lint": "eslint .",
         "test": "yarn test:bot && yarn test:web",
         "test:bot": "node --experimental-test-module-mocks --import tsx scripts/run-bot-tests.mjs",
