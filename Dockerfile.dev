@@ -27,7 +27,7 @@ RUN apk add --no-cache \
 
 # Copy package files and install ALL dependencies (including dev)
 COPY package.json yarn.lock ./
-COPY scripts/postinstall-prisma.mjs scripts/postinstall-prisma.mjs
+COPY scripts/postinstall-prisma.mjs scripts/prepare-husky.mjs scripts/
 RUN yarn install && yarn cache clean --all
 
 # Copy the rest of the application code (will be overridden by mounts in dev)

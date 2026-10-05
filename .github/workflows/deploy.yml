@@ -17,6 +17,7 @@ on:
     push:
         branches:
             - main
+    pull_request:
     workflow_dispatch:
         inputs:
             skip_build:
@@ -44,7 +45,7 @@ concurrency:
 jobs:
     validate-node-lts:
         runs-on: ubuntu-latest
-        timeout-minutes: 10
+        timeout-minutes: 20
         permissions:
             contents: read
         steps:
@@ -73,10 +74,11 @@ jobs:
               run: |
                   yarn typecheck
                   yarn lint
+                  yarn test
 
     build-and-push:
         needs: validate-node-lts
-        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.skip_build }}
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.skip_build) }}
         runs-on: ubuntu-latest
         timeout-minutes: 40
         permissions:
@@ -153,7 +155,7 @@ jobs:
         needs:
             - validate-node-lts
             - build-and-push
-        if: always() && needs.validate-node-lts.result == 'success' && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
+        if: always() && github.event_name != 'pull_request' && needs.validate-node-lts.result == 'success' && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
         runs-on: ubuntu-latest
         timeout-minutes: 15
         permissions:

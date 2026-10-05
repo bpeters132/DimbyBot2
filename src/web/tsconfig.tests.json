@@ -1,0 +1,9 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "noEmit": true,
+        "incremental": false
+    },
+    "include": ["../../tests/web/**/*.ts", "../shared/**/*.ts"],
+    "exclude": ["node_modules", ".next", ".next/cache"]
+}

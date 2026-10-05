@@ -1,5 +1,5 @@
 /**
- * Runs Bot `*.test.ts` files under `src/`, excluding the Dashboard (`src/web/`).
+ * Runs Bot `*.test.ts` files under `tests/`, excluding the Dashboard (`tests/web/`).
  * Avoids a giant argv list so Windows command-line limits do not clip the suite.
  */
 import { glob } from "node:fs/promises"
@@ -11,16 +11,16 @@ import { spec } from "node:test/reporters"
 const root = path.join(import.meta.dirname, "..")
 const files = []
 
-for await (const file of glob("src/**/*.test.ts", { cwd: root })) {
+for await (const file of glob("tests/**/*.test.ts", { cwd: root })) {
     const normalized = file.replaceAll("\\", "/")
-    if (normalized.startsWith("src/web/")) {
+    if (normalized.startsWith("tests/web/")) {
         continue
     }
     files.push(path.resolve(root, file))
 }
 
 if (files.length === 0) {
-    console.error("No bot tests found under src/ (excluding src/web/).")
+    console.error("No bot tests found under tests/ (excluding tests/web/).")
     process.exit(1)
 }
 
