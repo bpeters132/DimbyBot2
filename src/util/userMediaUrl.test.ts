@@ -131,6 +131,30 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://8.0.0.1/"), false)
     })
 
+    it("rejects short leading-zero IPv4 that WHATWG rewrites to a public host", () => {
+        // A.B / A.B.C: Node octal (`010.1` → `8.0.0.1`); Java decimal (`10.0.0.1`).
+        // The 4-octet raw-host check misses these because they are not four labels.
+        assert.equal(isBlockedUserMediaUrl("http://010.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://010.1:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://010.0.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://010.0.1:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://0172.16.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://0172.17.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://0127.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://0127.0.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://user:pass@010.1:5432/secret"), true)
+        assert.equal(isBlockedUserMediaUrl("http://010.1./"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://010.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://010.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("uri:http://0172.16.1/audio.mp3"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://010.1/stream"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://010.1:5432/"), true)
+        // Public short-form / rewritten hosts stay allowed.
+        assert.equal(isBlockedUserMediaUrl("http://8.1/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://8.0.1/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://8.0.0.1/"), false)
+    })
+
     it("rejects Docker-internal single-label hosts", () => {
         assert.equal(isBlockedUserMediaUrl("http://postgres-db:5432/"), true)
         assert.equal(isBlockedUserMediaUrl("http://lavalink:2333/"), true)
@@ -475,6 +499,8 @@ describe("isBlockedUserMediaUrl", () => {
 describe("rawHttpUrlHostname", () => {
     it("keeps leading-zero IPv4 octets instead of WHATWG octal rewrite", () => {
         assert.equal(rawHttpUrlHostname("http://010.0.0.1:5432/"), "010.0.0.1")
+        assert.equal(rawHttpUrlHostname("http://010.1:5432/"), "010.1")
+        assert.equal(rawHttpUrlHostname("http://010.0.1/"), "010.0.1")
         assert.equal(rawHttpUrlHostname("http://172.017.0.1/"), "172.017.0.1")
         assert.equal(rawHttpUrlHostname("http://user:pass@0172.017.0.1:2333/x"), "0172.017.0.1")
         assert.equal(rawHttpUrlHostname("icy://010.0.0.1/stream"), "010.0.0.1")
