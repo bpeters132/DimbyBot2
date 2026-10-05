@@ -4,6 +4,7 @@ import type { GuildDashboardSnapshotResult } from "@/types/web"
 import { headers } from "next/headers"
 import { sanitizeErrorText } from "@/lib/sanitize-log-text"
 import { getGuildDashboardPermissionSnapshot } from "@/lib/api-auth"
+import { mapGuildDashboardSnapshotActionFailure } from "@/lib/dashboard-permission-snapshot-action"
 import { parseDashboardGuildId } from "@/shared/discord-user-id"
 
 /** Loads primary + OAuth-fallback web permission lists for dashboard UI gating. */
@@ -12,12 +13,7 @@ export async function getGuildDashboardSnapshotAction(
 ): Promise<GuildDashboardSnapshotResult> {
     const trimmed = parseDashboardGuildId(guildId)
     if (!trimmed) {
-        return {
-            ok: false,
-            status: 400,
-            error: "Invalid guild id",
-            details: "Expected a non-empty Discord snowflake (numeric id).",
-        }
+        return mapGuildDashboardSnapshotActionFailure("invalid_guild")
     }
     try {
         return await getGuildDashboardPermissionSnapshot(await headers(), trimmed)
@@ -28,11 +24,6 @@ export async function getGuildDashboardSnapshotAction(
             "[dashboard-permissions.actions] getGuildDashboardPermissionSnapshot failed:",
             msg
         )
-        return {
-            ok: false,
-            status: 503,
-            error: "Service unavailable",
-            details: "Could not load permission snapshot. Try again later.",
-        }
+        return mapGuildDashboardSnapshotActionFailure("snapshot_throw")
     }
 }

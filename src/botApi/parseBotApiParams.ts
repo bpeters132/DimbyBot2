@@ -76,3 +76,14 @@ export function parseEnqueueQuery(raw: unknown): string | null {
     const query = raw.trim()
     return query || null
 }
+
+/**
+ * Parses an optional dashboard guild id used to prefer a Lavalink player for playlist search.
+ * Non-strings, empty strings, and whitespace-only values are absent so search falls back to any
+ * active player instead of looking up a padded or blank guild id.
+ */
+export function parsePreferredGuildId(raw: unknown): string | undefined {
+    if (typeof raw !== "string") return undefined
+    const guildId = raw.trim()
+    return guildId || undefined
+}

@@ -17,11 +17,12 @@ import {
     clearPlayerSessionPreservePriorSnapshot,
     clearPlayerSessionRestoreInProgress,
     markPlayerSessionPreservePriorSnapshot,
+    getPlayerSessionClearEpoch,
     markPlayerSessionRestoreInProgress,
     schedulePlayerSessionSave,
 } from "./playerSessionPersistence.js"
 import { resolvePersistedTracks } from "./playerSessionTracks.js"
-import { schedulePrefetchWindow } from "./youtubePlaybackWindow.js"
+import { queueTrackIdentity, schedulePrefetchWindow } from "./youtubePlaybackWindow.js"
 import {
     withGuildPlayerLifecycleReservation,
     withGuildPlayerQueueLock,
@@ -29,11 +30,57 @@ import {
 import { countHumanMembers } from "./voiceChannelMembers.js"
 
 /**
- * Whether a successful partial hydrate may overwrite the persisted session snapshot.
- * Transient resolve failures must keep the prior full snapshot on disk.
+ * Live current + upcoming length. Used so restore persist can detect JIT prepare drops.
  */
-export function shouldPersistRestoredPlayerSession(transientFailures: number): boolean {
-    return transientFailures <= 0
+export function restoredLiveTrackCount(player: {
+    queue: { current?: unknown; tracks: { length: number } }
+}): number {
+    return (player.queue.current ? 1 : 0) + player.queue.tracks.length
+}
+
+type QueueIdentityTrack = Parameters<typeof queueTrackIdentity>[0]
+
+/**
+ * How many restored tracks are still on the live queue, matched by URI identity.
+ * A concurrent `/play` can replace a dropped restored track and keep the counts equal.
+ */
+export function retainedRestoredTrackCount(
+    restored: readonly { info?: { uri?: string | null } }[],
+    live: readonly { info?: { uri?: string | null } }[]
+): number {
+    const available = new Map<string, number>()
+    for (const track of live) {
+        const id = queueTrackIdentity(track as QueueIdentityTrack)
+        if (!id) continue
+        available.set(id, (available.get(id) ?? 0) + 1)
+    }
+    let retained = 0
+    for (const track of restored) {
+        const id = queueTrackIdentity(track as QueueIdentityTrack)
+        const left = id ? (available.get(id) ?? 0) : 0
+        if (left <= 0) continue
+        available.set(id, left - 1)
+        retained += 1
+    }
+    return retained
+}
+
+/**
+ * Whether a successful hydrate may overwrite the persisted session snapshot.
+ * Transient resolve failures, JIT playback-window drops (thinned live queue),
+ * and a live queue that no longer contains every restored track must keep the
+ * prior full snapshot on disk.
+ */
+export function shouldPersistRestoredPlayerSession(options: {
+    transientFailures: number
+    storedPlayableCount: number
+    liveTrackCount: number
+    retainedRestoredCount: number
+}): boolean {
+    if (options.transientFailures > 0) return false
+    if (options.liveTrackCount < options.storedPlayableCount) return false
+    if (options.retainedRestoredCount < options.storedPlayableCount) return false
+    return true
 }
 
 /**
@@ -78,6 +125,127 @@ export function shouldSkipRestoreHydrateForLivePlayer(
     live: RestoreLivePlayer | null | undefined
 ): boolean {
     return live != null && shouldAbandonRestoreForConcurrentQueue(live)
+}
+
+/**
+ * Transient Discord VC fetch defers restore without hydrating. Concurrent `/play` saves are
+ * no-ops until restore-in-progress clears; if the live player already has queue content, the
+ * next save would replace the fuller snapshot unless preserve-prior is set (same contract as
+ * {@link shouldSkipRestoreHydrateForLivePlayer} / #240).
+ *
+ * Do not mark when nothing concurrent landed — a later `/play` after restore has given up
+ * is new user intent and must be allowed to persist.
+ */
+export function shouldPreservePriorSnapshotAfterRestoreDefer(
+    live: RestoreLivePlayer | null | undefined
+): boolean {
+    return shouldSkipRestoreHydrateForLivePlayer(live)
+}
+
+/**
+ * After a deferred restore, mark preserve-prior only while the persisted session
+ * row is still there and the live player already has a queue. `/stop` deletes
+ * the row; the successor queue must be allowed to persist once restore-in-progress
+ * clears. A concurrent `/play` leaves the row in place.
+ */
+export function shouldMarkPreservePriorAfterDeferredRestore(options: {
+    sessionRowExists: boolean
+    liveHasQueue: boolean
+}): boolean {
+    return options.sessionRowExists && options.liveHasQueue
+}
+
+export type DeferredSessionLookup =
+    | { status: "resolved"; row: unknown | null }
+    | { status: "failed" }
+
+export type DeferredRestoreGuardAction = "mark-and-clear" | "clear" | "keep-guard"
+
+/** Attempts before a deferred session read is treated as failed. */
+export const DEFERRED_SESSION_READ_ATTEMPTS = 3
+
+/**
+ * Whether to drop restore-in-progress after a deferred restore.
+ * A failed read is not preserve-prior. If `/stop` or `/leave` already advanced
+ * the clear epoch, the successor may save. Otherwise the guard stays so a thin
+ * live queue cannot replace the fuller snapshot.
+ */
+export function deferredRestoreGuardAction(options: {
+    lookup: DeferredSessionLookup
+    liveHasQueue: boolean
+    clearEpochAtStart: number
+    clearEpochNow: number
+}): DeferredRestoreGuardAction {
+    if (options.lookup.status === "failed") {
+        if (options.clearEpochNow !== options.clearEpochAtStart) return "clear"
+        return "keep-guard"
+    }
+    if (
+        shouldMarkPreservePriorAfterDeferredRestore({
+            sessionRowExists: options.lookup.row != null,
+            liveHasQueue: options.liveHasQueue,
+        })
+    ) {
+        return "mark-and-clear"
+    }
+    return "clear"
+}
+
+/**
+ * Drops restore-in-progress per guild after the batch. A thrown session read
+ * cannot skip later guilds. A failed read keeps the guard only when the clear
+ * epoch has not moved.
+ */
+export async function releaseDeferredRestoreGuards(args: {
+    guildIds: readonly string[]
+    deferredGuildIds: ReadonlySet<string>
+    readSession: (guildId: string) => Promise<unknown | null>
+    liveHasQueue: (guildId: string) => boolean
+    clearEpochAtStart: (guildId: string) => number
+    clearEpochNow: (guildId: string) => number
+    markPreservePrior: (guildId: string) => void
+    clearRestoreInProgress: (guildId: string) => void
+    onLookupError: (guildId: string, err: unknown) => void
+    sessionReadAttempts?: number
+}): Promise<void> {
+    const attempts = args.sessionReadAttempts ?? DEFERRED_SESSION_READ_ATTEMPTS
+    for (const id of args.guildIds) {
+        let action: DeferredRestoreGuardAction = "clear"
+        try {
+            if (!args.deferredGuildIds.has(id)) continue
+            const lookup = await readDeferredSessionWithRetry(id, args.readSession, attempts)
+            if (lookup.status === "failed") args.onLookupError(id, lookup.error)
+            action = deferredRestoreGuardAction({
+                lookup:
+                    lookup.status === "failed"
+                        ? { status: "failed" }
+                        : { status: "resolved", row: lookup.row },
+                liveHasQueue: args.liveHasQueue(id),
+                clearEpochAtStart: args.clearEpochAtStart(id),
+                clearEpochNow: args.clearEpochNow(id),
+            })
+            if (action === "mark-and-clear") args.markPreservePrior(id)
+        } finally {
+            if (action !== "keep-guard") args.clearRestoreInProgress(id)
+        }
+    }
+}
+
+async function readDeferredSessionWithRetry(
+    guildId: string,
+    readSession: (guildId: string) => Promise<unknown | null>,
+    attempts: number
+): Promise<{ status: "resolved"; row: unknown | null } | { status: "failed"; error: unknown }> {
+    let lastError: unknown
+    const tries = Math.max(1, attempts)
+    for (let attempt = 0; attempt < tries; attempt++) {
+        try {
+            return { status: "resolved", row: await readSession(guildId) }
+        } catch (err: unknown) {
+            lastError = err
+        }
+    }
+    return { status: "failed", error: lastError }
 }
 
 /**
@@ -231,7 +399,10 @@ function resolveTextChannelId(session: PlayerSessionData): string | null {
     return settings?.controlChannelId ?? null
 }
 
-async function restoreSingleSession(client: BotClient, session: PlayerSessionData): Promise<void> {
+async function restoreSingleSession(
+    client: BotClient,
+    session: PlayerSessionData
+): Promise<"completed" | "deferred"> {
     const { guildId, voiceChannelId, snapshot } = session
 
     const existingBeforeRestore = client.lavalink.getPlayer(guildId)
@@ -243,7 +414,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
         client.debug(
             `[playerSession] restore skipped for ${guildId}: live player already has queue content`
         )
-        return
+        return "completed"
     }
 
     const voiceResult = await fetchVoiceChannel(client, guildId, voiceChannelId)
@@ -251,14 +422,19 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
         client.warn(
             `[playerSession] restore deferred for ${guildId}: transient Discord error fetching voice channel ${voiceChannelId}`
         )
-        return
+        // Do not mark preserve-prior here. `/stop` can delete the session row while
+        // this fetch is in flight, and a successor `/play` can fill the live queue
+        // before we return. An early mark would stick after the batch finally sees
+        // no row and skips its own mark, blocking successor saves. The finally applies
+        // shouldMarkPreservePriorAfterDeferredRestore before restore-in-progress clears.
+        return "deferred"
     }
     if (voiceResult.status === "missing") {
         client.info(
             `[playerSession] stale session removed for ${guildId}: voice channel ${voiceChannelId} not found`
         )
         await safeDeleteStaleSession(client, session)
-        return
+        return "completed"
     }
     const voiceChannel = voiceResult.channel
 
@@ -268,13 +444,13 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
             `[playerSession] stale session removed for ${guildId}: no humans in VC ${voiceChannelId}`
         )
         await safeDeleteStaleSession(client, session)
-        return
+        return "completed"
     }
 
     const tracksToRestore = [...(snapshot.current ? [snapshot.current] : []), ...snapshot.queue]
     if (tracksToRestore.length === 0) {
         await safeDeleteStaleSession(client, session)
-        return
+        return "completed"
     }
 
     const textChannelId = resolveTextChannelId(session)
@@ -450,17 +626,39 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
             scheduleControlMessageUpdate(client, guildId)
             playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
             // schedulePlayerSessionSave is a no-op while restore-in-progress; persist after clear.
-            // Skip save when some tracks failed transiently — otherwise a partial hydrate would
-            // permanently drop those entries from the session snapshot. Mark preserve *before*
+            // Skip save when some tracks failed transiently OR JIT prepare dropped heads
+            // (false-permanent catalog/search misses during node warmup). Otherwise a
+            // thinned live queue would replace the fuller DB row. Mark preserve *before*
             // clearPlayerSessionRestoreInProgress so trackStart/trackEnd/shutdown/idle clear
             // cannot race and wipe the prior full row.
-            if (shouldPersistRestoredPlayerSession(transientTotal)) {
+            const liveTracks = [
+                ...(player.queue.current ? [player.queue.current] : []),
+                ...player.queue.tracks,
+            ]
+            const liveCount = liveTracks.length
+            const retained = retainedRestoredTrackCount(playable, liveTracks)
+            if (
+                shouldPersistRestoredPlayerSession({
+                    transientFailures: transientTotal,
+                    storedPlayableCount: playable.length,
+                    liveTrackCount: liveCount,
+                    retainedRestoredCount: retained,
+                })
+            ) {
                 clearPlayerSessionPreservePriorSnapshot(guildId)
                 playerToPersist = player
             } else {
                 markPlayerSessionPreservePriorSnapshot(guildId)
+                const dropped = Math.max(0, playable.length - liveCount)
+                const missing = Math.max(0, playable.length - retained)
                 client.warn(
-                    `[playerSession] restore for ${guildId}: skipping session save after ${transientTotal} transient failure(s); preserving prior snapshot`
+                    `[playerSession] restore for ${guildId}: skipping session save` +
+                        (transientTotal > 0
+                            ? ` after ${transientTotal} transient failure(s)`
+                            : missing > 0
+                              ? ` after ${missing} restored track(s) left the live queue`
+                              : ` after JIT prepare dropped ${dropped} track(s)`) +
+                        "; preserving prior snapshot"
                 )
             }
         })
@@ -507,6 +705,7 @@ async function restoreSingleSession(client: BotClient, session: PlayerSessionDat
             schedulePlayerSessionSave(playerToPersist)
         }
     }
+    return "completed"
 }
 
 function scheduleControlMessageUpdate(client: BotClient, guildId: string): void {
@@ -537,17 +736,39 @@ export async function restorePlayerSessions(client: BotClient): Promise<boolean>
     // only after voice fetch inside restoreSingleSession, so a concurrent /play on a
     // later guild can persist a thin live queue over the fuller snapshot (#240 hole).
     const restoreGuildIds = guildIdsNeedingRestoreSaveGuard(sessions)
+    const clearEpochAtStart = new Map<string, number>()
     for (const id of restoreGuildIds) {
         markPlayerSessionRestoreInProgress(id)
+        clearEpochAtStart.set(id, getPlayerSessionClearEpoch(id))
     }
+    const deferredGuildIds: string[] = []
     try {
         for (const session of sessions) {
-            await restoreSingleSession(client, session)
+            const result = await restoreSingleSession(client, session)
+            if (result === "deferred") deferredGuildIds.push(session.guildId)
         }
         return true
     } finally {
-        for (const id of restoreGuildIds) {
-            clearPlayerSessionRestoreInProgress(id)
-        }
+        // `/play` can land after a transient defer but while later guilds are still
+        // restoring (outer restore-in-progress still blocks saves). Re-check live
+        // queues before dropping that guard so a thin session cannot overwrite the
+        // fuller snapshot. `/stop` deletes that row first; do not mark preserve-prior
+        // then, or the successor queue cannot be saved after this guard clears.
+        const deferred = new Set(deferredGuildIds)
+        await releaseDeferredRestoreGuards({
+            guildIds: restoreGuildIds,
+            deferredGuildIds: deferred,
+            readSession: (id) => getPlayerSession(id),
+            liveHasQueue: (id) =>
+                shouldPreservePriorSnapshotAfterRestoreDefer(client.lavalink.getPlayer(id)),
+            clearEpochAtStart: (id) => clearEpochAtStart.get(id) ?? 0,
+            clearEpochNow: getPlayerSessionClearEpoch,
+            markPreservePrior: markPlayerSessionPreservePriorSnapshot,
+            clearRestoreInProgress: clearPlayerSessionRestoreInProgress,
+            onLookupError: (id, err) => {
+                const msg = err instanceof Error ? err.message : String(err)
+                client.error(`[playerSession] restore session lookup failed for ${id}: ${msg}`)
+            },
+        })
     }
 }

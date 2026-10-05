@@ -488,17 +488,25 @@ async function resolveSpotifyCatalogPlaybackTrack(
     }
 
     let youtubeHit: Track | UnresolvedTrack | undefined
+    let searchThrew = false
     for (const query of queries) {
         log.debug(`${LOG_PREFIX} catalog searching YouTube for ${id}`)
         try {
             const res = await player.search(query, track.requester)
             youtubeHit = (res?.tracks ?? []).find((candidate) => isYoutubeSourceTrack(candidate))
             if (youtubeHit) break
-        } catch {
-            log.warn(`${LOG_PREFIX} catalog YouTube search failed for ${id}`)
+        } catch (err: unknown) {
+            searchThrew = true
+            const msg = err instanceof Error ? err.message : String(err)
+            log.warn(`${LOG_PREFIX} catalog YouTube search failed for ${id}: ${msg}`)
         }
     }
     if (!youtubeHit) {
+        // Search throws (node warmup, timeout) are not catalog misses. The miss
+        // message is classified permanent and would drop the track from the queue.
+        if (searchThrew) {
+            throw new Error(`YouTube search failed for Spotify catalog track ${id}`)
+        }
         log.warn(`${LOG_PREFIX} catalog YouTube search miss for ${id}`)
         throw new Error(`No YouTube search result for Spotify catalog track ${id}.`)
     }

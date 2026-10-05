@@ -16,6 +16,7 @@ import {
     PREFETCH_UPCOMING_COUNT,
     queueMetadataTrackFromFields,
     queueTrackIdentity,
+    companionRetryApplyMissedFailedTrack,
     retryCompanionPlaybackOnce,
 } from "./youtubePlaybackWindow.js"
 import { isCompanionResolvedTrack } from "./youtubeCompanionPlayback.js"
@@ -244,6 +245,12 @@ describe("playlist load type + metadata helpers", () => {
             false
         )
         assert.equal(isPermanentYoutubePlaybackFailure(new Error("fetch failed")), false)
+        assert.equal(
+            isPermanentYoutubePlaybackFailure(
+                new Error("YouTube search failed for Spotify catalog track abc")
+            ),
+            false
+        )
     })
 
     it("normalizes queue track identity for case and trailing slashes", () => {
@@ -327,6 +334,28 @@ describe("ensureCurrentPlayable + prefetch window", () => {
         )
         assert.equal(result, "empty")
         assert.equal(player.queue.current, null)
+    })
+
+    it("defers Spotify catalog current when Lavalink YouTube search throws", async () => {
+        const meta = queueMetadataTrackFromFields({
+            title: "Worth it",
+            author: "Outr3ach",
+            uri: "https://open.spotify.com/track/4hqIKGKzDVJXCnD80y2fyn",
+            duration: 259000,
+            isrc: "USRC17600001",
+        })
+        assert.ok(meta)
+        const player = mockWindowPlayer("g-spotify-throw", [], meta)
+        player.search = async () => {
+            throw new Error("ECONNRESET")
+        }
+        const result = await ensureCurrentPlayable(
+            () => player,
+            "g-spotify-throw",
+            configWithFetch(companionOkFetch())
+        )
+        assert.equal(result, "deferred")
+        assert.equal(player.queue.current, meta)
     })
 
     it("skips permanently unplayable head items and starts the next playable", async () => {
@@ -686,6 +715,27 @@ describe("skip upcoming + companion retry", () => {
         assert.equal(isYoutubePlaybackReady(track), false)
     })
 
+    it("returns moved when remint throws after the live track advanced", async () => {
+        const failed = youtubeTrack(VIDEO_A)
+        ;(failed as { userData?: Record<string, unknown> }).userData = {
+            invidiousCompanionResolved: true,
+        }
+        const next = youtubeTrack(VIDEO_B)
+        const player = mockWindowPlayer("g-retry-throw-moved", [], failed)
+        const result = await retryCompanionPlaybackOnce(
+            () => player,
+            "g-retry-throw-moved",
+            failed,
+            configWithFetch(async () => {
+                player.queue.current = next
+                throw new Error("companion down")
+            })
+        )
+        assert.equal(result, "moved")
+        assert.equal(player.queue.current, next)
+        assert.equal(isCompanionRetryUsed(failed), true)
+    })
+
     it("demotes on a failed remint so queue-repeat cannot skip-loop the same HTTP item", async () => {
         const current = youtubeTrack(VIDEO_A)
         ;(current as { userData?: Record<string, unknown> }).userData = {
@@ -803,22 +853,64 @@ describe("skip upcoming + companion retry", () => {
         assert.equal(isCompanionResolvedTrack(successor.queue.current as Track), false)
     })
 
-    it("skips companion retry when live current no longer matches the failed track", async () => {
+    it("returns moved when live current no longer matches the failed track", async () => {
         const failed = youtubeTrack(VIDEO_A)
         ;(failed as { userData?: Record<string, unknown> }).userData = {
             invidiousCompanionResolved: true,
         }
-        const player = mockWindowPlayer("g-retry-mismatch", [], youtubeTrack(VIDEO_B))
+        const next = youtubeTrack(VIDEO_B)
+        const player = mockWindowPlayer("g-retry-mismatch", [], next)
+        let plays = 0
+        ;(player as { play: () => Promise<void> }).play = async () => {
+            plays += 1
+        }
         const result = await retryCompanionPlaybackOnce(
             () => player,
             "g-retry-mismatch",
             failed,
             configWithFetch(companionOkFetch())
         )
-        assert.equal(result, "skip")
+        assert.equal(result, "moved")
+        assert.equal(plays, 0)
         assert.equal(isCompanionRetryUsed(failed), true)
+        assert.equal(player.queue.current, next)
         assert.equal(player.queue.current?.info.identifier, VIDEO_B)
         assert.equal(isCompanionResolvedTrack(player.queue.current as Track), false)
+    })
+
+    it("classifies remint apply miss as moved only when the same player already advanced", () => {
+        assert.equal(
+            companionRetryApplyMissedFailedTrack({
+                sameLivePlayer: true,
+                currentIdentity: "https://youtu.be/b",
+                failedIdentity: "https://youtu.be/a",
+            }),
+            "moved"
+        )
+        assert.equal(
+            companionRetryApplyMissedFailedTrack({
+                sameLivePlayer: true,
+                currentIdentity: "https://youtu.be/a",
+                failedIdentity: "https://youtu.be/a",
+            }),
+            "skip"
+        )
+        assert.equal(
+            companionRetryApplyMissedFailedTrack({
+                sameLivePlayer: true,
+                currentIdentity: null,
+                failedIdentity: "https://youtu.be/a",
+            }),
+            "skip"
+        )
+        assert.equal(
+            companionRetryApplyMissedFailedTrack({
+                sameLivePlayer: false,
+                currentIdentity: "https://youtu.be/b",
+                failedIdentity: "https://youtu.be/a",
+            }),
+            "skip"
+        )
     })
 
     it("marks retry used without affecting a fresh track", () => {

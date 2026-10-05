@@ -7,7 +7,13 @@ import {
     shouldAbandonRestoreForConcurrentQueue,
     shouldDeleteStaleRestoredSession,
     shouldPersistConcurrentAbandonSession,
+    restoredLiveTrackCount,
+    deferredRestoreGuardAction,
+    releaseDeferredRestoreGuards,
+    retainedRestoredTrackCount,
+    shouldMarkPreservePriorAfterDeferredRestore,
     shouldPersistRestoredPlayerSession,
+    shouldPreservePriorSnapshotAfterRestoreDefer,
     shouldSkipRestoreHydrateForLivePlayer,
 } from "./restorePlayerSessions.js"
 
@@ -28,15 +34,98 @@ describe("isStaleSessionDiscordError", () => {
     })
 })
 
+describe("restoredLiveTrackCount", () => {
+    it("counts current plus upcoming", () => {
+        assert.equal(
+            restoredLiveTrackCount({ queue: { current: { id: "now" }, tracks: [{}, {}] } }),
+            3
+        )
+        assert.equal(restoredLiveTrackCount({ queue: { current: null, tracks: [{}, {}] } }), 2)
+        assert.equal(restoredLiveTrackCount({ queue: { current: { id: "now" }, tracks: [] } }), 1)
+        assert.equal(restoredLiveTrackCount({ queue: { current: null, tracks: [] } }), 0)
+    })
+})
+
+describe("retainedRestoredTrackCount", () => {
+    it("does not count a newly enqueued track as a retained restored track", () => {
+        const restored = [
+            { info: { uri: "https://youtu.be/a" } },
+            { info: { uri: "https://youtu.be/b" } },
+        ]
+        const live = [
+            { info: { uri: "https://youtu.be/a" } },
+            { info: { uri: "https://youtu.be/c" } },
+        ]
+        assert.equal(retainedRestoredTrackCount(restored, live), 1)
+    })
+})
+
 describe("shouldPersistRestoredPlayerSession", () => {
-    it("allows save when every track resolved (no transient failures)", () => {
-        assert.equal(shouldPersistRestoredPlayerSession(0), true)
+    it("allows save when every stored track is still on the live player", () => {
+        assert.equal(
+            shouldPersistRestoredPlayerSession({
+                transientFailures: 0,
+                storedPlayableCount: 5,
+                liveTrackCount: 5,
+                retainedRestoredCount: 5,
+            }),
+            true
+        )
     })
 
     it("blocks save when at least one track failed transiently (partial hydrate)", () => {
         // One resolved + one transient failure must not overwrite the full prior snapshot.
-        assert.equal(shouldPersistRestoredPlayerSession(1), false)
-        assert.equal(shouldPersistRestoredPlayerSession(2), false)
+        assert.equal(
+            shouldPersistRestoredPlayerSession({
+                transientFailures: 1,
+                storedPlayableCount: 5,
+                liveTrackCount: 4,
+                retainedRestoredCount: 4,
+            }),
+            false
+        )
+        assert.equal(
+            shouldPersistRestoredPlayerSession({
+                transientFailures: 2,
+                storedPlayableCount: 5,
+                liveTrackCount: 5,
+                retainedRestoredCount: 5,
+            }),
+            false
+        )
+    })
+
+    it("blocks save when JIT prepare dropped heads (thinned live queue must not wipe DB)", () => {
+        assert.equal(
+            shouldPersistRestoredPlayerSession({
+                transientFailures: 0,
+                storedPlayableCount: 50,
+                liveTrackCount: 49,
+                retainedRestoredCount: 49,
+            }),
+            false
+        )
+        assert.equal(
+            shouldPersistRestoredPlayerSession({
+                transientFailures: 0,
+                storedPlayableCount: 50,
+                liveTrackCount: 0,
+                retainedRestoredCount: 0,
+            }),
+            false
+        )
+    })
+
+    it("blocks save when a dropped restored track is replaced by a new track", () => {
+        assert.equal(
+            shouldPersistRestoredPlayerSession({
+                transientFailures: 0,
+                storedPlayableCount: 2,
+                liveTrackCount: 2,
+                retainedRestoredCount: 1,
+            }),
+            false
+        )
     })
 })
 
@@ -92,6 +181,163 @@ describe("shouldSkipRestoreHydrateForLivePlayer", () => {
         )
         assert.equal(shouldSkipRestoreHydrateForLivePlayer(null), false)
         assert.equal(shouldSkipRestoreHydrateForLivePlayer(undefined), false)
+    })
+})
+
+describe("shouldPreservePriorSnapshotAfterRestoreDefer", () => {
+    it("preserves the fuller snapshot when a concurrent /play filled the player during a deferred voice fetch", () => {
+        assert.equal(
+            shouldPreservePriorSnapshotAfterRestoreDefer({
+                queue: { current: { id: "thin" }, tracks: [] },
+            }),
+            true
+        )
+        assert.equal(
+            shouldPreservePriorSnapshotAfterRestoreDefer({
+                queue: { current: null, tracks: [{ id: "a" }] },
+            }),
+            true
+        )
+    })
+
+    it("does not mark preserve-prior when nothing concurrent landed (later /play may persist)", () => {
+        assert.equal(shouldPreservePriorSnapshotAfterRestoreDefer(null), false)
+        assert.equal(shouldPreservePriorSnapshotAfterRestoreDefer(undefined), false)
+        assert.equal(
+            shouldPreservePriorSnapshotAfterRestoreDefer({
+                queue: { current: null, tracks: [] },
+            }),
+            false
+        )
+    })
+})
+
+describe("shouldMarkPreservePriorAfterDeferredRestore", () => {
+    it("marks preserve-prior when the session row is still there and the live player has a queue", () => {
+        assert.equal(
+            shouldMarkPreservePriorAfterDeferredRestore({
+                sessionRowExists: true,
+                liveHasQueue: true,
+            }),
+            true
+        )
+    })
+
+    it("does not mark preserve-prior after /stop deleted the session row", () => {
+        // Transient voice fetch must not mark before this check. An early mark
+        // would stick after the batch finally sees no row and block successor saves.
+        assert.equal(
+            shouldMarkPreservePriorAfterDeferredRestore({
+                sessionRowExists: false,
+                liveHasQueue: true,
+            }),
+            false
+        )
+        assert.equal(
+            shouldMarkPreservePriorAfterDeferredRestore({
+                sessionRowExists: true,
+                liveHasQueue: false,
+            }),
+            false
+        )
+    })
+})
+
+describe("deferredRestoreGuardAction", () => {
+    it("keeps the guard when the read fails and nothing cleared the session", () => {
+        assert.equal(
+            deferredRestoreGuardAction({
+                lookup: { status: "failed" },
+                liveHasQueue: true,
+                clearEpochAtStart: 1,
+                clearEpochNow: 1,
+            }),
+            "keep-guard"
+        )
+    })
+
+    it("clears without marking when the read fails after /stop advanced the epoch", () => {
+        assert.equal(
+            deferredRestoreGuardAction({
+                lookup: { status: "failed" },
+                liveHasQueue: true,
+                clearEpochAtStart: 1,
+                clearEpochNow: 2,
+            }),
+            "clear"
+        )
+    })
+})
+
+describe("releaseDeferredRestoreGuards", () => {
+    it("keeps the failed guild guarded when the epoch is unchanged and still clears the next guild", async () => {
+        const cleared: string[] = []
+        const marked: string[] = []
+        const errors: string[] = []
+        await releaseDeferredRestoreGuards({
+            guildIds: ["a", "b", "c"],
+            deferredGuildIds: new Set(["a", "b", "c"]),
+            readSession: async (guildId) => {
+                if (guildId === "b") throw new Error("db down")
+                return { guildId }
+            },
+            liveHasQueue: () => true,
+            clearEpochAtStart: () => 0,
+            clearEpochNow: () => 0,
+            markPreservePrior: (guildId) => marked.push(guildId),
+            clearRestoreInProgress: (guildId) => cleared.push(guildId),
+            onLookupError: (guildId) => errors.push(guildId),
+            sessionReadAttempts: 1,
+        })
+        assert.deepEqual(cleared, ["a", "c"])
+        assert.deepEqual(marked, ["a", "c"])
+        assert.deepEqual(errors, ["b"])
+    })
+
+    it("clears the failed guild without marking when the epoch advanced", async () => {
+        const cleared: string[] = []
+        const marked: string[] = []
+        await releaseDeferredRestoreGuards({
+            guildIds: ["a", "b"],
+            deferredGuildIds: new Set(["a", "b"]),
+            readSession: async (guildId) => {
+                if (guildId === "b") throw new Error("db down")
+                return { guildId }
+            },
+            liveHasQueue: () => true,
+            clearEpochAtStart: (guildId) => (guildId === "b" ? 1 : 0),
+            clearEpochNow: (guildId) => (guildId === "b" ? 2 : 0),
+            markPreservePrior: (guildId) => marked.push(guildId),
+            clearRestoreInProgress: (guildId) => cleared.push(guildId),
+            onLookupError: () => undefined,
+            sessionReadAttempts: 1,
+        })
+        assert.deepEqual(cleared, ["a", "b"])
+        assert.deepEqual(marked, ["a"])
+    })
+
+    it("treats a later successful read as resolved", async () => {
+        const marked: string[] = []
+        const cleared: string[] = []
+        let tries = 0
+        await releaseDeferredRestoreGuards({
+            guildIds: ["a"],
+            deferredGuildIds: new Set(["a"]),
+            readSession: async () => {
+                tries += 1
+                if (tries < 3) throw new Error("blip")
+                return { guildId: "a" }
+            },
+            liveHasQueue: () => true,
+            clearEpochAtStart: () => 0,
+            clearEpochNow: () => 0,
+            markPreservePrior: (guildId) => marked.push(guildId),
+            clearRestoreInProgress: (guildId) => cleared.push(guildId),
+            onLookupError: () => undefined,
+        })
+        assert.equal(tries, 3)
+        assert.deepEqual(marked, ["a"])
+        assert.deepEqual(cleared, ["a"])
     })
 })
 

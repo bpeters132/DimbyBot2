@@ -383,19 +383,43 @@ export function schedulePrefetchWindow(
 }
 
 /**
+ * After remint apply fails, whether trackError recovery must still skip/idle.
+ * Same Player with a different current track means skip (or the library) already
+ * advanced — a further `skipCurrentTrack` would drop the new current.
+ * Successor replace stays `"skip"` so the handler's identity-stale gate runs.
+ */
+export function companionRetryApplyMissedFailedTrack(args: {
+    sameLivePlayer: boolean
+    currentIdentity: string | null
+    failedIdentity: string
+}): "moved" | "skip" {
+    if (
+        args.sameLivePlayer &&
+        args.currentIdentity != null &&
+        args.currentIdentity !== args.failedIdentity
+    ) {
+        return "moved"
+    }
+    return "skip"
+}
+
+/**
  * On companion HTTP trackError: re-mint that item once, then skip-and-refill.
  *
  * Remint awaits companion HTTP and Lavalink `search`. Destroyed `Player.play()` still
  * issues guild-keyed `node.updatePlayer` (no destroy-status gate), so a `/stop` + `/play`
  * successor that lands in that window would restart or replace the new session. Apply and
  * play only while the same Player instance still owns the guild slot.
+ *
+ * `"moved"` means the same Player already advanced off the failed track (user skip during
+ * remint) — the caller must not skip/idle again.
  */
 export async function retryCompanionPlaybackOnce(
     getLivePlayer: () => Player | undefined,
     guildId: string,
     failedTrack: Track | UnresolvedTrack | null,
     config: CompanionPlaybackConfig | null = playbackConfig()
-): Promise<"retried" | "skip"> {
+): Promise<"retried" | "skip" | "moved"> {
     if (!failedTrack || !isCompanionResolvedTrack(failedTrack)) {
         return "skip"
     }
@@ -426,7 +450,14 @@ export async function retryCompanionPlaybackOnce(
         })
         if (!applied) {
             demoteCompanionResolvedTrack(failedTrack)
-            return "skip"
+            const liveAfterMiss = livePlayer(getLivePlayer, guildId)
+            return companionRetryApplyMissedFailedTrack({
+                sameLivePlayer: isSameLivePlayer(liveAfterMiss, snapshot),
+                currentIdentity: liveAfterMiss?.queue.current
+                    ? queueTrackIdentity(liveAfterMiss.queue.current)
+                    : null,
+                failedIdentity: queueTrackIdentity(failedTrack),
+            })
         }
         const live = livePlayer(getLivePlayer, guildId)
         if (!isSameLivePlayer(live, snapshot)) {
@@ -439,6 +470,13 @@ export async function retryCompanionPlaybackOnce(
         const msg = err instanceof Error ? err.message : String(err)
         windowLogger(config).warn(`${LOG_PREFIX} companion retry failed: ${msg}`)
         demoteCompanionResolvedTrack(failedTrack)
-        return "skip"
+        const liveAfterError = livePlayer(getLivePlayer, guildId)
+        return companionRetryApplyMissedFailedTrack({
+            sameLivePlayer: isSameLivePlayer(liveAfterError, snapshot),
+            currentIdentity: liveAfterError?.queue.current
+                ? queueTrackIdentity(liveAfterError.queue.current)
+                : null,
+            failedIdentity: queueTrackIdentity(failedTrack),
+        })
     }
 }

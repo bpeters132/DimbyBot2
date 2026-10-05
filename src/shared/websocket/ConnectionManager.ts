@@ -13,6 +13,13 @@ import {
 } from "./wsSubscribeDecision.js"
 import { parseWsClientMessage } from "./wsClientMessage.js"
 import { resolveWsUpgradeAuth } from "./wsUpgradeAuth.js"
+import {
+    forceUnsubscribeErrorFrame,
+    forceUnsubscribeUnsubscribedFrame,
+    mapWsCanViewPlayer,
+    subscribeDenialErrorFrame,
+    type WsViewPlayerDenialCode,
+} from "./wsCanViewPlayer.js"
 import { webPlayerTrace, webPlayerWarn } from "../web-player-debug-log.js"
 
 interface SocketMeta {
@@ -186,44 +193,45 @@ export class ConnectionManager {
         userId: string
     ): Promise<boolean> {
         const botClient = tryGetBotClient()
-        if (!botClient) {
-            this.forceUnsubscribeSocket(socket, guildId, "BOT_UNAVAILABLE")
-            return false
-        }
-        try {
-            const resolution = await resolveUserPermissions(botClient, guildId, userId)
-            const allowed = hasRequiredPermissions(resolution.permissions, [
-                WebPermission.VIEW_PLAYER,
-            ])
-            if (!allowed) {
-                this.forceUnsubscribeSocket(socket, guildId, "SUBSCRIBE_FORBIDDEN")
-                return false
+        let permissionResolutionFailed = false
+        let hasViewPlayer = false
+        if (botClient) {
+            try {
+                const resolution = await resolveUserPermissions(botClient, guildId, userId)
+                hasViewPlayer = hasRequiredPermissions(resolution.permissions, [
+                    WebPermission.VIEW_PLAYER,
+                ])
+            } catch (err: unknown) {
+                permissionResolutionFailed = true
+                const message = err instanceof Error ? err.message : String(err)
+                webPlayerWarn("WS permission resolution failed (canViewPlayer)", {
+                    guildId,
+                    userId,
+                    message,
+                })
             }
-            return true
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err)
-            webPlayerWarn("WS permission resolution failed (canViewPlayer)", {
-                guildId,
-                userId,
-                message,
-            })
-            this.forceUnsubscribeSocket(socket, guildId, "PERMISSION_RESOLUTION_ERROR")
+        }
+        const decision = mapWsCanViewPlayer({
+            botReady: Boolean(botClient),
+            permissionResolutionFailed,
+            hasViewPlayer,
+        })
+        if (decision.allowed === false) {
+            this.forceUnsubscribeSocket(socket, guildId, decision.code)
             return false
         }
+        return true
     }
 
-    private forceUnsubscribeSocket(socket: WebSocket, guildId: string, code: string): void {
+    private forceUnsubscribeSocket(
+        socket: WebSocket,
+        guildId: string,
+        code: WsViewPlayerDenialCode
+    ): void {
         this.unsubscribe(socket, guildId)
         if (socket.readyState === WebSocket.OPEN) {
-            socket.send(
-                JSON.stringify({
-                    type: "error",
-                    code,
-                    message:
-                        "Live updates were removed because your access to this guild player changed.",
-                })
-            )
-            socket.send(JSON.stringify({ type: "unsubscribed", guildId }))
+            socket.send(JSON.stringify(forceUnsubscribeErrorFrame(code)))
+            socket.send(JSON.stringify(forceUnsubscribeUnsubscribedFrame(guildId)))
         }
     }
 
@@ -250,14 +258,7 @@ export class ConnectionManager {
             const botClient = tryGetBotClient()
             if (!botClient) {
                 this.subscribeLastAttempt.set(socket, { guildId, at: Date.now(), success: false })
-                socket.send(
-                    JSON.stringify({
-                        type: "error",
-                        code: "BOT_UNAVAILABLE",
-                        message:
-                            "Live updates require the bot process to be running with this dashboard.",
-                    })
-                )
+                socket.send(JSON.stringify(subscribeDenialErrorFrame("BOT_UNAVAILABLE")))
                 return
             }
 
@@ -316,11 +317,7 @@ export class ConnectionManager {
                     message,
                 })
                 socket.send(
-                    JSON.stringify({
-                        type: "error",
-                        code: "PERMISSION_RESOLUTION_ERROR",
-                        message: "Could not resolve permissions for this subscription request.",
-                    })
+                    JSON.stringify(subscribeDenialErrorFrame("PERMISSION_RESOLUTION_ERROR"))
                 )
                 return
             }
@@ -340,14 +337,7 @@ export class ConnectionManager {
                     permissions: resolution.permissions,
                     inVoiceWithBot: resolution.inVoiceWithBot,
                 })
-                socket.send(
-                    JSON.stringify({
-                        type: "error",
-                        code: "SUBSCRIBE_FORBIDDEN",
-                        message:
-                            "Live updates are blocked: the bot could not verify your access to this server’s player (sign in with Discord, same account as in the server). This is not about voice channels or whether music is playing.",
-                    })
-                )
+                socket.send(JSON.stringify(subscribeDenialErrorFrame("SUBSCRIBE_FORBIDDEN")))
                 return
             }
 

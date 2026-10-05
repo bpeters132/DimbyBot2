@@ -104,20 +104,8 @@ export async function playerPOST(
                 const skipped = await skipCurrentTrack(player, undefined, () =>
                     client.lavalink.getPlayer(guildId)
                 )
-                if (skipped === "stale") {
-                    return {
-                        status: 409,
-                        body: {
-                            ok: false,
-                            error: {
-                                error: "player_replaced",
-                                details: "The player was replaced. Try skip again.",
-                            },
-                        },
-                    }
-                }
-                const deferredHttp = playerHttpResultForSkip(skipped)
-                if (deferredHttp) return deferredHttp
+                const skipHttp = playerHttpResultForSkip(skipped)
+                if (skipHttp) return skipHttp
                 break
             }
             case "stop":

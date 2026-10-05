@@ -883,6 +883,29 @@ describe("Spotify catalog → YouTube search → companion", () => {
         )
     })
 
+    it("throws a non-miss error when YouTube search throws so playback can defer", async () => {
+        const catalog = spotifyTrack()
+        const rec = recordingLogger()
+        const player = mockPlayer(async () => {
+            throw new Error("ECONNRESET")
+        })
+        await assert.rejects(
+            () =>
+                resolveYoutubePlaybackTrack(
+                    player,
+                    catalog,
+                    configWithFetch(companionOkFetch(), [], rec.logger)
+                ),
+            { message: /YouTube search failed for Spotify catalog track/ }
+        )
+        assert.ok(
+            rec.lines.some(
+                (line) =>
+                    line.level === "warn" && line.message.includes("catalog YouTube search failed")
+            )
+        )
+    })
+
     it("skips unplayable catalog tracks in a playlist batch", async () => {
         const miss = spotifyTrack({ identifier: "miss-id", isrc: "MISS00000000", title: "Miss" })
         const hit = spotifyTrack({ identifier: "hit-id", isrc: "HIT000000000" })

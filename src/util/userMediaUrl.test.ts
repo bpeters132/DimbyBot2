@@ -3,6 +3,7 @@ import { describe, it } from "node:test"
 import {
     isBlockedUserMediaUrl,
     isHttpUrlQuery,
+    rawHttpUrlHostname,
     rewriteIcySchemeToHttp,
     trimmedHttpUrlQuery,
     unwrapDirectLinkSourcePrefix,
@@ -109,6 +110,25 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://[fd12:3456:789a:1::1]/"), true)
         assert.equal(isBlockedUserMediaUrl("http://[fe90::1]/"), true)
         assert.equal(isBlockedUserMediaUrl("http://[febf::1]/"), true) // still fe80::/10
+    })
+
+    it("rejects leading-zero IPv4 literals that WHATWG rewrites to a public host", () => {
+        // Node URL hostname is octal (`010.0.0.1` → `8.0.0.1`); Java InetAddress is decimal
+        // (`10.0.0.1`). player.search sends the original identifier to Lavalink/Lavaplayer.
+        assert.equal(isBlockedUserMediaUrl("http://010.0.0.1:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://172.017.0.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://0172.017.0.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://user:pass@010.0.0.1:5432/secret"), true)
+        assert.equal(isBlockedUserMediaUrl("http://010.0.0.1./"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://010.0.0.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://010.0.0.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("uri:http://172.017.0.1/audio.mp3"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://010.0.0.1/stream"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://010.0.0.1:5432/"), true)
+        // Public dotted-decimal (including WHATWG's rewritten form) must stay allowed.
+        assert.equal(isBlockedUserMediaUrl("http://8.8.8.8/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://172.15.0.1/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://8.0.0.1/"), false)
     })
 
     it("rejects Docker-internal single-label hosts", () => {
@@ -285,6 +305,127 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://a9fea9fe.attacker.example/"), true)
         // Public hex IPv4 8.8.8.8 must stay allowed
         assert.equal(isBlockedUserMediaUrl("http://08080808.attacker.example/"), false)
+        // lndo.site: Lando public wildcard loopback (apex is a public AWS site)
+        assert.equal(isBlockedUserMediaUrl("http://app.lndo.site/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.lndo.site:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://mysite.lndo.site/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://lndo.site/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://APP.LNDO.SITE/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://app.lndo.site:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://foo.lndo.site/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://app.lndo.site/"), true)
+        // backname.io IPv6 dash (`--` → `::`) is not four hyphen octets
+        assert.equal(isBlockedUserMediaUrl("http://0--1.backname.io/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://0--ffff-a00-1.backname.io/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://0--ffff-7f00-1.backname.io:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://fc00--1.backname.io/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://0--ffff-a00-1.backname.io/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://0--1.backname.io/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://0--ffff-a00-1.backname.io/"), true)
+        // Same IPv6 dash encoder under an unfamiliar suffix
+        assert.equal(isBlockedUserMediaUrl("http://0--1.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://0--ffff-a00-1.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://0--ffff-7f00-1.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://fc00--1.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://fd12-3456-789a-1--1.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://fe80--1.attacker.example/"), true)
+        // GCP IMDS hostname (A 169.254.169.254); not IP-in-name
+        assert.equal(isBlockedUserMediaUrl("http://metadata.goog/"), true)
+        assert.equal(isBlockedUserMediaUrl("https://metadata.goog/computeMetadata/v1/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://metadata.goog/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://metadata.goog/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://metadata.google.internal/"), true)
+        // ddev.site: DDEV public wildcard loopback (apex has no A)
+        assert.equal(isBlockedUserMediaUrl("http://foo.ddev.site/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://app.ddev.site:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://mysite.ddev.site/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://www.ddev.site/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://FOO.DDEV.SITE/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://foo.ddev.site:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://foo.ddev.site/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://foo.ddev.site/"), true)
+        // docksal.site: Docksal public wildcard RFC1918 (apex is a public site)
+        assert.equal(isBlockedUserMediaUrl("http://foo.docksal.site/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://app.docksal.site:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://anything.docksal.site/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://docksal.site/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://foo.docksal.site/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://foo.docksal.site/"), true)
+        // docker.amazee.io: Lagoon/Pygmy public loopback zone (amazee.io stays public)
+        assert.equal(isBlockedUserMediaUrl("http://foo.docker.amazee.io/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://docker.amazee.io/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://myapp.docker.amazee.io:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://foo.docker.amazee.io/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://docker.amazee.io/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://amazee.io/"), false)
+        // lagoon.cloud: Lagoon public wildcard RFC1918 (apex has no A)
+        assert.equal(isBlockedUserMediaUrl("http://foo.lagoon.cloud/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://www.lagoon.cloud/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://app.lagoon.cloud:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.us.lagoon.cloud/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://foo.lagoon.cloud/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://app.lagoon.cloud/"), true)
+        // sslip compact IPv4-mapped: `ffff-` + 8 hex (not a standalone hex label)
+        assert.equal(isBlockedUserMediaUrl("http://ffff-0a000001.my.local-ip.co/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://ffff-7f000001.my.local-ip.co:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://ffff-c0a80001.my.local-ip.co/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://ffff-a9fea9fe.my.local-ip.co/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://ffff-0a000001.my.local-ip.co/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://ffff-0a000001.my.local-ip.co/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://ffff-0a000001.my.local-ip.co/"), true)
+        // Same encoder under an unfamiliar suffix
+        assert.equal(isBlockedUserMediaUrl("http://ffff-0a000001.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://ffff-7f000001.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://ffff-c0a80001.attacker.example/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://ffff-a9fea9fe.attacker.example/"), true)
+        // Public compact-mapped 8.8.8.8 must stay allowed
+        assert.equal(isBlockedUserMediaUrl("http://ffff-08080808.attacker.example/"), false)
+        // BrowserStack Local: documented localhost alias (apex → 127.0.0.1 on public DNS).
+        // Wildcards under bs-local.com are empty today; suffix deny still covers them.
+        assert.equal(isBlockedUserMediaUrl("http://bs-local.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://bs-local.com:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://www.bs-local.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.bs-local.com:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://BS-LOCAL.COM/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://bs-local.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://bs-local.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://bs-local.com/"), true)
+
+        // backloop.dev: public wildcard loopback. Apex is a public website
+        // (suffix-deny tradeoff like localhost.tv).
+        assert.equal(isBlockedUserMediaUrl("http://foo.backloop.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://www.backloop.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://app.backloop.dev:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://api.backloop.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://backloop.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://FOO.BACKLOOP.DEV/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://foo.backloop.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://foo.backloop.dev/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://foo.backloop.dev/"), true)
+        // devlocal.me: public wildcard loopback (apex has no A; www/foo/app → 127.0.0.1)
+        assert.equal(isBlockedUserMediaUrl("http://foo.devlocal.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://www.devlocal.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://app.devlocal.me:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://api.devlocal.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://mysite.devlocal.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://bar.foo.devlocal.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://devlocal.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://foo.devlocal.me:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://www.devlocal.me/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://foo.devlocal.me/"), true)
+        // lhst.net: public wildcard RFC1918 bounce (apex/www/foo → 192.168.10.128).
+        // Distinct from denied localh.net / localh.st / localhst.dev.
+        assert.equal(isBlockedUserMediaUrl("http://lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://lhst.net:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://www.lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://app.lhst.net:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://LHST.NET/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("uri:http://foo.lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://lhst.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("local:http://lhst.net/"), true)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {
@@ -328,6 +469,20 @@ describe("isBlockedUserMediaUrl", () => {
         )
         assert.equal(isBlockedUserMediaUrl("uri:https://soundcloud.com/artist/track"), false)
         assert.equal(isBlockedUserMediaUrl("ytsearch:http://127.0.0.1/"), true)
+    })
+})
+
+describe("rawHttpUrlHostname", () => {
+    it("keeps leading-zero IPv4 octets instead of WHATWG octal rewrite", () => {
+        assert.equal(rawHttpUrlHostname("http://010.0.0.1:5432/"), "010.0.0.1")
+        assert.equal(rawHttpUrlHostname("http://172.017.0.1/"), "172.017.0.1")
+        assert.equal(rawHttpUrlHostname("http://user:pass@0172.017.0.1:2333/x"), "0172.017.0.1")
+        assert.equal(rawHttpUrlHostname("icy://010.0.0.1/stream"), "010.0.0.1")
+        assert.equal(rawHttpUrlHostname("http://[::1]/"), "[::1]")
+        assert.equal(
+            rawHttpUrlHostname("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
+            "www.youtube.com"
+        )
     })
 })
 

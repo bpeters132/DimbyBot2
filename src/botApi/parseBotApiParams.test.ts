@@ -5,6 +5,7 @@ import {
     parseEnqueueQuery,
     parsePlayerAction,
     parsePlayerSeekMs,
+    parsePreferredGuildId,
     parseQueueIndex,
     parseQueueQueryNumber,
     parseQueueReorderNewIndex,
@@ -139,5 +140,23 @@ describe("parseEnqueueQuery", () => {
         assert.equal(parseEnqueueQuery(1), null)
         assert.equal(parseEnqueueQuery({ query: "song" }), null)
         assert.equal(parseEnqueueQuery(["song"]), null)
+    })
+})
+
+describe("parsePreferredGuildId", () => {
+    it("accepts trimmed non-empty guild ids", () => {
+        assert.equal(parsePreferredGuildId("123456789012345678"), "123456789012345678")
+        assert.equal(parsePreferredGuildId("  123456789012345678  "), "123456789012345678")
+    })
+
+    it("treats empty, whitespace-only, and non-string values as absent", () => {
+        assert.equal(parsePreferredGuildId(""), undefined)
+        assert.equal(parsePreferredGuildId("   "), undefined)
+        assert.equal(parsePreferredGuildId("\n\t"), undefined)
+        assert.equal(parsePreferredGuildId(null), undefined)
+        assert.equal(parsePreferredGuildId(undefined), undefined)
+        assert.equal(parsePreferredGuildId(1), undefined)
+        assert.equal(parsePreferredGuildId({ guildId: "123" }), undefined)
+        assert.equal(parsePreferredGuildId(["123456789012345678"]), undefined)
     })
 })
