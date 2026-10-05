@@ -155,8 +155,9 @@ export function trimmedHttpUrlQuery(query: string): string | null {
  * IPv6 dash-compressed labels (`0--1` → `::1`, `0--ffff-a00-1` → `::ffff:10.0.0.1`),
  * well-known IMDS hostnames (`metadata.goog`),
  * compact IPv4-mapped labels (`ffff-0a000001` → 10.0.0.1) used by sslip-style bounce DNS,
- * and leading-zero IPv4 literals (`010.0.0.1`, `172.017.0.1`) that WHATWG rewrites
- * to a public address while Java `InetAddress` (Lavaplayer) still connects privately.
+ * and leading-zero IPv4 literals (`010.0.0.1`, `010.1`, `172.017.0.1`) that WHATWG
+ * rewrites to a public address while Java `InetAddress` (Lavaplayer) still connects
+ * privately. Short A / A.B / A.B.C forms use the same decimal parse as OpenJDK.
  */
 export function isBlockedUserMediaUrl(query: string): boolean {
     const trimmed = query.trim()
@@ -174,7 +175,7 @@ export function isBlockedUserMediaUrl(query: string): boolean {
             if (isBlockedUserMediaHost(hostname)) return true
             // WHATWG canonicalizes IPv4 with octal/dword/short forms. Lavalink search
             // still receives the original identifier; Java parses leading-zero octets
-            // as decimal (`010.0.0.1` → 10.0.0.1, not 8.0.0.1).
+            // as decimal (`010.0.0.1` → 10.0.0.1, `010.1` → 10.0.0.1, not 8.0.0.1).
             const rawHost = rawHttpUrlHostname(httpUrl)
             if (rawHost && rawHost !== hostname && isBlockedUserMediaHost(rawHost)) return true
         } catch {
@@ -186,8 +187,9 @@ export function isBlockedUserMediaUrl(query: string): boolean {
 
 /**
  * Authority hostname as written in the URL, before WHATWG IPv4 canonicalization.
- * `new URL(...).hostname` rewrites `010.0.0.1` to `8.0.0.1`; this returns `010.0.0.1`
- * so {@link isBlockedIpv4} can apply Java-style decimal octet parsing.
+ * `new URL(...).hostname` rewrites `010.0.0.1` / `010.1` to `8.0.0.1`; this returns
+ * the raw host so {@link isBlockedIpv4} can apply Java-style decimal parsing
+ * (including 1–3 component forms).
  */
 export function rawHttpUrlHostname(url: string): string | null {
     const rewritten = rewriteIcySchemeToHttp(url.trim())
@@ -407,13 +409,46 @@ function mappedIpv4FromV6(host: string): string | null {
     return `${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}`
 }
 
+/**
+ * OpenJDK `IPAddressUtil.textToNumericFormatV4`: decimal digits only, 1–4 dotted
+ * components. Last component fills the remaining 8/16/24/32 bits. Leading zeros
+ * are decimal (`010` → 10), unlike WHATWG octal (`010` → 8).
+ */
+function javaDecimalIpv4Octets(host: string): [number, number, number, number] | null {
+    const len = host.length
+    if (len === 0 || len > 15) return null
+    const res = [0, 0, 0, 0]
+    let tmpValue = 0
+    let currByte = 0
+    let newOctet = true
+    for (let i = 0; i < len; i++) {
+        const c = host.charCodeAt(i)
+        if (c === 46) {
+            if (newOctet || tmpValue < 0 || tmpValue > 0xff || currByte === 3) return null
+            res[currByte++] = tmpValue & 0xff
+            tmpValue = 0
+            newOctet = true
+            continue
+        }
+        const digit = c >= 48 && c <= 57 ? c - 48 : -1
+        if (digit < 0) return null
+        tmpValue = tmpValue * 10 + digit
+        newOctet = false
+    }
+    // Java uses a long left-shift; `1 << 32` is 1 in JS, so use exponentiation.
+    if (newOctet || tmpValue < 0 || tmpValue >= 2 ** ((4 - currByte) * 8)) return null
+    if (currByte === 0) res[0] = (tmpValue >>> 24) & 0xff
+    if (currByte <= 1) res[1] = (tmpValue >>> 16) & 0xff
+    if (currByte <= 2) res[2] = (tmpValue >>> 8) & 0xff
+    res[3] = tmpValue & 0xff
+    return res as [number, number, number, number]
+}
+
 function isBlockedIpv4(host: string): boolean {
-    const parts = host.split(".")
-    if (parts.length !== 4) return false
-    const octets = parts.map((part) => Number(part))
-    if (octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false
-    const a = octets[0]!
-    const b = octets[1]!
+    const octets = javaDecimalIpv4Octets(host)
+    if (!octets) return false
+    const a = octets[0]
+    const b = octets[1]
     if (a === 0 || a === 10 || a === 127) return true
     if (a === 169 && b === 254) return true
     if (a === 192 && b === 168) return true
