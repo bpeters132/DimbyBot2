@@ -27,6 +27,11 @@ import {
 } from "./dashboard-permission-snapshot.js"
 import { decideAdminAccess } from "./admin-access-decision.js"
 import { mapGuildAccessFailureToHttp } from "./guild-access-http.js"
+import {
+    mapDiscordAccountRequiredFailure,
+    mapMissingRequiredPermissions,
+    mapPermissionResolutionUnavailable,
+} from "./permission-guard-http.js"
 
 export interface AuthenticatedSession {
     user: {
@@ -246,20 +251,10 @@ export async function resolveAuthenticatedGuildAccess(
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error)
         console.error("[api-auth] resolveDiscordUserSnowflake failed:", msg)
-        return {
-            ok: false,
-            status: 403,
-            error: "Discord account required",
-        }
+        return mapDiscordAccountRequiredFailure("resolve_failed")
     }
     if (!discordUserId) {
-        return {
-            ok: false,
-            status: 403,
-            error: "Discord account required",
-            details:
-                "We could not resolve your Discord user id (needed for roles and voice state). Sign in with Discord, or sign out and sign in again.",
-        }
+        return mapDiscordAccountRequiredFailure("missing")
     }
 
     const guildAccess = await verifyGuildAccess(
@@ -482,23 +477,11 @@ export async function requirePermissions(
     } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error)
         console.error("[api-auth] requirePermissions permission resolution failed:", msg)
-        return {
-            ok: false,
-            status: 503,
-            error: "Service Unavailable",
-            details:
-                "Permission resolution is temporarily unavailable. Please retry in a moment or re-open the dashboard.",
-        }
+        return mapPermissionResolutionUnavailable()
     }
 
     if (!hasRequiredPermissions(permissionResolution.permissions, requiredPerms)) {
-        return {
-            ok: false,
-            status: 403,
-            error: "Forbidden",
-            details:
-                "You do not have permission for this action in this server (your Discord role may not include the required abilities).",
-        }
+        return mapMissingRequiredPermissions()
     }
 
     return {
