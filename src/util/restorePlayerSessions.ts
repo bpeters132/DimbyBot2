@@ -143,6 +143,23 @@ export function shouldPreservePriorSnapshotAfterRestoreDefer(
 }
 
 /**
+ * Gateway-unavailable guilds are unpatched stubs (`Guild` skips `_patch` when
+ * `unavailable` is set). `voiceStates.cache` is empty even when humans are still
+ * in the saved VC, so `humans === 0` is not evidence the session is stale.
+ *
+ * Concrete trigger: `clientReady` fires with the guild still unavailable (READY
+ * unavailable list, or discord.js `waitGuildTimeout` of 15s) while Lavalink
+ * connect runs restore. REST `channels.fetch` can succeed; the empty voice-state
+ * cache then deletes the persisted queue. Same contract as a transient VC fetch:
+ * defer, do not delete.
+ */
+export function shouldDeferRestoreForUnavailableGuild(
+    guild: { available?: boolean } | null | undefined
+): boolean {
+    return guild?.available === false
+}
+
+/**
  * After a deferred restore, mark preserve-prior only while the persisted session
  * row is still there and the live player already has a queue. `/stop` deletes
  * the row; the successor queue must be allowed to persist once restore-in-progress
@@ -439,6 +456,12 @@ async function restoreSingleSession(
     const voiceChannel = voiceResult.channel
 
     const humans = countHumanMembers(voiceChannel)
+    if (humans === 0 && shouldDeferRestoreForUnavailableGuild(voiceChannel.guild)) {
+        client.warn(
+            `[playerSession] restore deferred for ${guildId}: guild unavailable (voice state cache is not authoritative)`
+        )
+        return "deferred"
+    }
     if (humans === 0) {
         client.info(
             `[playerSession] stale session removed for ${guildId}: no humans in VC ${voiceChannelId}`
