@@ -11,6 +11,7 @@ import {
     deferredRestoreGuardAction,
     releaseDeferredRestoreGuards,
     retainedRestoredTrackCount,
+    shouldDeferRestoreForUnavailableGuild,
     shouldMarkPreservePriorAfterDeferredRestore,
     shouldPersistRestoredPlayerSession,
     shouldPreservePriorSnapshotAfterRestoreDefer,
@@ -209,6 +210,20 @@ describe("shouldPreservePriorSnapshotAfterRestoreDefer", () => {
             }),
             false
         )
+    })
+})
+
+describe("shouldDeferRestoreForUnavailableGuild", () => {
+    it("defers the humans===0 stale delete when the guild is a gateway-unavailable stub", () => {
+        // discord.js skips _patch on unavailable READY guilds, so voiceStates.cache is empty.
+        assert.equal(shouldDeferRestoreForUnavailableGuild({ available: false }), true)
+    })
+
+    it("does not defer when the guild is available (empty VC is truly stale)", () => {
+        assert.equal(shouldDeferRestoreForUnavailableGuild({ available: true }), false)
+        assert.equal(shouldDeferRestoreForUnavailableGuild({}), false)
+        assert.equal(shouldDeferRestoreForUnavailableGuild(null), false)
+        assert.equal(shouldDeferRestoreForUnavailableGuild(undefined), false)
     })
 })
 
