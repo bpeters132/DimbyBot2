@@ -266,6 +266,13 @@ const DNS_BOUNCE_SUFFIXES = [
     // Public wildcard loopback (apex has no A record today; suffix still covers it).
     "devlocal.me",
     "lhst.net",
+    // localdev.xyz: public wildcard loopback (apex/www/foo → 127.0.0.1). Distinct from
+    // denied localdev.me and remaining sibling zones of the reserved `devlocal.*` names.
+    "localdev.xyz",
+    // localh.online: public wildcard loopback. Distinct from denied localh.net / localh.st.
+    "localh.online",
+    // lvh.app: public wildcard loopback sibling of denied lvh.me.
+    "lvh.app",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
