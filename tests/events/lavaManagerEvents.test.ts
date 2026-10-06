@@ -63,6 +63,19 @@ function createPlayer(guildId: string) {
         async destroy() {},
         async skip() {},
         async stopPlaying() {},
+        async play() {
+            return player
+        },
+        async setRepeatMode(mode: string) {
+            player.repeatMode = mode
+        },
+        LavalinkManager: {
+            on() {},
+            off() {},
+        },
+        node: {
+            async updatePlayer() {},
+        },
     }
     return player
 }
