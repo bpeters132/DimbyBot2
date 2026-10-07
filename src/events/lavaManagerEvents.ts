@@ -53,6 +53,7 @@ import {
     schedulePrefetchWindow,
 } from "../util/youtubePlaybackWindow.js"
 import { shouldApplicationSkipOnTrackStuck } from "../util/trackStuckAdvance.js"
+import { armLibraryAutoSkipPlayPrepare } from "../util/libraryAutoSkipPlayPrepare.js"
 import { endCurrentTrackForAutoplay } from "../util/endCurrentTrackForAutoplay.js"
 import { safeIdlePlayerDestroy } from "../util/safeIdlePlayerDestroy.js"
 import { resolveTrackErrorRecoveryTarget } from "../util/trackErrorRecovery.js"
@@ -265,6 +266,11 @@ export default async (client: BotClient) => {
             }
         })
         .on("trackEnd", (player: Player, track: Track | null, payload: TrackEndEvent) => {
+            // Library already ran queueTrackEnd before emit; autoSkip play() follows without
+            // awaiting listeners. Unprepared Queue metadata (encoded:"") null-stops the node
+            // and TrackEnd(stopped) advances again — cascading through the remaining queue.
+            // Arm synchronously so the next play hydrates first (distinct from trackStuck #311).
+            armLibraryAutoSkipPlayPrepare(player, () => client.lavalink.getPlayer(player.guildId))
             client.debug(
                 `[LavaMgrEvents] Track ended in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "N/A"}, Reason: ${payload.reason}`
             )

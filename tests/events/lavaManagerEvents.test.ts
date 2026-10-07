@@ -63,6 +63,9 @@ function createPlayer(guildId: string) {
         async destroy() {},
         async skip() {},
         async stopPlaying() {},
+        async play() {
+            return player
+        },
     }
     return player
 }
@@ -168,6 +171,30 @@ describe("lavaManagerEvents", () => {
         await handlers.get("trackStuck")?.[0]?.(player, track("Stuck"), { thresholdMs: 1000 })
         await flush()
         assert.equal(sent[0], "Track stuck: **Stuck**")
+    })
+
+    it("arms library autoSkip play when trackEnd leaves an unprepared YouTube head", async () => {
+        const { client, handlers, players } = createHarness()
+        const player = createPlayer("guild-end-jit")
+        player.queue.current = {
+            encoded: "",
+            info: {
+                title: "Next",
+                author: "Artist",
+                uri: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                duration: 1000,
+                isStream: false,
+                sourceName: "youtube",
+                identifier: "dQw4w9WgXcQ",
+            },
+            requester: "user-1",
+            userData: { queueMetadata: true },
+        }
+        players.set(player.guildId, player)
+        const playBefore = player.play
+        await lavaManagerEvents(client as never)
+        await handlers.get("trackEnd")?.[0]?.(player, track("Ended"), { reason: "finished" })
+        assert.notEqual(player.play, playBefore)
     })
 
     it("sends a detailed message when audio streams are unsupported", async () => {
