@@ -266,6 +266,17 @@ const DNS_BOUNCE_SUFFIXES = [
     // Public wildcard loopback (apex has no A record today; suffix still covers it).
     "devlocal.me",
     "lhst.net",
+    // Charles Proxy documented localhost alias. Apex + unlabeled wildcards
+    // (`foo` / `ssl` / nested `bar.foo`) → 127.0.0.1. Do not deny charlesproxy.com
+    // (public Cloudflare site).
+    "localhost.charlesproxy.com",
+    // Charles short-domain apex localhost alias (chls.pro itself is public).
+    "localhost.chls.pro",
+    // Proxyman / Requestly documented localhost aliases (apex → 127.0.0.1;
+    // unlabeled wildcards empty today; suffix still covers them). Do not deny
+    // proxyman.io / requestly.io (public sites).
+    "localhost.proxyman.io",
+    "localhost.requestly.io",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
