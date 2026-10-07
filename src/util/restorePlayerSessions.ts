@@ -155,6 +155,40 @@ export function shouldMarkPreservePriorAfterDeferredRestore(options: {
     return options.sessionRowExists && options.liveHasQueue
 }
 
+/**
+ * Whether restore may mark preserve-prior after skip / concurrent-abandon / partial
+ * hydrate. `/stop` and `/leave` force-clear the row while restore-in-progress; marking
+ * without a row sticks after the guard clears and blocks the successor multi-track
+ * queue from ever saving (same contract as {@link shouldMarkPreservePriorAfterDeferredRestore}).
+ *
+ * Unlike the deferred-voice check, live queue content is not required: a JIT-thinned
+ * or emptied live player still needs preserve-prior so idle QueueEmpty destroy cannot
+ * delete the fuller DB row.
+ */
+export function shouldMarkPreservePriorIfSessionRowExists(sessionRowExists: boolean): boolean {
+    return sessionRowExists
+}
+
+/**
+ * Marks preserve-prior only while the persisted session row still exists.
+ * Read failures fail closed (mark) so a DB blip cannot open a thin-overwrite window.
+ * Returns whether preserve-prior was marked.
+ */
+export async function markPreservePriorIfSessionRowExists(
+    guildId: string,
+    readSession: (id: string) => Promise<unknown | null> = getPlayerSession
+): Promise<boolean> {
+    try {
+        const row = await readSession(guildId)
+        if (!shouldMarkPreservePriorIfSessionRowExists(row != null)) return false
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        return true
+    } catch {
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        return true
+    }
+}
+
 export type DeferredSessionLookup =
     | { status: "resolved"; row: unknown | null }
     | { status: "failed" }
@@ -410,7 +444,9 @@ async function restoreSingleSession(
         // Same contract as concurrent-abandon during resolve (#240): skipping hydrate
         // without preserve-prior lets schedulePlayerSessionSave replace a multi-track
         // snapshot. Existence-only skip is wrong for an empty createPlayer shell.
-        markPlayerSessionPreservePriorSnapshot(guildId)
+        // Do not mark when `/stop`/`/leave` already force-cleared the row — that would
+        // stick after restore-in-progress clears and block the successor queue save.
+        await markPreservePriorIfSessionRowExists(guildId)
         client.debug(
             `[playerSession] restore skipped for ${guildId}: live player already has queue content`
         )
@@ -464,7 +500,7 @@ async function restoreSingleSession(
             // Re-check under the reservation: a concurrent create may have won the race.
             const liveBeforeCreate = client.lavalink.getPlayer(guildId)
             if (shouldSkipRestoreHydrateForLivePlayer(liveBeforeCreate)) {
-                markPlayerSessionPreservePriorSnapshot(guildId)
+                await markPreservePriorIfSessionRowExists(guildId)
                 client.debug(
                     `[playerSession] restore skipped for ${guildId}: player appeared before hydrate`
                 )
@@ -536,7 +572,7 @@ async function restoreSingleSession(
                         playerToPersist = player
                     } else {
                         // Transient failures + concurrent enqueue must not wipe the fuller DB row.
-                        markPlayerSessionPreservePriorSnapshot(guildId)
+                        await markPreservePriorIfSessionRowExists(guildId)
                     }
                     return
                 }
@@ -581,8 +617,9 @@ async function restoreSingleSession(
                     `[playerSession] restore for ${guildId}: skipped hydrate; concurrent queue content present`
                 )
                 // Keep the prior full snapshot: schedulePlayerSessionSave of the thin concurrent
-                // queue would permanently drop the restored session from the DB.
-                markPlayerSessionPreservePriorSnapshot(guildId)
+                // queue would permanently drop the restored session from the DB. Skip the mark
+                // when `/stop`/`/leave` already cleared the row so the successor may save.
+                await markPreservePriorIfSessionRowExists(guildId)
                 scheduleControlMessageUpdate(client, guildId)
                 playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
                 return
@@ -648,7 +685,8 @@ async function restoreSingleSession(
                 clearPlayerSessionPreservePriorSnapshot(guildId)
                 playerToPersist = player
             } else {
-                markPlayerSessionPreservePriorSnapshot(guildId)
+                // Row may already be gone after `/stop`/`/leave` during playback setup.
+                await markPreservePriorIfSessionRowExists(guildId)
                 const dropped = Math.max(0, playable.length - liveCount)
                 const missing = Math.max(0, playable.length - retained)
                 client.warn(
@@ -683,7 +721,7 @@ async function restoreSingleSession(
                     `[playerSession] restore for ${guildId}: error after concurrent enqueue; keeping player`
                 )
                 // Failed restore must not overwrite the prior snapshot with a concurrent thin queue.
-                markPlayerSessionPreservePriorSnapshot(guildId)
+                await markPreservePriorIfSessionRowExists(guildId)
             }
             playerToPersist = null
         } else {

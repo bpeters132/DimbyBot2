@@ -4,6 +4,7 @@ import {
     isRestoreHydratePlayerStillLive,
     isStaleSessionDiscordError,
     guildIdsNeedingRestoreSaveGuard,
+    markPreservePriorIfSessionRowExists,
     shouldAbandonRestoreForConcurrentQueue,
     shouldDeleteStaleRestoredSession,
     shouldPersistConcurrentAbandonSession,
@@ -12,10 +13,15 @@ import {
     releaseDeferredRestoreGuards,
     retainedRestoredTrackCount,
     shouldMarkPreservePriorAfterDeferredRestore,
+    shouldMarkPreservePriorIfSessionRowExists,
     shouldPersistRestoredPlayerSession,
     shouldPreservePriorSnapshotAfterRestoreDefer,
     shouldSkipRestoreHydrateForLivePlayer,
 } from "../../src/util/restorePlayerSessions.js"
+import {
+    clearPlayerSessionPreservePriorSnapshot,
+    shouldPreservePriorPlayerSessionSnapshot,
+} from "../../src/util/playerSessionPersistence.js"
 
 describe("isStaleSessionDiscordError", () => {
     it("treats unknown channel/guild as permanently stale (safe to delete session)", () => {
@@ -240,6 +246,51 @@ describe("shouldMarkPreservePriorAfterDeferredRestore", () => {
             }),
             false
         )
+    })
+})
+
+describe("shouldMarkPreservePriorIfSessionRowExists", () => {
+    it("marks when the persisted row is still present (protect fuller snapshot)", () => {
+        assert.equal(shouldMarkPreservePriorIfSessionRowExists(true), true)
+    })
+
+    it("does not mark after /stop or /leave force-cleared the row during restore", () => {
+        // Skip-with-content and concurrent-abandon used to mark unconditionally (#279/#240).
+        // After force-clear the successor multi-track queue must be allowed to persist once
+        // restore-in-progress clears — same hole the deferred-voice path already closed.
+        assert.equal(shouldMarkPreservePriorIfSessionRowExists(false), false)
+    })
+})
+
+describe("markPreservePriorIfSessionRowExists", () => {
+    it("marks preserve-prior when the session row still exists", async () => {
+        const guildId = "preserve-row-exists"
+        clearPlayerSessionPreservePriorSnapshot(guildId)
+        const marked = await markPreservePriorIfSessionRowExists(guildId, async () => ({
+            guildId,
+        }))
+        assert.equal(marked, true)
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), true)
+        clearPlayerSessionPreservePriorSnapshot(guildId)
+    })
+
+    it("skips preserve-prior when /stop|/leave already deleted the session row", async () => {
+        const guildId = "preserve-row-gone"
+        clearPlayerSessionPreservePriorSnapshot(guildId)
+        const marked = await markPreservePriorIfSessionRowExists(guildId, async () => null)
+        assert.equal(marked, false)
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), false)
+    })
+
+    it("fails closed (marks) when the session read throws", async () => {
+        const guildId = "preserve-row-read-error"
+        clearPlayerSessionPreservePriorSnapshot(guildId)
+        const marked = await markPreservePriorIfSessionRowExists(guildId, async () => {
+            throw new Error("db down")
+        })
+        assert.equal(marked, true)
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), true)
+        clearPlayerSessionPreservePriorSnapshot(guildId)
     })
 })
 
