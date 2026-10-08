@@ -3,12 +3,14 @@ import { afterEach, describe, it } from "node:test"
 import type { Player, Track } from "lavalink-client"
 import {
     acquirePlayerSessionClearSuppressLease,
+    cancelPendingPlayerSessionSaveForGuild,
     clearPlayerSession,
     clearPlayerSessionPreservePriorSnapshot,
     clearPlayerSessionRestoreInProgress,
     consumePlayerSessionClearSuppressLease,
     destroyPlayerSuppressingSessionClear,
     enqueueGuildPersistenceTaskForTests,
+    flushPlayerSessionSave,
     forceClearPlayerSession,
     forceClearPlayerSessionAfterDestroyIfSafe,
     forceClearPlayerSessionIfNoLivePlayer,
@@ -661,6 +663,34 @@ describe("shouldUndoStaleSessionUpsert", () => {
 
     it("does not undo when clear epoch still matches the save epoch", () => {
         assert.equal(shouldUndoStaleSessionUpsert(1, 1, 3, 3), false)
+    })
+})
+
+describe("cancelPendingPlayerSessionSaveForGuild", () => {
+    afterEach(() => {
+        setPlayerSessionPersistenceDbForTests(null)
+        cancelPendingPlayerSessionSaveForGuild("guild-cancel-pending")
+    })
+
+    it("drops a debounced save so flush cannot upsert it", async () => {
+        const guildId = "guild-cancel-pending"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+
+        const player = mockPlayer({})
+        player.guildId = guildId
+        schedulePlayerSessionSave(player)
+        cancelPendingPlayerSessionSaveForGuild(guildId)
+        // Restore's keep-db-cancel-pending path: trackStart may have scheduled a save.
+        await flushPlayerSessionSave(guildId)
+        assert.deepEqual(events, [])
     })
 })
 
