@@ -295,6 +295,12 @@ const DNS_BOUNCE_SUFFIXES = [
     // proxyman.io / requestly.io (public sites).
     "localhost.proxyman.io",
     "localhost.requestly.io",
+    // Sibling of denied localhost.tv: apex localhost.tv.com → 127.0.0.1 (wildcards empty).
+    "localhost.tv.com",
+    // Proxyman .com localhost alias (distinct from localhost.proxyman.io). Do not deny proxyman.com.
+    "localhost.proxyman.com",
+    // Sibling of localdev.xyz: public wildcard loopback under .tech.
+    "localdev.tech",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
