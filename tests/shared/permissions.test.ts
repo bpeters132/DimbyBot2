@@ -6,6 +6,7 @@ import {
     hasRequiredPermissions,
     invalidatePermissionCache,
     parseEnvBotOwnerId,
+    resolveGuildMemberForPermissions,
     resolveOauthGuildPermissionFallback,
     resolveUserPermissions,
     selectApiGuardPermissionResolution,
@@ -109,6 +110,69 @@ describe("parseEnvBotOwnerId", () => {
         assert.equal(parseEnvBotOwnerId(envWithOwner("1234567890123456")), undefined) // 16
         assert.equal(parseEnvBotOwnerId(envWithOwner("12345678901234567890")), undefined) // 20
         assert.equal(parseEnvBotOwnerId(envWithOwner("12345678901234567a")), undefined)
+    })
+})
+
+describe("resolveGuildMemberForPermissions", () => {
+    const userId = "user-1"
+
+    it("returns the voice-state member without calling members.fetch", async () => {
+        const voiceMember = { id: userId, partial: false }
+        let fetched = 0
+        const guild = {
+            voiceStates: { cache: new Map([[userId, { member: voiceMember }]]) },
+            members: {
+                fetch: async () => {
+                    fetched += 1
+                    return null
+                },
+            },
+        }
+        const member = await resolveGuildMemberForPermissions(guild as never, userId)
+        assert.equal(member, voiceMember)
+        assert.equal(fetched, 0)
+    })
+
+    it("falls through to members.fetch when the voice-state member is partial and fetch fails", async () => {
+        const fetchedMember = { id: userId, partial: false }
+        const guild = {
+            voiceStates: {
+                cache: new Map([
+                    [
+                        userId,
+                        {
+                            member: {
+                                partial: true,
+                                fetch: async () => {
+                                    throw new Error("partial fetch failed")
+                                },
+                            },
+                        },
+                    ],
+                ]),
+            },
+            members: {
+                fetch: async (id: string) => {
+                    assert.equal(id, userId)
+                    return fetchedMember
+                },
+            },
+        }
+        const member = await resolveGuildMemberForPermissions(guild as never, userId)
+        assert.equal(member, fetchedMember)
+    })
+
+    it("returns null when voice cache and members.fetch both miss", async () => {
+        const guild = {
+            voiceStates: { cache: new Map() },
+            members: {
+                fetch: async () => {
+                    throw new Error("Unknown Member")
+                },
+            },
+        }
+        const member = await resolveGuildMemberForPermissions(guild as never, userId)
+        assert.equal(member, null)
     })
 })
 
