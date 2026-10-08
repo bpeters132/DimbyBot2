@@ -53,6 +53,7 @@ import {
     schedulePrefetchWindow,
 } from "../util/youtubePlaybackWindow.js"
 import { shouldApplicationSkipOnTrackStuck } from "../util/trackStuckAdvance.js"
+import { armAutoReconnectPlayPrepare } from "../util/autoReconnectPlayPrepare.js"
 import { endCurrentTrackForAutoplay } from "../util/endCurrentTrackForAutoplay.js"
 import { safeIdlePlayerDestroy } from "../util/safeIdlePlayerDestroy.js"
 import { resolveTrackErrorRecoveryTarget } from "../util/trackErrorRecovery.js"
@@ -176,6 +177,12 @@ export default async (client: BotClient) => {
                 schedulePlayerSessionSave(player)
             }
         )
+        .on("playerReconnect", (player: Player) => {
+            client.debug(`[LavaMgrEvents] Player reconnected in Guild: ${player.guildId}`)
+            // lavalink-client autoReconnect emits then play()s without JIT prepare.
+            // Arm synchronously: emit is not awaited before that play().
+            armAutoReconnectPlayPrepare(player, () => client.lavalink.getPlayer(player.guildId))
+        })
 
         /**
          * Track Playback Events
