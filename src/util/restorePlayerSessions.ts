@@ -14,6 +14,7 @@ import { getGuildSettings } from "./saveControlChannel.js"
 import { ensurePlayerConnected } from "./musicManager.js"
 import { startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
 import {
+    cancelPendingPlayerSessionSaveForGuild,
     clearPlayerSessionPreservePriorSnapshot,
     clearPlayerSessionRestoreInProgress,
     markPlayerSessionPreservePriorSnapshot,
@@ -22,7 +23,7 @@ import {
     schedulePlayerSessionSave,
 } from "./playerSessionPersistence.js"
 import { resolvePersistedTracks } from "./playerSessionTracks.js"
-import { queueTrackIdentity, schedulePrefetchWindow } from "./youtubePlaybackWindow.js"
+import { ensurePrefetchWindow, queueTrackIdentity } from "./youtubePlaybackWindow.js"
 import {
     withGuildPlayerLifecycleReservation,
     withGuildPlayerQueueLock,
@@ -81,6 +82,27 @@ export function shouldPersistRestoredPlayerSession(options: {
     if (options.liveTrackCount < options.storedPlayableCount) return false
     if (options.retainedRestoredCount < options.storedPlayableCount) return false
     return true
+}
+
+/**
+ * After a full restore hydrate, what to do with the DB row / pending saves.
+ *
+ * When the live queue still has every restored track, the persisted row is already
+ * correct — do not schedule a live save. `startPlaybackIfNeeded` emits `trackStart`,
+ * which debounces a save while fire-and-forget prefetch can still false-permanent-drop
+ * upcoming heads; that save would permanently thin the fuller snapshot (#296 hole).
+ * Cancel the pending save instead. When thinned/partial, mark preserve-prior.
+ */
+export type RestoreHydratePersistAction = "preserve-prior" | "keep-db-cancel-pending"
+
+export function restoreHydratePersistAction(options: {
+    transientFailures: number
+    storedPlayableCount: number
+    liveTrackCount: number
+    retainedRestoredCount: number
+}): RestoreHydratePersistAction {
+    if (shouldPersistRestoredPlayerSession(options)) return "keep-db-cancel-pending"
+    return "preserve-prior"
 }
 
 /**
@@ -603,7 +625,11 @@ async function restoreSingleSession(
             player.set("rrqEnabled", snapshot.rrqEnabled)
 
             await startPlaybackIfNeeded(player, () => client.lavalink.getPlayer(guildId))
-            schedulePrefetchWindow(() => client.lavalink.getPlayer(guildId), guildId)
+            // Await prefetch so upcoming false-permanent drops are visible before the
+            // persist decision. Fire-and-forget raced the post-restore debounced save (#296 hole).
+            await ensurePrefetchWindow(() => client.lavalink.getPlayer(guildId), guildId)
+            // trackStart during play() may have scheduled its own prefetch; settle once more.
+            await ensurePrefetchWindow(() => client.lavalink.getPlayer(guildId), guildId)
             if (
                 snapshot.paused &&
                 player.playing &&
@@ -625,28 +651,25 @@ async function restoreSingleSession(
 
             scheduleControlMessageUpdate(client, guildId)
             playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
-            // schedulePlayerSessionSave is a no-op while restore-in-progress; persist after clear.
-            // Skip save when some tracks failed transiently OR JIT prepare dropped heads
-            // (false-permanent catalog/search misses during node warmup). Otherwise a
-            // thinned live queue would replace the fuller DB row. Mark preserve *before*
-            // clearPlayerSessionRestoreInProgress so trackStart/trackEnd/shutdown/idle clear
-            // cannot race and wipe the prior full row.
+            // Do not schedulePlayerSessionSave after a full hydrate: the DB row already
+            // matches. trackStart debounced a save during play(); cancel it so a late
+            // prefetch drop cannot thin the fuller snapshot. Mark preserve *before*
+            // clearPlayerSessionRestoreInProgress when thinned so idle clear cannot wipe.
             const liveTracks = [
                 ...(player.queue.current ? [player.queue.current] : []),
                 ...player.queue.tracks,
             ]
             const liveCount = liveTracks.length
             const retained = retainedRestoredTrackCount(playable, liveTracks)
-            if (
-                shouldPersistRestoredPlayerSession({
-                    transientFailures: transientTotal,
-                    storedPlayableCount: playable.length,
-                    liveTrackCount: liveCount,
-                    retainedRestoredCount: retained,
-                })
-            ) {
+            const persistAction = restoreHydratePersistAction({
+                transientFailures: transientTotal,
+                storedPlayableCount: playable.length,
+                liveTrackCount: liveCount,
+                retainedRestoredCount: retained,
+            })
+            if (persistAction === "keep-db-cancel-pending") {
                 clearPlayerSessionPreservePriorSnapshot(guildId)
-                playerToPersist = player
+                cancelPendingPlayerSessionSaveForGuild(guildId)
             } else {
                 markPlayerSessionPreservePriorSnapshot(guildId)
                 const dropped = Math.max(0, playable.length - liveCount)

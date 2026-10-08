@@ -10,6 +10,7 @@ import {
     restoredLiveTrackCount,
     deferredRestoreGuardAction,
     releaseDeferredRestoreGuards,
+    restoreHydratePersistAction,
     retainedRestoredTrackCount,
     shouldMarkPreservePriorAfterDeferredRestore,
     shouldPersistRestoredPlayerSession,
@@ -125,6 +126,46 @@ describe("shouldPersistRestoredPlayerSession", () => {
                 retainedRestoredCount: 1,
             }),
             false
+        )
+    })
+})
+
+describe("restoreHydratePersistAction", () => {
+    it("keeps the DB row and cancels pending saves when the live queue is intact", () => {
+        // Full hydrate must not schedulePlayerSessionSave: trackStart's debounced save
+        // can race prefetch drops and thin the already-correct snapshot.
+        assert.equal(
+            restoreHydratePersistAction({
+                transientFailures: 0,
+                storedPlayableCount: 5,
+                liveTrackCount: 5,
+                retainedRestoredCount: 5,
+            }),
+            "keep-db-cancel-pending"
+        )
+    })
+
+    it("marks preserve-prior when JIT/prefetch thinned the live queue", () => {
+        assert.equal(
+            restoreHydratePersistAction({
+                transientFailures: 0,
+                storedPlayableCount: 50,
+                liveTrackCount: 48,
+                retainedRestoredCount: 48,
+            }),
+            "preserve-prior"
+        )
+    })
+
+    it("marks preserve-prior when resolve had transient failures", () => {
+        assert.equal(
+            restoreHydratePersistAction({
+                transientFailures: 1,
+                storedPlayableCount: 5,
+                liveTrackCount: 5,
+                retainedRestoredCount: 5,
+            }),
+            "preserve-prior"
         )
     })
 })

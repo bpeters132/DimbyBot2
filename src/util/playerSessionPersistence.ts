@@ -307,6 +307,15 @@ function cancelPendingPlayerSessionSave(guildId: string): void {
     pendingPlayers.delete(guildId)
 }
 
+/**
+ * Drops a guild's debounced session save without writing.
+ * Restore uses this after a full hydrate so a trackStart-scheduled save cannot
+ * race prefetch drops and thin the already-correct DB row.
+ */
+export function cancelPendingPlayerSessionSaveForGuild(guildId: string): void {
+    cancelPendingPlayerSessionSave(guildId)
+}
+
 type LivePlayerLookup = (guildId: string) => Player | null | undefined
 
 /** Test-only override for {@link getLivePlayerForSessionWrite}. Pass `null` to restore. */
