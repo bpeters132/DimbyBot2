@@ -63,6 +63,7 @@ function createPlayer(guildId: string) {
         async destroy() {},
         async skip() {},
         async stopPlaying() {},
+        async play() {},
     }
     return player
 }
@@ -270,6 +271,41 @@ describe("lavaManagerEvents", () => {
         } finally {
             mock.timers.reset()
         }
+    })
+
+    it("arms autoReconnect play prepare from the playerReconnect listener", async () => {
+        const { client, handlers, players } = createHarness()
+        const player = createPlayer("guild-reconnect")
+        player.queue.current = {
+            encoded: "",
+            info: {
+                title: "Queued",
+                author: "Artist",
+                uri: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                duration: 1000,
+                isStream: false,
+                sourceName: "youtube",
+                identifier: "dQw4w9WgXcQ",
+            },
+            requester: "user-1",
+            userData: { queueMetadata: true },
+        }
+        players.set(player.guildId, player)
+        await lavaManagerEvents(client as never)
+        const before = player.play
+        await handlers.get("playerReconnect")?.[0]?.(player)
+        assert.notEqual(player.play, before)
+    })
+
+    it("does not wrap play on playerReconnect when current is already ready", async () => {
+        const { client, handlers, players } = createHarness()
+        const player = createPlayer("guild-reconnect-ready")
+        player.queue.current = track("Ready")
+        players.set(player.guildId, player)
+        await lavaManagerEvents(client as never)
+        const before = player.play
+        await handlers.get("playerReconnect")?.[0]?.(player)
+        assert.equal(player.play, before)
     })
 
     it("logs when clearing the player session fails", async () => {
