@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
-import { describe, it } from "node:test"
-import { parseDiscordUsersMeId } from "../../src/shared/discord-rest.js"
+import { afterEach, describe, it } from "node:test"
+import { fetchDiscordCurrentUserId, parseDiscordUsersMeId } from "../../src/shared/discord-rest.js"
 
 const SNOWFLAKE = "123456789012345678"
 
@@ -27,5 +27,35 @@ describe("parseDiscordUsersMeId", () => {
         assert.equal(parseDiscordUsersMeId({ id: "not-a-snowflake" }), null)
         assert.equal(parseDiscordUsersMeId({ id: "1234567890123456" }), null)
         assert.equal(parseDiscordUsersMeId({ user: { id: SNOWFLAKE } }), null)
+    })
+})
+
+describe("fetchDiscordCurrentUserId", () => {
+    const previousFetch = globalThis.fetch
+
+    afterEach(() => {
+        globalThis.fetch = previousFetch
+    })
+
+    it("returns the snowflake from a successful /users/@me response", async () => {
+        globalThis.fetch = (async () =>
+            new Response(JSON.stringify({ id: SNOWFLAKE }), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+            })) as typeof fetch
+        assert.equal(await fetchDiscordCurrentUserId("token"), SNOWFLAKE)
+    })
+
+    it("fails closed on non-OK Discord responses", async () => {
+        globalThis.fetch = (async () =>
+            new Response(JSON.stringify({ id: SNOWFLAKE }), { status: 401 })) as typeof fetch
+        assert.equal(await fetchDiscordCurrentUserId("token"), null)
+    })
+
+    it("fails closed when fetch throws or aborts", async () => {
+        globalThis.fetch = (async () => {
+            throw new Error("network down")
+        }) as typeof fetch
+        assert.equal(await fetchDiscordCurrentUserId("token"), null)
     })
 })
