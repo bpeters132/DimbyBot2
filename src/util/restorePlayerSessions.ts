@@ -289,6 +289,31 @@ export function shouldDeleteStaleRestoredSession(args: {
     )
 }
 
+/**
+ * Whether restore may hydrate from the in-memory `listPlayerSessions` snapshot.
+ *
+ * The batch loads every row once, then restores guilds sequentially. `/leave` (and
+ * `/stop`) can force-clear a later guild's row while earlier guilds are still
+ * resolving. Hydrating that stale list entry rejoins VC and
+ * `schedulePlayerSessionSave` resurrects the queue the user just cleared.
+ *
+ * Clear-epoch advance catches force-clear even if a racy re-read is confused;
+ * matching `latest` rejects a replaced or deleted row.
+ */
+export function shouldHydrateRestoredSessionFromList(args: {
+    evaluated: Pick<PlayerSessionData, "voiceChannelId" | "updatedAt">
+    latest: Pick<PlayerSessionData, "voiceChannelId" | "updatedAt"> | null
+    clearEpochAtStart: number
+    clearEpochNow: number
+}): boolean {
+    if (args.clearEpochNow !== args.clearEpochAtStart) return false
+    if (!args.latest) return false
+    return (
+        args.latest.voiceChannelId === args.evaluated.voiceChannelId &&
+        args.latest.updatedAt.getTime() === args.evaluated.updatedAt.getTime()
+    )
+}
+
 let discordReady = false
 let restoreInFlight = false
 
@@ -401,7 +426,8 @@ function resolveTextChannelId(session: PlayerSessionData): string | null {
 
 async function restoreSingleSession(
     client: BotClient,
-    session: PlayerSessionData
+    session: PlayerSessionData,
+    clearEpochAtStart = 0
 ): Promise<"completed" | "deferred"> {
     const { guildId, voiceChannelId, snapshot } = session
 
@@ -415,6 +441,25 @@ async function restoreSingleSession(
             `[playerSession] restore skipped for ${guildId}: live player already has queue content`
         )
         return "completed"
+    }
+
+    // Cheap bail when `/leave`/`/stop` already force-cleared while this guild waited
+    // behind earlier restores. Re-checked under the reservation before createPlayer.
+    {
+        const latestBeforeFetch = await getPlayerSession(guildId)
+        if (
+            !shouldHydrateRestoredSessionFromList({
+                evaluated: session,
+                latest: latestBeforeFetch,
+                clearEpochAtStart,
+                clearEpochNow: getPlayerSessionClearEpoch(guildId),
+            })
+        ) {
+            client.debug(
+                `[playerSession] restore skipped for ${guildId}: session cleared or replaced before hydrate`
+            )
+            return "completed"
+        }
     }
 
     const voiceResult = await fetchVoiceChannel(client, guildId, voiceChannelId)
@@ -467,6 +512,23 @@ async function restoreSingleSession(
                 markPlayerSessionPreservePriorSnapshot(guildId)
                 client.debug(
                     `[playerSession] restore skipped for ${guildId}: player appeared before hydrate`
+                )
+                return
+            }
+
+            // `/leave` can force-clear during voice fetch / humans check while this
+            // guild still has only the stale list snapshot in memory.
+            const latestBeforeCreate = await getPlayerSession(guildId)
+            if (
+                !shouldHydrateRestoredSessionFromList({
+                    evaluated: session,
+                    latest: latestBeforeCreate,
+                    clearEpochAtStart,
+                    clearEpochNow: getPlayerSessionClearEpoch(guildId),
+                })
+            ) {
+                client.debug(
+                    `[playerSession] restore skipped for ${guildId}: session cleared or replaced before createPlayer`
                 )
                 return
             }
@@ -700,8 +762,12 @@ async function restoreSingleSession(
     }
 
     if (playerToPersist) {
-        // Final identity gate: never persist a zombie after /stop+/play during restore.
-        if (isRestoreHydratePlayerStillLive(playerToPersist, client.lavalink.getPlayer(guildId))) {
+        // Final identity + clear-epoch gates: never persist a zombie after /stop+/play,
+        // and never resurrect a row `/leave` force-cleared during playback setup.
+        if (
+            getPlayerSessionClearEpoch(guildId) === clearEpochAtStart &&
+            isRestoreHydratePlayerStillLive(playerToPersist, client.lavalink.getPlayer(guildId))
+        ) {
             schedulePlayerSessionSave(playerToPersist)
         }
     }
@@ -744,7 +810,11 @@ export async function restorePlayerSessions(client: BotClient): Promise<boolean>
     const deferredGuildIds: string[] = []
     try {
         for (const session of sessions) {
-            const result = await restoreSingleSession(client, session)
+            const result = await restoreSingleSession(
+                client,
+                session,
+                clearEpochAtStart.get(session.guildId) ?? 0
+            )
             if (result === "deferred") deferredGuildIds.push(session.guildId)
         }
         return true
