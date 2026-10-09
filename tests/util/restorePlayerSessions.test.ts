@@ -6,6 +6,7 @@ import {
     guildIdsNeedingRestoreSaveGuard,
     shouldAbandonRestoreForConcurrentQueue,
     shouldDeleteStaleRestoredSession,
+    shouldHydrateRestoredSessionFromList,
     shouldPersistConcurrentAbandonSession,
     restoredLiveTrackCount,
     deferredRestoreGuardAction,
@@ -459,6 +460,65 @@ describe("shouldDeleteStaleRestoredSession", () => {
                 evaluated,
                 latest: null,
                 livePlayerExists: false,
+            }),
+            false
+        )
+    })
+})
+
+describe("shouldHydrateRestoredSessionFromList", () => {
+    const evaluated = {
+        voiceChannelId: "vc-1",
+        updatedAt: new Date("2026-10-08T12:00:00.000Z"),
+    }
+
+    it("hydrates when the DB row still matches the list snapshot and clear epoch is unchanged", () => {
+        assert.equal(
+            shouldHydrateRestoredSessionFromList({
+                evaluated,
+                latest: { ...evaluated },
+                clearEpochAtStart: 0,
+                clearEpochNow: 0,
+            }),
+            true
+        )
+    })
+
+    it("skips hydrate after /leave force-cleared the row (stale list entry must not resurrect)", () => {
+        // Batch listed the session, then /leave deleted it while earlier guilds restored.
+        assert.equal(
+            shouldHydrateRestoredSessionFromList({
+                evaluated,
+                latest: null,
+                clearEpochAtStart: 0,
+                clearEpochNow: 0,
+            }),
+            false
+        )
+    })
+
+    it("skips hydrate when clear epoch advanced even if a racy re-read still sees a row", () => {
+        assert.equal(
+            shouldHydrateRestoredSessionFromList({
+                evaluated,
+                latest: { ...evaluated },
+                clearEpochAtStart: 1,
+                clearEpochNow: 2,
+            }),
+            false
+        )
+    })
+
+    it("skips hydrate when a successor session replaced the evaluated row", () => {
+        assert.equal(
+            shouldHydrateRestoredSessionFromList({
+                evaluated,
+                latest: {
+                    voiceChannelId: "vc-2",
+                    updatedAt: new Date("2026-10-08T12:05:00.000Z"),
+                },
+                clearEpochAtStart: 0,
+                clearEpochNow: 0,
             }),
             false
         )
