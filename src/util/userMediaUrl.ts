@@ -266,6 +266,12 @@ const DNS_BOUNCE_SUFFIXES = [
     // Public wildcard loopback (apex has no A record today; suffix still covers it).
     "devlocal.me",
     "lhst.net",
+    // Yaak API client localhost alias (apex → 127.0.0.1). Do not deny public yaak.app.
+    "localhost.yaak.app",
+    // Bruno API client localhost alias (apex → 127.0.0.1). Do not deny public usebruno.com.
+    "localhost.usebruno.com",
+    // Sibling of localdev.xyz / localdev.tech: public wildcard RFC1918 (10.0.64.4).
+    "localdev.cc",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
