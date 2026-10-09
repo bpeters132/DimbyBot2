@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { randomUUID } from "node:crypto"
 import { resolveBotApiProxyFetchFailure } from "@/lib/bot-api-proxy-fetch-failure"
+import { mapProxyBotApiOriginFailure } from "@/lib/bot-api-proxy-origin-failure"
 import { readBotApiProxyTimeoutMs } from "@/lib/bot-api-timeout"
 import { getBotApiOrigin } from "@/server/bot-api-origin"
 import { isBotApiVerbose, logBotApiVerbose } from "@/server/bot-api-verbose"
@@ -17,28 +18,15 @@ export async function proxyBotApi(request: Request): Promise<NextResponse> {
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Invalid API_PROXY_TARGET"
         logBotApiVerbose("proxyBotApi: invalid API_PROXY_TARGET", { message })
-        return NextResponse.json(
-            {
-                ok: false,
-                error: "Bot API misconfigured",
-                details: "Bot API misconfigured",
-            },
-            { status: 503 }
-        )
+        const failure = mapProxyBotApiOriginFailure("invalid")
+        return NextResponse.json(failure.body, { status: failure.status })
     }
     if (!origin) {
         logBotApiVerbose("proxyBotApi: no origin", {
             pathname: new URL(request.url).pathname,
         })
-        return NextResponse.json(
-            {
-                ok: false,
-                error: "Bot API not configured",
-                details:
-                    "Set API_PROXY_TARGET to the bot HTTP origin (e.g. http://localhost:3001).",
-            },
-            { status: 503 }
-        )
+        const failure = mapProxyBotApiOriginFailure("unset")
+        return NextResponse.json(failure.body, { status: failure.status })
     }
 
     const incoming = new URL(request.url)
