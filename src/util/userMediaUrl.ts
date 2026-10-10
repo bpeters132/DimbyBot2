@@ -307,6 +307,12 @@ const DNS_BOUNCE_SUFFIXES = [
     "localhost.usebruno.com",
     // Sibling of localdev.xyz / localdev.tech: public wildcard RFC1918 (10.0.64.4).
     "localdev.cc",
+    // Sibling public wildcard loopback of localdev.xyz / localdev.tech / localdev.cc.
+    "localdev.space",
+    // HTTP Toolkit documented localhost alias (apex httptoolkit.tech is public).
+    "local.httptoolkit.tech",
+    // LocalStack documented localhost alias (apex/docs localstack.cloud are public).
+    "localhost.localstack.cloud",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
