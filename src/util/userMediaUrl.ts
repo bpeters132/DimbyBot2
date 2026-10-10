@@ -266,6 +266,12 @@ const DNS_BOUNCE_SUFFIXES = [
     // Public wildcard loopback (apex has no A record today; suffix still covers it).
     "devlocal.me",
     "lhst.net",
+    // Sibling public wildcard loopback of localdev.xyz / localdev.tech / localdev.cc.
+    "localdev.space",
+    // HTTP Toolkit documented localhost alias (apex httptoolkit.tech is public).
+    "local.httptoolkit.tech",
+    // LocalStack documented localhost alias (apex/docs localstack.cloud are public).
+    "localhost.localstack.cloud",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
