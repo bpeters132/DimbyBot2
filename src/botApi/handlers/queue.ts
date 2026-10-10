@@ -9,6 +9,7 @@ import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { searchAndEnqueue } from "./searchAndEnqueue.js"
 import { clearUpcomingOnLivePlayer } from "../../util/livePlayerQueueMutations.js"
 import { parseEnqueueQuery, parseQueueQueryNumber } from "../parseBotApiParams.js"
+import { mapQueueClearStale } from "../queueClearRaceHttp.js"
 
 const MAX_QUEUE_PAGE_LIMIT = 100
 
@@ -112,9 +113,41 @@ export async function queueDELETE(
 
     const client = getBotClient()
     try {
-        // Re-resolve under the lock: concurrent stop destroys the captured player; splicing and
-        // saving that zombie would resurrect the session after clearPlayerSession.
-        await clearUpcomingOnLivePlayer(() => client.lavalink.getPlayer(guildId), guildId)
+        // Capture identity before the lock (parity with Discord ClearQueue). Without expectedPlayer,
+        // /stop+/play during the wait splices a successor's upcoming and can persist that wipe.
+        const expectedPlayer = client.lavalink.getPlayer(guildId)
+        if (!expectedPlayer) {
+            return {
+                status: 200,
+                body: {
+                    ok: true,
+                    data: await toQueueResponse(guildId, null),
+                },
+            }
+        }
+        const cleared = await clearUpcomingOnLivePlayer(
+            () => client.lavalink.getPlayer(guildId),
+            guildId,
+            expectedPlayer
+        )
+        if (cleared === "stale") {
+            const live = client.lavalink.getPlayer(guildId)
+            const mapped = mapQueueClearStale(live)
+            if (mapped.kind === "replaced") {
+                return {
+                    status: mapped.status,
+                    body: { ok: false, error: mapped.error },
+                }
+            }
+            return {
+                status: 200,
+                body: {
+                    ok: true,
+                    data: await toQueueResponse(guildId, null),
+                },
+            }
+        }
+        // splice() yields; /stop can drop `live` from the manager. Re-resolve and skip broadcast.
         const live = client.lavalink.getPlayer(guildId)
         if (live) {
             playerBroadcaster.broadcastPlayerEvent(guildId, live, "queueUpdate")
