@@ -313,6 +313,24 @@ const DNS_BOUNCE_SUFFIXES = [
     "local.httptoolkit.tech",
     // LocalStack documented localhost alias (apex/docs localstack.cloud are public).
     "localhost.localstack.cloud",
+    // Remaining localdev.* sibling public wildcard loopback of open PRs
+    // #313/#320/#323/#325 (`localdev.xyz` / `.tech` / `.cc` / `.space`).
+    "localdev.pw",
+    // Apex has no A today; unlabeled wildcards www/foo/app → 127.0.0.1.
+    "localdev.top",
+    "localdev.pl",
+    // Apex is public Cloudflare; unlabeled wildcards www/foo/app → 127.0.0.1
+    // (suffix-deny tradeoff like localhost.tv).
+    "localdev.hu",
+    // Apex/www are public GitHub Pages; unlabeled wildcards foo/app → 127.0.0.1
+    // (suffix-deny tradeoff like docksal.site).
+    "localdev.it",
+    // Apex has no A today; unlabeled wildcards www/foo/app → 127.0.0.1.
+    "localdev.co.uk",
+    // Sibling of denied localtest.me / localtest.org / localtest.dev.
+    "localtest.top",
+    // Apex-only RFC1918 sink (172.31.254.1); wildcards empty today.
+    "localdev.name",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
