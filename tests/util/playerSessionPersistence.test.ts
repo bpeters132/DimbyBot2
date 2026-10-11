@@ -219,7 +219,12 @@ describe("shouldForceClearPlayerSessionAfterDestroy", () => {
         const destroyed = mockPlayer({})
         assert.equal(shouldForceClearPlayerSessionAfterDestroy(destroyed, null), true)
         assert.equal(shouldForceClearPlayerSessionAfterDestroy(destroyed, undefined), true)
-        assert.equal(shouldForceClearPlayerSessionAfterDestroy(destroyed, destroyed), true)
+    })
+
+    it("skips force-clear when the destroyed player is still the live manager entry", () => {
+        // Destroy failed before cache delete — clearing would wipe DB while the queue is live.
+        const destroyed = mockPlayer({})
+        assert.equal(shouldForceClearPlayerSessionAfterDestroy(destroyed, destroyed), false)
     })
 
     it("skips force-clear when a successor already owns the guild", () => {

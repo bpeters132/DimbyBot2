@@ -33,6 +33,9 @@ describe("destroyLavalinkPlayerForStop", () => {
     })
 
     it("propagates destroy rejection to the caller (no floating promise)", async () => {
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async () => undefined,
+        })
         const player = {
             guildId: "guild-stop-reject",
             destroy: async () => {
@@ -87,8 +90,10 @@ describe("destroyLavalinkPlayerForStop", () => {
         assert.equal(deleted, false)
     })
 
-    it("does not clear the session when destroy rejects", async () => {
-        const guildId = "guild-stop-no-clear-on-fail"
+    it("force-clears when destroy rejects after the manager slot is empty", async () => {
+        // lavalink-client: deletePlayer then await node.destroyPlayer then emit playerDestroy.
+        // When node.destroyPlayer throws, playerDestroy never runs — force-clear must still wipe.
+        const guildId = "guild-stop-clear-on-fail-empty-slot"
         let deleted = false
         setPlayerSessionPersistenceDbForTests({
             deletePlayerSession: async (id) => {
@@ -108,6 +113,32 @@ describe("destroyLavalinkPlayerForStop", () => {
                     () => null
                 ),
             /boom/
+        )
+        assert.equal(deleted, true)
+    })
+
+    it("does not force-clear when destroy rejects while the same player is still live", async () => {
+        const guildId = "guild-stop-no-clear-on-fail-still-live"
+        const stillLive = { id: "same-player" }
+        let deleted = false
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async (id) => {
+                if (id === guildId) deleted = true
+            },
+            upsertPlayerSession: async () => undefined,
+        })
+        await assert.rejects(
+            () =>
+                destroyLavalinkPlayerForStop(
+                    {
+                        guildId,
+                        destroy: async () => {
+                            throw new Error("disconnect_failed")
+                        },
+                    },
+                    () => stillLive
+                ),
+            /disconnect_failed/
         )
         assert.equal(deleted, false)
     })
