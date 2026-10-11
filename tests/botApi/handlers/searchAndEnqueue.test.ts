@@ -95,6 +95,32 @@ function connectedPlayer() {
     }
 }
 
+function unknownMemberError() {
+    return Object.assign(new Error("Unknown Member"), {
+        status: 404,
+        code: 10007,
+        name: "UnknownMember",
+    })
+}
+
+function fetchThen(second: () => Promise<unknown>) {
+    let fetches = 0
+    return async () => {
+        fetches++
+        if (fetches === 1) return member(true)
+        return second()
+    }
+}
+
+function withDestroyCounter(client: ReturnType<typeof createClient>) {
+    let destroyed = 0
+    client.lavalink.destroyPlayer = async () => {
+        destroyed++
+        client.lavalink.players.delete(GUILD)
+    }
+    return () => destroyed
+}
+
 const guard = {
     session: {
         user: { id: USER, name: "Ada" },
@@ -289,6 +315,117 @@ describe("searchAndEnqueue", () => {
             "Player stopped before the track could be queued. Try again."
         )
         enqueueMode.value = "ok"
+    })
+
+    it("returns 503 when an existing-player voice refresh fails transiently, without destroying", async () => {
+        const existing = connectedPlayer()
+        let searchCalls = 0
+        const originalSearch = existing.search.bind(existing)
+        existing.search = async () => {
+            searchCalls++
+            return originalSearch()
+        }
+        const client = createClient({
+            player: existing,
+            fetch: fetchThen(async () => {
+                throw new Error("discord down")
+            }),
+        })
+        const destroyed = withDestroyCounter(client)
+
+        const result = await searchAndEnqueue(client as never, GUILD, USER, "song", guard)
+        assert.equal(result.ok, false)
+        if (result.ok) return
+        assert.equal(result.status, 503)
+        assert.equal(result.error.error, "Unable to verify voice state, please try again.")
+        assert.equal(destroyed(), 0)
+        assert.equal(searchCalls, 0)
+        assert.equal(client.lavalink.players.has(GUILD), true)
+    })
+
+    it("returns 400 when an existing-player voice refresh is Unknown Member, without destroying", async () => {
+        const client = createClient({
+            fetch: fetchThen(async () => {
+                throw unknownMemberError()
+            }),
+        })
+        const destroyed = withDestroyCounter(client)
+
+        const result = await searchAndEnqueue(client as never, GUILD, USER, "song", guard)
+        assert.equal(result.ok, false)
+        if (result.ok) return
+        assert.equal(result.status, 400)
+        assert.equal(result.error.error, "Join a voice channel first.")
+        assert.equal(destroyed(), 0)
+        assert.equal(client.lavalink.players.has(GUILD), true)
+    })
+
+    it("returns 400 when the requester leaves voice before an existing player is used", async () => {
+        const client = createClient({
+            fetch: fetchThen(async () => member(false)),
+        })
+        const destroyed = withDestroyCounter(client)
+
+        const result = await searchAndEnqueue(client as never, GUILD, USER, "song", guard)
+        assert.equal(result.ok, false)
+        if (result.ok) return
+        assert.equal(result.status, 400)
+        assert.equal(result.error.error, "Join a voice channel first.")
+        assert.equal(destroyed(), 0)
+        assert.equal(client.lavalink.players.has(GUILD), true)
+    })
+
+    it("destroys a newly created player when the requester leaves voice before search", async () => {
+        const created = connectedPlayer()
+        const client = createClient({
+            player: null,
+            fetch: fetchThen(async () => member(false)),
+        })
+        client.lavalink.createPlayer = async () => {
+            client.lavalink.players.set(GUILD, created)
+            return created
+        }
+        const destroyed = withDestroyCounter(client)
+        let searchCalls = 0
+        created.search = async () => {
+            searchCalls++
+            return {
+                loadType: "track",
+                tracks: [{ info: { title: "Song", uri: "https://example.com/s" } }],
+            }
+        }
+
+        const result = await searchAndEnqueue(client as never, GUILD, USER, "song", guard)
+        assert.equal(result.ok, false)
+        if (result.ok) return
+        assert.equal(result.status, 400)
+        assert.equal(result.error.error, "Join a voice channel first.")
+        assert.equal(destroyed(), 1)
+        assert.equal(searchCalls, 0)
+        assert.equal(client.lavalink.players.has(GUILD), false)
+    })
+
+    it("destroys a newly created player when the post-connect voice refresh fails transiently", async () => {
+        const created = connectedPlayer()
+        const client = createClient({
+            player: null,
+            fetch: fetchThen(async () => {
+                throw new Error("discord down")
+            }),
+        })
+        client.lavalink.createPlayer = async () => {
+            client.lavalink.players.set(GUILD, created)
+            return created
+        }
+        const destroyed = withDestroyCounter(client)
+
+        const result = await searchAndEnqueue(client as never, GUILD, USER, "song", guard)
+        assert.equal(result.ok, false)
+        if (result.ok) return
+        assert.equal(result.status, 503)
+        assert.equal(result.error.error, "Unable to verify voice state, please try again.")
+        assert.equal(destroyed(), 1)
+        assert.equal(client.lavalink.players.has(GUILD), false)
     })
 
     it("returns the connected player after enqueue", async () => {
