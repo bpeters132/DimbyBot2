@@ -7,10 +7,8 @@ import {
     getLocalPlayerState,
     cancelPendingLocalPlay,
 } from "../../util/localPlayer.js"
-import {
-    forceClearPlayerSessionIfNoLivePlayer,
-    forceClearPlayerSessionAfterDestroyIfSafe,
-} from "../../util/playerSessionPersistence.js"
+import { forceClearPlayerSessionIfNoLivePlayer } from "../../util/playerSessionPersistence.js"
+import { destroyLavalinkPlayerForStop } from "../../util/stopLavalinkPlayer.js"
 import { planLeaveAbsentLavalinkActions } from "../../util/leaveOrphanVoice.js"
 import {
     memberMayJoinOccupiedVoice,
@@ -158,13 +156,9 @@ export default {
 
         client.debug(`Destroying player for guild ${guild.id}`)
         try {
-            await player.destroy()
-            // playerDestroy → clearPlayerSession is skipped while restore-in-progress;
-            // force-clear so an intentional leave cannot resurrect on the next reconnect.
-            // Skip when a successor was created during destroy (cache-delete window).
-            await forceClearPlayerSessionAfterDestroyIfSafe(guild.id, player, () =>
-                client.lavalink.getPlayer(guild.id)
-            )
+            // Shared with /stop: force-clears in finally so node.destroyPlayer throw after
+            // cache delete cannot skip the clear (playerDestroy never emits in that case).
+            await destroyLavalinkPlayerForStop(player, () => client.lavalink.getPlayer(guild.id))
             client.debug(`Player destroyed for guild ${guild.id}`)
             await interaction.editReply({ content: "BYE!" })
             const msg = await interaction.fetchReply()

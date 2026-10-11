@@ -1,6 +1,9 @@
 import assert from "node:assert/strict"
-import { describe, it } from "node:test"
-import { setPlayerSessionPersistenceDbForTests } from "../../../src/util/playerSessionPersistence.js"
+import { afterEach, describe, it } from "node:test"
+import {
+    getSessionClearEpochForTests,
+    setPlayerSessionPersistenceDbForTests,
+} from "../../../src/util/playerSessionPersistence.js"
 import {
     createBotClientFake,
     createSlashInteraction,
@@ -12,6 +15,13 @@ import leave from "../../../src/commands/music/Leave.js"
 setPlayerSessionPersistenceDbForTests({
     upsertPlayerSession: async () => undefined,
     deletePlayerSession: async () => undefined,
+})
+
+afterEach(() => {
+    setPlayerSessionPersistenceDbForTests({
+        upsertPlayerSession: async () => undefined,
+        deletePlayerSession: async () => undefined,
+    })
 })
 
 function idleGuild() {
@@ -147,5 +157,44 @@ describe("leave replies", () => {
         }
         const calls = await executeLeave({}, new Map([["guild-1", player]]))
         assert.deepEqual(messageContents(calls), ["An error occurred while trying to leave."])
+    })
+
+    it("force-clears the session when destroy throws after the player leaves the manager", async () => {
+        // Mirrors lavalink-client: cache delete, then node.destroyPlayer throws (no playerDestroy).
+        const guildId = "guild-1"
+        const players = new Map<string, unknown>()
+        const player = {
+            connected: true,
+            playing: false,
+            destroy: async () => {
+                players.delete(guildId)
+                throw new Error("node destroyPlayer failed")
+            },
+        }
+        players.set(guildId, player)
+
+        let deleted = false
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => undefined,
+            deletePlayerSession: async (id) => {
+                if (id === guildId) deleted = true
+            },
+        })
+        const epochBefore = getSessionClearEpochForTests(guildId)
+
+        const { interaction, calls } = createSlashInteraction({
+            guild: idleGuild(),
+        })
+        Object.assign(interaction, {
+            fetchReply: async () => ({
+                delete: async () => undefined,
+            }),
+        })
+        const client = createBotClientFake({ players })
+        await leave.execute(interaction, client)
+
+        assert.deepEqual(messageContents(calls), ["An error occurred while trying to leave."])
+        assert.equal(deleted, true)
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
     })
 })
