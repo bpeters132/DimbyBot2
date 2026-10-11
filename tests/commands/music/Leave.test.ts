@@ -164,6 +164,7 @@ describe("leave replies", () => {
         const guildId = "guild-1"
         const players = new Map<string, unknown>()
         const player = {
+            guildId,
             connected: true,
             playing: false,
             destroy: async () => {
