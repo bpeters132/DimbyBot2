@@ -33,6 +33,9 @@ describe("destroyLavalinkPlayerForStop", () => {
     })
 
     it("propagates destroy rejection to the caller (no floating promise)", async () => {
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async () => undefined,
+        })
         const player = {
             guildId: "guild-stop-reject",
             destroy: async () => {
