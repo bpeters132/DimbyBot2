@@ -545,15 +545,20 @@ export function resolvePlayerDestroySessionClearAction(
 
 /**
  * After an intentional destroy (`/leave`, `/stop`, control/web stop), whether to
- * {@link forceClearPlayerSession}. `playerDestroy` → {@link clearPlayerSession} already
- * skips when a successor owns the guild; force-clear must use the same identity rule or
- * it wipes that successor's persisted snapshot (and invalidates its pending save).
+ * {@link forceClearPlayerSession}.
+ *
+ * Clear only when the guild slot is empty. A successor must not be wiped (same identity
+ * rule as `playerDestroy` skip-successor). If destroy failed before
+ * `LavalinkManager.deletePlayer`, the same instance is still live — clearing then would
+ * delete the DB row while the player still holds the queue. After cache-delete +
+ * `node.destroyPlayer` throw, the slot is empty and `playerDestroy` never emitted, so
+ * force-clear must still run.
  */
 export function shouldForceClearPlayerSessionAfterDestroy(
-    destroyedPlayer: object,
+    _destroyedPlayer: object,
     livePlayer: object | null | undefined
 ): boolean {
-    return livePlayer == null || livePlayer === destroyedPlayer
+    return livePlayer == null
 }
 
 /**
