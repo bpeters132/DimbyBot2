@@ -54,7 +54,7 @@ mock.module("../../../src/lib/botClientRegistry.js", {
 
 const { queueIndexDELETE, queueIndexPATCH } =
     await import("../../../src/botApi/handlers/queueIndex.js")
-const { setPlayerSessionPersistenceDbForTests } =
+const { getSessionClearEpochForTests, setPlayerSessionPersistenceDbForTests } =
     await import("../../../src/util/playerSessionPersistence.js")
 
 describe("queue index handlers", () => {
@@ -101,6 +101,29 @@ describe("queue index handlers", () => {
         const result = await queueIndexDELETE(new Headers(), GUILD, "0")
         assert.equal(result.status, 200)
         if (result.body.ok) assert.equal(result.body.data.total, 1)
+    })
+
+    it("force-clears the session when the last upcoming track is removed with no current", async () => {
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async (id) => {
+                events.push(`delete:${id}`)
+            },
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+        })
+        const epochBefore = getSessionClearEpochForTests(GUILD)
+        state.player = tracksPlayer(["only"])
+        const result = await queueIndexDELETE(new Headers(), GUILD, "0")
+        assert.equal(result.status, 200)
+        if (result.body.ok) assert.equal(result.body.data.total, 0)
+        assert.deepEqual(events, [`delete:${GUILD}`])
+        assert.equal(getSessionClearEpochForTests(GUILD), epochBefore + 1)
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => undefined,
+            deletePlayerSession: async () => undefined,
+        })
     })
 
     it("returns 500 when delete throws", async () => {
