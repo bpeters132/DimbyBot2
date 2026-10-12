@@ -331,6 +331,24 @@ const DNS_BOUNCE_SUFFIXES = [
     "localtest.top",
     // Apex-only RFC1918 sink (172.31.254.1); wildcards empty today.
     "localdev.name",
+    // Fastly unused localhost alias (apex → 127.0.0.1). Do not deny public fastly.net.
+    "localhost.fastly.net",
+    // WireMock Cloud localhost alias (apex → 127.0.0.1). Do not deny public wiremock.io.
+    "localhost.wiremock.io",
+    // Katalon catch-all under localhost.katalon.com → RFC1918 10.50.x. Do not deny public katalon.com.
+    "localhost.katalon.com",
+    // Public wildcard RFC1918 (apex/www/foo/app/api/admin → 192.168.10.3).
+    "islocal.dev",
+    // Sibling of denied localh.net / localh.st: unlabeled wildcards → 192.168.0.1.
+    "localh.de",
+    // Sibling of denied vcap.me: public wildcard loopback.
+    "vcap.cc",
+    // Apex-only public DNS loopback (wildcards empty today; suffix still covers them).
+    "localhost.sg",
+    // Sibling of denied localtest.me / .org / .dev: public wildcard loopback.
+    "localtest.cz",
+    // Sibling of denied devlocal.me: apex/www → 127.0.0.1 (unlabeled foo/app empty today).
+    "devlocal.nl",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
