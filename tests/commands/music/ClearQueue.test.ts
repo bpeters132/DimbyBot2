@@ -89,13 +89,38 @@ describe("clearqueue", () => {
 
     it("confirms how many tracks were cleared", async () => {
         const tracks = [{}, {}, {}]
+        // Keep a restorable current track so clear schedules a save instead of force-clearing
+        // the session row (null snapshots cannot be persisted).
         const player = {
+            guildId: "guild-1",
+            voiceChannelId: "voice-1",
+            textChannelId: "text-1",
+            volume: 100,
+            repeatMode: "off",
+            paused: false,
+            playing: true,
             queue: {
+                current: {
+                    encoded: "enc-current",
+                    info: {
+                        title: "Now",
+                        author: "Artist",
+                        uri: "https://example.com/now",
+                        duration: 1000,
+                        isStream: false,
+                        identifier: "now",
+                        isSeekable: true,
+                        sourceName: "http",
+                        artworkUrl: null,
+                        isrc: null,
+                    },
+                },
                 tracks,
                 splice: async (start: number, size: number) => {
                     tracks.splice(start, size)
                 },
             },
+            get: () => undefined,
         }
         const { interaction, calls } = createSlashInteraction({ guild: serverGuild() })
         await clearQueue.execute(
