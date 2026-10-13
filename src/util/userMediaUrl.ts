@@ -349,6 +349,42 @@ const DNS_BOUNCE_SUFFIXES = [
     "localtest.cz",
     // Sibling of denied devlocal.me: apex/www → 127.0.0.1 (unlabeled foo/app empty today).
     "devlocal.nl",
+    // Sibling of denied 127001.it: apex-only loopback (wildcards empty today).
+    "127001.info",
+    // Sibling of denied 127001.it: apex-only RFC1918 192.168.2.14 (wildcards empty).
+    "127001.cz",
+    // Sibling of denied 127001.it: unlabeled wildcards → 127.0.0.1/::1 (apex empty).
+    "127001.in",
+    // Sibling of denied docksal.site: unlabeled wildcards → 192.168.64.100
+    // (apex is public Cloudflare; suffix-deny tradeoff like docksal.site).
+    "docksal.dev",
+    // Sibling of islocal.dev: public wildcard RFC1918 192.168.0.3.
+    "islocal.eu",
+    // Sibling of islocal.dev: public wildcard RFC1918 10.11.11.107 (TCP :80/:443 open).
+    "islocal.nl",
+    // Sibling of denied lvh.me: public wildcard loopback.
+    "lvh.sh",
+    // Sibling of localhost.sg: public wildcard loopback (apex + unlabeled names).
+    "localhost.tw",
+    // Sibling of localhost.sg: unlabeled wildcards → 127.0.0.1 (apex empty).
+    "localhost.so",
+    // Internet Archive unused localhost alias (apex + wildcards → 127.0.0.1).
+    // Do not deny public archive.org.
+    "localhost.archive.org",
+    // New Relic unused localhost alias (apex + wildcards → 127.0.0.1).
+    // Do not deny public newrelic.com.
+    "localhost.newrelic.com",
+    // LambdaTest localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public lambdatest.com.
+    "localhost.lambdatest.com",
+    // Ruby on Rails unused localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public rubyonrails.org.
+    "localhost.rubyonrails.org",
+    // First-level unlabeled wildcards → 127.0.0.1. Apex is public parking on
+    // 8.8.8.8 (suffix-deny tradeoff like localhost.tv).
+    "local.cl",
+    // Slovak public wildcard loopback (apex has no A; www/foo/app → 127.0.0.1).
+    "host.sk",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
