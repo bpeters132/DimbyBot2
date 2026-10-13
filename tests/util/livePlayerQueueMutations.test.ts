@@ -5,6 +5,14 @@ import {
     clearUpcomingOnLivePlayer,
     shuffleUpcomingOnLivePlayer,
 } from "../../src/util/livePlayerQueueMutations.js"
+import {
+    clearPlayerSessionPreservePriorSnapshot,
+    flushPlayerSessionSave,
+    markPlayerSessionPreservePriorSnapshot,
+    setLivePlayerLookupForTests,
+    setPlayerSessionPersistenceDbForTests,
+    shouldPreservePriorPlayerSessionSnapshot,
+} from "../../src/util/playerSessionPersistence.js"
 
 function mockTrack(id: string): Track {
     return {
@@ -74,6 +82,38 @@ describe("clearUpcomingOnLivePlayer", () => {
         assert.equal(cleared, "stale")
         assert.equal(successor.queue.tracks.length, 2)
         assert.equal(expected.queue.tracks.length, 1)
+    })
+
+    it("releases preserve-prior so an intentional clear with a current track can persist", async () => {
+        // Partial/concurrent restore marks preserve-prior; scheduleSave then no-ops and the
+        // fuller DB row would resurrect cleared upcoming on the next restore.
+        const guildId = "guild-clear-preserve-prior"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+            deletePlayerSession: async () => {
+                events.push("delete")
+            },
+        })
+        const live = mockMutablePlayer(guildId, [mockTrack("a"), mockTrack("b")])
+        setLivePlayerLookupForTests((id) => (id === guildId ? live : undefined))
+        markPlayerSessionPreservePriorSnapshot(guildId)
+
+        try {
+            const cleared = await clearUpcomingOnLivePlayer(() => live, guildId, live)
+            assert.equal(cleared, 2)
+            assert.equal(live.queue.tracks.length, 0)
+            assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), false)
+
+            await flushPlayerSessionSave(guildId)
+            assert.deepEqual(events, ["upsert"])
+        } finally {
+            clearPlayerSessionPreservePriorSnapshot(guildId)
+            setLivePlayerLookupForTests(null)
+            setPlayerSessionPersistenceDbForTests(null)
+        }
     })
 })
 
