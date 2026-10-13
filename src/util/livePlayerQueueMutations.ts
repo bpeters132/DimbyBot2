@@ -1,6 +1,7 @@
 import type { Player } from "lavalink-client"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
 import {
+    clearPlayerSessionPreservePriorSnapshot,
     forceClearPlayerSession,
     scheduleSaveIfPlayerStillLive,
     snapshotFromPlayer,
@@ -45,6 +46,10 @@ export async function persistLiveQueueAfterUpcomingMutation(
  * When clear leaves no current track and no upcoming, force-clears the session row:
  * {@link writePlayerSession} refuses null snapshots (transient empty-queue guard), so a
  * plain scheduleSave cannot record the clear.
+ *
+ * Releases preserve-prior before scheduling a save: after a partial/concurrent restore
+ * that guard blocks all writes, so an intentional `/clearqueue` or dashboard clear would
+ * leave the fuller DB row in place and resurrect the cleared upcoming on the next restore.
  */
 export async function clearUpcomingOnLivePlayer(
     getLivePlayer: () => Player | undefined,
@@ -58,6 +63,11 @@ export async function clearUpcomingOnLivePlayer(
         const size = live.queue.tracks.length
         if (size === 0) return 0
         await live.queue.splice(0, size)
+        // User cleared upcoming — the live queue is now the source of truth, including
+        // abandoning unrestored tracks still held only in a preserve-prior DB row.
+        if (getLivePlayer() === live) {
+            clearPlayerSessionPreservePriorSnapshot(guildId)
+        }
         await persistLiveQueueAfterUpcomingMutation(getLivePlayer, live, guildId)
         return size
     })
