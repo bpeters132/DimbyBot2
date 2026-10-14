@@ -266,6 +266,31 @@ const DNS_BOUNCE_SUFFIXES = [
     // Public wildcard loopback (apex has no A record today; suffix still covers it).
     "devlocal.me",
     "lhst.net",
+    // Sibling of denied anyip.dev: unlabeled wildcards (and apex) → 127.0.0.1.
+    // app/api are public Azure (suffix-deny tradeoff like docksal.site).
+    "anyip.cc",
+    // HostGator unused localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public hostgator.com.
+    "localhost.hostgator.com",
+    // DreamHost unused localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public dreamhost.com.
+    "localhost.dreamhost.com",
+    // Unused localhost.host.net alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public host.net.
+    "localhost.host.net",
+    // Unused localhost.host.co.in alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public host.co.in.
+    "localhost.host.co.in",
+    // Unused localhost.host.ca alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public host.ca.
+    "localhost.host.ca",
+    // Unused localhost.host.jp alias (apex → 127.0.0.1; wildcards empty).
+    "localhost.host.jp",
+    // Entire zone (apex + wildcards) → 127.0.53.53 loopback, same class as fbi.com.
+    "corp.com",
+    // Apex + www → 172.16.210.97 RFC1918 (unlabeled wildcards empty). ns1/ns2 are
+    // public nameservers (suffix-deny tradeoff like domaincontrol.com).
+    "host.in",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
