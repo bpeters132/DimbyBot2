@@ -5,7 +5,10 @@ import {
     clearPlayerSessionRestoreInProgress,
     setPlayerSessionPersistenceDbForTests,
 } from "../../src/util/playerSessionPersistence.js"
-import { destroyLavalinkPlayerForStop } from "../../src/util/stopLavalinkPlayer.js"
+import {
+    destroyLavalinkPlayerForStop,
+    shouldForceClearSessionAfterLocalOnlyStop,
+} from "../../src/util/stopLavalinkPlayer.js"
 
 afterEach(() => {
     setPlayerSessionPersistenceDbForTests(null)
@@ -141,5 +144,53 @@ describe("destroyLavalinkPlayerForStop", () => {
             /disconnect_failed/
         )
         assert.equal(deleted, false)
+    })
+})
+
+describe("shouldForceClearSessionAfterLocalOnlyStop", () => {
+    it("force-clears after local stop when no Lavalink player remains", () => {
+        // LocalHandoffReady under preserve-prior leaves the fuller DB row; /stop must
+        // delete it so the next Lavalink reconnect cannot resurrect the queue.
+        assert.equal(
+            shouldForceClearSessionAfterLocalOnlyStop({
+                stoppedLocal: true,
+                cancelledPendingLocal: false,
+                livePlayerExists: false,
+            }),
+            true
+        )
+    })
+
+    it("force-clears after cancelling an in-flight local handoff with no live player", () => {
+        assert.equal(
+            shouldForceClearSessionAfterLocalOnlyStop({
+                stoppedLocal: false,
+                cancelledPendingLocal: true,
+                livePlayerExists: false,
+            }),
+            true
+        )
+    })
+
+    it("skips when a live Lavalink player still owns the guild", () => {
+        assert.equal(
+            shouldForceClearSessionAfterLocalOnlyStop({
+                stoppedLocal: true,
+                cancelledPendingLocal: true,
+                livePlayerExists: true,
+            }),
+            false
+        )
+    })
+
+    it("skips when nothing local was stopped or cancelled", () => {
+        assert.equal(
+            shouldForceClearSessionAfterLocalOnlyStop({
+                stoppedLocal: false,
+                cancelledPendingLocal: false,
+                livePlayerExists: false,
+            }),
+            false
+        )
     })
 })
