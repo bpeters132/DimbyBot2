@@ -2,8 +2,9 @@
  * Pure playlist-move reorder used by {@link movePlaylistTrack}.
  *
  * `fromPosition` is matched by stored position value; `toPosition` is a 1-based
- * index into the position-sorted row list (not a position lookup). Keeping that
- * asymmetry explicit avoids silent off-by-ones that corrupt saved playlist order.
+ * index into the position-sorted row list (not a position lookup). Same-slot
+ * no-ops compare the resolved sorted index to `toPosition`, never raw position
+ * equality — gaps make `position === toPosition` a real move (e.g. 4 → slot 4).
  */
 
 export type PlaylistTrackRowRef = { id: number; position: number }
@@ -19,7 +20,9 @@ export type PlaylistTrackReorderResult =
 
 /**
  * Returns the new row order after moving `fromPosition` to 1-based slot `toPosition`.
- * Same-position moves are a no-op that still returns `{ ok: true }`.
+ * A no-op is when the track is already in that sorted-list slot (`fromIdx === toPosition - 1`),
+ * not when the stored position value equals `toPosition` — those domains diverge when positions
+ * have gaps (e.g. concurrent deletes leave `1,2,4,5`; dragging position 4 to slot 4 must move).
  */
 export function reorderPlaylistTrackRows(
     rows: readonly PlaylistTrackRowRef[],
@@ -29,9 +32,6 @@ export function reorderPlaylistTrackRows(
     if (rows.length === 0) {
         return { ok: false, reason: "empty", missingPosition: fromPosition }
     }
-    if (fromPosition === toPosition) {
-        return { ok: true, rows: [...rows] }
-    }
 
     const fromIdx = rows.findIndex((r) => r.position === fromPosition)
     if (fromIdx === -1) {
@@ -39,6 +39,10 @@ export function reorderPlaylistTrackRows(
     }
     if (toPosition < 1 || toPosition > rows.length) {
         return { ok: false, reason: "to_out_of_range", missingPosition: toPosition }
+    }
+    // Already in the destination slot (dense or gapped). Compare indexes, not position values.
+    if (fromIdx === toPosition - 1) {
+        return { ok: true, rows: [...rows] }
     }
 
     const reordered = [...rows]

@@ -276,7 +276,8 @@ export async function movePlaylistTrack(
     fromPosition: number,
     toPosition: number
 ): Promise<void> {
-    if (fromPosition === toPosition) return
+    // Do not early-return on `fromPosition === toPosition`: with gapped positions that
+    // equality is not a same-slot no-op (see {@link reorderPlaylistTrackRows}).
     const prisma = getPrismaClient()
     await prisma.$transaction(async (tx) => {
         const rows = await tx.playlistTrack.findMany({
@@ -288,6 +289,10 @@ export async function movePlaylistTrack(
             throw new PlaylistTrackNotFoundError(ordered.missingPosition)
         }
         const reordered = ordered.rows
+        // True no-op: track already occupies the destination sorted-list slot.
+        if (reordered.every((row, i) => row.id === rows[i]?.id)) {
+            return
+        }
         for (let i = 0; i < reordered.length; i++) {
             await tx.playlistTrack.update({
                 where: { id: reordered[i]!.id },
