@@ -5,6 +5,7 @@ import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
 import {
     forceClearPlayerSession,
     schedulePlayerSessionSave,
+    shouldPreservePriorPlayerSessionSnapshot,
     snapshotFromPlayer,
 } from "./playerSessionPersistence.js"
 
@@ -280,7 +281,12 @@ export async function removeAndRebalanceRrqAfterDisconnect(
                 // empty snapshots). A plain scheduleSave would leave the prior DB row and
                 // resurrect RRQ-removed tracks on the next restore — same class as clearqueue
                 // null-current persist (#330), distinct entry point.
-                if (snapshotFromPlayer(stillLive) === null) {
+                // Skip force-clear while preserve-prior is set: that fuller unrestored
+                // snapshot is kept until /stop or /leave (intentional #240 tradeoff).
+                if (
+                    snapshotFromPlayer(stillLive) === null &&
+                    !shouldPreservePriorPlayerSessionSnapshot(stillLive.guildId)
+                ) {
                     await forceClearPlayerSession(stillLive.guildId)
                 } else {
                     schedulePlayerSessionSave(stillLive)
