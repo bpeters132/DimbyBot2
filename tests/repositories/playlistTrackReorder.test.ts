@@ -46,6 +46,23 @@ describe("reorderPlaylistTrackRows", () => {
         assert.deepEqual(idsOf(reorderPlaylistTrackRows(drifted, 1, 3)), [20, 30, 10])
     })
 
+    it("moves a gapped middle track to the end when position value equals destination slot", () => {
+        // Concurrent deletes can leave gaps; append then yields e.g. 1,2,4,5.
+        // Dashboard drag of position 4 → last slot sends from=4, to=4. Comparing
+        // those values as a no-op would leave order unchanged (silent reorder miss).
+        const gapped = [
+            { id: 10, position: 1 },
+            { id: 20, position: 2 },
+            { id: 30, position: 4 },
+            { id: 40, position: 5 },
+        ]
+        assert.deepEqual(idsOf(reorderPlaylistTrackRows(gapped, 4, 4)), [10, 20, 40, 30])
+        // Same-slot no-op still holds: track at position 2 is already in slot 2.
+        assert.deepEqual(idsOf(reorderPlaylistTrackRows(gapped, 2, 2)), [10, 20, 30, 40])
+        // Gapped same-slot: position 4 is sorted index 2 (slot 3), not slot 4.
+        assert.deepEqual(idsOf(reorderPlaylistTrackRows(gapped, 4, 3)), [10, 20, 30, 40])
+    })
+
     it("rejects empty playlists and missing / out-of-range positions", () => {
         assert.deepEqual(reorderPlaylistTrackRows([], 1, 1), {
             ok: false,
