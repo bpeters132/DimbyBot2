@@ -9,7 +9,9 @@ import {
     stampRequesterUserIdOnTracks,
 } from "../../src/util/rrqDisconnect.js"
 import {
+    clearPlayerSessionPreservePriorSnapshot,
     getSessionClearEpochForTests,
+    markPlayerSessionPreservePriorSnapshot,
     setPlayerSessionPersistenceDbForTests,
 } from "../../src/util/playerSessionPersistence.js"
 
@@ -72,6 +74,8 @@ function mockMutablePlayer(
 describe("RRQ vs guild queue lock", () => {
     afterEach(() => {
         setPlayerSessionPersistenceDbForTests(null)
+        clearPlayerSessionPreservePriorSnapshot("guild-rrq-null-current-clear")
+        clearPlayerSessionPreservePriorSnapshot("guild-rrq-preserve-prior-empty")
     })
 
     it("legacy separate RRQ chain can resurrect tracks after a guild-locked clear", async () => {
@@ -201,6 +205,33 @@ describe("RRQ vs guild queue lock", () => {
         assert.equal(player.queue.tracks.length, 0)
         assert.deepEqual(events, [`delete:${guildId}`])
         assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
+    })
+
+    it("does not force-clear an empty null-current queue while preserve-prior is set", async () => {
+        // Partial restore keeps the fuller DB row until /stop or /leave. RRQ emptying
+        // the thin live queue must not wipe unrestored tracks (#240).
+        const guildId = "guild-rrq-preserve-prior-empty"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async (id) => {
+                events.push(`delete:${id}`)
+            },
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+        })
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        const a1 = mockTrack("a1", "user-a")
+        stampRequesterUserIdOnTracks([a1], "user-a")
+        const player = mockMutablePlayer(guildId, [a1], null)
+        const epochBefore = getSessionClearEpochForTests(guildId)
+
+        const removed = await removeAndRebalanceRrqAfterDisconnect(player, "user-a")
+        assert.equal(removed, 1)
+        assert.equal(player.queue.tracks.length, 0)
+        assert.deepEqual(events, [])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore)
+        clearPlayerSessionPreservePriorSnapshot(guildId)
     })
 
     it("schedules a save when RRQ remove leaves a restorable current track", async () => {
