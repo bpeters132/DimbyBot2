@@ -266,6 +266,34 @@ const DNS_BOUNCE_SUFFIXES = [
     // Public wildcard loopback (apex has no A record today; suffix still covers it).
     "devlocal.me",
     "lhst.net",
+    // Sibling of denied 127001.it / 127001.info: apex → 127.0.0.1 (wildcards empty).
+    "127001.lt",
+    // Sibling of denied corp.com: apex + first-level unlabeled wildcards → 127.0.0.1.
+    // Nested bar.foo.corp.co is public parking (suffix-deny tradeoff like local.cl).
+    "corp.co",
+    // Sibling of denied corp.com: unlabeled wildcards including nested bar.foo → 127.0.0.1
+    // (apex has no A; suffix still covers it).
+    "corp.xyz",
+    // Documented public wildcard loopback (apex + unlabeled wildcards including nested).
+    "localfabriek.nl",
+    // Documented HSTS-preloaded localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public qinlili.bid.
+    "local.qinlili.bid",
+    // A2 Hosting unused localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public a2hosting.com.
+    "localhost.a2hosting.com",
+    // AMD unused localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public amd.com.
+    "localhost.amd.com",
+    // Gandi unused localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public gandi.net.
+    "localhost.gandi.net",
+    // HostGator India unused localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Sibling of denied localhost.hostgator.com. Do not deny public hostgator.in.
+    "localhost.hostgator.in",
+    // PHP unused localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public php.net.
+    "localhost.php.net",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
