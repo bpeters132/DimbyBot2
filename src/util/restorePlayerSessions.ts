@@ -11,6 +11,7 @@ import { updateControlMessage } from "../events/handlers/handleControlChannel.js
 import { playerBroadcaster } from "../shared/websocket/PlayerBroadcaster.js"
 import { getDiscordErrorCode } from "./discordErrorDetails.js"
 import { getGuildSettings } from "./saveControlChannel.js"
+import { getLocalPlayerState, isPendingLocalPlay } from "./localPlayer.js"
 import { ensurePlayerConnected } from "./musicManager.js"
 import { startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
 import {
@@ -125,6 +126,35 @@ export function shouldSkipRestoreHydrateForLivePlayer(
     live: RestoreLivePlayer | null | undefined
 ): boolean {
     return live != null && shouldAbandonRestoreForConcurrentQueue(live)
+}
+
+/**
+ * True when restore must not hydrate or stale-delete because this guild is in a
+ * Lavalink → @discordjs/voice local handoff (join in flight) or already playing locally.
+ *
+ * Local play flushes the session then destroys Lavalink under a suppress lease so a
+ * failed join can recover the queue. The slot is empty for up to 30s of Ready wait.
+ * A node `connect` restore would `createPlayer` + `ensurePlayerConnected`, steal Discord
+ * voice from the local join, and local Ready would skip session clear because live !==
+ * the handoff player (`shouldClearSessionAfterLocalHandoffReady`). After Ready, a
+ * preserve-prior keep-row (`LocalHandoffReady`) plus a later node reconnect has the
+ * same steal while local audio is still playing.
+ *
+ * Skip the whole session (do not humans===0 stale-delete) and leave the row. Do not
+ * mark preserve-prior here — that would block a later `/play` save after local ends.
+ */
+export function shouldSkipRestoreForLocalPlayback(options: {
+    pendingLocalPlay: boolean
+    localPlayerActive: boolean
+}): boolean {
+    return options.pendingLocalPlay || options.localPlayerActive
+}
+
+function guildHasLocalPlayback(guildId: string): boolean {
+    return shouldSkipRestoreForLocalPlayback({
+        pendingLocalPlay: isPendingLocalPlay(guildId),
+        localPlayerActive: getLocalPlayerState(guildId) != null,
+    })
 }
 
 /**
@@ -405,6 +435,11 @@ async function restoreSingleSession(
 ): Promise<"completed" | "deferred"> {
     const { guildId, voiceChannelId, snapshot } = session
 
+    if (guildHasLocalPlayback(guildId)) {
+        client.debug(`[playerSession] restore skipped for ${guildId}: local playback in progress`)
+        return "completed"
+    }
+
     const existingBeforeRestore = client.lavalink.getPlayer(guildId)
     if (shouldSkipRestoreHydrateForLivePlayer(existingBeforeRestore)) {
         // Same contract as concurrent-abandon during resolve (#240): skipping hydrate
@@ -428,6 +463,12 @@ async function restoreSingleSession(
         // no row and skips its own mark, blocking successor saves. The finally applies
         // shouldMarkPreservePriorAfterDeferredRestore before restore-in-progress clears.
         return "deferred"
+    }
+    // Local handoff can start during the voice fetch await. Do not stale-delete the
+    // flushed snapshot or createPlayer into the empty slot (would steal Discord voice).
+    if (guildHasLocalPlayback(guildId)) {
+        client.debug(`[playerSession] restore skipped for ${guildId}: local playback in progress`)
+        return "completed"
     }
     if (voiceResult.status === "missing") {
         client.info(
@@ -461,6 +502,12 @@ async function restoreSingleSession(
     let restorePlayer: Player | null = null
     try {
         await withGuildPlayerLifecycleReservation(guildId, async () => {
+            if (guildHasLocalPlayback(guildId)) {
+                client.debug(
+                    `[playerSession] restore skipped for ${guildId}: local playback in progress`
+                )
+                return
+            }
             // Re-check under the reservation: a concurrent create may have won the race.
             const liveBeforeCreate = client.lavalink.getPlayer(guildId)
             if (shouldSkipRestoreHydrateForLivePlayer(liveBeforeCreate)) {

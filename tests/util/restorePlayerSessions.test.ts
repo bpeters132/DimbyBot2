@@ -14,6 +14,7 @@ import {
     shouldMarkPreservePriorAfterDeferredRestore,
     shouldPersistRestoredPlayerSession,
     shouldPreservePriorSnapshotAfterRestoreDefer,
+    shouldSkipRestoreForLocalPlayback,
     shouldSkipRestoreHydrateForLivePlayer,
 } from "../../src/util/restorePlayerSessions.js"
 
@@ -152,6 +153,45 @@ describe("shouldPersistConcurrentAbandonSession", () => {
         assert.equal(
             shouldPersistConcurrentAbandonSession({ playableCount: 0, transientFailures: 0 }),
             true
+        )
+    })
+})
+
+describe("shouldSkipRestoreForLocalPlayback", () => {
+    it("skips restore during local handoff Ready wait and while local audio is playing", () => {
+        // Flush + destroy leaves an empty Lavalink slot for up to 30s. Hydrate would
+        // createPlayer, steal Discord voice, and Ready would skip session clear.
+        assert.equal(
+            shouldSkipRestoreForLocalPlayback({
+                pendingLocalPlay: true,
+                localPlayerActive: false,
+            }),
+            true
+        )
+        // Preserve-prior LocalHandoffReady keep-row + later node reconnect.
+        assert.equal(
+            shouldSkipRestoreForLocalPlayback({
+                pendingLocalPlay: false,
+                localPlayerActive: true,
+            }),
+            true
+        )
+        assert.equal(
+            shouldSkipRestoreForLocalPlayback({
+                pendingLocalPlay: true,
+                localPlayerActive: true,
+            }),
+            true
+        )
+    })
+
+    it("does not skip restore when this guild is not in local playback", () => {
+        assert.equal(
+            shouldSkipRestoreForLocalPlayback({
+                pendingLocalPlay: false,
+                localPlayerActive: false,
+            }),
+            false
         )
     })
 })
