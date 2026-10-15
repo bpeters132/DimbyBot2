@@ -40,6 +40,7 @@ import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
 } from "../../util/sameVoiceChannel.js"
+import { ensurePlayerConnected } from "../../util/musicManager.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -395,6 +396,19 @@ export default {
                             return { kind: "wrong_channel" as const }
                         }
 
+                        // Match web playlistPlay / Discord /play: createPlayer alone does not join VC.
+                        // Without ensurePlayerConnected, cold-start /playlist play reports "Queued N"
+                        // while the bot never connects and playback never starts.
+                        try {
+                            await ensurePlayerConnected(client, player, voiceChannel)
+                        } catch {
+                            await cleanupCreatedPlayer()
+                            return { kind: "connect_failed" as const }
+                        }
+                        if (!isSameLivePlayer(client.lavalink.getPlayer(guild.id), player)) {
+                            return { kind: "player_gone" as const }
+                        }
+
                         const { resolved, failed } = await resolveStoredPlaylistTracks(
                             player,
                             playlist.tracks,
@@ -431,6 +445,11 @@ export default {
                 if (playOutcome.kind === "wrong_channel") {
                     return interaction.editReply({
                         content: "You need to be in the same voice channel as the bot!",
+                    })
+                }
+                if (playOutcome.kind === "connect_failed") {
+                    return interaction.editReply({
+                        content: "I couldn't connect to your voice channel. Try again.",
                     })
                 }
                 if (playOutcome.kind === "no_tracks") {

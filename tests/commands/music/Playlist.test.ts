@@ -184,13 +184,15 @@ function searchHit(title: string, uri: string) {
     }
 }
 
-function queuePlayer() {
+function queuePlayer(overrides: { connected?: boolean } = {}) {
     return {
         guildId: "guild-1",
-        connected: false,
+        // Default connected so ensurePlayerConnected is a no-op (avoids 10s move confirm wait).
+        connected: overrides.connected ?? true,
         playing: true,
         voiceChannelId: "voice-1",
         get: () => false,
+        connect: async () => undefined,
         queue: {
             tracks: [] as unknown[],
             current: null as unknown,
@@ -529,6 +531,50 @@ describe("playlist replies", () => {
                 putPlayer(client, queuePlayer())
             }
         )
+        assert.deepEqual(messageContents(calls), ["Queued 1 track from **Favorites**."])
+    })
+
+    it("tells you when voice connect fails before queuing a playlist", async () => {
+        seedPlaylist("Favorites", [{ title: "Song", uri: "https://example.com/song" }])
+        const calls = await executePlaylist(
+            { subcommand: "play", options: { name: "Favorites" } },
+            (client) => {
+                const player = queuePlayer({ connected: false })
+                player.connect = async () => {
+                    throw new Error("voice down")
+                }
+                putPlayer(client, player)
+            }
+        )
+        assert.deepEqual(messageContents(calls), [
+            "I couldn't connect to your voice channel. Try again.",
+        ])
+    })
+
+    it("creates a player and queues when none exists yet", async () => {
+        seedPlaylist("Favorites", [{ title: "Song", uri: "https://example.com/song" }])
+        let created = false
+        const calls = await executePlaylist(
+            { subcommand: "play", options: { name: "Favorites" } },
+            (client) => {
+                const lavalink = client.lavalink as unknown as {
+                    createPlayer: (opts: {
+                        guildId: string
+                        voiceChannelId: string
+                    }) => Promise<ReturnType<typeof queuePlayer>>
+                    getPlayer: (guildId: string) => unknown
+                    players: Map<string, unknown>
+                }
+                lavalink.createPlayer = async (opts) => {
+                    created = true
+                    const player = queuePlayer()
+                    player.voiceChannelId = opts.voiceChannelId
+                    lavalink.players.set(opts.guildId, player)
+                    return player
+                }
+            }
+        )
+        assert.equal(created, true)
         assert.deepEqual(messageContents(calls), ["Queued 1 track from **Favorites**."])
     })
 
