@@ -266,6 +266,28 @@ const DNS_BOUNCE_SUFFIXES = [
     // Public wildcard loopback (apex has no A record today; suffix still covers it).
     "devlocal.me",
     "lhst.net",
+    // Unused vendor `localhost.` aliases: public DNS A 127.0.0.1 on the apex only.
+    // Deny the full `localhost.<parent>` label so public parent zones stay allowed
+    // (pair.com, mail.ru, a2hosting.net, gandi.fr, hostgator.com.br, …).
+    "localhost.pair.com",
+    "localhost.pairnic.com",
+    "localhost.pairnetworks.com",
+    "localhost.a2hosting.net",
+    "localhost.a2hosting.org",
+    "localhost.a2hosting.co",
+    "localhost.a2webhosting.com",
+    "localhost.mail.ru",
+    "localhost.rambler.ru",
+    "localhost.justhost.ru",
+    "localhost.masterhost.ru",
+    "localhost.mchost.ru",
+    "localhost.nic.ru",
+    "localhost.rbc.ru",
+    "localhost.gandi.fr",
+    "localhost.online.net",
+    "localhost.hostgator.com.br",
+    "localhost.fatcow.com",
+    "localhost.arvixe.com",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */

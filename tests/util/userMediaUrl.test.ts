@@ -426,6 +426,47 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("icy://lhst.net/"), true)
         assert.equal(isBlockedUserMediaUrl("ytsearch:http://lhst.net/"), true)
         assert.equal(isBlockedUserMediaUrl("local:http://lhst.net/"), true)
+
+        // Unused vendor localhost aliases (apex → 127.0.0.1). Deny `localhost.<parent>`
+        // only; public parents (pair.com, mail.ru, a2hosting.net, gandi.fr, …) stay allowed.
+        const unusedVendorLocalhost = [
+            "localhost.pair.com",
+            "localhost.pairnic.com",
+            "localhost.pairnetworks.com",
+            "localhost.a2hosting.net",
+            "localhost.a2hosting.org",
+            "localhost.a2hosting.co",
+            "localhost.a2webhosting.com",
+            "localhost.mail.ru",
+            "localhost.rambler.ru",
+            "localhost.justhost.ru",
+            "localhost.masterhost.ru",
+            "localhost.mchost.ru",
+            "localhost.nic.ru",
+            "localhost.rbc.ru",
+            "localhost.gandi.fr",
+            "localhost.online.net",
+            "localhost.hostgator.com.br",
+            "localhost.fatcow.com",
+            "localhost.arvixe.com",
+        ]
+        for (const host of unusedVendorLocalhost) {
+            assert.equal(isBlockedUserMediaUrl(`http://${host}/`), true, host)
+            assert.equal(isBlockedUserMediaUrl(`http://${host}:5432/`), true, host)
+            assert.equal(isBlockedUserMediaUrl(`HTTP://${host.toUpperCase()}/`), true, host)
+            assert.equal(isBlockedUserMediaUrl(`link:http://${host}/`), true, host)
+            assert.equal(isBlockedUserMediaUrl(`uri:http://${host}:2333/`), true, host)
+            assert.equal(isBlockedUserMediaUrl(`icy://${host}/`), true, host)
+            assert.equal(isBlockedUserMediaUrl(`ytsearch:http://${host}/`), true, host)
+            assert.equal(isBlockedUserMediaUrl(`local:http://${host}/`), true, host)
+        }
+        assert.equal(isBlockedUserMediaUrl("http://pair.com/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://mail.ru/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://a2hosting.net/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://gandi.fr/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://hostgator.com.br/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://online.net/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://fatcow.com/"), false)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {
