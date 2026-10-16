@@ -1,7 +1,12 @@
 import { updateControlMessage } from "../events/handlers/handleControlChannel.js"
 import path from "path"
 import fs from "fs"
-import { playLocalFile, getLocalPlayerState, stopLocalPlayer } from "./localPlayer.js"
+import {
+    cancelPendingLocalPlay,
+    playLocalFile,
+    getLocalPlayerState,
+    stopLocalPlayer,
+} from "./localPlayer.js"
 import {
     ActionRowBuilder,
     ButtonBuilder,
@@ -151,6 +156,11 @@ export async function handleQueryAndPlay(
     let previousVoiceChannelIdBeforeEnsure: string | null = null
 
     try {
+        // Cancel an in-flight Play Local Ready wait immediately so concurrent `/play`
+        // (or control-channel enqueue) cannot leave @discordjs/voice starting against a
+        // Lavalink successor. Active local stop still happens later before enqueue.
+        cancelPendingLocalPlay(guildId)
+
         if (
             player.voiceChannelId &&
             player.voiceChannelId !== voiceChannel.id &&

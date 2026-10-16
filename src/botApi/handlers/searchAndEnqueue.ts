@@ -5,6 +5,7 @@ import type { ApiErrorPayload } from "../../types/index.js"
 import { ensurePlayerConnected } from "../../util/musicManager.js"
 import type { PermissionGuardSuccess } from "../../shared/api-auth.js"
 import { resolveWebDashboardTextChannelId } from "../webDashboardTextChannel.js"
+import { stopLocalPlaybackForLavalinkTakeover } from "../../util/stopLocalForLavalinkTakeover.js"
 import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
 import {
     acquireGuildPlayerLifecycleReservation,
@@ -121,6 +122,12 @@ export async function searchAndEnqueue(
             return mapSearchAndEnqueuePreflightFailure("occupied_voice_mismatch")
         }
     }
+
+    // Discord `/play` (handleQueryAndPlay) stops local before Lavalink; Dashboard must too.
+    // Without this, createPlayer + ensurePlayerConnected steals voice while @discordjs/voice
+    // still plays (dual playback). Also cancel an in-flight local Ready wait so handoff
+    // cannot resume audio after this enqueue owns the slot.
+    await stopLocalPlaybackForLavalinkTakeover(client, guildId)
 
     // Reserve before createPlayer so concurrent orphan/idle destroy cannot tear down a
     // freshly created player in the window between create and the old post-create acquire.
