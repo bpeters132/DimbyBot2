@@ -6,6 +6,7 @@ import {
 } from "../../src/util/guildPlayerQueueLock.js"
 import {
     runLocalHandoffLavalinkStopAndDestroy,
+    shouldAbortLocalAudioForSuccessorAtReady,
     shouldAbortLocalPlayForLivePlayerConflict,
     shouldClearSessionAfterFailedHandoffDestroy,
     shouldClearSessionAfterLocalHandoffReady,
@@ -34,6 +35,21 @@ describe("localPlayHandoffLeftover", () => {
         assert.equal(shouldClearSessionAfterLocalHandoffReady(handoff, handoff), true)
         // /play during Ready wait installed a successor — must not wipe its session.
         assert.equal(shouldClearSessionAfterLocalHandoffReady(handoff, successor), false)
+    })
+
+    it("aborts local audio at Ready when a successor owns the Lavalink slot", () => {
+        const handoff = { id: "handoff" }
+        const successor = { id: "successor" }
+
+        // Empty slot or same handoff instance — safe to start local after clear.
+        assert.equal(shouldAbortLocalAudioForSuccessorAtReady(handoff, null), false)
+        assert.equal(shouldAbortLocalAudioForSuccessorAtReady(handoff, handoff), false)
+        // Concurrent /play or Dashboard enqueue during Ready — must not start @discordjs/voice.
+        assert.equal(shouldAbortLocalAudioForSuccessorAtReady(handoff, successor), true)
+        assert.equal(
+            shouldAbortLocalAudioForSuccessorAtReady(handoff, successor),
+            !shouldClearSessionAfterLocalHandoffReady(handoff, successor)
+        )
     })
 
     it("keeps the legacy alias in sync with the Ready clear helper", () => {

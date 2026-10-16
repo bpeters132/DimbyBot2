@@ -6,6 +6,7 @@ const GUILD = "100000000000000001"
 const USER = "100000000000000002"
 
 const enqueueMode = { value: "ok" as "ok" | "no_player" | "throw" }
+const takeover = { calls: 0 }
 
 mock.module("../../../src/botApi/handlers/enqueueSearchTracks.js", {
     namedExports: {
@@ -14,6 +15,16 @@ mock.module("../../../src/botApi/handlers/enqueueSearchTracks.js", {
             if (enqueueMode.value === "no_player") return { status: "no_player" }
             return { status: "ok", player: getLive(), playbackStarted: true }
         },
+    },
+})
+
+mock.module("../../../src/util/stopLocalForLavalinkTakeover.js", {
+    namedExports: {
+        stopLocalPlaybackForLavalinkTakeover: async () => {
+            takeover.calls += 1
+            return false
+        },
+        shouldStopLocalPlayerBeforeLavalinkTakeover: () => false,
     },
 })
 
@@ -197,6 +208,7 @@ describe("searchAndEnqueue", () => {
     })
 
     it("returns 403 when the bot is in a different voice channel", async () => {
+        takeover.calls = 0
         const client = createClient()
         client.guild.members.me.voice.channelId = "voice-2"
         const result = await searchAndEnqueue(client as never, GUILD, USER, "song", guard)
@@ -204,12 +216,17 @@ describe("searchAndEnqueue", () => {
         if (result.ok) return
         assert.equal(result.status, 403)
         assert.equal(result.error.error, "You need to be in the same voice channel as the bot.")
+        // Do not tear down local audio in another channel the requester cannot join.
+        assert.equal(takeover.calls, 0)
     })
 
     it("returns 503 when the player cannot be created", async () => {
+        takeover.calls = 0
+        let stoppedLocalBeforeCreate = false
         const client = createClient({
             player: null,
             createPlayer: async () => {
+                stoppedLocalBeforeCreate = takeover.calls > 0
                 throw new Error("no node")
             },
         })
@@ -218,6 +235,7 @@ describe("searchAndEnqueue", () => {
         if (result.ok) return
         assert.equal(result.status, 503)
         assert.equal(result.error.error, "Could not create the player.")
+        assert.equal(stoppedLocalBeforeCreate, true)
     })
 
     it("returns 503 when the player cannot connect", async () => {

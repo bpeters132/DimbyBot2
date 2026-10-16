@@ -11,6 +11,7 @@ import {
     withGuildPlayerLifecycleReservation,
 } from "../../util/guildPlayerQueueLock.js"
 import { handleQueryAndPlay } from "../../util/musicManager.js"
+import { stopLocalPlaybackForLavalinkTakeover } from "../../util/stopLocalForLavalinkTakeover.js"
 import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
 import { playerHasQueueContent } from "../../util/playlistQueue.js"
 import {
@@ -105,6 +106,10 @@ export default async function handleControlMessages(client: BotClient, message: 
                 return
             }
         }
+
+        // Tear down local / cancel in-flight handoff before createPlayer+connect so control
+        // enqueue cannot dual-play against @discordjs/voice (Dashboard searchAndEnqueue matches).
+        await stopLocalPlaybackForLavalinkTakeover(client, guildId)
 
         const controlOutcome = await withGuildPlayerLifecycleReservation(guildId, async () => {
             let player = client.lavalink?.getPlayer(guildId)
