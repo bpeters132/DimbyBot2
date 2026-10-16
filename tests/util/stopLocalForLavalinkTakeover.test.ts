@@ -1,6 +1,12 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { shouldStopLocalPlayerBeforeLavalinkTakeover } from "../../src/util/stopLocalForLavalinkTakeover.js"
+import { getLocalPlayerState } from "../../src/util/localPlayer.js"
+import {
+    shouldStopLocalPlayerBeforeLavalinkTakeover,
+    stopLocalPlaybackForLavalinkTakeover,
+} from "../../src/util/stopLocalForLavalinkTakeover.js"
+
+const client = { debug() {} }
 
 describe("shouldStopLocalPlayerBeforeLavalinkTakeover", () => {
     it("stops whenever a local player state entry exists", () => {
@@ -15,5 +21,15 @@ describe("shouldStopLocalPlayerBeforeLavalinkTakeover", () => {
             shouldStopLocalPlayerBeforeLavalinkTakeover({ isPlaying: false, trackTitle: "a" }),
             true
         )
+    })
+})
+
+describe("stopLocalPlaybackForLavalinkTakeover", () => {
+    it("returns false without stopping when this guild has no mapped local player", async () => {
+        const guildId = "guild-takeover-none"
+        assert.equal(getLocalPlayerState(guildId), null)
+        const stopped = await stopLocalPlaybackForLavalinkTakeover(client as never, guildId, 0)
+        assert.equal(stopped, false)
+        assert.equal(getLocalPlayerState(guildId), null)
     })
 })
