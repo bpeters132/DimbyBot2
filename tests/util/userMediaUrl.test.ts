@@ -1177,6 +1177,36 @@ describe("isBlockedUserMediaUrl", () => {
             "localhost.hostgator.com.br",
             "localhost.fatcow.com",
             "localhost.arvixe.com",
+
+        // Unused vendor localhost aliases (apex → 127.0.0.1, except hopto.org →
+        // 10.10.10.10 RFC1918). Deny `localhost.<parent>` only; public parents stay allowed.
+        const unusedVendorLocalhost = [
+            "localhost.123-reg.co.uk",
+            "localhost.123-reg.com",
+            "localhost.free.fr",
+            "localhost.online.fr",
+            "localhost.pair.org",
+            "localhost.pair.net",
+            "localhost.pairnic.net",
+            "localhost.amd.net",
+            "localhost.no-ip.org",
+            "localhost.no-ip.com",
+            "localhost.hopto.org",
+            "localhost.zapto.org",
+            "localhost.sytes.net",
+            "localhost.servehttp.com",
+            "localhost.mybluehost.me",
+            "localhost.websitewelcome.com",
+            "localhost.afraid.org",
+            "localhost.siteground.net",
+            "localhost.siteground.org",
+            "localhost.a2webhosting.net",
+            "localhost.infomaniak.ch",
+            "localhost.inmotionhosting.net",
+            "localhost.namecheaphosting.com",
+            "localhost.hostgator.org",
+            "localhost.donuts.domains",
+            "localhost.pir.org",
         ]
         for (const host of unusedVendorLocalhost) {
             assert.equal(isBlockedUserMediaUrl(`http://${host}/`), true, host)
@@ -1195,6 +1225,22 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://hostgator.com.br/"), false)
         assert.equal(isBlockedUserMediaUrl("http://online.net/"), false)
         assert.equal(isBlockedUserMediaUrl("http://fatcow.com/"), false)
+        // servehttp.com unused localhost zone also wildcards www/foo → 127.0.0.1
+        assert.equal(isBlockedUserMediaUrl("http://www.localhost.servehttp.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.localhost.servehttp.com:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://123-reg.co.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://pair.org/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://no-ip.com/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://free.fr/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://online.fr/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://mybluehost.me/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://websitewelcome.com/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://afraid.org/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://siteground.net/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://namecheaphosting.com/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://donuts.domains/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://pir.org/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://hopto.org/"), false)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {
