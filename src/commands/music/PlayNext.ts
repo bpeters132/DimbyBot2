@@ -4,6 +4,10 @@ import type { ChatInputCommandInteraction } from "discord.js"
 import { guildMemberFromInteraction } from "../../util/guildMember.js"
 import { enqueuePlayNextTrackAssumingSearchDone } from "../../util/playNextEnqueue.js"
 import { withGuildPlayerLifecycleReservation } from "../../util/guildPlayerQueueLock.js"
+import {
+    isBlockedLocalFilesystemMediaQuery,
+    USER_LOCAL_FILE_QUERY_BLOCKED,
+} from "../../util/localFilesystemMediaQuery.js"
 import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "../../util/userMediaUrl.js"
 import { isSameLivePlayer } from "../../util/livePlayerIdentity.js"
 
@@ -37,6 +41,12 @@ export default {
         if (isBlockedUserMediaUrl(query)) {
             return interaction.reply({
                 content: USER_MEDIA_URL_BLOCKED,
+                ephemeral: true,
+            })
+        }
+        if (isBlockedLocalFilesystemMediaQuery(query, { guildId: guild.id })) {
+            return interaction.reply({
+                content: USER_LOCAL_FILE_QUERY_BLOCKED,
                 ephemeral: true,
             })
         }

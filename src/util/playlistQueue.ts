@@ -10,6 +10,10 @@ import { startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
 import { playbackStartedFromStartResult } from "./playbackStartedFlag.js"
 import { scheduleSaveIfPlayerStillLive } from "./playerSessionPersistence.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
+import {
+    isBlockedLocalFilesystemMediaQuery,
+    USER_LOCAL_FILE_QUERY_BLOCKED,
+} from "./localFilesystemMediaQuery.js"
 import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "./userMediaUrl.js"
 import {
     isPlaylistLoadType,
@@ -276,6 +280,10 @@ export async function searchTracksForPlaylist(
     }
     if (isBlockedUserMediaUrl(trimmed)) {
         return { ok: false, error: USER_MEDIA_URL_BLOCKED }
+    }
+    // Playlist rows are user-scoped, not guild-scoped — never persist host filesystem paths.
+    if (isBlockedLocalFilesystemMediaQuery(trimmed)) {
+        return { ok: false, error: USER_LOCAL_FILE_QUERY_BLOCKED }
     }
     let res
     try {
