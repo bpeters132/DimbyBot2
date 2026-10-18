@@ -99,6 +99,13 @@ describe("playnext replies", () => {
         assert.deepEqual(messageContents(calls), ["That URL isn't allowed."])
     })
 
+    it("rejects a local filesystem path query", async () => {
+        const calls = await executePlayNext({
+            options: { query: "local:/app/downloads/999888777666555444_abcd_song.wav" },
+        })
+        assert.deepEqual(messageContents(calls), ["That local file path isn't allowed."])
+    })
+
     it("tells you when the guild has no player", async () => {
         const calls = await executePlayNext()
         assert.deepEqual(messageContents(calls), ["No player found for this guild."])
