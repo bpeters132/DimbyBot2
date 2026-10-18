@@ -5,6 +5,7 @@ import {
     resolveStoredPlaylistTracks,
     searchTracksForPlaylist,
 } from "../../src/util/playlistQueue.js"
+import { USER_LOCAL_FILE_QUERY_BLOCKED } from "../../src/util/localFilesystemMediaQuery.js"
 import { USER_MEDIA_URL_BLOCKED } from "../../src/util/userMediaUrl.js"
 
 function mockPlayer(searchUris: string[]): Player {
@@ -62,13 +63,20 @@ describe("resolveStoredPlaylistTracks user-media deny", () => {
                     duration: 213000,
                     thumbnailUrl: null,
                 },
+                {
+                    uri: "local:/app/downloads/999888777666555444_abcd_song.wav",
+                    title: "Leaked",
+                    author: "Other",
+                    duration: 1,
+                    thumbnailUrl: null,
+                },
             ],
             { id: "user-1" }
         )
         assert.deepEqual(searched, [])
         assert.equal(result.resolved.length, 1)
         assert.equal(result.resolved[0]?.info.uri, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-        assert.equal(result.failed, 3)
+        assert.equal(result.failed, 4)
     })
 })
 
@@ -86,6 +94,21 @@ describe("searchTracksForPlaylist user-media deny", () => {
             if (!result.ok) {
                 assert.equal(result.error, USER_MEDIA_URL_BLOCKED)
             }
+        }
+        assert.deepEqual(searched, [])
+    })
+
+    it("rejects local filesystem path queries without calling Lavalink search", async () => {
+        const searched: string[] = []
+        const player = mockPlayer(searched)
+        const result = await searchTracksForPlaylist(
+            player,
+            "local:/app/downloads/999888777666555444_abcd_song.wav",
+            { id: "user-1" }
+        )
+        assert.equal(result.ok, false)
+        if (!result.ok) {
+            assert.equal(result.error, USER_LOCAL_FILE_QUERY_BLOCKED)
         }
         assert.deepEqual(searched, [])
     })

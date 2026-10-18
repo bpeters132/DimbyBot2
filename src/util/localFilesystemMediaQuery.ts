@@ -22,9 +22,11 @@ function filesystemQueryCandidates(query: string): string[] {
 }
 
 /**
- * True when `query` looks like a host filesystem path that Lavalink's local source would
- * open. With `defaultSearchPlatform: "local"`, bare absolute paths and `local:/…` are sent
- * as `/loadtracks` identifiers — including other guilds' files on the shared downloads volume.
+ * True when `query` looks like a host filesystem path that Lavalink would open.
+ * `local:` sends the remainder as a `/loadtracks` identifier with no search prefix.
+ * `link:` / `uri:` send the remainder as a raw identifier (a path is then loaded locally).
+ * Compose mounts the shared downloads volume at `/app/downloads` on Lavalink, so another
+ * guild's `{guildId}_*.wav` is readable if the identifier is that path.
  *
  * Song titles (including those with `/`, e.g. "AC/DC") are not matches.
  */

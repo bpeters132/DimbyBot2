@@ -22,6 +22,14 @@ describe("looksLikeLocalFilesystemMediaQuery", () => {
         assert.equal(looksLikeLocalFilesystemMediaQuery("downloads/other_guild_song.wav"), true)
         assert.equal(looksLikeLocalFilesystemMediaQuery("C:\\secrets\\token.txt"), true)
         assert.equal(looksLikeLocalFilesystemMediaQuery("~/secret.wav"), true)
+        assert.equal(
+            looksLikeLocalFilesystemMediaQuery("link:/app/downloads/other_guild_song.wav"),
+            true
+        )
+        assert.equal(
+            looksLikeLocalFilesystemMediaQuery("uri:/app/downloads/other_guild_song.wav"),
+            true
+        )
     })
 
     it("allows normal song titles and catalog URLs", () => {
@@ -70,6 +78,20 @@ describe("isPermittedGuildDownloadPlaybackPath / isBlockedLocalFilesystemMediaQu
             )
             assert.equal(
                 isBlockedLocalFilesystemMediaQuery(`local:${otherPath}`, {
+                    guildId,
+                    downloadsDir,
+                }),
+                true
+            )
+            assert.equal(
+                isBlockedLocalFilesystemMediaQuery(`link:${otherPath}`, {
+                    guildId,
+                    downloadsDir,
+                }),
+                true
+            )
+            assert.equal(
+                isBlockedLocalFilesystemMediaQuery(`uri:${otherPath}`, {
                     guildId,
                     downloadsDir,
                 }),
