@@ -224,6 +224,15 @@ describe("playlist load type + metadata helpers", () => {
             }),
             null
         )
+        assert.equal(
+            queueMetadataTrackFromFields({
+                title: "leaked",
+                author: "y",
+                uri: "/app/downloads/otherguild_abc_song.wav",
+                duration: 1,
+            }),
+            null
+        )
     })
 
     it("classifies companion playability misses as permanent", () => {

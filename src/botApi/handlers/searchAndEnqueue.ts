@@ -18,6 +18,10 @@ import {
 } from "../../util/sameVoiceChannel.js"
 import { isMemberFetchNotFound } from "../../util/discordMemberFetchError.js"
 import { enqueueSearchTracksAssumingSearchDone } from "./enqueueSearchTracks.js"
+import {
+    isBlockedLocalFilesystemMediaQuery,
+    USER_LOCAL_FILE_QUERY_BLOCKED,
+} from "../../util/localFilesystemMediaQuery.js"
 import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "../../util/userMediaUrl.js"
 import {
     createdPlayerOrphanSlotLooksOccupied,
@@ -75,6 +79,13 @@ export async function searchAndEnqueue(
             ok: false,
             status: 400,
             error: { error: USER_MEDIA_URL_BLOCKED },
+        }
+    }
+    if (!options?.connectOnly && isBlockedLocalFilesystemMediaQuery(query, { guildId })) {
+        return {
+            ok: false,
+            status: 400,
+            error: { error: USER_LOCAL_FILE_QUERY_BLOCKED },
         }
     }
     const guild = client.guilds.cache.get(guildId)

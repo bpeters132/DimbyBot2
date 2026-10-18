@@ -32,6 +32,10 @@ import {
     pickPlayerForPlaylistSearch,
     searchTracksForPlaylist,
 } from "../../util/playlistQueue.js"
+import {
+    isBlockedLocalFilesystemMediaQuery,
+    USER_LOCAL_FILE_QUERY_BLOCKED,
+} from "../../util/localFilesystemMediaQuery.js"
 import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "../../util/userMediaUrl.js"
 import { parseEnqueueQuery, parsePreferredGuildId } from "../parseBotApiParams.js"
 import {
@@ -364,6 +368,18 @@ export async function playlistTracksPOST(
                 error: {
                     error: "Bad request",
                     details: USER_MEDIA_URL_BLOCKED,
+                },
+            },
+        }
+    }
+    if (isBlockedLocalFilesystemMediaQuery(body.uri)) {
+        return {
+            status: 400,
+            body: {
+                ok: false,
+                error: {
+                    error: "Bad request",
+                    details: USER_LOCAL_FILE_QUERY_BLOCKED,
                 },
             },
         }

@@ -32,6 +32,10 @@ import { memberMayJoinOccupiedVoice, resolveOccupiedVoiceChannelId } from "./sam
 import { playbackStartLostLivePlayer, startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
 import { isPlaylistLoadType, schedulePrefetchWindow } from "./youtubePlaybackWindow.js"
 import {
+    isBlockedLocalFilesystemMediaQuery,
+    USER_LOCAL_FILE_QUERY_BLOCKED,
+} from "./localFilesystemMediaQuery.js"
+import {
     isBlockedUserMediaUrl,
     trimmedHttpUrlQuery,
     USER_MEDIA_URL_BLOCKED,
@@ -181,6 +185,15 @@ export async function handleQueryAndPlay(
             return {
                 success: false,
                 feedbackText: USER_MEDIA_URL_BLOCKED,
+            }
+        }
+        // defaultSearchPlatform is "local": bare absolute paths / local:/… open host files on
+        // the Lavalink container (shared downloads volume). Allow only this guild's download WAVs
+        // so /download autoplay still works.
+        if (isBlockedLocalFilesystemMediaQuery(query, { guildId })) {
+            return {
+                success: false,
+                feedbackText: USER_LOCAL_FILE_QUERY_BLOCKED,
             }
         }
 
