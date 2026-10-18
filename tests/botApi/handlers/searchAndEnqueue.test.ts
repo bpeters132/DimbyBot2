@@ -154,6 +154,20 @@ describe("searchAndEnqueue", () => {
         assert.equal(result.error.error, "That URL isn't allowed.")
     })
 
+    it("rejects a local filesystem path query", async () => {
+        const result = await searchAndEnqueue(
+            createClient() as never,
+            GUILD,
+            USER,
+            "local:/app/downloads/999888777666555444_abcd_song.wav",
+            guard
+        )
+        assert.equal(result.ok, false)
+        if (result.ok) return
+        assert.equal(result.status, 400)
+        assert.equal(result.error.error, "That local file path isn't allowed.")
+    })
+
     it("returns 404 when the guild is not cached", async () => {
         const result = await searchAndEnqueue(
             createClient({ guild: false }) as never,

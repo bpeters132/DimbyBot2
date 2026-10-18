@@ -187,9 +187,9 @@ export async function handleQueryAndPlay(
                 feedbackText: USER_MEDIA_URL_BLOCKED,
             }
         }
-        // defaultSearchPlatform is "local": bare absolute paths / local:/… open host files on
-        // the Lavalink container (shared downloads volume). Allow only this guild's download WAVs
-        // so /download autoplay still works.
+        // `local:` / `link:` / `uri:` identifiers open host files on the Lavalink container
+        // (shared downloads volume). Allow only this guild's download WAVs so /download autoplay
+        // still reaches local-file matching.
         if (isBlockedLocalFilesystemMediaQuery(query, { guildId })) {
             return {
                 success: false,

@@ -100,7 +100,7 @@ export type QueueMetadataFields = {
 
 /**
  * Builds Queue metadata from stored title/author/URI (no Lavalink search).
- * Returns null for blocked User media URLs.
+ * Returns null for blocked User media URLs and host filesystem paths.
  */
 export function queueMetadataTrackFromFields(fields: QueueMetadataFields): Track | null {
     const uri = fields.uri.trim()

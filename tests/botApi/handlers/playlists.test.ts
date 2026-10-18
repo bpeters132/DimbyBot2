@@ -312,6 +312,15 @@ describe("playlist handlers", () => {
         assert.equal(details(result), "That URL isn't allowed.")
     })
 
+    it("returns 400 for a local filesystem track URI", async () => {
+        const result = await playlistTracksPOST(new Headers(), "1", {
+            ...trackBody,
+            uri: "local:/app/downloads/999888777666555444_abcd_song.wav",
+        })
+        assert.equal(result.status, 400)
+        assert.equal(details(result), "That local file path isn't allowed.")
+    })
+
     it("returns the added track", async () => {
         const result = await playlistTracksPOST(new Headers(), "1", trackBody)
         assert.equal(result.status, 201)
