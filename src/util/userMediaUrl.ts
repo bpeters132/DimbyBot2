@@ -266,6 +266,31 @@ const DNS_BOUNCE_SUFFIXES = [
     // Public wildcard loopback (apex has no A record today; suffix still covers it).
     "devlocal.me",
     "lhst.net",
+    // Remaining No-IP unused localhost aliases after denied localhost.no-ip.com /
+    // no-ip.org / zapto.org / sytes.net / servehttp.com / hopto.org. Apex → 127.0.0.1
+    // except ddnsgeek → 192.168.0.167 RFC1918. Do not deny public parent zones.
+    "localhost.serveftp.com",
+    "localhost.serveftp.net",
+    "localhost.servegame.com",
+    "localhost.myftp.org",
+    "localhost.myftp.biz",
+    "localhost.myvnc.com",
+    "localhost.redirectme.net",
+    "localhost.homelinux.org",
+    "localhost.homelinux.net",
+    "localhost.homeip.net",
+    "localhost.dynalias.com",
+    "localhost.dynalias.net",
+    "localhost.dynalias.org",
+    "localhost.no-ip.info",
+    "localhost.ddnsgeek.com",
+    // Unused vendor localhost aliases → 127.0.0.1. www.localhost.lflink.com is a
+    // public A (suffix-deny tradeoff like localhost.tv). Do not deny public parents.
+    "localhost.freedns.com",
+    "localhost.lflink.com",
+    // SiteGround siblings of denied localhost.siteground.net / .org
+    "localhost.siteground.eu",
+    "localhost.siteground.us",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
