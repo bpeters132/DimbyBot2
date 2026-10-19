@@ -266,6 +266,24 @@ const DNS_BOUNCE_SUFFIXES = [
     // Public wildcard loopback (apex has no A record today; suffix still covers it).
     "devlocal.me",
     "lhst.net",
+    // Remaining unused localhost aliases after prior No-IP/vendor batches. Apex →
+    // 127.0.0.1 on public DNS (localhost.127001.ch also ::1). Do not deny public
+    // parent zones (127001.com / hostnet.nl / whm.com / dedibox.fr / ols.com / …).
+    "localhost.127001.ch",
+    "localhost.127001.com",
+    "localhost.127001.net",
+    "localhost.127001.dk",
+    "localhost.homeunix.com",
+    "localhost.hostnet.nl",
+    "localhost.noip.org",
+    "localhost.serveftp.org",
+    "localhost.servemp3.com",
+    "localhost.webhop.biz",
+    "localhost.webhop.info",
+    "localhost.webhop.net",
+    "localhost.whm.com",
+    "localhost.dedibox.fr",
+    "localhost.ols.com",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
