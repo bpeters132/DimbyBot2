@@ -177,4 +177,28 @@ describe("enqueuePlayNextTrackAssumingSearchDone", () => {
         assert.equal(player.queue.tracks[0]?.info.title, "cut-in")
         assert.equal(player.queue.current?.info.title, "now")
     })
+
+    it("does not call play when a current track is paused", async () => {
+        const guildId = "guild-playnext-paused-current"
+        const player = mockMutablePlayer(guildId, [mockTrack("soon")], { playing: false })
+        player.queue.current = mockTrack("paused-now")
+        let playCalls = 0
+        player.play = async () => {
+            playCalls += 1
+        }
+
+        const outcome = await enqueuePlayNextTrackAssumingSearchDone(
+            () => player,
+            guildId,
+            mockTrack("cut-in"),
+            "user-1"
+        )
+
+        assert.equal(outcome, "ok")
+        assert.equal(playCalls, 0)
+        assert.equal(player.playing, false)
+        assert.equal(player.queue.current?.info.title, "paused-now")
+        assert.equal(player.queue.tracks[0]?.info.title, "cut-in")
+        assert.equal(player.queue.tracks[1]?.info.title, "soon")
+    })
 })
