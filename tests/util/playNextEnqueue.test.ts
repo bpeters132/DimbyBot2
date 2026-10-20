@@ -2,6 +2,12 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import type { Player, Track } from "lavalink-client"
 import { enqueuePlayNextTrackAssumingSearchDone } from "../../src/util/playNextEnqueue.js"
+import { setPlayerSessionPersistenceDbForTests } from "../../src/util/playerSessionPersistence.js"
+
+setPlayerSessionPersistenceDbForTests({
+    upsertPlayerSession: async () => undefined,
+    deletePlayerSession: async () => undefined,
+})
 
 function mockTrack(id: string): Track {
     return {
@@ -22,13 +28,23 @@ function mockTrack(id: string): Track {
     } as unknown as Track
 }
 
-function mockMutablePlayer(guildId: string, initial: Track[] = []): Player {
+function mockMutablePlayer(
+    guildId: string,
+    initial: Track[] = [],
+    opts: { playing?: boolean } = {}
+): Player {
     const tracks = [...initial]
-    return {
+    let playing = opts.playing ?? true
+    const player = {
         guildId,
-        playing: true,
+        get playing() {
+            return playing
+        },
+        set playing(value: boolean) {
+            playing = value
+        },
         queue: {
-            current: null,
+            current: null as Track | null,
             tracks,
             add(items: Track | Track[], index?: number) {
                 const list = Array.isArray(items) ? items : [items]
@@ -43,10 +59,17 @@ function mockMutablePlayer(guildId: string, initial: Track[] = []): Player {
                 return tracks.splice(start, deleteCount, ...insert.flat())
             },
         },
+        async play() {
+            if (!player.queue.current && tracks.length > 0) {
+                player.queue.current = tracks.shift()!
+            }
+            playing = true
+        },
         get() {
             return undefined
         },
-    } as unknown as Player
+    }
+    return player as unknown as Player
 }
 
 describe("enqueuePlayNextTrackAssumingSearchDone", () => {
@@ -107,5 +130,51 @@ describe("enqueuePlayNextTrackAssumingSearchDone", () => {
         assert.equal(outcome, "no_player")
         assert.equal(successor.queue.tracks.map((t) => t.info.title).join(","), "kept")
         assert.equal(resolvePlayer.queue.tracks.map((t) => t.info.title).join(","), "old")
+    })
+
+    it("starts playback when the player is idle after queue end", async () => {
+        const guildId = "guild-playnext-idle-start"
+        const player = mockMutablePlayer(guildId, [], { playing: false })
+        let playCalls = 0
+        const originalPlay = player.play.bind(player)
+        player.play = async () => {
+            playCalls += 1
+            await originalPlay()
+        }
+
+        const outcome = await enqueuePlayNextTrackAssumingSearchDone(
+            () => player,
+            guildId,
+            mockTrack("next-up"),
+            "user-1"
+        )
+
+        assert.equal(outcome, "ok")
+        assert.equal(playCalls, 1)
+        assert.equal(player.playing, true)
+        assert.equal(player.queue.current?.info.title, "next-up")
+        assert.equal(player.queue.tracks.length, 0)
+    })
+
+    it("does not call play when the player is already playing", async () => {
+        const guildId = "guild-playnext-already-playing"
+        const player = mockMutablePlayer(guildId, [mockTrack("soon")], { playing: true })
+        player.queue.current = mockTrack("now")
+        let playCalls = 0
+        player.play = async () => {
+            playCalls += 1
+        }
+
+        const outcome = await enqueuePlayNextTrackAssumingSearchDone(
+            () => player,
+            guildId,
+            mockTrack("cut-in"),
+            "user-1"
+        )
+
+        assert.equal(outcome, "ok")
+        assert.equal(playCalls, 0)
+        assert.equal(player.queue.tracks[0]?.info.title, "cut-in")
+        assert.equal(player.queue.current?.info.title, "now")
     })
 })
