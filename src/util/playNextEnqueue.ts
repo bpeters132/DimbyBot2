@@ -17,9 +17,10 @@ import { schedulePrefetchWindow } from "./youtubePlaybackWindow.js"
  * append onto a stale Player that is no longer in the Lavalink manager map.
  * After companion resolve, also requires the same Player identity (not merely a successor).
  *
- * When the player is idle (nothing playing / no current), starts playback after enqueue —
- * otherwise `/playnext` after queue-end would report success while silence continues and the
- * idle destroy skip (hasQueueContent) leaves the bot stuck with an unplayed upcoming track.
+ * When the player is idle after queue-end (nothing playing and no current), starts playback
+ * after enqueue — otherwise `/playnext` reports success while silence continues and the idle
+ * destroy skip (`hasQueueContent`) leaves the bot stuck with an unplayed upcoming track.
+ * Do not start when a current track is paused: `Player.play()` restarts that track from 0.
  */
 export async function enqueuePlayNextTrackAssumingSearchDone(
     getLivePlayer: () => Player | undefined,
@@ -52,7 +53,9 @@ export async function enqueuePlayNextTrackAssumingSearchDone(
     // trackError → idle destroy cannot nest on the non-reentrant guild chain.
     const liveAfter = getLivePlayer()
     if (!liveAfter || liveAfter !== liveForResolve) return "no_player"
-    if (!liveAfter.playing) {
+    // Idle after queue-end only. A paused current must stay paused at its position;
+    // startPlaybackIfNeeded → play() would restart it from 0.
+    if (!liveAfter.playing && !liveAfter.queue.current) {
         try {
             const started = await startPlaybackIfNeeded(liveAfter, getLivePlayer)
             if (playbackStartLostLivePlayer(started) || getLivePlayer() !== liveAfter) {
