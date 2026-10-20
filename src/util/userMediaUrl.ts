@@ -532,6 +532,14 @@ const DNS_BOUNCE_SUFFIXES = [
     "localhost.whm.com",
     "localhost.dedibox.fr",
     "localhost.ols.com",
+    // Remaining unused No-IP / YDNS localhost aliases (apex → 127.0.0.1 on public DNS).
+    // Do not deny public parents (dnsalias.com / .net / .org, mine.nu, ydns.eu / ydns.org).
+    "localhost.dnsalias.com",
+    "localhost.dnsalias.net",
+    "localhost.dnsalias.org",
+    "localhost.mine.nu",
+    "localhost.ydns.eu",
+    "localhost.ydns.org",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */

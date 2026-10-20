@@ -1319,6 +1319,36 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://dedibox.fr/"), false)
         assert.equal(isBlockedUserMediaUrl("http://ols.com/"), false)
         assert.equal(isBlockedUserMediaUrl("http://homeunix.com/"), false)
+
+        // Remaining unused No-IP / YDNS localhost aliases (apex → 127.0.0.1).
+        // Do not deny public parents dnsalias.com / .net / .org, mine.nu, ydns.eu / ydns.org.
+        assert.equal(isBlockedUserMediaUrl("http://localhost.dnsalias.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://localhost.dnsalias.com:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://LOCALHOST.DNSALIAS.COM/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://localhost.dnsalias.com/"), true)
+        assert.equal(isBlockedUserMediaUrl("uri:http://localhost.dnsalias.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://localhost.dnsalias.org/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://localhost.dnsalias.net/"), true)
+        assert.equal(isBlockedUserMediaUrl("local:http://localhost.dnsalias.org/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://localhost.mine.nu/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://localhost.mine.nu:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://localhost.mine.nu/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://localhost.mine.nu/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://localhost.mine.nu/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://localhost.ydns.eu/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://localhost.ydns.org/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://localhost.ydns.org:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://localhost.ydns.eu/"), true)
+        assert.equal(isBlockedUserMediaUrl("uri:http://localhost.ydns.org/"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://localhost.ydns.eu/"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://localhost.ydns.org/"), true)
+        assert.equal(isBlockedUserMediaUrl("local:http://localhost.ydns.eu/"), true)
+        // Public parent zones must stay allowed.
+        assert.equal(isBlockedUserMediaUrl("http://dnsalias.com/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://www.dnsalias.net/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://mine.nu/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://ydns.eu/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://ydns.org/"), false)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {
