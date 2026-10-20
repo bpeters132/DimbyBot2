@@ -32,6 +32,7 @@ function trackResult(loadType = "track", tracks: unknown[] = [sampleTrack()]) {
 
 function sampleTrack() {
     return {
+        encoded: "enc-song",
         info: {
             title: "Song",
             uri: "https://example.com/song",
@@ -42,17 +43,20 @@ function sampleTrack() {
     }
 }
 
-function searchablePlayer(search: () => Promise<unknown>) {
+function searchablePlayer(search: () => Promise<unknown>, opts: { playing?: boolean } = {}) {
     return {
         guildId: "guild-1",
         voiceChannelId: "voice-1",
+        // Default playing: play-next while a track is active (front-insert only).
+        playing: opts.playing ?? true,
         get: () => undefined,
         search,
         queue: {
             tracks: [] as unknown[],
-            current: null,
+            current: opts.playing === false ? null : sampleTrack(),
             add: async () => undefined,
         },
+        play: async () => undefined,
     }
 }
 
