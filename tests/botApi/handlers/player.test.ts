@@ -191,6 +191,28 @@ describe("player handlers", () => {
         if (result.body.ok) assert.equal(result.body.data.hasPlayer, false)
     })
 
+    it("stops active local playback when stop is posted with no Lavalink player", async () => {
+        state.player = null
+        localStop.cancelledPending = false
+        localStop.stoppedLocal = true
+        localStop.calls = 0
+        const result = await playerPOST(new Headers(), GUILD, { action: "stop" })
+        assert.equal(result.status, 200)
+        assert.equal(localStop.calls, 1)
+        if (result.body.ok) assert.equal(result.body.data.hasPlayer, false)
+    })
+
+    it("cancels local playback before destroying a live Lavalink player on stop", async () => {
+        state.player = basePlayer({ playing: true })
+        localStop.cancelledPending = false
+        localStop.stoppedLocal = false
+        localStop.calls = 0
+        const result = await playerPOST(new Headers(), GUILD, { action: "stop" })
+        assert.equal(result.status, 200)
+        assert.equal(localStop.calls, 1)
+        if (result.body.ok) assert.equal(result.body.data.hasPlayer, false)
+    })
+
     it("returns 404 for stop when neither Lavalink nor local playback is active", async () => {
         state.player = null
         localStop.cancelledPending = false
