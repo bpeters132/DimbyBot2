@@ -13,6 +13,11 @@ const deps = {
     skip: async (): Promise<"skipped" | "stale" | "deferred"> => "skipped",
     shuffle: async (): Promise<boolean | "stale"> => true,
     start: async () => undefined as unknown,
+    localStop: {
+        cancelledPending: false,
+        stoppedLocal: false,
+    },
+    localStopCalls: 0,
 }
 
 mock.module("../../../src/util/skipCurrentTrack.js", {
@@ -30,6 +35,19 @@ mock.module("../../../src/util/livePlayerQueueMutations.js", {
 mock.module("../../../src/util/startPlaybackIfNeeded.js", {
     namedExports: {
         startPlaybackIfNeeded: () => deps.start(),
+    },
+})
+
+mock.module("../../../src/util/stopLocalForUserStop.js", {
+    namedExports: {
+        stopLocalPlaybackForUserStop: () => {
+            deps.localStopCalls += 1
+            return { ...deps.localStop }
+        },
+        userStopAffectedLocalPlayback: (result: {
+            cancelledPending: boolean
+            stoppedLocal: boolean
+        }) => result.cancelledPending || result.stoppedLocal,
     },
 })
 
@@ -158,6 +176,8 @@ describe("handleControlButtonInteraction", () => {
         deps.skip = async () => "skipped"
         deps.shuffle = async () => true
         deps.start = async () => undefined
+        deps.localStop = { cancelledPending: false, stoppedLocal: false }
+        deps.localStopCalls = 0
         setPlayerSessionPersistenceDbForTests({
             upsertPlayerSession: async () => undefined,
             deletePlayerSession: async () => undefined,
@@ -196,6 +216,33 @@ describe("handleControlButtonInteraction", () => {
         assert.deepEqual(messageContents(calls), [
             "Player not found. It might have been stopped or disconnected.",
         ])
+        assert.equal(deps.localStopCalls, 1)
+    })
+
+    it("stops pending local playback when Stop is pressed with no Lavalink player", async () => {
+        deps.localStop = { cancelledPending: true, stoppedLocal: false }
+        const { calls } = await run("control_stop", undefined)
+        assert.deepEqual(messageContents(calls), ["BYE!"])
+        assert.equal(deps.localStopCalls, 1)
+    })
+
+    it("stops active local playback when Stop is pressed with no Lavalink player", async () => {
+        deps.localStop = { cancelledPending: false, stoppedLocal: true }
+        const { calls } = await run("control_stop", undefined)
+        assert.deepEqual(messageContents(calls), ["BYE!"])
+        assert.equal(deps.localStopCalls, 1)
+    })
+
+    it("cancels local before destroying Lavalink on control Stop", async () => {
+        const player = createPlayer({ playing: true })
+        let destroyed = false
+        player.destroy = async () => {
+            destroyed = true
+        }
+        const { calls } = await run("control_stop", player)
+        assert.equal(deps.localStopCalls, 1)
+        assert.equal(destroyed, true)
+        assert.ok(messageContents(calls).includes("BYE!"))
     })
 
     it("tells autoplay users to join a voice channel", async () => {
