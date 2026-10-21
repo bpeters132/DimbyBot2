@@ -1177,10 +1177,8 @@ describe("isBlockedUserMediaUrl", () => {
             "localhost.hostgator.com.br",
             "localhost.fatcow.com",
             "localhost.arvixe.com",
-
-        // Unused vendor localhost aliases (apex → 127.0.0.1, except hopto.org →
-        // 10.10.10.10 RFC1918). Deny `localhost.<parent>` only; public parents stay allowed.
-        const unusedVendorLocalhost = [
+            // Unused vendor localhost aliases (apex → 127.0.0.1, except hopto.org →
+            // 10.10.10.10 RFC1918). Deny `localhost.<parent>` only; public parents stay allowed.
             "localhost.123-reg.co.uk",
             "localhost.123-reg.com",
             "localhost.free.fr",
