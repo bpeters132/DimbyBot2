@@ -25,6 +25,9 @@ const playerStartLocks = new WeakMap<Player, Promise<PlaybackStartResult>>()
  * successor, and destroyed `Player.play()` still issues guild-keyed `node.updatePlayer` (no
  * destroy-status gate in lavalink-client). Optional `config` is for tests / callers that inject
  * companion fetch; production omits it.
+ *
+ * Skips start when the player is paused: enqueue paths share this helper, and `play()` would
+ * restart the paused current track from position 0 instead of leaving it paused.
  */
 export async function startPlaybackIfNeeded(
     player: Player,
@@ -48,7 +51,15 @@ export async function startPlaybackIfNeeded(
             if (prepared !== "ok") return prepared
             const live = getLivePlayerIfUnchanged(getLivePlayer, player)
             if (!live) return "no_player"
-            if (!live.playing && (live.queue.current || live.queue.tracks.length > 0)) {
+            // Paused sessions must stay paused at their position. lavalink-client
+            // `Player.play()` sends `position: options?.position ?? 0`, which restarts
+            // the current track from the beginning (and is used by every post-enqueue
+            // start path: /play, playlist play, dashboard searchAndEnqueue).
+            if (
+                !live.playing &&
+                !live.paused &&
+                (live.queue.current || live.queue.tracks.length > 0)
+            ) {
                 await live.play()
             }
             return "ok"

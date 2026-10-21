@@ -27,12 +27,14 @@ function mockTrack(id: string): Track {
 
 type MockPlayer = Player & {
     playing: boolean
+    paused: boolean
     queue: { current: Track | null; tracks: Track[] }
     playCalls: number
 }
 
 function mockPlayer(opts: {
     playing?: boolean
+    paused?: boolean
     current?: Track | null
     tracks?: Track[]
     playDelayMs?: number
@@ -42,6 +44,7 @@ function mockPlayer(opts: {
     const player = {
         guildId: "guild-start-playback",
         playing: opts.playing ?? false,
+        paused: opts.paused ?? false,
         queue: {
             current: opts.current === undefined ? null : opts.current,
             tracks: opts.tracks ? [...opts.tracks] : [],
@@ -54,6 +57,7 @@ function mockPlayer(opts: {
                 await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
             }
             player.playing = true
+            player.paused = false
         },
     }
     return player as unknown as MockPlayer
@@ -83,6 +87,23 @@ describe("startPlaybackIfNeeded", () => {
         await startPlaybackIfNeeded(player, () => player)
         assert.equal(player.playCalls, 1)
         assert.equal(player.playing, true)
+    })
+
+    it("does not call play when paused with a current track", async () => {
+        // Mirrors post-playerUpdate pause: playing=false, paused=true, current set.
+        // play() would send position 0 and restart the track (lavalink-client).
+        const player = mockPlayer({
+            playing: false,
+            paused: true,
+            current: mockTrack("paused-cur"),
+            tracks: [mockTrack("queued")],
+        })
+        const result = await startPlaybackIfNeeded(player, () => player)
+        assert.equal(result, "ok")
+        assert.equal(player.playCalls, 0)
+        assert.equal(player.paused, true)
+        assert.equal(player.playing, false)
+        assert.equal(player.queue.current?.info.title, "paused-cur")
     })
 
     it("starts playback when idle with upcoming tracks only", async () => {

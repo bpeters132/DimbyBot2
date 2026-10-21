@@ -1,9 +1,5 @@
 import type { Player, Track, UnresolvedTrack } from "lavalink-client"
-import {
-    isRRQActive,
-    rebalancePlayerQueueRoundRobinAssumingLock,
-    stampRequesterUserIdOnTracks,
-} from "./rrqDisconnect.js"
+import { stampRequesterUserIdOnTracks } from "./rrqDisconnect.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
 import { scheduleSaveIfPlayerStillLive } from "./playerSessionPersistence.js"
 import { tryGetBotClient } from "../lib/botClientRegistry.js"
@@ -14,6 +10,11 @@ import { companionPlaybackConfig, resolveYoutubePlaybackTrack } from "./youtubeC
  * Callers must re-resolve via `getLivePlayer` so a destroy during an earlier search cannot
  * append onto a stale Player that is no longer in the Lavalink manager map.
  * After companion resolve, also requires the same Player identity (not merely a successor).
+ *
+ * Does **not** run RRQ rebalance after the front-insert: `/playnext` is an explicit
+ * "play this next" override. Rebalancing would move the inserted track away from index 0
+ * whenever the current track's requester matches the playnext requester and other users
+ * have upcoming tracks — contradicting the command reply and the queue order users expect.
  */
 export async function enqueuePlayNextTrackAssumingSearchDone(
     getLivePlayer: () => Player | undefined,
@@ -34,9 +35,6 @@ export async function enqueuePlayNextTrackAssumingSearchDone(
         const live = getLivePlayer()
         if (!live || live !== liveForResolve) return "no_player"
         await live.queue.add(playableTrack, 0)
-        if (isRRQActive(live)) {
-            await rebalancePlayerQueueRoundRobinAssumingLock(live)
-        }
         scheduleSaveIfPlayerStillLive(getLivePlayer, live)
         return "ok"
     })
