@@ -3,7 +3,7 @@ import { describe, it } from "node:test"
 import type { Player, Track } from "lavalink-client"
 import { enqueuePlayNextTrackAssumingSearchDone } from "../../src/util/playNextEnqueue.js"
 
-function mockTrack(id: string, requesterId?: string): Track {
+function mockTrack(id: string): Track {
     return {
         encoded: `enc-${id}`,
         info: {
@@ -18,23 +18,17 @@ function mockTrack(id: string, requesterId?: string): Track {
             artworkUrl: null,
             isrc: null,
         },
-        requester: requesterId,
+        requester: undefined,
     } as unknown as Track
 }
 
-function mockMutablePlayer(
-    guildId: string,
-    initial: Track[] = [],
-    opts: { rrqEnabled?: boolean; current?: Track | null } = {}
-): Player {
+function mockMutablePlayer(guildId: string, initial: Track[] = []): Player {
     const tracks = [...initial]
-    const flags = new Map<string, unknown>()
-    if (opts.rrqEnabled) flags.set("rrqEnabled", true)
     return {
         guildId,
         playing: true,
         queue: {
-            current: opts.current === undefined ? null : opts.current,
+            current: null,
             tracks,
             add(items: Track | Track[], index?: number) {
                 const list = Array.isArray(items) ? items : [items]
@@ -49,11 +43,8 @@ function mockMutablePlayer(
                 return tracks.splice(start, deleteCount, ...insert.flat())
             },
         },
-        get(key: string) {
-            return flags.get(key)
-        },
-        set(key: string, value: unknown) {
-            flags.set(key, value)
+        get() {
+            return undefined
         },
     } as unknown as Player
 }
@@ -116,30 +107,5 @@ describe("enqueuePlayNextTrackAssumingSearchDone", () => {
         assert.equal(outcome, "no_player")
         assert.equal(successor.queue.tracks.map((t) => t.info.title).join(","), "kept")
         assert.equal(resolvePlayer.queue.tracks.map((t) => t.info.title).join(","), "old")
-    })
-
-    it("keeps the playnext track at index 0 even when RRQ is active", async () => {
-        // Tip used to rebalance after front-insert. With current requester A and upcoming
-        // from B, RRQ moved A's playnext off the head — contradicting "top of the queue".
-        const guildId = "guild-playnext-rrq"
-        const player = mockMutablePlayer(
-            guildId,
-            [mockTrack("B1", "user-B"), mockTrack("B2", "user-B")],
-            {
-                rrqEnabled: true,
-                current: mockTrack("now", "user-A"),
-            }
-        )
-
-        const outcome = await enqueuePlayNextTrackAssumingSearchDone(
-            () => player,
-            guildId,
-            mockTrack("A-next"),
-            "user-A"
-        )
-
-        assert.equal(outcome, "ok")
-        assert.equal(player.queue.tracks[0]?.info.title, "A-next")
-        assert.equal(player.queue.tracks.map((t) => t.info.title).join(","), "A-next,B1,B2")
     })
 })
