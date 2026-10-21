@@ -13,6 +13,10 @@ import { playerHttpResultForSkip } from "../../util/skipDeferredResult.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 import { parsePlayerAction, parsePlayerSeekMs } from "../parseBotApiParams.js"
 import { destroyLavalinkPlayerForStop } from "../../util/stopLavalinkPlayer.js"
+import {
+    stopLocalPlaybackForUserStop,
+    userStopAffectedLocalPlayback,
+} from "../../util/stopLocalForUserStop.js"
 
 export async function playerGET(
     headers: Headers,
@@ -75,12 +79,6 @@ export async function playerPOST(
 
     const client = getBotClient()
     const player = client.lavalink.getPlayer(guildId)
-    if (!player) {
-        return {
-            status: 404,
-            body: { ok: false, error: { error: "No active player for this guild." } },
-        }
-    }
 
     const body = (typeof rawBody === "object" && rawBody !== null ? rawBody : {}) as {
         action?: unknown
@@ -91,6 +89,28 @@ export async function playerPOST(
         return {
             status: 400,
             body: { ok: false, error: { error: "Invalid action." } },
+        }
+    }
+
+    // Stop must cancel in-flight Play Local / tear down `@discordjs/voice` even when the
+    // Lavalink slot is already empty (handoff destroy succeeded; Ready wait still open).
+    if (!player) {
+        if (action === "stop") {
+            const localStop = stopLocalPlaybackForUserStop(client, guildId)
+            if (userStopAffectedLocalPlayback(localStop)) {
+                playerBroadcaster.broadcastPlayerEvent(guildId, null, "playerDestroy")
+                return {
+                    status: 200,
+                    body: {
+                        ok: true,
+                        data: await toPlayerStateResponse(guildId, guard.discordUserId, null),
+                    },
+                }
+            }
+        }
+        return {
+            status: 404,
+            body: { ok: false, error: { error: "No active player for this guild." } },
         }
     }
 
@@ -109,6 +129,7 @@ export async function playerPOST(
                 break
             }
             case "stop":
+                stopLocalPlaybackForUserStop(client, guildId)
                 await destroyLavalinkPlayerForStop(player, () => client.lavalink.getPlayer(guildId))
                 break
             case "seek": {
