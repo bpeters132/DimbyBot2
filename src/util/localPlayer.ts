@@ -43,7 +43,8 @@ const pendingLocalPlayCancelEpochByGuild = new Map<string, number>()
 
 /**
  * Cancels an in-flight `playLocalFile` join (before audio starts). Safe when nothing is pending.
- * Call from `/stop` and `/leave` so a Ready wait after Lavalink handoff cannot resume playback.
+ * Call from `/stop`, `/leave`, control Stop, and Dashboard stop so a Ready wait after
+ * Lavalink handoff cannot resume playback.
  */
 export function cancelPendingLocalPlay(guildId: string): void {
     pendingLocalPlayCancelEpochByGuild.set(
