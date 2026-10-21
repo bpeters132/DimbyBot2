@@ -540,6 +540,19 @@ const DNS_BOUNCE_SUFFIXES = [
     "localhost.mine.nu",
     "localhost.ydns.eu",
     "localhost.ydns.org",
+    // Remaining unused localhost aliases (apex → 127.0.0.1 on public DNS).
+    // Do not deny public parents (homeftp.org, sprinthost.ru, lacnic.net,
+    // apache.com, haproxy.com). Do not deny public localhost.lu / .ro / .be
+    // (only the nested localhost.localhost.* labels bounce).
+    "localhost.homeftp.org",
+    "localhost.sprinthost.ru",
+    "localhost.lacnic.net",
+    "localhost.apache.com",
+    "localhost.haproxy.com",
+    "localhost.sm",
+    "localhost.localhost.lu",
+    "localhost.localhost.ro",
+    "localhost.localhost.be",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
