@@ -392,9 +392,7 @@ describe("markPreservePriorIfSessionRowExists", () => {
 })
 
 describe("deferredRestoreGuardAction", () => {
-    it("marks preserve-prior and clears restore-in-progress when the read fails with a live queue", () => {
-        // keep-guard left restore-in-progress stuck for the process lifetime, so every
-        // later enqueue/trackEnd save no-op'd until another Lavalink connect re-ran restore.
+    it("keeps the guard when the read fails and nothing cleared the session", () => {
         assert.equal(
             deferredRestoreGuardAction({
                 lookup: { status: "failed" },
@@ -402,19 +400,7 @@ describe("deferredRestoreGuardAction", () => {
                 clearEpochAtStart: 1,
                 clearEpochNow: 1,
             }),
-            "mark-and-clear"
-        )
-    })
-
-    it("clears without marking when the read fails and nothing concurrent landed", () => {
-        assert.equal(
-            deferredRestoreGuardAction({
-                lookup: { status: "failed" },
-                liveHasQueue: false,
-                clearEpochAtStart: 1,
-                clearEpochNow: 1,
-            }),
-            "clear"
+            "keep-guard"
         )
     })
 
@@ -432,7 +418,7 @@ describe("deferredRestoreGuardAction", () => {
 })
 
 describe("releaseDeferredRestoreGuards", () => {
-    it("marks preserve-prior and clears restore-in-progress when a deferred read fails with a live queue", async () => {
+    it("keeps the failed guild guarded when the epoch is unchanged and still clears the next guild", async () => {
         const cleared: string[] = []
         const marked: string[] = []
         const errors: string[] = []
@@ -451,9 +437,8 @@ describe("releaseDeferredRestoreGuards", () => {
             onLookupError: (guildId) => errors.push(guildId),
             sessionReadAttempts: 1,
         })
-        // Failed read on b must not leave restore-in-progress stuck (was keep-guard).
-        assert.deepEqual(cleared, ["a", "b", "c"])
-        assert.deepEqual(marked, ["a", "b", "c"])
+        assert.deepEqual(cleared, ["a", "c"])
+        assert.deepEqual(marked, ["a", "c"])
         assert.deepEqual(errors, ["b"])
     })
 
