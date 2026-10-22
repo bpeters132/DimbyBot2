@@ -135,7 +135,11 @@ export async function queueIndexPATCH(
                 return { ok: false as const, reason: "out_of_range" as const }
             }
 
-            const [track] = await live.queue.splice(sourceIndex, 1)
+            // lavalink-client Queue.splice returns the Track itself when amount === 1
+            // (not a one-element array). Array-destructuring that value throws after the
+            // remove already landed, permanently dropping the track from the live queue.
+            const removed = await live.queue.splice(sourceIndex, 1)
+            const track = Array.isArray(removed) ? removed[0] : removed
             if (!track) {
                 return { ok: false as const, reason: "out_of_range" as const }
             }
