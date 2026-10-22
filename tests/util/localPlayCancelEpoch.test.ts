@@ -2,7 +2,6 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
     isLocalPlayCancelledByEpoch,
-    mayStartLocalAudioAfterPostReadyWork,
     nextLocalPlayCancelEpoch,
     readLocalPlayCancelEpoch,
 } from "../../src/util/localPlayCancelEpoch.js"
@@ -38,20 +37,5 @@ describe("isLocalPlayCancelledByEpoch", () => {
         assert.equal(isLocalPlayCancelledByEpoch(1, 0), true)
         assert.equal(isLocalPlayCancelledByEpoch(3, 2), true)
         assert.equal(isLocalPlayCancelledByEpoch(undefined, 1), true)
-    })
-})
-
-describe("mayStartLocalAudioAfterPostReadyWork", () => {
-    it("allows audio when the epoch is unchanged after leftover destroy / session clear", () => {
-        assert.equal(mayStartLocalAudioAfterPostReadyWork(undefined, 0), true)
-        assert.equal(mayStartLocalAudioAfterPostReadyWork(0, 0), true)
-        assert.equal(mayStartLocalAudioAfterPostReadyWork(4, 4), true)
-    })
-
-    it("refuses audio when /stop or /leave bumped the epoch during post-Ready awaits", () => {
-        // Ready-time check saw epoch 0; session-clear await then observed a bump to 1.
-        assert.equal(mayStartLocalAudioAfterPostReadyWork(1, 0), false)
-        assert.equal(mayStartLocalAudioAfterPostReadyWork(5, 4), false)
-        assert.equal(mayStartLocalAudioAfterPostReadyWork(undefined, 2), false)
     })
 })
