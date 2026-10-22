@@ -23,18 +23,3 @@ export function isLocalPlayCancelledByEpoch(
 ): boolean {
     return readLocalPlayCancelEpoch(stored) !== startEpoch
 }
-
-/**
- * After Voice Ready, `playLocalFile` may await leftover Lavalink destroy and
- * session clear (DB I/O). `/stop` / `/leave` can bump the cancel epoch during
- * those awaits — a Ready-time check alone is not enough.
- *
- * Returns true only when audio may start; false means abort (destroy the
- * Ready connection, do not `activeLocalPlayers.set` / `audioPlayer.play`).
- */
-export function mayStartLocalAudioAfterPostReadyWork(
-    storedEpochAfterPostReadyWork: number | undefined,
-    startEpoch: number
-): boolean {
-    return !isLocalPlayCancelledByEpoch(storedEpochAfterPostReadyWork, startEpoch)
-}

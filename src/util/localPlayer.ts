@@ -32,7 +32,6 @@ import {
 } from "./localPlaySessionHandoff.js"
 import {
     isLocalPlayCancelledByEpoch,
-    mayStartLocalAudioAfterPostReadyWork,
     nextLocalPlayCancelEpoch,
     readLocalPlayCancelEpoch,
 } from "./localPlayCancelEpoch.js"
@@ -444,18 +443,6 @@ export async function playLocalFile(
             client.warn(
                 `[LocalPlayer] clearPlayerSession after local Ready failed for guild ${guildId}: ${msg}`
             )
-        }
-
-        // Leftover destroy + session clear await above — `/stop`/`/leave` may have
-        // bumped the epoch after the Ready check. Re-check before starting audio.
-        if (
-            !mayStartLocalAudioAfterPostReadyWork(
-                pendingLocalPlayCancelEpochByGuild.get(guildId),
-                cancelEpochAtStart
-            )
-        ) {
-            const cancelledBeforeAudio = await abortIfCancelled(connection)
-            if (cancelledBeforeAudio) return cancelledBeforeAudio
         }
 
         const conn = connection!
