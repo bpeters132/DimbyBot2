@@ -553,6 +553,35 @@ const DNS_BOUNCE_SUFFIXES = [
     "localhost.localhost.lu",
     "localhost.localhost.ro",
     "localhost.localhost.be",
+    // Remaining unused localhost aliases after #12/#17–#49. Deny only the
+    // `localhost.*` label (or nested `*.localhost.kasserver.com`) so public
+    // parent sites stay allowed. FreeDNS unused aliases also have AAAA ::1.
+    "localhost.mooo.com",
+    "localhost.strangled.net",
+    "localhost.ignorelist.com",
+    "localhost.crabdance.com",
+    "localhost.jumpingcrab.com",
+    "localhost.twilightparadox.com",
+    "localhost.us.to",
+    "localhost.soon.it",
+    "localhost.undo.it",
+    "localhost.freebsd.org",
+    "localhost.netbsd.org",
+    "localhost.dragonflybsd.org",
+    "localhost.sun.com",
+    "localhost.ox.ac.uk",
+    "localhost.imperial.ac.uk",
+    "localhost.opencart.com",
+    "localhost.panasonic.com",
+    "localhost.micron.com",
+    "localhost.gskill.com",
+    "localhost.webhostingpad.com",
+    "localhost.fatcow.net",
+    "localhost.wiredtree.com",
+    "localhost.softlayer.com",
+    "localhost.kasserver.com",
+    "localhost.csail.mit.edu",
+    "localhost.usenix.org",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
