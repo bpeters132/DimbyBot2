@@ -31,8 +31,17 @@ function tracksPlayer(ids: string[]) {
         get: () => false,
         queue: {
             tracks,
-            async splice(start: number, count: number, ...insert: unknown[]) {
-                return tracks.splice(start, count, ...(insert.flat() as typeof tracks))
+            /** Mirrors lavalink-client: single-track remove returns the Track, not `[Track]`. */
+            async splice(start: number, count: number, trackOrTracks?: unknown) {
+                const insert =
+                    trackOrTracks === undefined
+                        ? []
+                        : ((Array.isArray(trackOrTracks)
+                              ? trackOrTracks
+                              : [trackOrTracks]
+                          ).flat() as typeof tracks)
+                const spliced = tracks.splice(start, count, ...insert)
+                return spliced.length === 1 ? spliced[0] : spliced
             },
         },
     }
@@ -250,6 +259,19 @@ describe("queue index handlers", () => {
             ["a", "b"]
         )
         assert.deepEqual(broadcasts, [])
+    })
+
+    it("preserves every track when reordering under lavalink-client splice returns", async () => {
+        // Real Queue.splice(i, 1) yields the Track object; treating it as an array throws
+        // after remove and used to drop the moved track (500 + permanent live/session loss).
+        state.player = tracksPlayer(["a", "b", "c"])
+        const result = await queueIndexPATCH(new Headers(), GUILD, "0", { newIndex: 2 })
+        assert.equal(result.status, 200)
+        assert.deepEqual(
+            state.player.queue.tracks.map((t) => t.info.title),
+            ["b", "c", "a"]
+        )
+        if (result.body.ok) assert.equal(result.body.data.total, 3)
     })
 
     it("returns 500 when reorder throws", async () => {
