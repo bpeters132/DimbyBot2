@@ -159,19 +159,16 @@ export type DeferredSessionLookup =
     | { status: "resolved"; row: unknown | null }
     | { status: "failed" }
 
-export type DeferredRestoreGuardAction = "mark-and-clear" | "clear"
+export type DeferredRestoreGuardAction = "mark-and-clear" | "clear" | "keep-guard"
 
 /** Attempts before a deferred session read is treated as failed. */
 export const DEFERRED_SESSION_READ_ATTEMPTS = 3
 
 /**
  * Whether to drop restore-in-progress after a deferred restore.
- * A failed session read must not leave restore-in-progress stuck for the process
- * lifetime (that bricks all {@link schedulePlayerSessionSave} until another Lavalink
- * connect re-runs restore). If `/stop` or `/leave` already advanced the clear epoch,
- * the successor may save. Otherwise, when a concurrent live queue exists, mark
- * preserve-prior and clear the restore guard — same thin-save protection without
- * blocking force-clear + later intentional persists.
+ * A failed read is not preserve-prior. If `/stop` or `/leave` already advanced
+ * the clear epoch, the successor may save. Otherwise the guard stays so a thin
+ * live queue cannot replace the fuller snapshot.
  */
 export function deferredRestoreGuardAction(options: {
     lookup: DeferredSessionLookup
@@ -181,10 +178,7 @@ export function deferredRestoreGuardAction(options: {
 }): DeferredRestoreGuardAction {
     if (options.lookup.status === "failed") {
         if (options.clearEpochNow !== options.clearEpochAtStart) return "clear"
-        // Do not keep-guard: restore-in-progress would never clear without another
-        // restore pass, so every later enqueue/trackEnd save no-ops for this guild.
-        if (options.liveHasQueue) return "mark-and-clear"
-        return "clear"
+        return "keep-guard"
     }
     if (
         shouldMarkPreservePriorAfterDeferredRestore({
@@ -199,8 +193,8 @@ export function deferredRestoreGuardAction(options: {
 
 /**
  * Drops restore-in-progress per guild after the batch. A thrown session read
- * cannot skip later guilds. Failed reads mark preserve-prior when a live queue
- * is present, then always clear restore-in-progress.
+ * cannot skip later guilds. A failed read keeps the guard only when the clear
+ * epoch has not moved.
  */
 export async function releaseDeferredRestoreGuards(args: {
     guildIds: readonly string[]
@@ -216,11 +210,12 @@ export async function releaseDeferredRestoreGuards(args: {
 }): Promise<void> {
     const attempts = args.sessionReadAttempts ?? DEFERRED_SESSION_READ_ATTEMPTS
     for (const id of args.guildIds) {
+        let action: DeferredRestoreGuardAction = "clear"
         try {
             if (!args.deferredGuildIds.has(id)) continue
             const lookup = await readDeferredSessionWithRetry(id, args.readSession, attempts)
             if (lookup.status === "failed") args.onLookupError(id, lookup.error)
-            const action = deferredRestoreGuardAction({
+            action = deferredRestoreGuardAction({
                 lookup:
                     lookup.status === "failed"
                         ? { status: "failed" }
@@ -231,7 +226,7 @@ export async function releaseDeferredRestoreGuards(args: {
             })
             if (action === "mark-and-clear") args.markPreservePrior(id)
         } finally {
-            args.clearRestoreInProgress(id)
+            if (action !== "keep-guard") args.clearRestoreInProgress(id)
         }
     }
 }
