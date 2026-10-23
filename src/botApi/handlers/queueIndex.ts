@@ -38,10 +38,20 @@ export async function queueIndexDELETE(
         }
 
         const client = getBotClient()
+        // Capture identity before the lock (parity with Discord ClearQueue / queueDELETE).
+        // Without expectedPlayer, /stop+/play during the wait splices a successor's upcoming.
+        const expectedPlayer = client.lavalink.getPlayer(guildId)
+        if (!expectedPlayer) {
+            const mapped = mapQueueIndexLockFailure("no_player")
+            return {
+                status: mapped.status,
+                body: { ok: false, error: { error: mapped.error } },
+            }
+        }
         const removeResult = await withGuildPlayerQueueLock(guildId, async () => {
-            // Re-resolve: concurrent /stop leaves a zombie; splicing+saving it resurrects the session.
             const live = client.lavalink.getPlayer(guildId)
             if (!live) return { ok: false as const, reason: "no_player" as const }
+            if (live !== expectedPlayer) return { ok: false as const, reason: "stale" as const }
             if (queueIndex >= live.queue.tracks.length) {
                 return { ok: false as const, reason: "out_of_range" as const }
             }
@@ -57,6 +67,7 @@ export async function queueIndexDELETE(
                     ok: false,
                     error: {
                         error: mapped.error,
+                        ...("details" in mapped ? { details: mapped.details } : {}),
                     },
                 },
             }
@@ -125,10 +136,22 @@ export async function queueIndexPATCH(
         }
 
         const client = getBotClient()
+        // Same capture-before-lock gate as DELETE: never reorder a successor session.
+        const expectedPlayer = client.lavalink.getPlayer(guildId)
+        if (!expectedPlayer) {
+            const mapped = mapQueueIndexLockFailure("no_player")
+            return {
+                status: mapped.status,
+                body: { ok: false, error: { error: mapped.error } },
+            }
+        }
         const reorderResult = await withGuildPlayerQueueLock(guildId, async () => {
             const live = client.lavalink.getPlayer(guildId)
             if (!live) {
                 return { ok: false as const, reason: "no_player" as const }
+            }
+            if (live !== expectedPlayer) {
+                return { ok: false as const, reason: "stale" as const }
             }
             const trackCount = live.queue.tracks.length
             if (sourceIndex >= trackCount || destinationIndex >= trackCount) {
@@ -179,7 +202,13 @@ export async function queueIndexPATCH(
             const mapped = mapQueueIndexLockFailure(reorderResult.reason)
             return {
                 status: mapped.status,
-                body: { ok: false, error: { error: mapped.error } },
+                body: {
+                    ok: false,
+                    error: {
+                        error: mapped.error,
+                        ...("details" in mapped ? { details: mapped.details } : {}),
+                    },
+                },
             }
         }
 
