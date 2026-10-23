@@ -266,6 +266,34 @@ const DNS_BOUNCE_SUFFIXES = [
     // Public wildcard loopback (apex has no A record today; suffix still covers it).
     "devlocal.me",
     "lhst.net",
+    // Remaining unused localhost aliases after #12/#17–#50. Do not deny public parents
+    // (`doesntexist.com`, `ftp.sh`, `mine.bz`, `wiki.gd`, `x10host.com`, `root.sx`,
+    // `ed.ac.uk`, `cornell.edu`, `columbia.edu`, `autodesk.com`, `ea.com`, `ubisoft.com`,
+    // `lua.org`, `cnn.com`, `nytimes.com`, `citibank.com`, `nih.gov`, `who.int`,
+    // `creativecommons.org`). `h4ck.me` apex is empty today.
+    "localhost.doesntexist.com",
+    "localhost.doesntexist.org",
+    "localhost.ftp.sh",
+    "localhost.h4ck.me",
+    "localhost.mine.bz",
+    "localhost.wiki.gd",
+    "localhost.x10host.com",
+    "localhost.root.sx",
+    "localhost.ed.ac.uk",
+    "localhost.cornell.edu",
+    "localhost.columbia.edu",
+    "localhost.autodesk.com",
+    "localhost.ea.com",
+    "localhost.ubisoft.com",
+    "localhost.lua.org",
+    "localhost.cnn.com",
+    "localhost.nytimes.com",
+    "localhost.citibank.com",
+    "localhost.nih.gov",
+    "localhost.who.int",
+    "localhost.creativecommons.org",
+    // ix.tc: dedicated loopback apex (wildcards empty on public DNS).
+    "ix.tc",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
