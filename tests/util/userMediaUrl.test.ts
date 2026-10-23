@@ -1438,6 +1438,81 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://freebsd.org/"), false)
         assert.equal(isBlockedUserMediaUrl("http://kasserver.com/"), false)
         assert.equal(isBlockedUserMediaUrl("http://fatcow.net/"), false)
+
+        // Remaining unused localhost aliases after #12/#17–#50 (apex → 127.0.0.1, or
+        // localhost.ed.ac.uk → 172.20.0.202 RFC1918). Do not deny public parents.
+        const leftoverLocalhostAliases = [
+            "localhost.doesntexist.com",
+            "localhost.doesntexist.org",
+            "localhost.ftp.sh",
+            "localhost.h4ck.me",
+            "localhost.mine.bz",
+            "localhost.wiki.gd",
+            "localhost.x10host.com",
+            "localhost.root.sx",
+            "localhost.ed.ac.uk",
+            "localhost.cornell.edu",
+            "localhost.columbia.edu",
+            "localhost.autodesk.com",
+            "localhost.ea.com",
+            "localhost.ubisoft.com",
+            "localhost.lua.org",
+            "localhost.cnn.com",
+            "localhost.nytimes.com",
+            "localhost.citibank.com",
+            "localhost.nih.gov",
+            "localhost.who.int",
+            "localhost.creativecommons.org",
+        ]
+        for (const host of leftoverLocalhostAliases) {
+            assert.equal(isBlockedUserMediaUrl(`http://${host}/`), true, host)
+            assert.equal(isBlockedUserMediaUrl(`https://${host}:5432/`), true, host)
+            assert.equal(isBlockedUserMediaUrl(`HTTP://${host.toUpperCase()}/`), true, host)
+            assert.equal(isBlockedUserMediaUrl(`link:http://${host}/`), true, host)
+            assert.equal(isBlockedUserMediaUrl(`uri:http://${host}/audio.mp3`), true, host)
+            assert.equal(isBlockedUserMediaUrl(`icy://${host}/stream`), true, host)
+            assert.equal(isBlockedUserMediaUrl(`ytsearch:http://${host}:2333/`), true, host)
+            assert.equal(isBlockedUserMediaUrl(`local:http://${host}/`), true, host)
+        }
+        // ix.tc: dedicated loopback apex (wildcards empty).
+        assert.equal(isBlockedUserMediaUrl("http://ix.tc/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://ix.tc:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://foo.ix.tc/"), true)
+        assert.equal(isBlockedUserMediaUrl("HTTP://IX.TC/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://ix.tc/"), true)
+        assert.equal(isBlockedUserMediaUrl("uri:http://ix.tc/audio.mp3"), true)
+        assert.equal(isBlockedUserMediaUrl("icy://ix.tc/stream"), true)
+        assert.equal(isBlockedUserMediaUrl("ytsearch:http://ix.tc:2333/"), true)
+        assert.equal(isBlockedUserMediaUrl("local:http://ix.tc/"), true)
+        // Public parents of unused localhost aliases must stay allowed.
+        assert.equal(isBlockedUserMediaUrl("http://doesntexist.com/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://www.doesntexist.com/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://doesntexist.org/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://ftp.sh/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://www.ftp.sh/"), false)
+        // h4ck.me apex is empty today; do not suffix-deny the parent.
+        assert.equal(isBlockedUserMediaUrl("http://h4ck.me/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://mine.bz/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://www.mine.bz/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://wiki.gd/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://x10host.com/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://www.x10host.com/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://root.sx/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://www.root.sx/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://ed.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://www.ed.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://cornell.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://columbia.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://autodesk.com/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://ea.com/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://ubisoft.com/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://lua.org/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://cnn.com/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://nytimes.com/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://citibank.com/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://nih.gov/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://who.int/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://creativecommons.org/"), false)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {
