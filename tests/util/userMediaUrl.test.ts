@@ -1513,6 +1513,36 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://nih.gov/"), false)
         assert.equal(isBlockedUserMediaUrl("http://who.int/"), false)
         assert.equal(isBlockedUserMediaUrl("http://creativecommons.org/"), false)
+
+        // Remaining unused localhost.<parent> aliases after #12/#17–#51.
+        // Apex → 127.0.0.1 unless noted. Do not deny public parents.
+        const unusedLocalhostAliases = [
+            "localhost.usc.edu",
+            "localhost.ucla.edu",
+            "localhost.ethz.ch",
+            "localhost.pfizer.com",
+            "localhost.gov.za",
+            "localhost.uwaterloo.ca",
+            // RFC1918 siteLocal (Java InetAddress); umd.edu :80/:443 CONNECTED.
+            "localhost.umd.edu",
+            "localhost.qut.edu.au",
+            "localhost.warnerbros.com",
+        ]
+        for (const host of unusedLocalhostAliases) {
+            assert.equal(isBlockedUserMediaUrl(`http://${host}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`http://${host}:5432/`), true)
+            assert.equal(isBlockedUserMediaUrl(`HTTP://${host.toUpperCase()}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`link:http://${host}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`uri:http://${host}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`icy://${host}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`ytsearch:http://${host}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`local:http://${host}/`), true)
+        }
+        assert.equal(isBlockedUserMediaUrl("https://www.usc.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("https://umd.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("https://www.gov.za/"), false)
+        assert.equal(isBlockedUserMediaUrl("https://www.pfizer.com/"), false)
+        assert.equal(isBlockedUserMediaUrl("https://www.warnerbros.com/"), false)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {
