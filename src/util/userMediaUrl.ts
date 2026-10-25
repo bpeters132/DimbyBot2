@@ -787,27 +787,53 @@ const DNS_BOUNCE_SUFFIXES = [
     // Remaining unused localhost.<parent> aliases after #12/#17–#52 (apex → 127.0.0.1
     // on Cloudflare+Google DoH; Java InetAddress loopback=true). localhost.utexas.edu
     // also has unlabeled wildcards www/foo/app/api/admin → 127.0.0.1. Do not deny
-    // public parents (bu.edu, utexas.edu, upenn.edu, uchicago.edu, …). Distinct from
-    // open #365 (localhost.osu.edu / #52 batch) — ohio-state.edu is the hyphenated sibling.
+    // public parents (bu.edu, utexas.edu, upenn.edu, uchicago.edu, njit.edu, …).
+    // Distinct from open #365 (localhost.osu.edu / #52 batch) — ohio-state.edu is the
+    // hyphenated sibling; soton.ac.uk is distinct from #365 southampton.ac.uk.
+    // www/foo.localhost.conncoll.edu is public docker (suffix-deny tradeoff like docksal.site).
+    "localhost.beloit.edu",
+    "localhost.bgsu.edu",
     "localhost.bu.edu",
     "localhost.chapman.edu",
+    "localhost.conncoll.edu",
     "localhost.cpp.edu",
+    "localhost.cwru.edu",
     "localhost.duq.edu",
     "localhost.edinburgh.ac.uk",
+    "localhost.ewu.edu",
     "localhost.fiu.edu",
     "localhost.furman.edu",
     "localhost.gw.edu",
     "localhost.hmc.edu",
     "localhost.humboldt.edu",
+    "localhost.iupui.edu",
+    "localhost.jmu.edu",
+    "localhost.latrobe.edu.au",
+    "localhost.lawrence.edu",
     "localhost.louisville.edu",
     "localhost.loyola.edu",
+    "localhost.mq.edu.au",
+    "localhost.mst.edu",
+    "localhost.niu.edu",
+    "localhost.njit.edu",
     "localhost.ohio-state.edu",
     "localhost.rit.edu",
     "localhost.sonoma.edu",
+    "localhost.soton.ac.uk",
+    "localhost.towson.edu",
     "localhost.uchicago.edu",
+    "localhost.udel.edu",
+    "localhost.uic.edu",
+    "localhost.uidaho.edu",
+    "localhost.umbc.edu",
+    "localhost.umkc.edu",
+    "localhost.umsl.edu",
+    "localhost.unf.edu",
     "localhost.upenn.edu",
     "localhost.utexas.edu",
     "localhost.uva.edu",
+    "localhost.uwo.ca",
+    "localhost.wesleyan.edu",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
