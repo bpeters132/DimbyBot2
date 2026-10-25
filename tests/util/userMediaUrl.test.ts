@@ -426,6 +426,36 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("icy://lhst.net/"), true)
         assert.equal(isBlockedUserMediaUrl("ytsearch:http://lhst.net/"), true)
         assert.equal(isBlockedUserMediaUrl("local:http://lhst.net/"), true)
+
+        // Remaining unused localhost.<parent> aliases after #12/#17–#52.
+        // Apex → 127.0.0.1 (Java loopback). utexas.edu also has unlabeled wildcards.
+        // Do not deny public parents. Distinct from open #365 / #52 batch.
+        const unusedLocalhostAliases = [
+            "localhost.bu.edu",
+            "localhost.utexas.edu",
+            "localhost.upenn.edu",
+            "localhost.uchicago.edu",
+            "localhost.ohio-state.edu",
+            "localhost.edinburgh.ac.uk",
+            "localhost.uva.edu",
+            "localhost.rit.edu",
+            "localhost.gw.edu",
+        ]
+        for (const host of unusedLocalhostAliases) {
+            assert.equal(isBlockedUserMediaUrl(`http://${host}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`http://${host}:5432/`), true)
+            assert.equal(isBlockedUserMediaUrl(`HTTP://${host.toUpperCase()}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`link:http://${host}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`uri:http://${host}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`icy://${host}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`ytsearch:http://${host}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`local:http://${host}/`), true)
+        }
+        assert.equal(isBlockedUserMediaUrl("http://foo.localhost.utexas.edu/"), true)
+        assert.equal(isBlockedUserMediaUrl("https://www.bu.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("https://www.utexas.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("https://www.upenn.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("https://www.uchicago.edu/"), false)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {

@@ -266,6 +266,30 @@ const DNS_BOUNCE_SUFFIXES = [
     // Public wildcard loopback (apex has no A record today; suffix still covers it).
     "devlocal.me",
     "lhst.net",
+    // Remaining unused localhost.<parent> aliases after #12/#17–#52 (apex → 127.0.0.1
+    // on Cloudflare+Google DoH; Java InetAddress loopback=true). localhost.utexas.edu
+    // also has unlabeled wildcards www/foo/app/api/admin → 127.0.0.1. Do not deny
+    // public parents (bu.edu, utexas.edu, upenn.edu, uchicago.edu, …). Distinct from
+    // open #365 (localhost.osu.edu / #52 batch) — ohio-state.edu is the hyphenated sibling.
+    "localhost.bu.edu",
+    "localhost.chapman.edu",
+    "localhost.cpp.edu",
+    "localhost.duq.edu",
+    "localhost.edinburgh.ac.uk",
+    "localhost.fiu.edu",
+    "localhost.furman.edu",
+    "localhost.gw.edu",
+    "localhost.hmc.edu",
+    "localhost.humboldt.edu",
+    "localhost.louisville.edu",
+    "localhost.loyola.edu",
+    "localhost.ohio-state.edu",
+    "localhost.rit.edu",
+    "localhost.sonoma.edu",
+    "localhost.uchicago.edu",
+    "localhost.upenn.edu",
+    "localhost.utexas.edu",
+    "localhost.uva.edu",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
