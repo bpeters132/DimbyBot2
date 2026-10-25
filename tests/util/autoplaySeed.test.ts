@@ -3,6 +3,7 @@ import { describe, it } from "node:test"
 import type { Player, Track } from "lavalink-client"
 import {
     isAllowedSearchLoadType,
+    parkCurrentForLibraryAutoplayAdvance,
     resolveAutoplaySeed,
     shouldStillInjectAutoplayTrack,
     titleAfterArtistPrefix,
@@ -150,5 +151,67 @@ describe("shouldStillInjectAutoplayTrack", () => {
             shouldStillInjectAutoplayTrack(mockPlayer({ autoplay: true, paused: true })),
             false
         )
+    })
+})
+
+/**
+ * lavalink-client 2.9.9 `queueEnd` after `autoPlayFunction`: promote upcoming[0] whenever
+ * upcoming is non-empty, moving a live current into previous.
+ */
+function libraryQueueEndAfterAutoplay(player: Player): void {
+    const queue = player.queue
+    if ((queue.tracks?.length ?? 0) > 0) {
+        if (queue.current && !queue.current.pluginInfo?.clientData?.previousTrack) {
+            queue.previous.unshift(queue.current)
+        }
+        queue.current = (queue.tracks.shift() ?? null) as typeof queue.current
+    }
+}
+
+describe("parkCurrentForLibraryAutoplayAdvance", () => {
+    it("library queueEnd without park skips the live current into previous", () => {
+        const current = track("Playlist Head", "A")
+        const next = track("Playlist Next", "B")
+        const player = mockPlayer({ current, tracks: [next] })
+        libraryQueueEndAfterAutoplay(player)
+        assert.equal(player.queue.current, next)
+        assert.deepEqual(player.queue.previous, [current])
+        assert.deepEqual(player.queue.tracks, [])
+    })
+
+    it("parks a live current so library queueEnd does not skip it into previous", () => {
+        const current = track("Playlist Head", "A")
+        const next = track("Playlist Next", "B")
+        const rest = track("Playlist Rest", "C")
+        const player = mockPlayer({ current, tracks: [next, rest] })
+
+        assert.equal(parkCurrentForLibraryAutoplayAdvance(player), true)
+        assert.equal(player.queue.current, null)
+        assert.deepEqual(player.queue.tracks, [current, next, rest])
+
+        libraryQueueEndAfterAutoplay(player)
+        assert.equal(player.queue.current, current)
+        assert.deepEqual(player.queue.tracks, [next, rest])
+        assert.deepEqual(player.queue.previous, [])
+    })
+
+    it("no-ops when autoplay inject already promoted a single track", () => {
+        const current = track("Autoplay Pick", "Seed")
+        const player = mockPlayer({ current, tracks: [] })
+        assert.equal(parkCurrentForLibraryAutoplayAdvance(player), false)
+        assert.equal(player.queue.current, current)
+        libraryQueueEndAfterAutoplay(player)
+        assert.equal(player.queue.current, current)
+        assert.deepEqual(player.queue.previous, [])
+    })
+
+    it("no-ops when the user only enqueued and current is still empty", () => {
+        const first = track("First", "A")
+        const second = track("Second", "B")
+        const player = mockPlayer({ tracks: [first, second] })
+        assert.equal(parkCurrentForLibraryAutoplayAdvance(player), false)
+        libraryQueueEndAfterAutoplay(player)
+        assert.equal(player.queue.current, first)
+        assert.deepEqual(player.queue.tracks, [second])
     })
 })
