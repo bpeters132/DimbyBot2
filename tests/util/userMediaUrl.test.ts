@@ -440,6 +440,12 @@ describe("isBlockedUserMediaUrl", () => {
             "localhost.uva.edu",
             "localhost.rit.edu",
             "localhost.gw.edu",
+            "localhost.njit.edu",
+            "localhost.uidaho.edu",
+            "localhost.soton.ac.uk",
+            "localhost.uwo.ca",
+            "localhost.mq.edu.au",
+            "localhost.conncoll.edu",
         ]
         for (const host of unusedLocalhostAliases) {
             assert.equal(isBlockedUserMediaUrl(`http://${host}/`), true)
@@ -456,6 +462,9 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("https://www.utexas.edu/"), false)
         assert.equal(isBlockedUserMediaUrl("https://www.upenn.edu/"), false)
         assert.equal(isBlockedUserMediaUrl("https://www.uchicago.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("https://www.njit.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("https://www.uidaho.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("https://www.uwo.ca/"), false)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {
