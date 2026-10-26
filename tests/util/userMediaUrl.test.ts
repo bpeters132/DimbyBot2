@@ -1527,11 +1527,9 @@ describe("isBlockedUserMediaUrl", () => {
             "localhost.umd.edu",
             "localhost.qut.edu.au",
             "localhost.warnerbros.com",
-
-        // Remaining unused localhost.<parent> aliases after #12/#17–#52.
-        // Apex → 127.0.0.1 (Java loopback). utexas.edu also has unlabeled wildcards.
-        // Do not deny public parents. Distinct from open #365 / #52 batch.
-        const unusedLocalhostAliases = [
+            // Remaining unused localhost.<parent> aliases after #12/#17–#52.
+            // Apex → 127.0.0.1 (Java loopback). utexas.edu also has unlabeled wildcards.
+            // Do not deny public parents. Distinct from open #365 / #52 batch.
             "localhost.bu.edu",
             "localhost.utexas.edu",
             "localhost.upenn.edu",

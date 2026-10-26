@@ -150,6 +150,60 @@ export function shouldSkipRestoreHydrateForLivePlayer(
     return live != null && shouldAbandonRestoreForConcurrentQueue(live)
 }
 
+type RestoreSkipTrack = { info?: { uri?: string | null } }
+
+/**
+ * When hydrate is skipped because the live player already has queue content, whether to
+ * mark preserve-prior so later saves cannot replace the DB row.
+ *
+ * Concurrent `/play` during a multi-guild restore can leave a thin live queue while the
+ * persisted snapshot is still fuller — preserve-prior is required (#240 / #279).
+ *
+ * A second Lavalink node `connect` (or any reconnect while another node still holds the
+ * player) re-runs restore against guilds that already have a complete live queue. Marking
+ * preserve-prior in that case bricks `schedulePlayerSessionSave` for the rest of the
+ * process lifetime (until idle/`/stop`), so every subsequent enqueue/skip is lost on the
+ * next crash. Only preserve when the live queue does not still contain every stored track.
+ */
+export function shouldMarkPreservePriorAfterSkippingLiveHydrate(options: {
+    storedTracks: readonly RestoreSkipTrack[]
+    liveTracks: readonly RestoreSkipTrack[]
+}): boolean {
+    const storedPlayableCount = options.storedTracks.length
+    if (storedPlayableCount === 0) return false
+    const retained = retainedRestoredTrackCount(options.storedTracks, options.liveTracks)
+    return !shouldPersistRestoredPlayerSession({
+        transientFailures: 0,
+        storedPlayableCount,
+        liveTrackCount: options.liveTracks.length,
+        retainedRestoredCount: retained,
+    })
+}
+
+/** Current + upcoming tracks on a live restore player, for skip-hydrate preserve decisions. */
+export function liveTracksForRestorePreserveDecision(player: {
+    queue: { current?: RestoreSkipTrack | null; tracks: readonly RestoreSkipTrack[] }
+}): RestoreSkipTrack[] {
+    return [...(player.queue.current ? [player.queue.current] : []), ...player.queue.tracks]
+}
+
+/**
+ * Stored current + queue from a v1 session snapshot, shaped for
+ * {@link retainedRestoredTrackCount} / {@link queueTrackIdentity} (URI under `info`).
+ */
+export function storedTracksForRestorePreserveDecision(snapshot: {
+    current?: { uri?: string | null } | null
+    queue: readonly { uri?: string | null }[]
+}): RestoreSkipTrack[] {
+    const asIdentityTrack = (track: { uri?: string | null }): RestoreSkipTrack => ({
+        info: { uri: track.uri },
+    })
+    return [
+        ...(snapshot.current ? [asIdentityTrack(snapshot.current)] : []),
+        ...snapshot.queue.map(asIdentityTrack),
+    ]
+}
+
 /**
  * True when restore must not hydrate or stale-delete because this guild is in a
  * Lavalink → @discordjs/voice local handoff (join in flight) or already playing locally.
@@ -541,12 +595,19 @@ async function restoreSingleSession(
 
     const existingBeforeRestore = client.lavalink.getPlayer(guildId)
     if (shouldSkipRestoreHydrateForLivePlayer(existingBeforeRestore)) {
-        // Same contract as concurrent-abandon during resolve (#240): skipping hydrate
-        // without preserve-prior lets schedulePlayerSessionSave replace a multi-track
-        // snapshot. Existence-only skip is wrong for an empty createPlayer shell.
-        // Do not mark when `/stop`/`/leave` already force-cleared the row — that would
+        // Concurrent thin `/play` during multi-guild restore must keep the fuller DB row
+        // (#240 / #279). A complete live queue (e.g. second node connect while this guild
+        // is already playing) must not mark preserve-prior — that bricks all later saves.
+        // Also do not mark when `/stop`/`/leave` already force-cleared the row — that would
         // stick after restore-in-progress clears and block the successor queue save.
-        await markPreservePriorIfSessionRowExists(guildId)
+        if (
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: storedTracksForRestorePreserveDecision(snapshot),
+                liveTracks: liveTracksForRestorePreserveDecision(existingBeforeRestore),
+            })
+        ) {
+            await markPreservePriorIfSessionRowExists(guildId)
+        }
         client.debug(
             `[playerSession] restore skipped for ${guildId}: live player already has queue content`
         )
@@ -637,7 +698,14 @@ async function restoreSingleSession(
             // Re-check under the reservation: a concurrent create may have won the race.
             const liveBeforeCreate = client.lavalink.getPlayer(guildId)
             if (shouldSkipRestoreHydrateForLivePlayer(liveBeforeCreate)) {
-                await markPreservePriorIfSessionRowExists(guildId)
+                if (
+                    shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                        storedTracks: storedTracksForRestorePreserveDecision(snapshot),
+                        liveTracks: liveTracksForRestorePreserveDecision(liveBeforeCreate),
+                    })
+                ) {
+                    await markPreservePriorIfSessionRowExists(guildId)
+                }
                 client.debug(
                     `[playerSession] restore skipped for ${guildId}: player appeared before hydrate`
                 )

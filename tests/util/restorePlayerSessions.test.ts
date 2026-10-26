@@ -21,6 +21,9 @@ import {
     shouldPreservePriorSnapshotAfterRestoreDefer,
     shouldSkipRestoreForLocalPlayback,
     shouldSkipRestoreHydrateForLivePlayer,
+    shouldMarkPreservePriorAfterSkippingLiveHydrate,
+    liveTracksForRestorePreserveDecision,
+    storedTracksForRestorePreserveDecision,
 } from "../../src/util/restorePlayerSessions.js"
 import {
     clearPlayerSessionPreservePriorSnapshot,
@@ -270,6 +273,93 @@ describe("shouldSkipRestoreHydrateForLivePlayer", () => {
         )
         assert.equal(shouldSkipRestoreHydrateForLivePlayer(null), false)
         assert.equal(shouldSkipRestoreHydrateForLivePlayer(undefined), false)
+    })
+})
+
+describe("shouldMarkPreservePriorAfterSkippingLiveHydrate", () => {
+    const stored = [
+        { info: { uri: "https://youtu.be/a" } },
+        { info: { uri: "https://youtu.be/b" } },
+        { info: { uri: "https://youtu.be/c" } },
+    ]
+
+    it("marks preserve-prior when a concurrent thin live queue is missing stored tracks", () => {
+        // Multi-guild restore: /play landed one track while the DB still holds the fuller row.
+        assert.equal(
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: stored,
+                liveTracks: [{ info: { uri: "https://youtu.be/z" } }],
+            }),
+            true
+        )
+        assert.equal(
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: stored,
+                liveTracks: [{ info: { uri: "https://youtu.be/a" } }],
+            }),
+            true
+        )
+    })
+
+    it("does not mark preserve-prior when the live queue still holds every stored track", () => {
+        // Second Lavalink node connect re-runs restore while this guild is already playing
+        // the restored (or still-live) queue — preserve-prior would brick later saves.
+        assert.equal(
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: stored,
+                liveTracks: stored,
+            }),
+            false
+        )
+        assert.equal(
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: stored,
+                liveTracks: [...stored, { info: { uri: "https://youtu.be/d" } }],
+            }),
+            false
+        )
+    })
+
+    it("does not mark preserve-prior when the stored snapshot was empty", () => {
+        assert.equal(
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: [],
+                liveTracks: [{ info: { uri: "https://youtu.be/a" } }],
+            }),
+            false
+        )
+    })
+
+    it("maps persisted snapshot URIs onto the live-track identity shape", () => {
+        // PersistedQueueTrack stores `uri` at the top level; live Lavalink tracks use info.uri.
+        const snapshotTracks = storedTracksForRestorePreserveDecision({
+            current: { uri: "https://youtu.be/a" },
+            queue: [{ uri: "https://youtu.be/b" }],
+        })
+        const liveTracks = liveTracksForRestorePreserveDecision({
+            queue: {
+                current: { info: { uri: "https://youtu.be/a" } },
+                tracks: [{ info: { uri: "https://youtu.be/b" } }],
+            },
+        })
+        assert.deepEqual(snapshotTracks, [
+            { info: { uri: "https://youtu.be/a" } },
+            { info: { uri: "https://youtu.be/b" } },
+        ])
+        assert.equal(
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: snapshotTracks,
+                liveTracks,
+            }),
+            false
+        )
+        assert.equal(
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: snapshotTracks,
+                liveTracks: [{ info: { uri: "https://youtu.be/a" } }],
+            }),
+            true
+        )
     })
 })
 
