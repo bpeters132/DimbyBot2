@@ -266,6 +266,48 @@ const DNS_BOUNCE_SUFFIXES = [
     // Public wildcard loopback (apex has no A record today; suffix still covers it).
     "devlocal.me",
     "lhst.net",
+    // Remaining unused localhost.<parent> aliases after #12/#17–#53 (apex → 127.0.0.1
+    // on Cloudflare+Google DoH; Java InetAddress loopback=true). Do not deny public
+    // parents (navy.mil / www.navy.mil, bham.ac.uk, gla.ac.uk, virginia.edu, …).
+    // Distinct from open #365/#368: bham.ac.uk vs birmingham.ac.uk, gla.ac.uk vs
+    // glasgow.ac.uk, liv.ac.uk vs liverpool.ac.uk, ntu.ac.uk vs ntu.edu.sg.
+    // localhost.lib.virginia.edu is nested — do not deny lib.virginia.edu.
+    "localhost.acadiau.ca",
+    "localhost.aut.ac.nz",
+    "localhost.bgu.ac.il",
+    "localhost.bham.ac.uk",
+    "localhost.bowiestate.edu",
+    "localhost.brookes.ac.uk",
+    "localhost.brunel.ac.uk",
+    "localhost.city.ac.uk",
+    "localhost.cqu.edu.au",
+    "localhost.essex.ac.uk",
+    "localhost.gla.ac.uk",
+    "localhost.hull.ac.uk",
+    "localhost.jcu.edu.au",
+    "localhost.kent.ac.uk",
+    "localhost.le.ac.uk",
+    "localhost.lib.virginia.edu",
+    "localhost.liv.ac.uk",
+    "localhost.navy.mil",
+    "localhost.northumbria.ac.uk",
+    "localhost.nps.edu",
+    "localhost.ntu.ac.uk",
+    "localhost.pittstate.edu",
+    "localhost.polyu.edu.hk",
+    "localhost.rhul.ac.uk",
+    "localhost.salford.ac.uk",
+    "localhost.stir.ac.uk",
+    "localhost.strath.ac.uk",
+    "localhost.sussex.ac.uk",
+    "localhost.swan.ac.uk",
+    "localhost.swansea.ac.uk",
+    "localhost.swin.edu.au",
+    "localhost.tau.ac.il",
+    "localhost.ufrgs.br",
+    "localhost.usm.edu",
+    "localhost.utas.edu.au",
+    "localhost.vu.edu.au",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */

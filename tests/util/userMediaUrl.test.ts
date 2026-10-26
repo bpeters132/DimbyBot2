@@ -426,6 +426,50 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("icy://lhst.net/"), true)
         assert.equal(isBlockedUserMediaUrl("ytsearch:http://lhst.net/"), true)
         assert.equal(isBlockedUserMediaUrl("local:http://lhst.net/"), true)
+
+        // Remaining unused localhost.<parent> aliases after #12/#17–#53.
+        // Apex → 127.0.0.1 (Java loopback). Do not deny public parents.
+        // Distinct from open #365/#368 batches (bham vs birmingham, gla vs glasgow,
+        // liv vs liverpool, ntu.ac.uk vs ntu.edu.sg). Nested lib.virginia.edu.
+        const unusedLocalhostAliases = [
+            "localhost.navy.mil",
+            "localhost.nps.edu",
+            "localhost.bham.ac.uk",
+            "localhost.gla.ac.uk",
+            "localhost.liv.ac.uk",
+            "localhost.swan.ac.uk",
+            "localhost.swansea.ac.uk",
+            "localhost.utas.edu.au",
+            "localhost.lib.virginia.edu",
+            "localhost.polyu.edu.hk",
+            "localhost.tau.ac.il",
+            "localhost.ufrgs.br",
+            "localhost.bowiestate.edu",
+            "localhost.city.ac.uk",
+            "localhost.ntu.ac.uk",
+            "localhost.acadiau.ca",
+        ]
+        for (const host of unusedLocalhostAliases) {
+            assert.equal(isBlockedUserMediaUrl(`http://${host}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`http://${host}:5432/`), true)
+            assert.equal(isBlockedUserMediaUrl(`HTTP://${host.toUpperCase()}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`link:http://${host}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`uri:http://${host}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`icy://${host}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`ytsearch:http://${host}/`), true)
+            assert.equal(isBlockedUserMediaUrl(`local:http://${host}/`), true)
+        }
+        assert.equal(isBlockedUserMediaUrl("http://www.navy.mil/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://bham.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://gla.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://utas.edu.au/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://virginia.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://lib.virginia.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://polyu.edu.hk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://bowiestate.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://city.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://ntu.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://acadiau.ca/"), false)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {
