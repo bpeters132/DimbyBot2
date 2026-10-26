@@ -72,8 +72,7 @@ function companionOkFetch(): CompanionFetch {
                 },
             })
         }
-        const href = typeof url === "string" ? url : url.toString()
-        const id = new URL(href, COMPANION_ORIGIN).searchParams.get("id") ?? VIDEO_A
+        const id = new URL(url, COMPANION_ORIGIN).searchParams.get("id") ?? VIDEO_A
         return new Response(null, {
             status: 302,
             headers: { Location: `/companion/videoplayback?id=${id}` },
@@ -90,17 +89,14 @@ function configWithFetch(fetchImpl: CompanionFetch): CompanionPlaybackConfig {
     }
 }
 
-function stuckPlayer(
-    current: Track,
-    guildId = "guild-stuck"
-): Player & { repeatMode: string; playCalls: unknown[] } {
+function stuckPlayer(current: Track, guildId = "guild-stuck"): Player & { playCalls: unknown[] } {
     const playCalls: unknown[] = []
     const listeners = new Map<string, Array<(...args: unknown[]) => void>>()
     const bag = new Map<string, unknown>()
     let currentRef: Track | null = current
     const player = {
         guildId,
-        repeatMode: "off",
+        repeatMode: "off" as Player["repeatMode"],
         playCalls,
         queue: {
             get current() {
@@ -139,7 +135,7 @@ function stuckPlayer(
         set: (key: string, value: unknown) => {
             bag.set(key, value)
         },
-        async setRepeatMode(mode: string) {
+        async setRepeatMode(mode: Player["repeatMode"]) {
             player.repeatMode = mode
         },
         async search(query: string) {
