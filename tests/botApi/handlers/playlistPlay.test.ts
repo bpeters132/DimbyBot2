@@ -11,17 +11,22 @@ const guardOk = {
     permissionResolution: {},
 }
 
-const player = {
-    guildId: GUILD,
-    playing: true,
-    paused: false,
-    position: 0,
-    repeatMode: "off",
-    volume: 100,
-    voiceChannelId: "voice-1",
-    queue: { current: null, tracks: [] as unknown[] },
-    get: () => false,
+function fakePlayer() {
+    return {
+        guildId: GUILD,
+        playing: true,
+        paused: false,
+        position: 0,
+        repeatMode: "off",
+        volume: 100,
+        voiceChannelId: "voice-1",
+        queue: { current: null, tracks: [] as unknown[] },
+        get: () => false,
+    }
 }
+
+const player = fakePlayer()
+const successor = fakePlayer()
 
 const state = {
     guard: guardOk as
@@ -38,6 +43,9 @@ const state = {
         | { ok: false; status: number; error: { error: string } },
     resolved: { resolved: [{}], failed: 0 } as { resolved: unknown[]; failed: number },
     enqueue: { queued: 2 } as { queued: number } | "no_player",
+    livePlayer: player as object | null,
+    destroyCalls: 0,
+    enqueueCalls: 0,
     playlistThrows: false,
     clientThrows: false,
 }
@@ -67,7 +75,10 @@ mock.module("../../../src/util/playlistQueue.js", {
     namedExports: {
         playerHasQueueContent: () => false,
         resolveStoredPlaylistTracks: async () => state.resolved,
-        enqueueResolvedPlaylistTracks: async () => state.enqueue,
+        enqueueResolvedPlaylistTracks: async () => {
+            state.enqueueCalls += 1
+            return state.enqueue
+        },
     },
 })
 
@@ -76,7 +87,14 @@ mock.module("../../../src/lib/botClientRegistry.js", {
         tryGetBotClient: () => null,
         getBotClient: () => {
             if (state.clientThrows) throw new Error("bot down")
-            return { lavalink: { getPlayer: () => player } }
+            return {
+                lavalink: {
+                    getPlayer: () => state.livePlayer,
+                    destroyPlayer: async () => {
+                        state.destroyCalls += 1
+                    },
+                },
+            }
         },
     },
 })
@@ -173,10 +191,40 @@ describe("playerPlaylistPlayPOST", () => {
 
     it("returns 404 when no playlist tracks resolve", async () => {
         state.resolved = { resolved: [], failed: 1 }
+        state.destroyCalls = 0
+        state.livePlayer = player
         const result = await playerPlaylistPlayPOST(new Headers(), GUILD, { playlistId: 1 })
         assert.equal(result.status, 404)
         assert.equal(result.body.ok === false && result.body.error.error, "No matches found.")
+        assert.equal(state.destroyCalls, 1)
         state.resolved = { resolved: [{}], failed: 0 }
+    })
+
+    it("returns 404 and does not destroy a successor when no playlist tracks resolve", async () => {
+        state.resolved = { resolved: [], failed: 1 }
+        state.destroyCalls = 0
+        state.livePlayer = successor
+        const result = await playerPlaylistPlayPOST(new Headers(), GUILD, { playlistId: 1 })
+        assert.equal(result.status, 404)
+        assert.equal(result.body.ok === false && result.body.error.error, "No matches found.")
+        assert.equal(state.destroyCalls, 0)
+        state.resolved = { resolved: [{}], failed: 0 }
+        state.livePlayer = player
+    })
+
+    it("returns 409 and does not enqueue when a successor is live after hydrate", async () => {
+        state.enqueueCalls = 0
+        state.livePlayer = successor
+        const result = await playerPlaylistPlayPOST(new Headers(), GUILD, { playlistId: 1 })
+        assert.equal(result.status, 409)
+        if (result.body.ok === false) {
+            assert.equal(
+                result.body.error.error,
+                "Player stopped before the playlist could be queued. Try again."
+            )
+        }
+        assert.equal(state.enqueueCalls, 0)
+        state.livePlayer = player
     })
 
     it("returns 409 when the player is replaced before enqueue", async () => {

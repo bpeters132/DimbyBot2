@@ -13,6 +13,10 @@ import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
 } from "../../util/sameVoiceChannel.js"
+import {
+    stopLocalPlaybackForUserStop,
+    userStopAffectedLocalPlayback,
+} from "../../util/stopLocalForUserStop.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 import { nextPlayerRepeatMode } from "../../util/playerRepeatMode.js"
 import { updateControlMessage } from "./handleControlChannel.js"
@@ -95,29 +99,10 @@ export async function handleControlButtonInteraction(
             ? interaction.member
             : await guild.members.fetch(interaction.user.id)
 
-    // 3. Get Player
-    const player = client.lavalink?.getPlayer(guildId)
-    if (!player) {
-        client.warn(
-            `[ControlButtonHandler] Player not found for guild ${guildId} when handling button ${customId}.`
-        )
-        await updateControlMessage(client, guildId)
-        try {
-            await interaction.followUp({
-                content: "Player not found. It might have been stopped or disconnected.",
-                ephemeral: true,
-            })
-        } catch {
-            /* Ignore */
-        }
-        return
-    }
-    client.debug(
-        `[ControlButtonHandler] Found player for guild ${guildId}. Connected: ${player.connected}, Playing: ${player.playing}`
-    )
-
-    // 4. Voice channel check — same occupied-VC gate for autoplay and other controls.
+    // 3. Voice channel check before the Lavalink player lookup so control Stop can still
+    // cancel in-flight Play Local / tear down `@discordjs/voice` when the manager slot is empty.
     // Autoplay previously used `player.connected &&`, which skipped the check while disconnected.
+    const player = client.lavalink?.getPlayer(guildId)
     {
         const voiceChannel = member.voice?.channel
         if (!voiceChannel) {
@@ -159,6 +144,46 @@ export async function handleControlButtonInteraction(
             `[ControlButtonHandler] User ${interaction.user.id} is in the correct voice channel (${occupiedVoiceChannelId}).`
         )
     }
+
+    // 4. Get Player — Stop still handles local/pending when Lavalink was already destroyed.
+    if (!player) {
+        if (customId === "control_stop") {
+            const localStop = stopLocalPlaybackForUserStop(client, guildId)
+            if (userStopAffectedLocalPlayback(localStop)) {
+                client.debug(
+                    `[ControlButtonHandler] Stopped local/pending playback with no Lavalink player for guild ${guildId}.`
+                )
+                try {
+                    await interaction.followUp({ content: "BYE!", ephemeral: true })
+                } catch {
+                    /* Ignore */
+                }
+                updateControlMessage(client, guildId).catch((err: unknown) =>
+                    client.error(
+                        `[ControlButtonHandler] Error updating control message after local stop:`,
+                        err
+                    )
+                )
+                return
+            }
+        }
+        client.warn(
+            `[ControlButtonHandler] Player not found for guild ${guildId} when handling button ${customId}.`
+        )
+        await updateControlMessage(client, guildId)
+        try {
+            await interaction.followUp({
+                content: "Player not found. It might have been stopped or disconnected.",
+                ephemeral: true,
+            })
+        } catch {
+            /* Ignore */
+        }
+        return
+    }
+    client.debug(
+        `[ControlButtonHandler] Found player for guild ${guildId}. Connected: ${player.connected}, Playing: ${player.playing}`
+    )
 
     // 5. Execute Action & Update Control Message
     let actionTaken = false
@@ -324,9 +349,24 @@ export async function handleControlButtonInteraction(
             }
             case "control_stop": {
                 try {
+                    // Match /stop: cancel Ready-wait Play Local before Lavalink teardown so
+                    // force-clear cannot race an in-flight handoff that still starts audio.
+                    const localStop = stopLocalPlaybackForUserStop(client, guildId)
                     if (
                         !getLivePlayerIfUnchanged(() => client.lavalink?.getPlayer(guildId), player)
                     ) {
+                        if (userStopAffectedLocalPlayback(localStop)) {
+                            actionTaken = true
+                            client.debug(
+                                `[ControlButtonHandler] Local/pending stopped after player replace for guild ${guildId}.`
+                            )
+                            try {
+                                await interaction.followUp({ content: "BYE!", ephemeral: true })
+                            } catch {
+                                /* Ignore */
+                            }
+                            break
+                        }
                         client.warn(
                             `[ControlButtonHandler] Aborting stop: player replaced for guild ${guildId}.`
                         )

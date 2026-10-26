@@ -5,7 +5,10 @@ import {
     clearPlayerSessionRestoreInProgress,
     setPlayerSessionPersistenceDbForTests,
 } from "../../src/util/playerSessionPersistence.js"
-import { destroyLavalinkPlayerForStop } from "../../src/util/stopLavalinkPlayer.js"
+import {
+    destroyLavalinkPlayerForStop,
+    shouldForceClearSessionAfterLocalOnlyStop,
+} from "../../src/util/stopLavalinkPlayer.js"
 
 afterEach(() => {
     setPlayerSessionPersistenceDbForTests(null)
@@ -33,6 +36,9 @@ describe("destroyLavalinkPlayerForStop", () => {
     })
 
     it("propagates destroy rejection to the caller (no floating promise)", async () => {
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async () => undefined,
+        })
         const player = {
             guildId: "guild-stop-reject",
             destroy: async () => {
@@ -87,8 +93,10 @@ describe("destroyLavalinkPlayerForStop", () => {
         assert.equal(deleted, false)
     })
 
-    it("does not clear the session when destroy rejects", async () => {
-        const guildId = "guild-stop-no-clear-on-fail"
+    it("force-clears when destroy rejects after the manager slot is empty", async () => {
+        // lavalink-client: deletePlayer then await node.destroyPlayer then emit playerDestroy.
+        // When node.destroyPlayer throws, playerDestroy never runs — force-clear must still wipe.
+        const guildId = "guild-stop-clear-on-fail-empty-slot"
         let deleted = false
         setPlayerSessionPersistenceDbForTests({
             deletePlayerSession: async (id) => {
@@ -109,6 +117,80 @@ describe("destroyLavalinkPlayerForStop", () => {
                 ),
             /boom/
         )
+        assert.equal(deleted, true)
+    })
+
+    it("does not force-clear when destroy rejects while the same player is still live", async () => {
+        const guildId = "guild-stop-no-clear-on-fail-still-live"
+        const stillLive = { id: "same-player" }
+        let deleted = false
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async (id) => {
+                if (id === guildId) deleted = true
+            },
+            upsertPlayerSession: async () => undefined,
+        })
+        await assert.rejects(
+            () =>
+                destroyLavalinkPlayerForStop(
+                    {
+                        guildId,
+                        destroy: async () => {
+                            throw new Error("disconnect_failed")
+                        },
+                    },
+                    () => stillLive
+                ),
+            /disconnect_failed/
+        )
         assert.equal(deleted, false)
+    })
+})
+
+describe("shouldForceClearSessionAfterLocalOnlyStop", () => {
+    it("force-clears after local stop when no Lavalink player remains", () => {
+        // LocalHandoffReady under preserve-prior leaves the fuller DB row; /stop must
+        // delete it so the next Lavalink reconnect cannot resurrect the queue.
+        assert.equal(
+            shouldForceClearSessionAfterLocalOnlyStop({
+                stoppedLocal: true,
+                cancelledPendingLocal: false,
+                livePlayerExists: false,
+            }),
+            true
+        )
+    })
+
+    it("force-clears after cancelling an in-flight local handoff with no live player", () => {
+        assert.equal(
+            shouldForceClearSessionAfterLocalOnlyStop({
+                stoppedLocal: false,
+                cancelledPendingLocal: true,
+                livePlayerExists: false,
+            }),
+            true
+        )
+    })
+
+    it("skips when a live Lavalink player still owns the guild", () => {
+        assert.equal(
+            shouldForceClearSessionAfterLocalOnlyStop({
+                stoppedLocal: true,
+                cancelledPendingLocal: true,
+                livePlayerExists: true,
+            }),
+            false
+        )
+    })
+
+    it("skips when nothing local was stopped or cancelled", () => {
+        assert.equal(
+            shouldForceClearSessionAfterLocalOnlyStop({
+                stoppedLocal: false,
+                cancelledPendingLocal: false,
+                livePlayerExists: false,
+            }),
+            false
+        )
     })
 })

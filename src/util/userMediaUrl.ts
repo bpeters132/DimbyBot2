@@ -155,8 +155,9 @@ export function trimmedHttpUrlQuery(query: string): string | null {
  * IPv6 dash-compressed labels (`0--1` → `::1`, `0--ffff-a00-1` → `::ffff:10.0.0.1`),
  * well-known IMDS hostnames (`metadata.goog`),
  * compact IPv4-mapped labels (`ffff-0a000001` → 10.0.0.1) used by sslip-style bounce DNS,
- * and leading-zero IPv4 literals (`010.0.0.1`, `172.017.0.1`) that WHATWG rewrites
- * to a public address while Java `InetAddress` (Lavaplayer) still connects privately.
+ * and leading-zero IPv4 literals (`010.0.0.1`, `010.1`, `172.017.0.1`) that WHATWG
+ * rewrites to a public address while Java `InetAddress` (Lavaplayer) still connects
+ * privately. Short A / A.B / A.B.C forms use the same decimal parse as OpenJDK.
  */
 export function isBlockedUserMediaUrl(query: string): boolean {
     const trimmed = query.trim()
@@ -174,7 +175,7 @@ export function isBlockedUserMediaUrl(query: string): boolean {
             if (isBlockedUserMediaHost(hostname)) return true
             // WHATWG canonicalizes IPv4 with octal/dword/short forms. Lavalink search
             // still receives the original identifier; Java parses leading-zero octets
-            // as decimal (`010.0.0.1` → 10.0.0.1, not 8.0.0.1).
+            // as decimal (`010.0.0.1` → 10.0.0.1, `010.1` → 10.0.0.1, not 8.0.0.1).
             const rawHost = rawHttpUrlHostname(httpUrl)
             if (rawHost && rawHost !== hostname && isBlockedUserMediaHost(rawHost)) return true
         } catch {
@@ -186,8 +187,9 @@ export function isBlockedUserMediaUrl(query: string): boolean {
 
 /**
  * Authority hostname as written in the URL, before WHATWG IPv4 canonicalization.
- * `new URL(...).hostname` rewrites `010.0.0.1` to `8.0.0.1`; this returns `010.0.0.1`
- * so {@link isBlockedIpv4} can apply Java-style decimal octet parsing.
+ * `new URL(...).hostname` rewrites `010.0.0.1` / `010.1` to `8.0.0.1`; this returns
+ * the raw host so {@link isBlockedIpv4} can apply Java-style decimal parsing
+ * (including 1–3 component forms).
  */
 export function rawHttpUrlHostname(url: string): string | null {
     const rewritten = rewriteIcySchemeToHttp(url.trim())
@@ -266,6 +268,614 @@ const DNS_BOUNCE_SUFFIXES = [
     // Public wildcard loopback (apex has no A record today; suffix still covers it).
     "devlocal.me",
     "lhst.net",
+    // Sibling public wildcard loopback zones, distinct from denied `devlocal.me`.
+    // `devlocal.dev` / `devlocal.io` / `devlocal.us` / `devlocal.site`: apex + wildcards
+    // → 127.0.0.1. `devlocal.net` wildcards → 127.0.0.1; apex/www are public parking
+    // (suffix-deny tradeoff like localhost.tv).
+    "devlocal.net",
+    "devlocal.dev",
+    "devlocal.io",
+    "devlocal.us",
+    "devlocal.site",
+    // localdev.xyz: public wildcard loopback (apex/www/foo → 127.0.0.1). Distinct from
+    // denied localdev.me and remaining sibling zones of the reserved `devlocal.*` names.
+    "localdev.xyz",
+    // localh.online: public wildcard loopback. Distinct from denied localh.net / localh.st.
+    "localh.online",
+    // lvh.app: public wildcard loopback sibling of denied lvh.me.
+    "lvh.app",
+    // Charles Proxy documented localhost alias. Apex + unlabeled wildcards
+    // (`foo` / `ssl` / nested `bar.foo`) → 127.0.0.1. Do not deny charlesproxy.com
+    // (public Cloudflare site).
+    "localhost.charlesproxy.com",
+    // Charles short-domain apex localhost alias (chls.pro itself is public).
+    "localhost.chls.pro",
+    // Proxyman / Requestly documented localhost aliases (apex → 127.0.0.1;
+    // unlabeled wildcards empty today; suffix still covers them). Do not deny
+    // proxyman.io / requestly.io (public sites).
+    "localhost.proxyman.io",
+    "localhost.requestly.io",
+    // Sibling of denied localhost.tv: apex localhost.tv.com → 127.0.0.1 (wildcards empty).
+    "localhost.tv.com",
+    // Proxyman .com localhost alias (distinct from localhost.proxyman.io). Do not deny proxyman.com.
+    "localhost.proxyman.com",
+    // Sibling of localdev.xyz: public wildcard loopback under .tech.
+    "localdev.tech",
+    // Yaak API client localhost alias (apex → 127.0.0.1). Do not deny public yaak.app.
+    "localhost.yaak.app",
+    // Bruno API client localhost alias (apex → 127.0.0.1). Do not deny public usebruno.com.
+    "localhost.usebruno.com",
+    // Sibling of localdev.xyz / localdev.tech: public wildcard RFC1918 (10.0.64.4).
+    "localdev.cc",
+    // Sibling public wildcard loopback of localdev.xyz / localdev.tech / localdev.cc.
+    "localdev.space",
+    // HTTP Toolkit documented localhost alias (apex httptoolkit.tech is public).
+    "local.httptoolkit.tech",
+    // LocalStack documented localhost alias (apex/docs localstack.cloud are public).
+    "localhost.localstack.cloud",
+    // Remaining localdev.* sibling public wildcard loopback of open PRs
+    // #313/#320/#323/#325 (`localdev.xyz` / `.tech` / `.cc` / `.space`).
+    "localdev.pw",
+    // Apex has no A today; unlabeled wildcards www/foo/app → 127.0.0.1.
+    "localdev.top",
+    "localdev.pl",
+    // Apex is public Cloudflare; unlabeled wildcards www/foo/app → 127.0.0.1
+    // (suffix-deny tradeoff like localhost.tv).
+    "localdev.hu",
+    // Apex/www are public GitHub Pages; unlabeled wildcards foo/app → 127.0.0.1
+    // (suffix-deny tradeoff like docksal.site).
+    "localdev.it",
+    // Apex has no A today; unlabeled wildcards www/foo/app → 127.0.0.1.
+    "localdev.co.uk",
+    // Sibling of denied localtest.me / localtest.org / localtest.dev.
+    "localtest.top",
+    // Apex-only RFC1918 sink (172.31.254.1); wildcards empty today.
+    "localdev.name",
+    // Fastly unused localhost alias (apex → 127.0.0.1). Do not deny public fastly.net.
+    "localhost.fastly.net",
+    // WireMock Cloud localhost alias (apex → 127.0.0.1). Do not deny public wiremock.io.
+    "localhost.wiremock.io",
+    // Katalon catch-all under localhost.katalon.com → RFC1918 10.50.x. Do not deny public katalon.com.
+    "localhost.katalon.com",
+    // Public wildcard RFC1918 (apex/www/foo/app/api/admin → 192.168.10.3).
+    "islocal.dev",
+    // Sibling of denied localh.net / localh.st: unlabeled wildcards → 192.168.0.1.
+    "localh.de",
+    // Sibling of denied vcap.me: public wildcard loopback.
+    "vcap.cc",
+    // Apex-only public DNS loopback (wildcards empty today; suffix still covers them).
+    "localhost.sg",
+    // Sibling of denied localtest.me / .org / .dev: public wildcard loopback.
+    "localtest.cz",
+    // Sibling of denied devlocal.me: apex/www → 127.0.0.1 (unlabeled foo/app empty today).
+    "devlocal.nl",
+    // Sibling of denied 127001.it: apex-only loopback (wildcards empty today).
+    "127001.info",
+    // Sibling of denied 127001.it: apex-only RFC1918 192.168.2.14 (wildcards empty).
+    "127001.cz",
+    // Sibling of denied 127001.it: unlabeled wildcards → 127.0.0.1/::1 (apex empty).
+    "127001.in",
+    // Sibling of denied docksal.site: unlabeled wildcards → 192.168.64.100
+    // (apex is public Cloudflare; suffix-deny tradeoff like docksal.site).
+    "docksal.dev",
+    // Sibling of islocal.dev: public wildcard RFC1918 192.168.0.3.
+    "islocal.eu",
+    // Sibling of islocal.dev: public wildcard RFC1918 10.11.11.107 (TCP :80/:443 open).
+    "islocal.nl",
+    // Sibling of denied lvh.me: public wildcard loopback.
+    "lvh.sh",
+    // Sibling of localhost.sg: public wildcard loopback (apex + unlabeled names).
+    "localhost.tw",
+    // Sibling of localhost.sg: unlabeled wildcards → 127.0.0.1 (apex empty).
+    "localhost.so",
+    // Internet Archive unused localhost alias (apex + wildcards → 127.0.0.1).
+    // Do not deny public archive.org.
+    "localhost.archive.org",
+    // New Relic unused localhost alias (apex + wildcards → 127.0.0.1).
+    // Do not deny public newrelic.com.
+    "localhost.newrelic.com",
+    // LambdaTest localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public lambdatest.com.
+    "localhost.lambdatest.com",
+    // Ruby on Rails unused localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public rubyonrails.org.
+    "localhost.rubyonrails.org",
+    // First-level unlabeled wildcards → 127.0.0.1. Apex is public parking on
+    // 8.8.8.8 (suffix-deny tradeoff like localhost.tv).
+    "local.cl",
+    // Slovak public wildcard loopback (apex has no A; www/foo/app → 127.0.0.1).
+    "host.sk",
+    // Sibling of denied anyip.dev: unlabeled wildcards (and apex) → 127.0.0.1.
+    // app/api are public Azure (suffix-deny tradeoff like docksal.site).
+    "anyip.cc",
+    // HostGator unused localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public hostgator.com.
+    "localhost.hostgator.com",
+    // DreamHost unused localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public dreamhost.com.
+    "localhost.dreamhost.com",
+    // Unused localhost.host.net alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public host.net.
+    "localhost.host.net",
+    // Unused localhost.host.co.in alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public host.co.in.
+    "localhost.host.co.in",
+    // Unused localhost.host.ca alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public host.ca.
+    "localhost.host.ca",
+    // Unused localhost.host.jp alias (apex → 127.0.0.1; wildcards empty).
+    "localhost.host.jp",
+    // Entire zone (apex + wildcards) → 127.0.53.53 loopback, same class as fbi.com.
+    "corp.com",
+    // Apex + www → 172.16.210.97 RFC1918 (unlabeled wildcards empty). ns1/ns2 are
+    // public nameservers (suffix-deny tradeoff like domaincontrol.com).
+    "host.in",
+    // Sibling of denied 127001.it / 127001.info: apex → 127.0.0.1 (wildcards empty).
+    "127001.lt",
+    // Sibling of denied corp.com: apex + first-level unlabeled wildcards → 127.0.0.1.
+    // Nested bar.foo.corp.co is public parking (suffix-deny tradeoff like local.cl).
+    "corp.co",
+    // Sibling of denied corp.com: unlabeled wildcards including nested bar.foo → 127.0.0.1
+    // (apex has no A; suffix still covers it).
+    "corp.xyz",
+    // Documented public wildcard loopback (apex + unlabeled wildcards including nested).
+    "localfabriek.nl",
+    // Documented HSTS-preloaded localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public qinlili.bid.
+    "local.qinlili.bid",
+    // A2 Hosting unused localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public a2hosting.com.
+    "localhost.a2hosting.com",
+    // AMD unused localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public amd.com.
+    "localhost.amd.com",
+    // Gandi unused localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public gandi.net.
+    "localhost.gandi.net",
+    // HostGator India unused localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Sibling of denied localhost.hostgator.com. Do not deny public hostgator.in.
+    "localhost.hostgator.in",
+    // PHP unused localhost alias (apex → 127.0.0.1; wildcards empty).
+    // Do not deny public php.net.
+    "localhost.php.net",
+    // Unused vendor `localhost.` aliases: public DNS A 127.0.0.1 on the apex only.
+    // Deny the full `localhost.<parent>` label so public parent zones stay allowed
+    // (pair.com, mail.ru, a2hosting.net, gandi.fr, hostgator.com.br, …).
+    "localhost.pair.com",
+    "localhost.pairnic.com",
+    "localhost.pairnetworks.com",
+    "localhost.a2hosting.net",
+    "localhost.a2hosting.org",
+    "localhost.a2hosting.co",
+    "localhost.a2webhosting.com",
+    "localhost.mail.ru",
+    "localhost.rambler.ru",
+    "localhost.justhost.ru",
+    "localhost.masterhost.ru",
+    "localhost.mchost.ru",
+    "localhost.nic.ru",
+    "localhost.rbc.ru",
+    "localhost.gandi.fr",
+    "localhost.online.net",
+    "localhost.hostgator.com.br",
+    "localhost.fatcow.com",
+    "localhost.arvixe.com",
+    // Unused vendor `localhost.` aliases: public DNS A 127.0.0.1 (or RFC1918 for
+    // hopto.org) on the apex. Deny the full `localhost.<parent>` label so public
+    // parent zones stay allowed (123-reg.co.uk, pair.org, no-ip.com, …).
+    "localhost.123-reg.co.uk",
+    "localhost.123-reg.com",
+    "localhost.free.fr",
+    "localhost.online.fr",
+    "localhost.pair.org",
+    "localhost.pair.net",
+    "localhost.pairnic.net",
+    "localhost.amd.net",
+    "localhost.no-ip.org",
+    "localhost.no-ip.com",
+    "localhost.hopto.org",
+    "localhost.zapto.org",
+    "localhost.sytes.net",
+    "localhost.servehttp.com",
+    "localhost.mybluehost.me",
+    "localhost.websitewelcome.com",
+    "localhost.afraid.org",
+    "localhost.siteground.net",
+    "localhost.siteground.org",
+    "localhost.a2webhosting.net",
+    "localhost.infomaniak.ch",
+    "localhost.inmotionhosting.net",
+    "localhost.namecheaphosting.com",
+    "localhost.hostgator.org",
+    "localhost.donuts.domains",
+    "localhost.pir.org",
+    // Remaining No-IP unused localhost aliases after denied localhost.no-ip.com /
+    // no-ip.org / zapto.org / sytes.net / servehttp.com / hopto.org. Apex → 127.0.0.1
+    // except ddnsgeek → 192.168.0.167 RFC1918. Do not deny public parent zones.
+    "localhost.serveftp.com",
+    "localhost.serveftp.net",
+    "localhost.servegame.com",
+    "localhost.myftp.org",
+    "localhost.myftp.biz",
+    "localhost.myvnc.com",
+    "localhost.redirectme.net",
+    "localhost.homelinux.org",
+    "localhost.homelinux.net",
+    "localhost.homeip.net",
+    "localhost.dynalias.com",
+    "localhost.dynalias.net",
+    "localhost.dynalias.org",
+    "localhost.no-ip.info",
+    "localhost.ddnsgeek.com",
+    // Unused vendor localhost aliases → 127.0.0.1. www.localhost.lflink.com is a
+    // public A (suffix-deny tradeoff like localhost.tv). Do not deny public parents.
+    "localhost.freedns.com",
+    "localhost.lflink.com",
+    // SiteGround siblings of denied localhost.siteground.net / .org
+    "localhost.siteground.eu",
+    "localhost.siteground.us",
+    // Remaining unused localhost aliases after prior No-IP/vendor batches. Apex →
+    // 127.0.0.1 on public DNS (localhost.127001.ch also ::1). Do not deny public
+    // parent zones (127001.com / hostnet.nl / whm.com / dedibox.fr / ols.com / …).
+    "localhost.127001.ch",
+    "localhost.127001.com",
+    "localhost.127001.net",
+    "localhost.127001.dk",
+    "localhost.homeunix.com",
+    "localhost.hostnet.nl",
+    "localhost.noip.org",
+    "localhost.serveftp.org",
+    "localhost.servemp3.com",
+    "localhost.webhop.biz",
+    "localhost.webhop.info",
+    "localhost.webhop.net",
+    "localhost.whm.com",
+    "localhost.dedibox.fr",
+    "localhost.ols.com",
+    // Remaining unused No-IP / YDNS localhost aliases (apex → 127.0.0.1 on public DNS).
+    // Do not deny public parents (dnsalias.com / .net / .org, mine.nu, ydns.eu / ydns.org).
+    "localhost.dnsalias.com",
+    "localhost.dnsalias.net",
+    "localhost.dnsalias.org",
+    "localhost.mine.nu",
+    "localhost.ydns.eu",
+    "localhost.ydns.org",
+    // Remaining unused localhost aliases (apex → 127.0.0.1 on public DNS).
+    // Do not deny public parents (homeftp.org, sprinthost.ru, lacnic.net,
+    // apache.com, haproxy.com). Do not deny public localhost.lu / .ro / .be
+    // (only the nested localhost.localhost.* labels bounce).
+    "localhost.homeftp.org",
+    "localhost.sprinthost.ru",
+    "localhost.lacnic.net",
+    "localhost.apache.com",
+    "localhost.haproxy.com",
+    "localhost.sm",
+    "localhost.localhost.lu",
+    "localhost.localhost.ro",
+    "localhost.localhost.be",
+    // Remaining unused localhost aliases after #12/#17–#49. Deny only the
+    // `localhost.*` label (or nested `*.localhost.kasserver.com`) so public
+    // parent sites stay allowed. FreeDNS unused aliases also have AAAA ::1.
+    "localhost.mooo.com",
+    "localhost.strangled.net",
+    "localhost.ignorelist.com",
+    "localhost.crabdance.com",
+    "localhost.jumpingcrab.com",
+    "localhost.twilightparadox.com",
+    "localhost.us.to",
+    "localhost.soon.it",
+    "localhost.undo.it",
+    "localhost.freebsd.org",
+    "localhost.netbsd.org",
+    "localhost.dragonflybsd.org",
+    "localhost.sun.com",
+    "localhost.ox.ac.uk",
+    "localhost.imperial.ac.uk",
+    "localhost.opencart.com",
+    "localhost.panasonic.com",
+    "localhost.micron.com",
+    "localhost.gskill.com",
+    "localhost.webhostingpad.com",
+    "localhost.fatcow.net",
+    "localhost.wiredtree.com",
+    "localhost.softlayer.com",
+    "localhost.kasserver.com",
+    "localhost.csail.mit.edu",
+    "localhost.usenix.org",
+    // Remaining unused localhost aliases after #12/#17–#50. Do not deny public parents
+    // (`doesntexist.com`, `ftp.sh`, `mine.bz`, `wiki.gd`, `x10host.com`, `root.sx`,
+    // `ed.ac.uk`, `cornell.edu`, `columbia.edu`, `autodesk.com`, `ea.com`, `ubisoft.com`,
+    // `lua.org`, `cnn.com`, `nytimes.com`, `citibank.com`, `nih.gov`, `who.int`,
+    // `creativecommons.org`). `h4ck.me` apex is empty today.
+    "localhost.doesntexist.com",
+    "localhost.doesntexist.org",
+    "localhost.ftp.sh",
+    "localhost.h4ck.me",
+    "localhost.mine.bz",
+    "localhost.wiki.gd",
+    "localhost.x10host.com",
+    "localhost.root.sx",
+    "localhost.ed.ac.uk",
+    "localhost.cornell.edu",
+    "localhost.columbia.edu",
+    "localhost.autodesk.com",
+    "localhost.ea.com",
+    "localhost.ubisoft.com",
+    "localhost.lua.org",
+    "localhost.cnn.com",
+    "localhost.nytimes.com",
+    "localhost.citibank.com",
+    "localhost.nih.gov",
+    "localhost.who.int",
+    "localhost.creativecommons.org",
+    // ix.tc: dedicated loopback apex (wildcards empty on public DNS).
+    "ix.tc",
+    // Remaining unused localhost.<parent> aliases after #12/#17–#51 (apex → 127.0.0.1
+    // on Cloudflare+Google DoH unless noted). Do not deny public parents.
+    // RFC1918 siteLocal: localhost.umd.edu → 10.182.100.148 (TCP :80/:443 CONNECTED),
+    // localhost.qut.edu.au → 172.17.161.60, localhost.warnerbros.com → 172.17.19.116.
+    "localhost.3m.com",
+    "localhost.adelaide.edu.au",
+    "localhost.adelphi.edu",
+    "localhost.albany.edu",
+    "localhost.american.edu",
+    "localhost.ansys.com",
+    "localhost.anu.edu.au",
+    "localhost.ap.org",
+    "localhost.arxiv.org",
+    "localhost.asml.com",
+    "localhost.astrazeneca.com",
+    "localhost.auburn.edu",
+    "localhost.auckland.ac.nz",
+    "localhost.bath.ac.uk",
+    "localhost.birmingham.ac.uk",
+    "localhost.bloomberg.com",
+    "localhost.boeing.com",
+    "localhost.bristol.ac.uk",
+    "localhost.britishairways.com",
+    "localhost.buffalo.edu",
+    "localhost.canterbury.ac.nz",
+    "localhost.cardiff.ac.uk",
+    "localhost.cargill.com",
+    "localhost.cbc.ca",
+    "localhost.chalmers.se",
+    "localhost.chevron.com",
+    "localhost.cityu.edu.hk",
+    "localhost.clemson.edu",
+    "localhost.cofc.edu",
+    "localhost.colostate.edu",
+    "localhost.concordia.ca",
+    "localhost.cooper.edu",
+    "localhost.corriere.it",
+    "localhost.csulb.edu",
+    "localhost.cuny.edu",
+    "localhost.daiichisankyo.com",
+    "localhost.dartmouth.edu",
+    "localhost.deloitte.com",
+    "localhost.delta.com",
+    "localhost.disney.com",
+    "localhost.easyjet.com",
+    "localhost.ethz.ch",
+    "localhost.experian.com",
+    "localhost.fastretailing.com",
+    "localhost.fordham.edu",
+    "localhost.fsu.edu",
+    "localhost.fu-berlin.de",
+    "localhost.gao.gov",
+    "localhost.georgetown.edu",
+    "localhost.gov.za",
+    "localhost.gu.se",
+    "localhost.gwu.edu",
+    "localhost.hawaii.edu",
+    "localhost.hyatt.com",
+    "localhost.inria.fr",
+    "localhost.intuit.com",
+    "localhost.jpmorganchase.com",
+    "localhost.kddi.com",
+    "localhost.kennesaw.edu",
+    "localhost.kenyon.edu",
+    "localhost.kering.com",
+    "localhost.ki.se",
+    "localhost.korea.ac.kr",
+    "localhost.ksu.edu",
+    "localhost.latimes.com",
+    "localhost.leeds.ac.uk",
+    "localhost.lehigh.edu",
+    "localhost.lilly.com",
+    "localhost.lsu.edu",
+    "localhost.lu.se",
+    "localhost.marquette.edu",
+    "localhost.mcdonalds.com",
+    "localhost.mckinsey.com",
+    "localhost.mcmaster.ca",
+    "localhost.memphis.edu",
+    "localhost.merck.com",
+    "localhost.miami.edu",
+    "localhost.morganstanley.com",
+    "localhost.msstate.edu",
+    "localhost.msu.edu",
+    "localhost.mtu.edu",
+    "localhost.northeastern.edu",
+    "localhost.northropgrumman.com",
+    "localhost.northwestern.edu",
+    "localhost.nottingham.ac.uk",
+    "localhost.npr.org",
+    "localhost.ntnu.no",
+    "localhost.nus.edu.sg",
+    "localhost.oberlin.edu",
+    "localhost.oecd.org",
+    "localhost.okstate.edu",
+    "localhost.openlibrary.org",
+    "localhost.oregonstate.edu",
+    "localhost.osdi.org",
+    "localhost.osu.edu",
+    "localhost.owu.edu",
+    "localhost.oxy.edu",
+    "localhost.pepperdine.edu",
+    "localhost.pfizer.com",
+    "localhost.pizzahut.com",
+    "localhost.polito.it",
+    "localhost.pratt.edu",
+    "localhost.qatarairways.com",
+    "localhost.qut.edu.au",
+    "localhost.redcross.org",
+    "localhost.rmit.edu.au",
+    "localhost.royalmail.com",
+    "localhost.rpi.edu",
+    "localhost.rutgers.edu",
+    "localhost.sc.edu",
+    "localhost.sdsu.edu",
+    "localhost.sdu.dk",
+    "localhost.sfsu.edu",
+    "localhost.sfu.ca",
+    "localhost.sharp.com",
+    "localhost.sheffield.ac.uk",
+    "localhost.sjsu.edu",
+    "localhost.skidmore.edu",
+    "localhost.southampton.ac.uk",
+    "localhost.suny.edu",
+    "localhost.syracuse.edu",
+    "localhost.tecnico.ulisboa.pt",
+    "localhost.telegraph.co.uk",
+    "localhost.telstra.com.au",
+    "localhost.time.com",
+    "localhost.trulia.com",
+    "localhost.ua.edu",
+    "localhost.ub.edu",
+    "localhost.uc3m.es",
+    "localhost.ucd.ie",
+    "localhost.ucdavis.edu",
+    "localhost.uci.edu",
+    "localhost.ucla.edu",
+    "localhost.ucsb.edu",
+    "localhost.ucsc.edu",
+    "localhost.ucsd.edu",
+    "localhost.uh.edu",
+    "localhost.uib.no",
+    "localhost.uibk.ac.at",
+    "localhost.uio.no",
+    "localhost.uiowa.edu",
+    "localhost.uit.no",
+    "localhost.umassd.edu",
+    "localhost.umd.edu",
+    "localhost.unesco.org",
+    "localhost.unh.edu",
+    "localhost.uni-freiburg.de",
+    "localhost.unibo.it",
+    "localhost.unige.ch",
+    "localhost.unlv.edu",
+    "localhost.unm.edu",
+    "localhost.usc.edu",
+    "localhost.ust.hk",
+    "localhost.utdallas.edu",
+    "localhost.uts.edu.au",
+    "localhost.uu.se",
+    "localhost.uv.es",
+    "localhost.uvm.edu",
+    "localhost.uw.edu",
+    "localhost.uwa.edu.au",
+    "localhost.uwaterloo.ca",
+    "localhost.vanguard.com",
+    "localhost.vt.edu",
+    "localhost.walgreens.com",
+    "localhost.warnerbros.com",
+    "localhost.washington.edu",
+    "localhost.wiley.com",
+    "localhost.williams.edu",
+    "localhost.wmich.edu",
+    "localhost.zeit.de",
+    // Remaining unused localhost.<parent> aliases after #12/#17–#52 (apex → 127.0.0.1
+    // on Cloudflare+Google DoH; Java InetAddress loopback=true). localhost.utexas.edu
+    // also has unlabeled wildcards www/foo/app/api/admin → 127.0.0.1. Do not deny
+    // public parents (bu.edu, utexas.edu, upenn.edu, uchicago.edu, njit.edu, …).
+    // Distinct from open #365 (localhost.osu.edu / #52 batch) — ohio-state.edu is the
+    // hyphenated sibling; soton.ac.uk is distinct from #365 southampton.ac.uk.
+    // www/foo.localhost.conncoll.edu is public docker (suffix-deny tradeoff like docksal.site).
+    "localhost.beloit.edu",
+    "localhost.bgsu.edu",
+    "localhost.bu.edu",
+    "localhost.chapman.edu",
+    "localhost.conncoll.edu",
+    "localhost.cpp.edu",
+    "localhost.cwru.edu",
+    "localhost.duq.edu",
+    "localhost.edinburgh.ac.uk",
+    "localhost.ewu.edu",
+    "localhost.fiu.edu",
+    "localhost.furman.edu",
+    "localhost.gw.edu",
+    "localhost.hmc.edu",
+    "localhost.humboldt.edu",
+    "localhost.iupui.edu",
+    "localhost.jmu.edu",
+    "localhost.latrobe.edu.au",
+    "localhost.lawrence.edu",
+    "localhost.louisville.edu",
+    "localhost.loyola.edu",
+    "localhost.mq.edu.au",
+    "localhost.mst.edu",
+    "localhost.niu.edu",
+    "localhost.njit.edu",
+    "localhost.ohio-state.edu",
+    "localhost.rit.edu",
+    "localhost.sonoma.edu",
+    "localhost.soton.ac.uk",
+    "localhost.towson.edu",
+    "localhost.uchicago.edu",
+    "localhost.udel.edu",
+    "localhost.uic.edu",
+    "localhost.uidaho.edu",
+    "localhost.umbc.edu",
+    "localhost.umkc.edu",
+    "localhost.umsl.edu",
+    "localhost.unf.edu",
+    "localhost.upenn.edu",
+    "localhost.utexas.edu",
+    "localhost.uva.edu",
+    "localhost.uwo.ca",
+    "localhost.wesleyan.edu",
+    // Remaining unused localhost.<parent> aliases after #12/#17–#53 (apex → 127.0.0.1
+    // on Cloudflare+Google DoH; Java InetAddress loopback=true). Do not deny public
+    // parents (navy.mil / www.navy.mil, bham.ac.uk, gla.ac.uk, virginia.edu, …).
+    // Distinct from open #365/#368: bham.ac.uk vs birmingham.ac.uk, gla.ac.uk vs
+    // glasgow.ac.uk, liv.ac.uk vs liverpool.ac.uk, ntu.ac.uk vs ntu.edu.sg.
+    // localhost.lib.virginia.edu is nested — do not deny lib.virginia.edu.
+    "localhost.acadiau.ca",
+    "localhost.aut.ac.nz",
+    "localhost.bgu.ac.il",
+    "localhost.bham.ac.uk",
+    "localhost.bowiestate.edu",
+    "localhost.brookes.ac.uk",
+    "localhost.brunel.ac.uk",
+    "localhost.city.ac.uk",
+    "localhost.cqu.edu.au",
+    "localhost.essex.ac.uk",
+    "localhost.gla.ac.uk",
+    "localhost.hull.ac.uk",
+    "localhost.jcu.edu.au",
+    "localhost.kent.ac.uk",
+    "localhost.le.ac.uk",
+    "localhost.lib.virginia.edu",
+    "localhost.liv.ac.uk",
+    "localhost.navy.mil",
+    "localhost.northumbria.ac.uk",
+    "localhost.nps.edu",
+    "localhost.ntu.ac.uk",
+    "localhost.pittstate.edu",
+    "localhost.polyu.edu.hk",
+    "localhost.rhul.ac.uk",
+    "localhost.salford.ac.uk",
+    "localhost.stir.ac.uk",
+    "localhost.strath.ac.uk",
+    "localhost.sussex.ac.uk",
+    "localhost.swan.ac.uk",
+    "localhost.swansea.ac.uk",
+    "localhost.swin.edu.au",
+    "localhost.tau.ac.il",
+    "localhost.ufrgs.br",
+    "localhost.usm.edu",
+    "localhost.utas.edu.au",
+    "localhost.vu.edu.au",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
@@ -407,13 +1017,46 @@ function mappedIpv4FromV6(host: string): string | null {
     return `${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}`
 }
 
+/**
+ * OpenJDK `IPAddressUtil.textToNumericFormatV4`: decimal digits only, 1–4 dotted
+ * components. Last component fills the remaining 8/16/24/32 bits. Leading zeros
+ * are decimal (`010` → 10), unlike WHATWG octal (`010` → 8).
+ */
+function javaDecimalIpv4Octets(host: string): [number, number, number, number] | null {
+    const len = host.length
+    if (len === 0 || len > 15) return null
+    const res = [0, 0, 0, 0]
+    let tmpValue = 0
+    let currByte = 0
+    let newOctet = true
+    for (let i = 0; i < len; i++) {
+        const c = host.charCodeAt(i)
+        if (c === 46) {
+            if (newOctet || tmpValue < 0 || tmpValue > 0xff || currByte === 3) return null
+            res[currByte++] = tmpValue & 0xff
+            tmpValue = 0
+            newOctet = true
+            continue
+        }
+        const digit = c >= 48 && c <= 57 ? c - 48 : -1
+        if (digit < 0) return null
+        tmpValue = tmpValue * 10 + digit
+        newOctet = false
+    }
+    // Java uses a long left-shift; `1 << 32` is 1 in JS, so use exponentiation.
+    if (newOctet || tmpValue < 0 || tmpValue >= 2 ** ((4 - currByte) * 8)) return null
+    if (currByte === 0) res[0] = (tmpValue >>> 24) & 0xff
+    if (currByte <= 1) res[1] = (tmpValue >>> 16) & 0xff
+    if (currByte <= 2) res[2] = (tmpValue >>> 8) & 0xff
+    res[3] = tmpValue & 0xff
+    return res as [number, number, number, number]
+}
+
 function isBlockedIpv4(host: string): boolean {
-    const parts = host.split(".")
-    if (parts.length !== 4) return false
-    const octets = parts.map((part) => Number(part))
-    if (octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false
-    const a = octets[0]!
-    const b = octets[1]!
+    const octets = javaDecimalIpv4Octets(host)
+    if (!octets) return false
+    const a = octets[0]
+    const b = octets[1]
     if (a === 0 || a === 10 || a === 127) return true
     if (a === 169 && b === 254) return true
     if (a === 192 && b === 168) return true

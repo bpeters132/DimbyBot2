@@ -50,6 +50,19 @@ export function shouldClearSessionAfterLocalHandoffReady(
     return livePlayer == null || livePlayer === handoffPlayer
 }
 
+/**
+ * After local VC Ready, abort starting @discordjs/voice when a successor Lavalink
+ * player owns the guild. Skipping only the session clear (prior behavior) left dual
+ * playback: local audio fighting the concurrent `/play` or Dashboard enqueue that
+ * installed the successor during the Ready wait.
+ */
+export function shouldAbortLocalAudioForSuccessorAtReady(
+    handoffPlayer: object,
+    livePlayer: object | null | undefined
+): boolean {
+    return !shouldClearSessionAfterLocalHandoffReady(handoffPlayer, livePlayer)
+}
+
 /** @deprecated Use {@link shouldClearSessionAfterLocalHandoffReady} (same semantics). */
 export function shouldClearSessionAfterFailedHandoffDestroy(
     handoffPlayer: object,

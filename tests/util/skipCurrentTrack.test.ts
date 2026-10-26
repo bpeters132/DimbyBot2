@@ -124,4 +124,38 @@ describe("skipCurrentTrack", () => {
         assert.deepEqual(originalCalls, [])
         assert.deepEqual(successorCalls, [])
     })
+
+    it("advances only once when two skips race after companion prepare", async () => {
+        const current = nativeTrack("now")
+        const next = nativeTrack("next")
+        const later = nativeTrack("later")
+        const upcoming = [next, later]
+        let skipCount = 0
+        const player = {
+            guildId: "guild-skip-double",
+            queue: {
+                current,
+                get tracks() {
+                    return upcoming
+                },
+            },
+            skip: async () => {
+                skipCount += 1
+                // Mirror lavalink-client: current becomes former upcoming[0].
+                player.queue.current = upcoming.shift() ?? null
+            },
+        }
+
+        const [first, second] = await Promise.all([
+            skipCurrentTrack(player),
+            skipCurrentTrack(player),
+        ])
+
+        assert.equal(first, "skipped")
+        assert.equal(second, "skipped")
+        assert.equal(skipCount, 1)
+        assert.equal(player.queue.current?.info.title, "next")
+        assert.equal(upcoming.length, 1)
+        assert.equal(upcoming[0]?.info.title, "later")
+    })
 })

@@ -63,6 +63,19 @@ function createPlayer(guildId: string) {
         async destroy() {},
         async skip() {},
         async stopPlaying() {},
+        async play() {
+            return player
+        },
+        async setRepeatMode(mode: string) {
+            player.repeatMode = mode
+        },
+        LavalinkManager: {
+            on() {},
+            off() {},
+        },
+        node: {
+            async updatePlayer() {},
+        },
     }
     return player
 }
@@ -170,6 +183,30 @@ describe("lavaManagerEvents", () => {
         assert.equal(sent[0], "Track stuck: **Stuck**")
     })
 
+    it("arms library autoSkip play when trackEnd leaves an unprepared YouTube head", async () => {
+        const { client, handlers, players } = createHarness()
+        const player = createPlayer("guild-end-jit")
+        player.queue.current = {
+            encoded: "",
+            info: {
+                title: "Next",
+                author: "Artist",
+                uri: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                duration: 1000,
+                isStream: false,
+                sourceName: "youtube",
+                identifier: "dQw4w9WgXcQ",
+            },
+            requester: "user-1",
+            userData: { queueMetadata: true },
+        }
+        players.set(player.guildId, player)
+        const playBefore = player.play
+        await lavaManagerEvents(client as never)
+        await handlers.get("trackEnd")?.[0]?.(player, track("Ended"), { reason: "finished" })
+        assert.notEqual(player.play, playBefore)
+    })
+
     it("sends a detailed message when audio streams are unsupported", async () => {
         const { client, handlers, sent, players } = createHarness()
         const player = createPlayer("guild-age")
@@ -270,6 +307,41 @@ describe("lavaManagerEvents", () => {
         } finally {
             mock.timers.reset()
         }
+    })
+
+    it("arms autoReconnect play prepare from the playerReconnect listener", async () => {
+        const { client, handlers, players } = createHarness()
+        const player = createPlayer("guild-reconnect")
+        player.queue.current = {
+            encoded: "",
+            info: {
+                title: "Queued",
+                author: "Artist",
+                uri: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                duration: 1000,
+                isStream: false,
+                sourceName: "youtube",
+                identifier: "dQw4w9WgXcQ",
+            },
+            requester: "user-1",
+            userData: { queueMetadata: true },
+        }
+        players.set(player.guildId, player)
+        await lavaManagerEvents(client as never)
+        const before = player.play
+        await handlers.get("playerReconnect")?.[0]?.(player)
+        assert.notEqual(player.play, before)
+    })
+
+    it("does not wrap play on playerReconnect when current is already ready", async () => {
+        const { client, handlers, players } = createHarness()
+        const player = createPlayer("guild-reconnect-ready")
+        player.queue.current = track("Ready")
+        players.set(player.guildId, player)
+        await lavaManagerEvents(client as never)
+        const before = player.play
+        await handlers.get("playerReconnect")?.[0]?.(player)
+        assert.equal(player.play, before)
     })
 
     it("logs when clearing the player session fails", async () => {

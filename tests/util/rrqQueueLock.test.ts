@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { describe, it } from "node:test"
+import { afterEach, describe, it } from "node:test"
 import type { Player, Track } from "lavalink-client"
 import { createGuildAsyncChain } from "../../src/util/guildAsyncChain.js"
 import { withGuildPlayerQueueLock } from "../../src/util/guildPlayerQueueLock.js"
@@ -8,6 +8,12 @@ import {
     removeAndRebalanceRrqAfterDisconnect,
     stampRequesterUserIdOnTracks,
 } from "../../src/util/rrqDisconnect.js"
+import {
+    clearPlayerSessionPreservePriorSnapshot,
+    getSessionClearEpochForTests,
+    markPlayerSessionPreservePriorSnapshot,
+    setPlayerSessionPersistenceDbForTests,
+} from "../../src/util/playerSessionPersistence.js"
 
 function mockTrack(id: string, requesterId: string): Track {
     return {
@@ -28,15 +34,24 @@ function mockTrack(id: string, requesterId: string): Track {
     } as unknown as Track
 }
 
-function mockMutablePlayer(guildId: string, initial: Track[] = []): Player {
+function mockMutablePlayer(
+    guildId: string,
+    initial: Track[] = [],
+    current: Track | null = null
+): Player {
     const tracks = [...initial]
     const store = new Map<string, unknown>()
     store.set("rrqEnabled", true)
     return {
         guildId,
-        playing: true,
+        voiceChannelId: "vc-1",
+        textChannelId: "tc-1",
+        volume: 100,
+        repeatMode: "off",
+        paused: false,
+        playing: current != null,
         queue: {
-            current: null,
+            current,
             tracks,
             add(items: Track | Track[], index?: number) {
                 const list = Array.isArray(items) ? items : [items]
@@ -57,6 +72,12 @@ function mockMutablePlayer(guildId: string, initial: Track[] = []): Player {
 }
 
 describe("RRQ vs guild queue lock", () => {
+    afterEach(() => {
+        setPlayerSessionPersistenceDbForTests(null)
+        clearPlayerSessionPreservePriorSnapshot("guild-rrq-null-current-clear")
+        clearPlayerSessionPreservePriorSnapshot("guild-rrq-preserve-prior-empty")
+    })
+
     it("legacy separate RRQ chain can resurrect tracks after a guild-locked clear", async () => {
         // Documents the pre-fix race: RRQ splice on its own chain after clear under guild lock.
         const guildId = "guild-rrq-legacy-race"
@@ -157,5 +178,86 @@ describe("RRQ vs guild queue lock", () => {
         assert.equal(removed, 2)
         assert.equal(player.queue.tracks.length, 1)
         assert.equal(player.queue.tracks[0]?.info.title, "b1")
+    })
+
+    it("force-clears the session when RRQ remove empties a null-current queue", async () => {
+        // Deferred startPlayback leaves {current:null, queue:[...]}. RRQ disconnect can
+        // remove every upcoming track; scheduleSave would no-op on the null snapshot and
+        // leave the prior DB row for restore resurrection.
+        const guildId = "guild-rrq-null-current-clear"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async (id) => {
+                events.push(`delete:${id}`)
+            },
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+        })
+        const a1 = mockTrack("a1", "user-a")
+        const a2 = mockTrack("a2", "user-a")
+        stampRequesterUserIdOnTracks([a1, a2], "user-a")
+        const player = mockMutablePlayer(guildId, [a1, a2], null)
+        const epochBefore = getSessionClearEpochForTests(guildId)
+
+        const removed = await removeAndRebalanceRrqAfterDisconnect(player, "user-a")
+        assert.equal(removed, 2)
+        assert.equal(player.queue.tracks.length, 0)
+        assert.deepEqual(events, [`delete:${guildId}`])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore + 1)
+    })
+
+    it("does not force-clear an empty null-current queue while preserve-prior is set", async () => {
+        // Partial restore keeps the fuller DB row until /stop or /leave. RRQ emptying
+        // the thin live queue must not wipe unrestored tracks (#240).
+        const guildId = "guild-rrq-preserve-prior-empty"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async (id) => {
+                events.push(`delete:${id}`)
+            },
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+        })
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        const a1 = mockTrack("a1", "user-a")
+        stampRequesterUserIdOnTracks([a1], "user-a")
+        const player = mockMutablePlayer(guildId, [a1], null)
+        const epochBefore = getSessionClearEpochForTests(guildId)
+
+        const removed = await removeAndRebalanceRrqAfterDisconnect(player, "user-a")
+        assert.equal(removed, 1)
+        assert.equal(player.queue.tracks.length, 0)
+        assert.deepEqual(events, [])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore)
+        clearPlayerSessionPreservePriorSnapshot(guildId)
+    })
+
+    it("schedules a save when RRQ remove leaves a restorable current track", async () => {
+        const guildId = "guild-rrq-keep-current-save"
+        const events: string[] = []
+        setPlayerSessionPersistenceDbForTests({
+            deletePlayerSession: async (id) => {
+                events.push(`delete:${id}`)
+            },
+            upsertPlayerSession: async () => {
+                events.push("upsert")
+            },
+        })
+        const current = mockTrack("now", "user-b")
+        const a1 = mockTrack("a1", "user-a")
+        stampRequesterUserIdOnTracks([a1], "user-a")
+        stampRequesterUserIdOnTracks([current], "user-b")
+        const player = mockMutablePlayer(guildId, [a1], current)
+        const epochBefore = getSessionClearEpochForTests(guildId)
+
+        const removed = await removeAndRebalanceRrqAfterDisconnect(player, "user-a")
+        assert.equal(removed, 1)
+        assert.equal(player.queue.current, current)
+        assert.equal(player.queue.tracks.length, 0)
+        // Debounced save — no immediate upsert/delete; epoch unchanged (not force-cleared).
+        assert.deepEqual(events, [])
+        assert.equal(getSessionClearEpochForTests(guildId), epochBefore)
     })
 })

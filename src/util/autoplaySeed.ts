@@ -90,3 +90,21 @@ export function shouldStillInjectAutoplayTrack(player: Player): boolean {
     if (player.paused) return false
     return true
 }
+
+/**
+ * lavalink-client 2.9.9 `queueEnd` always `queueTrackEnd()`s when upcoming is non-empty
+ * after `autoPlayFunction`, even if `current` is already set. That skips the live current
+ * (user `/play` playlist or a second enqueue during the catalog search) into `previous`.
+ * Park current at the front of upcoming so the library promotes the same track back.
+ *
+ * No-ops when there is no current or no upcoming — successful single-track autoplay
+ * inject already called `play()`, which left `current` set and `tracks` empty.
+ */
+export function parkCurrentForLibraryAutoplayAdvance(player: Player): boolean {
+    const current = player.queue?.current
+    const tracks = player.queue?.tracks
+    if (!current || !Array.isArray(tracks) || tracks.length === 0) return false
+    tracks.unshift(current)
+    player.queue.current = null
+    return true
+}

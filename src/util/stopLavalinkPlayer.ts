@@ -1,14 +1,19 @@
 import { forceClearPlayerSessionAfterDestroyIfSafe } from "./playerSessionPersistence.js"
 
 /**
- * Destroys a Lavalink player from `/stop` (and control/web stop), awaiting completion so
- * failures cannot become unhandled rejections (Node 24+ exits the process on those).
+ * Destroys a Lavalink player from `/stop`, `/leave`, and control/web stop, awaiting
+ * completion so failures cannot become unhandled rejections (Node 24+ exits on those).
  *
- * Also force-clears the persisted session when no successor owns the guild:
+ * Also force-clears the persisted session when no live player owns the guild:
  * `playerDestroy` → `clearPlayerSession` is a no-op while session restore is in progress,
  * which would otherwise resurrect the stopped queue on the next Lavalink reconnect.
- * When a concurrent `/play` installed a successor during `destroy()`, skip force-clear
- * (same identity rule as `playerDestroy` skip-successor).
+ *
+ * Force-clear runs in `finally` so a throw from `node.destroyPlayer` after the manager
+ * cache delete (lavalink-client emits `playerDestroy` only after that await) cannot skip
+ * the clear and leave a durable row for restore. When destroy fails earlier and the same
+ * player is still live, {@link forceClearPlayerSessionAfterDestroyIfSafe} no-ops.
+ * A concurrent `/play` successor also skips force-clear (same identity rule as
+ * `playerDestroy` skip-successor).
  */
 export async function destroyLavalinkPlayerForStop(
     player: {
@@ -17,6 +22,26 @@ export async function destroyLavalinkPlayerForStop(
     },
     getLivePlayer: () => object | null | undefined
 ): Promise<void> {
-    await player.destroy()
-    await forceClearPlayerSessionAfterDestroyIfSafe(player.guildId, player, getLivePlayer)
+    try {
+        await player.destroy()
+    } finally {
+        await forceClearPlayerSessionAfterDestroyIfSafe(player.guildId, player, getLivePlayer)
+    }
+}
+
+/**
+ * Whether `/stop` must force-clear a leftover session after local-only teardown.
+ *
+ * Local handoff Ready under preserve-prior intentionally leaves the fuller DB row
+ * (`LocalHandoffReady`). `/leave` force-clears on its absent-Lavalink path; `/stop`
+ * previously only cleared via Lavalink destroy — so stopping local playback left the
+ * row and the next Lavalink reconnect resurrected the queue.
+ */
+export function shouldForceClearSessionAfterLocalOnlyStop(options: {
+    stoppedLocal: boolean
+    cancelledPendingLocal: boolean
+    livePlayerExists: boolean
+}): boolean {
+    if (options.livePlayerExists) return false
+    return options.stoppedLocal || options.cancelledPendingLocal
 }

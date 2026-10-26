@@ -13,7 +13,11 @@ import {
     memberMayJoinOccupiedVoice,
     resolveOccupiedVoiceChannelId,
 } from "../../util/sameVoiceChannel.js"
-import { destroyLavalinkPlayerForStop } from "../../util/stopLavalinkPlayer.js"
+import { forceClearPlayerSessionIfNoLivePlayer } from "../../util/playerSessionPersistence.js"
+import {
+    destroyLavalinkPlayerForStop,
+    shouldForceClearSessionAfterLocalOnlyStop,
+} from "../../util/stopLavalinkPlayer.js"
 import { resolveStopCommandReply } from "../../util/stopCommandReply.js"
 
 export default {
@@ -108,6 +112,28 @@ export default {
                 client.error(
                     `[StopCmd] Failed to destroy Lavalink player for guild ${guild.id}:`,
                     destroyErr
+                )
+            }
+        }
+
+        // Local-only (or cancelled handoff) stop: no Lavalink destroy ran, so the session
+        // row left by LocalHandoffReady under preserve-prior would otherwise survive and
+        // resurrect on the next Lavalink reconnect. `/leave` already force-clears here.
+        if (
+            shouldForceClearSessionAfterLocalOnlyStop({
+                stoppedLocal,
+                cancelledPendingLocal,
+                livePlayerExists: client.lavalink.getPlayer(guild.id) != null,
+            })
+        ) {
+            try {
+                await forceClearPlayerSessionIfNoLivePlayer(guild.id, () =>
+                    client.lavalink.getPlayer(guild.id)
+                )
+            } catch (clearErr: unknown) {
+                client.error(
+                    `[StopCmd] Failed to force-clear session after local stop for guild ${guild.id}:`,
+                    clearErr
                 )
             }
         }

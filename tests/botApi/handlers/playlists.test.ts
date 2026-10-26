@@ -59,6 +59,7 @@ const repo = {
     moveThrows: null as null | "missing" | "boom",
     removeThrows: null as null | "missing" | "boom",
     getThrows: false,
+    vanishAfterGet: false,
 }
 
 const players = new Map<string, { search: (query: string) => Promise<unknown> }>()
@@ -101,22 +102,31 @@ mock.module("../../../src/repositories/playlistRepository.js", {
         },
         getPlaylistById: async () => {
             if (repo.getThrows) throw new Error("db")
+            if (repo.vanishAfterGet) {
+                const current = repo.playlist
+                repo.playlist = null
+                repo.vanishAfterGet = false
+                return current
+            }
             return repo.playlist
         },
         deletePlaylistById: async () => {
             if (repo.deleteThrows === "missing") throw new PlaylistNotFoundError()
             if (repo.deleteThrows === "boom") throw new Error("db")
         },
-        addTrackToPlaylist: async () => ({
-            id: 4,
-            title: "Song",
-            uri: "https://example.com/song",
-            author: "Artist",
-            duration: 10,
-            thumbnailUrl: null,
-            addedAt: now,
-            position: 1,
-        }),
+        addTrackToPlaylist: async () => {
+            if (repo.addThrows) throw new Error("db")
+            return {
+                id: 4,
+                title: "Song",
+                uri: "https://example.com/song",
+                author: "Artist",
+                duration: 10,
+                thumbnailUrl: null,
+                addedAt: now,
+                position: 1,
+            }
+        },
         addTracksToPlaylist: async () => [
             {
                 id: 4,
@@ -265,6 +275,14 @@ describe("playlist handlers", () => {
         if (result.body.ok) assert.equal(result.body.data.name, "Mix")
     })
 
+    it("returns 500 when loading an owned playlist throws", async () => {
+        repo.getThrows = true
+        const result = await playlistsDetailGET(new Headers(), "1")
+        assert.equal(result.status, 500)
+        assert.equal(result.body.ok === false && result.body.error.error, "internal_error")
+        repo.getThrows = false
+    })
+
     it("returns 404 when delete races a missing playlist", async () => {
         repo.deleteThrows = "missing"
         const result = await playlistsDELETE(new Headers(), "1")
@@ -294,10 +312,33 @@ describe("playlist handlers", () => {
         assert.equal(details(result), "That URL isn't allowed.")
     })
 
+    it("returns 400 for a local filesystem track URI", async () => {
+        const result = await playlistTracksPOST(new Headers(), "1", {
+            ...trackBody,
+            uri: "local:/app/downloads/999888777666555444_abcd_song.wav",
+        })
+        assert.equal(result.status, 400)
+        assert.equal(details(result), "That local file path isn't allowed.")
+    })
+
     it("returns the added track", async () => {
         const result = await playlistTracksPOST(new Headers(), "1", trackBody)
         assert.equal(result.status, 201)
         if (result.body.ok) assert.equal(result.body.data.title, "Song")
+    })
+
+    it("returns 500 when adding a track throws", async () => {
+        repo.addThrows = true
+        const result = await playlistTracksPOST(new Headers(), "1", trackBody)
+        assert.equal(result.status, 500)
+        assert.equal(details(result), "Internal server error.")
+        repo.addThrows = false
+    })
+
+    it("returns 400 when a from-query body is missing", async () => {
+        const result = await playlistTracksFromQueryPOST(new Headers(), "1", null)
+        assert.equal(result.status, 400)
+        assert.equal(details(result), "Expected JSON body with query.")
     })
 
     it("returns 400 when a from-query body has no query", async () => {
@@ -372,6 +413,15 @@ describe("playlist handlers", () => {
         if (result.body.ok) assert.equal(result.body.data.id, 1)
     })
 
+    it("returns 404 when the playlist vanishes after a move", async () => {
+        repo.playlist = ownedPlaylist()
+        repo.vanishAfterGet = true
+        const result = await playlistTrackMovePATCH(new Headers(), "1", "1", { newPosition: 2 })
+        assert.equal(result.status, 404)
+        assert.equal(details(result), "Playlist not found.")
+        repo.playlist = ownedPlaylist()
+    })
+
     it("returns 400 for an invalid track id", async () => {
         const result = await playlistTracksDELETE(new Headers(), "1", "0")
         assert.equal(result.status, 400)
@@ -390,5 +440,14 @@ describe("playlist handlers", () => {
         const result = await playlistTracksDELETE(new Headers(), "1", "9")
         assert.equal(result.status, 200)
         if (result.body.ok) assert.equal(result.body.data.removed, true)
+    })
+
+    it("returns 404 when remove races a missing track", async () => {
+        repo.playlist = ownedPlaylist([{ id: 9 }])
+        repo.removeThrows = "missing"
+        const result = await playlistTracksDELETE(new Headers(), "1", "9")
+        assert.equal(result.status, 404)
+        assert.equal(details(result), "Track not found.")
+        repo.removeThrows = null
     })
 })

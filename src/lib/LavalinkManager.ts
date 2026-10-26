@@ -24,6 +24,7 @@ import {
 } from "../util/autoplayHistory.js"
 import {
     isAllowedSearchLoadType,
+    parkCurrentForLibraryAutoplayAdvance,
     resolveAutoplaySeed,
     shouldStillInjectAutoplayTrack,
 } from "../util/autoplaySeed.js"
@@ -394,6 +395,10 @@ export default function createLavalinkManager(client: BotClient): LavalinkManage
                     } catch (e: unknown) {
                         const msg = e instanceof Error ? e.message : String(e)
                         client.error(`[LavalinkManager] Autoplay crashed: ${msg}`, e)
+                    } finally {
+                        // User enqueue+play during this await leaves current+upcoming set.
+                        // Library queueEnd still queueTrackEnd()s non-empty upcoming.
+                        parkCurrentForLibraryAutoplayAdvance(player)
                     }
                 },
             },

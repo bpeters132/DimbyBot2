@@ -52,7 +52,12 @@ import {
     retryCompanionPlaybackOnce,
     schedulePrefetchWindow,
 } from "../util/youtubePlaybackWindow.js"
-import { shouldApplicationSkipOnTrackStuck } from "../util/trackStuckAdvance.js"
+import {
+    armTrackStuckPlayPrepare,
+    shouldApplicationSkipOnTrackStuck,
+} from "../util/trackStuckAdvance.js"
+import { armLibraryAutoSkipPlayPrepare } from "../util/libraryAutoSkipPlayPrepare.js"
+import { armAutoReconnectPlayPrepare } from "../util/autoReconnectPlayPrepare.js"
 import { endCurrentTrackForAutoplay } from "../util/endCurrentTrackForAutoplay.js"
 import { safeIdlePlayerDestroy } from "../util/safeIdlePlayerDestroy.js"
 import { resolveTrackErrorRecoveryTarget } from "../util/trackErrorRecovery.js"
@@ -176,6 +181,12 @@ export default async (client: BotClient) => {
                 schedulePlayerSessionSave(player)
             }
         )
+        .on("playerReconnect", (player: Player) => {
+            client.debug(`[LavaMgrEvents] Player reconnected in Guild: ${player.guildId}`)
+            // lavalink-client autoReconnect emits then play()s without JIT prepare.
+            // Arm synchronously: emit is not awaited before that play().
+            armAutoReconnectPlayPrepare(player, () => client.lavalink.getPlayer(player.guildId))
+        })
 
         /**
          * Track Playback Events
@@ -265,6 +276,11 @@ export default async (client: BotClient) => {
             }
         })
         .on("trackEnd", (player: Player, track: Track | null, payload: TrackEndEvent) => {
+            // Library already ran queueTrackEnd before emit; autoSkip play() follows without
+            // awaiting listeners. Unprepared Queue metadata (encoded:"") null-stops the node
+            // and TrackEnd(stopped) advances again — cascading through the remaining queue.
+            // Arm synchronously so the next play hydrates first (distinct from trackStuck #311).
+            armLibraryAutoSkipPlayPrepare(player, () => client.lavalink.getPlayer(player.guildId))
             client.debug(
                 `[LavaMgrEvents] Track ended in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "N/A"}, Reason: ${payload.reason}`
             )
@@ -299,7 +315,15 @@ export default async (client: BotClient) => {
             }
             // lavalink-client advances after emit (queueTrackEnd + play / empty → null track).
             // A second skip races that path and can drop the next good track — see trackStuckAdvance.
-            if (shouldApplicationSkipOnTrackStuck()) {
+            // Arm play() first (sync): library does not await this listener before queueTrackEnd+play.
+            // Playing encoded:"" null-stops the node and TrackEnd(stopped) advances again past the
+            // JIT metadata head.
+            if (!shouldApplicationSkipOnTrackStuck()) {
+                armTrackStuckPlayPrepare(player, () => client.lavalink.getPlayer(player.guildId))
+                client.debug(
+                    `[LavaMgrEvents] Stuck track reported for guild ${player.guildId}; library will advance.`
+                )
+            } else {
                 try {
                     await skipCurrentTrack(player, undefined, () =>
                         client.lavalink.getPlayer(player.guildId)
@@ -310,10 +334,6 @@ export default async (client: BotClient) => {
                         e
                     )
                 }
-            } else {
-                client.debug(
-                    `[LavaMgrEvents] Stuck track reported for guild ${player.guildId}; library will advance.`
-                )
             }
         })
         .on(

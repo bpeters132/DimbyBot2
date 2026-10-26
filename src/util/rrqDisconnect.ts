@@ -2,7 +2,12 @@ import type { Player, Track, UnresolvedTrack } from "lavalink-client"
 import type { RRQDisconnectedUsersMap } from "../types/index.js"
 import { tryGetBotClient } from "../lib/botClientRegistry.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
-import { schedulePlayerSessionSave } from "./playerSessionPersistence.js"
+import {
+    forceClearPlayerSession,
+    schedulePlayerSessionSave,
+    shouldPreservePriorPlayerSessionSnapshot,
+    snapshotFromPlayer,
+} from "./playerSessionPersistence.js"
 
 const RRQ_DISCONNECTED_USERS_KEY = "rrqDisconnectedUsers"
 const RRQ_ENABLED_KEY = "rrqEnabled"
@@ -272,7 +277,20 @@ export async function removeAndRebalanceRrqAfterDisconnect(
         if (removedCount > 0 || removeFailed) {
             const stillLive = client ? client.lavalink.getPlayer(player.guildId) : player
             if (stillLive && stillLive === live) {
-                schedulePlayerSessionSave(stillLive)
+                // Null current + emptied upcoming cannot be written (writePlayerSession refuses
+                // empty snapshots). A plain scheduleSave would leave the prior DB row and
+                // resurrect RRQ-removed tracks on the next restore — same class as clearqueue
+                // null-current persist (#330), distinct entry point.
+                // Skip force-clear while preserve-prior is set: that fuller unrestored
+                // snapshot is kept until /stop or /leave (intentional #240 tradeoff).
+                if (
+                    snapshotFromPlayer(stillLive) === null &&
+                    !shouldPreservePriorPlayerSessionSnapshot(stillLive.guildId)
+                ) {
+                    await forceClearPlayerSession(stillLive.guildId)
+                } else {
+                    schedulePlayerSessionSave(stillLive)
+                }
             }
         }
 

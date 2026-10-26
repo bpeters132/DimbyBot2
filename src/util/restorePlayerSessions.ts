@@ -11,9 +11,11 @@ import { updateControlMessage } from "../events/handlers/handleControlChannel.js
 import { playerBroadcaster } from "../shared/websocket/PlayerBroadcaster.js"
 import { getDiscordErrorCode } from "./discordErrorDetails.js"
 import { getGuildSettings } from "./saveControlChannel.js"
+import { getLocalPlayerState, isPendingLocalPlay } from "./localPlayer.js"
 import { ensurePlayerConnected } from "./musicManager.js"
 import { startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
 import {
+    cancelPendingPlayerSessionSaveForGuild,
     clearPlayerSessionPreservePriorSnapshot,
     clearPlayerSessionRestoreInProgress,
     markPlayerSessionPreservePriorSnapshot,
@@ -22,7 +24,7 @@ import {
     schedulePlayerSessionSave,
 } from "./playerSessionPersistence.js"
 import { resolvePersistedTracks } from "./playerSessionTracks.js"
-import { queueTrackIdentity, schedulePrefetchWindow } from "./youtubePlaybackWindow.js"
+import { ensurePrefetchWindow, queueTrackIdentity } from "./youtubePlaybackWindow.js"
 import {
     withGuildPlayerLifecycleReservation,
     withGuildPlayerQueueLock,
@@ -84,6 +86,27 @@ export function shouldPersistRestoredPlayerSession(options: {
 }
 
 /**
+ * After a full restore hydrate, what to do with the DB row / pending saves.
+ *
+ * When the live queue still has every restored track, the persisted row is already
+ * correct — do not schedule a live save. `startPlaybackIfNeeded` emits `trackStart`,
+ * which debounces a save while fire-and-forget prefetch can still false-permanent-drop
+ * upcoming heads; that save would permanently thin the fuller snapshot (#296 hole).
+ * Cancel the pending save instead. When thinned/partial, mark preserve-prior.
+ */
+export type RestoreHydratePersistAction = "preserve-prior" | "keep-db-cancel-pending"
+
+export function restoreHydratePersistAction(options: {
+    transientFailures: number
+    storedPlayableCount: number
+    liveTrackCount: number
+    retainedRestoredCount: number
+}): RestoreHydratePersistAction {
+    if (shouldPersistRestoredPlayerSession(options)) return "keep-db-cancel-pending"
+    return "preserve-prior"
+}
+
+/**
  * Whether a concurrent-enqueue abandon may overwrite the persisted session row.
  *
  * When restore still has playable tracks (or only transient resolve failures), saving the
@@ -127,6 +150,89 @@ export function shouldSkipRestoreHydrateForLivePlayer(
     return live != null && shouldAbandonRestoreForConcurrentQueue(live)
 }
 
+type RestoreSkipTrack = { info?: { uri?: string | null } }
+
+/**
+ * When hydrate is skipped because the live player already has queue content, whether to
+ * mark preserve-prior so later saves cannot replace the DB row.
+ *
+ * Concurrent `/play` during a multi-guild restore can leave a thin live queue while the
+ * persisted snapshot is still fuller — preserve-prior is required (#240 / #279).
+ *
+ * A second Lavalink node `connect` (or any reconnect while another node still holds the
+ * player) re-runs restore against guilds that already have a complete live queue. Marking
+ * preserve-prior in that case bricks `schedulePlayerSessionSave` for the rest of the
+ * process lifetime (until idle/`/stop`), so every subsequent enqueue/skip is lost on the
+ * next crash. Only preserve when the live queue does not still contain every stored track.
+ */
+export function shouldMarkPreservePriorAfterSkippingLiveHydrate(options: {
+    storedTracks: readonly RestoreSkipTrack[]
+    liveTracks: readonly RestoreSkipTrack[]
+}): boolean {
+    const storedPlayableCount = options.storedTracks.length
+    if (storedPlayableCount === 0) return false
+    const retained = retainedRestoredTrackCount(options.storedTracks, options.liveTracks)
+    return !shouldPersistRestoredPlayerSession({
+        transientFailures: 0,
+        storedPlayableCount,
+        liveTrackCount: options.liveTracks.length,
+        retainedRestoredCount: retained,
+    })
+}
+
+/** Current + upcoming tracks on a live restore player, for skip-hydrate preserve decisions. */
+export function liveTracksForRestorePreserveDecision(player: {
+    queue: { current?: RestoreSkipTrack | null; tracks: readonly RestoreSkipTrack[] }
+}): RestoreSkipTrack[] {
+    return [...(player.queue.current ? [player.queue.current] : []), ...player.queue.tracks]
+}
+
+/**
+ * Stored current + queue from a v1 session snapshot, shaped for
+ * {@link retainedRestoredTrackCount} / {@link queueTrackIdentity} (URI under `info`).
+ */
+export function storedTracksForRestorePreserveDecision(snapshot: {
+    current?: { uri?: string | null } | null
+    queue: readonly { uri?: string | null }[]
+}): RestoreSkipTrack[] {
+    const asIdentityTrack = (track: { uri?: string | null }): RestoreSkipTrack => ({
+        info: { uri: track.uri },
+    })
+    return [
+        ...(snapshot.current ? [asIdentityTrack(snapshot.current)] : []),
+        ...snapshot.queue.map(asIdentityTrack),
+    ]
+}
+
+/**
+ * True when restore must not hydrate or stale-delete because this guild is in a
+ * Lavalink → @discordjs/voice local handoff (join in flight) or already playing locally.
+ *
+ * Local play flushes the session then destroys Lavalink under a suppress lease so a
+ * failed join can recover the queue. The slot is empty for up to 30s of Ready wait.
+ * A node `connect` restore would `createPlayer` + `ensurePlayerConnected`, steal Discord
+ * voice from the local join, and local Ready would skip session clear because live !==
+ * the handoff player (`shouldClearSessionAfterLocalHandoffReady`). After Ready, a
+ * preserve-prior keep-row (`LocalHandoffReady`) plus a later node reconnect has the
+ * same steal while local audio is still playing.
+ *
+ * Skip the whole session (do not humans===0 stale-delete) and leave the row. Do not
+ * mark preserve-prior here — that would block a later `/play` save after local ends.
+ */
+export function shouldSkipRestoreForLocalPlayback(options: {
+    pendingLocalPlay: boolean
+    localPlayerActive: boolean
+}): boolean {
+    return options.pendingLocalPlay || options.localPlayerActive
+}
+
+function guildHasLocalPlayback(guildId: string): boolean {
+    return shouldSkipRestoreForLocalPlayback({
+        pendingLocalPlay: isPendingLocalPlay(guildId),
+        localPlayerActive: getLocalPlayerState(guildId) != null,
+    })
+}
+
 /**
  * Transient Discord VC fetch defers restore without hydrating. Concurrent `/play` saves are
  * no-ops until restore-in-progress clears; if the live player already has queue content, the
@@ -143,6 +249,23 @@ export function shouldPreservePriorSnapshotAfterRestoreDefer(
 }
 
 /**
+ * Gateway-unavailable guilds are unpatched stubs (`Guild` skips `_patch` when
+ * `unavailable` is set). `voiceStates.cache` is empty even when humans are still
+ * in the saved VC, so `humans === 0` is not evidence the session is stale.
+ *
+ * Concrete trigger: `clientReady` fires with the guild still unavailable (READY
+ * unavailable list, or discord.js `waitGuildTimeout` of 15s) while Lavalink
+ * connect runs restore. REST `channels.fetch` can succeed; the empty voice-state
+ * cache then deletes the persisted queue. Same contract as a transient VC fetch:
+ * defer, do not delete.
+ */
+export function shouldDeferRestoreForUnavailableGuild(
+    guild: { available?: boolean } | null | undefined
+): boolean {
+    return guild?.available === false
+}
+
+/**
  * After a deferred restore, mark preserve-prior only while the persisted session
  * row is still there and the live player already has a queue. `/stop` deletes
  * the row; the successor queue must be allowed to persist once restore-in-progress
@@ -153,6 +276,40 @@ export function shouldMarkPreservePriorAfterDeferredRestore(options: {
     liveHasQueue: boolean
 }): boolean {
     return options.sessionRowExists && options.liveHasQueue
+}
+
+/**
+ * Whether restore may mark preserve-prior after skip / concurrent-abandon / partial
+ * hydrate. `/stop` and `/leave` force-clear the row while restore-in-progress; marking
+ * without a row sticks after the guard clears and blocks the successor multi-track
+ * queue from ever saving (same contract as {@link shouldMarkPreservePriorAfterDeferredRestore}).
+ *
+ * Unlike the deferred-voice check, live queue content is not required: a JIT-thinned
+ * or emptied live player still needs preserve-prior so idle QueueEmpty destroy cannot
+ * delete the fuller DB row.
+ */
+export function shouldMarkPreservePriorIfSessionRowExists(sessionRowExists: boolean): boolean {
+    return sessionRowExists
+}
+
+/**
+ * Marks preserve-prior only while the persisted session row still exists.
+ * Read failures fail closed (mark) so a DB blip cannot open a thin-overwrite window.
+ * Returns whether preserve-prior was marked.
+ */
+export async function markPreservePriorIfSessionRowExists(
+    guildId: string,
+    readSession: (id: string) => Promise<unknown | null> = getPlayerSession
+): Promise<boolean> {
+    try {
+        const row = await readSession(guildId)
+        if (!shouldMarkPreservePriorIfSessionRowExists(row != null)) return false
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        return true
+    } catch {
+        markPlayerSessionPreservePriorSnapshot(guildId)
+        return true
+    }
 }
 
 export type DeferredSessionLookup =
@@ -289,6 +446,31 @@ export function shouldDeleteStaleRestoredSession(args: {
     )
 }
 
+/**
+ * Whether restore may hydrate from the in-memory `listPlayerSessions` snapshot.
+ *
+ * The batch loads every row once, then restores guilds sequentially. `/leave` (and
+ * `/stop`) can force-clear a later guild's row while earlier guilds are still
+ * resolving. Hydrating that stale list entry rejoins VC and
+ * `schedulePlayerSessionSave` resurrects the queue the user just cleared.
+ *
+ * Clear-epoch advance catches force-clear even if a racy re-read is confused;
+ * matching `latest` rejects a replaced or deleted row.
+ */
+export function shouldHydrateRestoredSessionFromList(args: {
+    evaluated: Pick<PlayerSessionData, "voiceChannelId" | "updatedAt">
+    latest: Pick<PlayerSessionData, "voiceChannelId" | "updatedAt"> | null
+    clearEpochAtStart: number
+    clearEpochNow: number
+}): boolean {
+    if (args.clearEpochNow !== args.clearEpochAtStart) return false
+    if (!args.latest) return false
+    return (
+        args.latest.voiceChannelId === args.evaluated.voiceChannelId &&
+        args.latest.updatedAt.getTime() === args.evaluated.updatedAt.getTime()
+    )
+}
+
 let discordReady = false
 let restoreInFlight = false
 
@@ -401,20 +583,54 @@ function resolveTextChannelId(session: PlayerSessionData): string | null {
 
 async function restoreSingleSession(
     client: BotClient,
-    session: PlayerSessionData
+    session: PlayerSessionData,
+    clearEpochAtStart = 0
 ): Promise<"completed" | "deferred"> {
     const { guildId, voiceChannelId, snapshot } = session
 
+    if (guildHasLocalPlayback(guildId)) {
+        client.debug(`[playerSession] restore skipped for ${guildId}: local playback in progress`)
+        return "completed"
+    }
+
     const existingBeforeRestore = client.lavalink.getPlayer(guildId)
     if (shouldSkipRestoreHydrateForLivePlayer(existingBeforeRestore)) {
-        // Same contract as concurrent-abandon during resolve (#240): skipping hydrate
-        // without preserve-prior lets schedulePlayerSessionSave replace a multi-track
-        // snapshot. Existence-only skip is wrong for an empty createPlayer shell.
-        markPlayerSessionPreservePriorSnapshot(guildId)
+        // Concurrent thin `/play` during multi-guild restore must keep the fuller DB row
+        // (#240 / #279). A complete live queue (e.g. second node connect while this guild
+        // is already playing) must not mark preserve-prior — that bricks all later saves.
+        // Also do not mark when `/stop`/`/leave` already force-cleared the row — that would
+        // stick after restore-in-progress clears and block the successor queue save.
+        if (
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: storedTracksForRestorePreserveDecision(snapshot),
+                liveTracks: liveTracksForRestorePreserveDecision(existingBeforeRestore),
+            })
+        ) {
+            await markPreservePriorIfSessionRowExists(guildId)
+        }
         client.debug(
             `[playerSession] restore skipped for ${guildId}: live player already has queue content`
         )
         return "completed"
+    }
+
+    // Cheap bail when `/leave`/`/stop` already force-cleared while this guild waited
+    // behind earlier restores. Re-checked under the reservation before createPlayer.
+    {
+        const latestBeforeFetch = await getPlayerSession(guildId)
+        if (
+            !shouldHydrateRestoredSessionFromList({
+                evaluated: session,
+                latest: latestBeforeFetch,
+                clearEpochAtStart,
+                clearEpochNow: getPlayerSessionClearEpoch(guildId),
+            })
+        ) {
+            client.debug(
+                `[playerSession] restore skipped for ${guildId}: session cleared or replaced before hydrate`
+            )
+            return "completed"
+        }
     }
 
     const voiceResult = await fetchVoiceChannel(client, guildId, voiceChannelId)
@@ -429,6 +645,12 @@ async function restoreSingleSession(
         // shouldMarkPreservePriorAfterDeferredRestore before restore-in-progress clears.
         return "deferred"
     }
+    // Local handoff can start during the voice fetch await. Do not stale-delete the
+    // flushed snapshot or createPlayer into the empty slot (would steal Discord voice).
+    if (guildHasLocalPlayback(guildId)) {
+        client.debug(`[playerSession] restore skipped for ${guildId}: local playback in progress`)
+        return "completed"
+    }
     if (voiceResult.status === "missing") {
         client.info(
             `[playerSession] stale session removed for ${guildId}: voice channel ${voiceChannelId} not found`
@@ -439,6 +661,12 @@ async function restoreSingleSession(
     const voiceChannel = voiceResult.channel
 
     const humans = countHumanMembers(voiceChannel)
+    if (humans === 0 && shouldDeferRestoreForUnavailableGuild(voiceChannel.guild)) {
+        client.warn(
+            `[playerSession] restore deferred for ${guildId}: guild unavailable (voice state cache is not authoritative)`
+        )
+        return "deferred"
+    }
     if (humans === 0) {
         client.info(
             `[playerSession] stale session removed for ${guildId}: no humans in VC ${voiceChannelId}`
@@ -461,12 +689,42 @@ async function restoreSingleSession(
     let restorePlayer: Player | null = null
     try {
         await withGuildPlayerLifecycleReservation(guildId, async () => {
+            if (guildHasLocalPlayback(guildId)) {
+                client.debug(
+                    `[playerSession] restore skipped for ${guildId}: local playback in progress`
+                )
+                return
+            }
             // Re-check under the reservation: a concurrent create may have won the race.
             const liveBeforeCreate = client.lavalink.getPlayer(guildId)
             if (shouldSkipRestoreHydrateForLivePlayer(liveBeforeCreate)) {
-                markPlayerSessionPreservePriorSnapshot(guildId)
+                if (
+                    shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                        storedTracks: storedTracksForRestorePreserveDecision(snapshot),
+                        liveTracks: liveTracksForRestorePreserveDecision(liveBeforeCreate),
+                    })
+                ) {
+                    await markPreservePriorIfSessionRowExists(guildId)
+                }
                 client.debug(
                     `[playerSession] restore skipped for ${guildId}: player appeared before hydrate`
+                )
+                return
+            }
+
+            // `/leave` can force-clear during voice fetch / humans check while this
+            // guild still has only the stale list snapshot in memory.
+            const latestBeforeCreate = await getPlayerSession(guildId)
+            if (
+                !shouldHydrateRestoredSessionFromList({
+                    evaluated: session,
+                    latest: latestBeforeCreate,
+                    clearEpochAtStart,
+                    clearEpochNow: getPlayerSessionClearEpoch(guildId),
+                })
+            ) {
+                client.debug(
+                    `[playerSession] restore skipped for ${guildId}: session cleared or replaced before createPlayer`
                 )
                 return
             }
@@ -536,7 +794,7 @@ async function restoreSingleSession(
                         playerToPersist = player
                     } else {
                         // Transient failures + concurrent enqueue must not wipe the fuller DB row.
-                        markPlayerSessionPreservePriorSnapshot(guildId)
+                        await markPreservePriorIfSessionRowExists(guildId)
                     }
                     return
                 }
@@ -581,8 +839,9 @@ async function restoreSingleSession(
                     `[playerSession] restore for ${guildId}: skipped hydrate; concurrent queue content present`
                 )
                 // Keep the prior full snapshot: schedulePlayerSessionSave of the thin concurrent
-                // queue would permanently drop the restored session from the DB.
-                markPlayerSessionPreservePriorSnapshot(guildId)
+                // queue would permanently drop the restored session from the DB. Skip the mark
+                // when `/stop`/`/leave` already cleared the row so the successor may save.
+                await markPreservePriorIfSessionRowExists(guildId)
                 scheduleControlMessageUpdate(client, guildId)
                 playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
                 return
@@ -603,7 +862,11 @@ async function restoreSingleSession(
             player.set("rrqEnabled", snapshot.rrqEnabled)
 
             await startPlaybackIfNeeded(player, () => client.lavalink.getPlayer(guildId))
-            schedulePrefetchWindow(() => client.lavalink.getPlayer(guildId), guildId)
+            // Await prefetch so upcoming false-permanent drops are visible before the
+            // persist decision. Fire-and-forget raced the post-restore debounced save (#296 hole).
+            await ensurePrefetchWindow(() => client.lavalink.getPlayer(guildId), guildId)
+            // trackStart during play() may have scheduled its own prefetch; settle once more.
+            await ensurePrefetchWindow(() => client.lavalink.getPlayer(guildId), guildId)
             if (
                 snapshot.paused &&
                 player.playing &&
@@ -625,30 +888,28 @@ async function restoreSingleSession(
 
             scheduleControlMessageUpdate(client, guildId)
             playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
-            // schedulePlayerSessionSave is a no-op while restore-in-progress; persist after clear.
-            // Skip save when some tracks failed transiently OR JIT prepare dropped heads
-            // (false-permanent catalog/search misses during node warmup). Otherwise a
-            // thinned live queue would replace the fuller DB row. Mark preserve *before*
-            // clearPlayerSessionRestoreInProgress so trackStart/trackEnd/shutdown/idle clear
-            // cannot race and wipe the prior full row.
+            // Do not schedulePlayerSessionSave after a full hydrate: the DB row already
+            // matches. trackStart debounced a save during play(); cancel it so a late
+            // prefetch drop cannot thin the fuller snapshot. Mark preserve *before*
+            // clearPlayerSessionRestoreInProgress when thinned so idle clear cannot wipe.
             const liveTracks = [
                 ...(player.queue.current ? [player.queue.current] : []),
                 ...player.queue.tracks,
             ]
             const liveCount = liveTracks.length
             const retained = retainedRestoredTrackCount(playable, liveTracks)
-            if (
-                shouldPersistRestoredPlayerSession({
-                    transientFailures: transientTotal,
-                    storedPlayableCount: playable.length,
-                    liveTrackCount: liveCount,
-                    retainedRestoredCount: retained,
-                })
-            ) {
+            const persistAction = restoreHydratePersistAction({
+                transientFailures: transientTotal,
+                storedPlayableCount: playable.length,
+                liveTrackCount: liveCount,
+                retainedRestoredCount: retained,
+            })
+            if (persistAction === "keep-db-cancel-pending") {
                 clearPlayerSessionPreservePriorSnapshot(guildId)
-                playerToPersist = player
+                cancelPendingPlayerSessionSaveForGuild(guildId)
             } else {
-                markPlayerSessionPreservePriorSnapshot(guildId)
+                // Row may already be gone after `/stop`/`/leave` during playback setup.
+                await markPreservePriorIfSessionRowExists(guildId)
                 const dropped = Math.max(0, playable.length - liveCount)
                 const missing = Math.max(0, playable.length - retained)
                 client.warn(
@@ -683,7 +944,7 @@ async function restoreSingleSession(
                     `[playerSession] restore for ${guildId}: error after concurrent enqueue; keeping player`
                 )
                 // Failed restore must not overwrite the prior snapshot with a concurrent thin queue.
-                markPlayerSessionPreservePriorSnapshot(guildId)
+                await markPreservePriorIfSessionRowExists(guildId)
             }
             playerToPersist = null
         } else {
@@ -700,8 +961,12 @@ async function restoreSingleSession(
     }
 
     if (playerToPersist) {
-        // Final identity gate: never persist a zombie after /stop+/play during restore.
-        if (isRestoreHydratePlayerStillLive(playerToPersist, client.lavalink.getPlayer(guildId))) {
+        // Final identity + clear-epoch gates: never persist a zombie after /stop+/play,
+        // and never resurrect a row `/leave` force-cleared during playback setup.
+        if (
+            getPlayerSessionClearEpoch(guildId) === clearEpochAtStart &&
+            isRestoreHydratePlayerStillLive(playerToPersist, client.lavalink.getPlayer(guildId))
+        ) {
             schedulePlayerSessionSave(playerToPersist)
         }
     }
@@ -744,7 +1009,11 @@ export async function restorePlayerSessions(client: BotClient): Promise<boolean>
     const deferredGuildIds: string[] = []
     try {
         for (const session of sessions) {
-            const result = await restoreSingleSession(client, session)
+            const result = await restoreSingleSession(
+                client,
+                session,
+                clearEpochAtStart.get(session.guildId) ?? 0
+            )
             if (result === "deferred") deferredGuildIds.push(session.guildId)
         }
         return true

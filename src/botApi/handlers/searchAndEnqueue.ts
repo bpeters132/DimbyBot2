@@ -5,6 +5,7 @@ import type { ApiErrorPayload } from "../../types/index.js"
 import { ensurePlayerConnected } from "../../util/musicManager.js"
 import type { PermissionGuardSuccess } from "../../shared/api-auth.js"
 import { resolveWebDashboardTextChannelId } from "../webDashboardTextChannel.js"
+import { stopLocalPlaybackForLavalinkTakeover } from "../../util/stopLocalForLavalinkTakeover.js"
 import { destroyPlayerSuppressingSessionClear } from "../../util/playerSessionPersistence.js"
 import {
     acquireGuildPlayerLifecycleReservation,
@@ -17,6 +18,10 @@ import {
 } from "../../util/sameVoiceChannel.js"
 import { isMemberFetchNotFound } from "../../util/discordMemberFetchError.js"
 import { enqueueSearchTracksAssumingSearchDone } from "./enqueueSearchTracks.js"
+import {
+    isBlockedLocalFilesystemMediaQuery,
+    USER_LOCAL_FILE_QUERY_BLOCKED,
+} from "../../util/localFilesystemMediaQuery.js"
 import { isBlockedUserMediaUrl, USER_MEDIA_URL_BLOCKED } from "../../util/userMediaUrl.js"
 import {
     createdPlayerOrphanSlotLooksOccupied,
@@ -76,6 +81,13 @@ export async function searchAndEnqueue(
             error: { error: USER_MEDIA_URL_BLOCKED },
         }
     }
+    if (!options?.connectOnly && isBlockedLocalFilesystemMediaQuery(query, { guildId })) {
+        return {
+            ok: false,
+            status: 400,
+            error: { error: USER_LOCAL_FILE_QUERY_BLOCKED },
+        }
+    }
     const guild = client.guilds.cache.get(guildId)
     if (!guild) {
         return mapSearchAndEnqueuePreflightFailure("guild_missing")
@@ -121,6 +133,12 @@ export async function searchAndEnqueue(
             return mapSearchAndEnqueuePreflightFailure("occupied_voice_mismatch")
         }
     }
+
+    // Discord `/play` (handleQueryAndPlay) stops local before Lavalink; Dashboard must too.
+    // Without this, createPlayer + ensurePlayerConnected steals voice while @discordjs/voice
+    // still plays (dual playback). Also cancel an in-flight local Ready wait so handoff
+    // cannot resume audio after this enqueue owns the slot.
+    await stopLocalPlaybackForLavalinkTakeover(client, guildId)
 
     // Reserve before createPlayer so concurrent orphan/idle destroy cannot tear down a
     // freshly created player in the window between create and the old post-create acquire.

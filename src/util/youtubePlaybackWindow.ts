@@ -3,6 +3,7 @@ import { tryGetBotClient } from "../lib/botClientRegistry.js"
 import { withGuildPlayerQueueLock } from "./guildPlayerQueueLock.js"
 import { isSameLivePlayer } from "./livePlayerIdentity.js"
 import { loggerFromPartial } from "./loggerFromPartial.js"
+import { isBlockedLocalFilesystemMediaQuery } from "./localFilesystemMediaQuery.js"
 import { isBlockedUserMediaUrl } from "./userMediaUrl.js"
 import {
     companionPlaybackConfig,
@@ -99,11 +100,13 @@ export type QueueMetadataFields = {
 
 /**
  * Builds Queue metadata from stored title/author/URI (no Lavalink search).
- * Returns null for blocked User media URLs.
+ * Returns null for blocked User media URLs and host filesystem paths.
  */
 export function queueMetadataTrackFromFields(fields: QueueMetadataFields): Track | null {
     const uri = fields.uri.trim()
     if (!uri || isBlockedUserMediaUrl(uri)) return null
+    // Stored playlist / session URIs must not reopen host paths via later JIT hydrate.
+    if (isBlockedLocalFilesystemMediaQuery(uri)) return null
     const youtubeId = youtubeVideoIdFromUri(uri)
     const spotify = isSpotifyCatalogUri(uri)
     const sourceName = youtubeId ? "youtube" : spotify ? "spotify" : "http"
@@ -158,6 +161,9 @@ async function hydrateNativeMetadataTrack(
     }
     if (isBlockedUserMediaUrl(uri)) {
         throw new Error(`cannot play blocked user-media URL: ${uri}`)
+    }
+    if (isBlockedLocalFilesystemMediaQuery(uri, { guildId: player.guildId })) {
+        throw new Error(`cannot play blocked local filesystem path: ${uri}`)
     }
     let res: Awaited<ReturnType<Player["search"]>>
     try {

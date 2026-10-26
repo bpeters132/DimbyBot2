@@ -1,7 +1,12 @@
 import { updateControlMessage } from "../events/handlers/handleControlChannel.js"
 import path from "path"
 import fs from "fs"
-import { playLocalFile, getLocalPlayerState, stopLocalPlayer } from "./localPlayer.js"
+import {
+    cancelPendingLocalPlay,
+    playLocalFile,
+    getLocalPlayerState,
+    stopLocalPlayer,
+} from "./localPlayer.js"
 import {
     ActionRowBuilder,
     ButtonBuilder,
@@ -26,6 +31,10 @@ import { stampRequesterUserIdOnTracks } from "./rrqDisconnect.js"
 import { memberMayJoinOccupiedVoice, resolveOccupiedVoiceChannelId } from "./sameVoiceChannel.js"
 import { playbackStartLostLivePlayer, startPlaybackIfNeeded } from "./startPlaybackIfNeeded.js"
 import { isPlaylistLoadType, schedulePrefetchWindow } from "./youtubePlaybackWindow.js"
+import {
+    isBlockedLocalFilesystemMediaQuery,
+    USER_LOCAL_FILE_QUERY_BLOCKED,
+} from "./localFilesystemMediaQuery.js"
 import {
     isBlockedUserMediaUrl,
     trimmedHttpUrlQuery,
@@ -151,6 +160,11 @@ export async function handleQueryAndPlay(
     let previousVoiceChannelIdBeforeEnsure: string | null = null
 
     try {
+        // Cancel an in-flight Play Local Ready wait immediately so concurrent `/play`
+        // (or control-channel enqueue) cannot leave @discordjs/voice starting against a
+        // Lavalink successor. Active local stop still happens later before enqueue.
+        cancelPendingLocalPlay(guildId)
+
         if (
             player.voiceChannelId &&
             player.voiceChannelId !== voiceChannel.id &&
@@ -171,6 +185,15 @@ export async function handleQueryAndPlay(
             return {
                 success: false,
                 feedbackText: USER_MEDIA_URL_BLOCKED,
+            }
+        }
+        // `local:` / `link:` / `uri:` identifiers open host files on the Lavalink container
+        // (shared downloads volume). Allow only this guild's download WAVs so /download autoplay
+        // still reaches local-file matching.
+        if (isBlockedLocalFilesystemMediaQuery(query, { guildId })) {
+            return {
+                success: false,
+                feedbackText: USER_LOCAL_FILE_QUERY_BLOCKED,
             }
         }
 

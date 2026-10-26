@@ -6,6 +6,7 @@ import { getBotClient, tryGetBotClient } from "../../lib/botClientRegistry.js"
 import { toQueueResponse } from "../../shared/player-state.js"
 import { playerBroadcaster } from "../../shared/websocket/PlayerBroadcaster.js"
 import { scheduleSaveIfPlayerStillLive } from "../../util/playerSessionPersistence.js"
+import { persistLiveQueueAfterUpcomingMutation } from "../../util/livePlayerQueueMutations.js"
 import { withGuildPlayerQueueLock } from "../../util/guildPlayerQueueLock.js"
 import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 import { parseQueueIndex, parseQueueReorderNewIndex } from "../parseBotApiParams.js"
@@ -46,7 +47,12 @@ export async function queueIndexDELETE(
                 return { ok: false as const, reason: "out_of_range" as const }
             }
             await live.queue.splice(queueIndex, 1)
-            scheduleSaveIfPlayerStillLive(() => client.lavalink.getPlayer(guildId), live)
+            // Last upcoming + no current → null snapshot; scheduleSave would leave the prior row.
+            await persistLiveQueueAfterUpcomingMutation(
+                () => client.lavalink.getPlayer(guildId),
+                live,
+                guildId
+            )
             return { ok: true as const }
         })
         if (!removeResult.ok) {
@@ -135,7 +141,11 @@ export async function queueIndexPATCH(
                 return { ok: false as const, reason: "out_of_range" as const }
             }
 
-            const [track] = await live.queue.splice(sourceIndex, 1)
+            // lavalink-client Queue.splice returns the Track itself when amount === 1
+            // (not a one-element array). Array-destructuring that value throws after the
+            // remove already landed, permanently dropping the track from the live queue.
+            const removed = await live.queue.splice(sourceIndex, 1)
+            const track = Array.isArray(removed) ? removed[0] : removed
             if (!track) {
                 return { ok: false as const, reason: "out_of_range" as const }
             }

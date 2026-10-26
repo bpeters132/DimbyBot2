@@ -20,6 +20,7 @@ import type {
 import { shouldDeleteLavalinkPlayerAfterDestroy } from "./lavalinkManagerPlayerDelete.js"
 import {
     runLocalHandoffLavalinkStopAndDestroy,
+    shouldAbortLocalAudioForSuccessorAtReady,
     shouldAbortLocalPlayForLivePlayerConflict,
     shouldClearSessionAfterFailedHandoffDestroy,
     shouldClearSessionAfterLocalHandoffReady,
@@ -42,7 +43,8 @@ const pendingLocalPlayCancelEpochByGuild = new Map<string, number>()
 
 /**
  * Cancels an in-flight `playLocalFile` join (before audio starts). Safe when nothing is pending.
- * Call from `/stop` and `/leave` so a Ready wait after Lavalink handoff cannot resume playback.
+ * Call from `/stop`, `/leave`, control Stop, and Dashboard stop so a Ready wait after
+ * Lavalink handoff cannot resume playback.
  */
 export function cancelPendingLocalPlay(guildId: string): void {
     pendingLocalPlayCancelEpochByGuild.set(
@@ -414,14 +416,26 @@ export async function playLocalFile(
                 // Re-read after optional leftover destroy: node.destroyPlayer await can admit a
                 // successor between cache delete and playerDestroy; do not wipe that session.
                 const liveAfter = client.lavalink.getPlayer(guildId)
+                if (shouldAbortLocalAudioForSuccessorAtReady(lavalinkPlayer, liveAfter)) {
+                    // Successor /play or Dashboard enqueue won the slot during Ready wait.
+                    // Clearing its session is wrong; starting local audio is also wrong —
+                    // both would fight for Discord voice (dual playback).
+                    sessionHandoff.releaseLeftoverSuppressLease()
+                    if (connection.state.status !== VoiceConnectionStatus.Destroyed) {
+                        connection.destroy()
+                    }
+                    client.debug(
+                        `[LocalPlayer] Aborting local audio for guild ${guildId}: successor Lavalink player owns the slot after Ready.`
+                    )
+                    return {
+                        success: false,
+                        feedbackText:
+                            "Playback changed while local playback was connecting. Start your request again if you still want the local file.",
+                        error: new Error("lavalink successor during local Ready"),
+                    }
+                }
                 if (shouldClearSessionAfterLocalHandoffReady(lavalinkPlayer, liveAfter)) {
                     await sessionHandoff.clearSessionAfterLocalReady()
-                } else {
-                    // Successor owns the slot — drop our suppress lease without wiping its row.
-                    sessionHandoff.releaseLeftoverSuppressLease()
-                    client.debug(
-                        `[LocalPlayer] Skipping session clear after local Ready for guild ${guildId}: successor player owns the slot.`
-                    )
                 }
             }
         } catch (e: unknown) {

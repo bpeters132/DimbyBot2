@@ -9,9 +9,21 @@ const query = {
     }),
 }
 
+const takeover = { calls: 0 }
+
 mock.module("../../../src/util/musicManager.js", {
     namedExports: {
         handleQueryAndPlay: () => query.impl(),
+    },
+})
+
+mock.module("../../../src/util/stopLocalForLavalinkTakeover.js", {
+    namedExports: {
+        stopLocalPlaybackForLavalinkTakeover: async () => {
+            takeover.calls += 1
+            return false
+        },
+        shouldStopLocalPlayerBeforeLavalinkTakeover: () => false,
     },
 })
 
@@ -146,6 +158,7 @@ describe("handleControlMessages", () => {
 
     it("tells the user the bot is already in another voice channel", async () => {
         mock.timers.enable({ apis: ["setTimeout"] })
+        takeover.calls = 0
         try {
             const message = createMessage()
             message.guild.members.me.voice.channelId = "voice-2"
@@ -156,6 +169,8 @@ describe("handleControlMessages", () => {
                 message.sent[0],
                 "<@user-1>, I'm already playing in another voice channel (Stage)."
             )
+            // Do not tear down local audio in another channel the requester cannot join.
+            assert.equal(takeover.calls, 0)
         } finally {
             mock.timers.reset()
         }
@@ -163,15 +178,21 @@ describe("handleControlMessages", () => {
 
     it("tells the user the player could not be started", async () => {
         mock.timers.enable({ apis: ["setTimeout"] })
+        takeover.calls = 0
         try {
             const message = createMessage()
             const client = createClient(null)
-            client.lavalink.createPlayer = () => null
+            let stoppedLocalBeforeCreate = false
+            client.lavalink.createPlayer = () => {
+                stoppedLocalBeforeCreate = takeover.calls > 0
+                return null
+            }
             await handleControlMessages(client as never, message as never)
             assert.equal(
                 message.sent[0],
                 "<@user-1>, Could not start the music player. Try again in a moment."
             )
+            assert.equal(stoppedLocalBeforeCreate, true)
         } finally {
             mock.timers.reset()
         }

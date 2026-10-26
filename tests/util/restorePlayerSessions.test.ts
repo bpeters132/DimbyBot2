@@ -4,18 +4,31 @@ import {
     isRestoreHydratePlayerStillLive,
     isStaleSessionDiscordError,
     guildIdsNeedingRestoreSaveGuard,
+    markPreservePriorIfSessionRowExists,
     shouldAbandonRestoreForConcurrentQueue,
     shouldDeleteStaleRestoredSession,
+    shouldHydrateRestoredSessionFromList,
     shouldPersistConcurrentAbandonSession,
     restoredLiveTrackCount,
     deferredRestoreGuardAction,
     releaseDeferredRestoreGuards,
+    restoreHydratePersistAction,
     retainedRestoredTrackCount,
+    shouldDeferRestoreForUnavailableGuild,
     shouldMarkPreservePriorAfterDeferredRestore,
+    shouldMarkPreservePriorIfSessionRowExists,
     shouldPersistRestoredPlayerSession,
     shouldPreservePriorSnapshotAfterRestoreDefer,
+    shouldSkipRestoreForLocalPlayback,
     shouldSkipRestoreHydrateForLivePlayer,
+    shouldMarkPreservePriorAfterSkippingLiveHydrate,
+    liveTracksForRestorePreserveDecision,
+    storedTracksForRestorePreserveDecision,
 } from "../../src/util/restorePlayerSessions.js"
+import {
+    clearPlayerSessionPreservePriorSnapshot,
+    shouldPreservePriorPlayerSessionSnapshot,
+} from "../../src/util/playerSessionPersistence.js"
 
 describe("isStaleSessionDiscordError", () => {
     it("treats unknown channel/guild as permanently stale (safe to delete session)", () => {
@@ -129,6 +142,46 @@ describe("shouldPersistRestoredPlayerSession", () => {
     })
 })
 
+describe("restoreHydratePersistAction", () => {
+    it("keeps the DB row and cancels pending saves when the live queue is intact", () => {
+        // Full hydrate must not schedulePlayerSessionSave: trackStart's debounced save
+        // can race prefetch drops and thin the already-correct snapshot.
+        assert.equal(
+            restoreHydratePersistAction({
+                transientFailures: 0,
+                storedPlayableCount: 5,
+                liveTrackCount: 5,
+                retainedRestoredCount: 5,
+            }),
+            "keep-db-cancel-pending"
+        )
+    })
+
+    it("marks preserve-prior when JIT/prefetch thinned the live queue", () => {
+        assert.equal(
+            restoreHydratePersistAction({
+                transientFailures: 0,
+                storedPlayableCount: 50,
+                liveTrackCount: 48,
+                retainedRestoredCount: 48,
+            }),
+            "preserve-prior"
+        )
+    })
+
+    it("marks preserve-prior when resolve had transient failures", () => {
+        assert.equal(
+            restoreHydratePersistAction({
+                transientFailures: 1,
+                storedPlayableCount: 5,
+                liveTrackCount: 5,
+                retainedRestoredCount: 5,
+            }),
+            "preserve-prior"
+        )
+    })
+})
+
 describe("shouldPersistConcurrentAbandonSession", () => {
     it("blocks save when restore still had playable tracks (thin concurrent queue must not wipe DB)", () => {
         assert.equal(
@@ -152,6 +205,45 @@ describe("shouldPersistConcurrentAbandonSession", () => {
         assert.equal(
             shouldPersistConcurrentAbandonSession({ playableCount: 0, transientFailures: 0 }),
             true
+        )
+    })
+})
+
+describe("shouldSkipRestoreForLocalPlayback", () => {
+    it("skips restore during local handoff Ready wait and while local audio is playing", () => {
+        // Flush + destroy leaves an empty Lavalink slot for up to 30s. Hydrate would
+        // createPlayer, steal Discord voice, and Ready would skip session clear.
+        assert.equal(
+            shouldSkipRestoreForLocalPlayback({
+                pendingLocalPlay: true,
+                localPlayerActive: false,
+            }),
+            true
+        )
+        // Preserve-prior LocalHandoffReady keep-row + later node reconnect.
+        assert.equal(
+            shouldSkipRestoreForLocalPlayback({
+                pendingLocalPlay: false,
+                localPlayerActive: true,
+            }),
+            true
+        )
+        assert.equal(
+            shouldSkipRestoreForLocalPlayback({
+                pendingLocalPlay: true,
+                localPlayerActive: true,
+            }),
+            true
+        )
+    })
+
+    it("does not skip restore when this guild is not in local playback", () => {
+        assert.equal(
+            shouldSkipRestoreForLocalPlayback({
+                pendingLocalPlay: false,
+                localPlayerActive: false,
+            }),
+            false
         )
     })
 })
@@ -184,6 +276,93 @@ describe("shouldSkipRestoreHydrateForLivePlayer", () => {
     })
 })
 
+describe("shouldMarkPreservePriorAfterSkippingLiveHydrate", () => {
+    const stored = [
+        { info: { uri: "https://youtu.be/a" } },
+        { info: { uri: "https://youtu.be/b" } },
+        { info: { uri: "https://youtu.be/c" } },
+    ]
+
+    it("marks preserve-prior when a concurrent thin live queue is missing stored tracks", () => {
+        // Multi-guild restore: /play landed one track while the DB still holds the fuller row.
+        assert.equal(
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: stored,
+                liveTracks: [{ info: { uri: "https://youtu.be/z" } }],
+            }),
+            true
+        )
+        assert.equal(
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: stored,
+                liveTracks: [{ info: { uri: "https://youtu.be/a" } }],
+            }),
+            true
+        )
+    })
+
+    it("does not mark preserve-prior when the live queue still holds every stored track", () => {
+        // Second Lavalink node connect re-runs restore while this guild is already playing
+        // the restored (or still-live) queue — preserve-prior would brick later saves.
+        assert.equal(
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: stored,
+                liveTracks: stored,
+            }),
+            false
+        )
+        assert.equal(
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: stored,
+                liveTracks: [...stored, { info: { uri: "https://youtu.be/d" } }],
+            }),
+            false
+        )
+    })
+
+    it("does not mark preserve-prior when the stored snapshot was empty", () => {
+        assert.equal(
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: [],
+                liveTracks: [{ info: { uri: "https://youtu.be/a" } }],
+            }),
+            false
+        )
+    })
+
+    it("maps persisted snapshot URIs onto the live-track identity shape", () => {
+        // PersistedQueueTrack stores `uri` at the top level; live Lavalink tracks use info.uri.
+        const snapshotTracks = storedTracksForRestorePreserveDecision({
+            current: { uri: "https://youtu.be/a" },
+            queue: [{ uri: "https://youtu.be/b" }],
+        })
+        const liveTracks = liveTracksForRestorePreserveDecision({
+            queue: {
+                current: { info: { uri: "https://youtu.be/a" } },
+                tracks: [{ info: { uri: "https://youtu.be/b" } }],
+            },
+        })
+        assert.deepEqual(snapshotTracks, [
+            { info: { uri: "https://youtu.be/a" } },
+            { info: { uri: "https://youtu.be/b" } },
+        ])
+        assert.equal(
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: snapshotTracks,
+                liveTracks,
+            }),
+            false
+        )
+        assert.equal(
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: snapshotTracks,
+                liveTracks: [{ info: { uri: "https://youtu.be/a" } }],
+            }),
+            true
+        )
+    })
+})
+
 describe("shouldPreservePriorSnapshotAfterRestoreDefer", () => {
     it("preserves the fuller snapshot when a concurrent /play filled the player during a deferred voice fetch", () => {
         assert.equal(
@@ -209,6 +388,20 @@ describe("shouldPreservePriorSnapshotAfterRestoreDefer", () => {
             }),
             false
         )
+    })
+})
+
+describe("shouldDeferRestoreForUnavailableGuild", () => {
+    it("defers the humans===0 stale delete when the guild is a gateway-unavailable stub", () => {
+        // discord.js skips _patch on unavailable READY guilds, so voiceStates.cache is empty.
+        assert.equal(shouldDeferRestoreForUnavailableGuild({ available: false }), true)
+    })
+
+    it("does not defer when the guild is available (empty VC is truly stale)", () => {
+        assert.equal(shouldDeferRestoreForUnavailableGuild({ available: true }), false)
+        assert.equal(shouldDeferRestoreForUnavailableGuild({}), false)
+        assert.equal(shouldDeferRestoreForUnavailableGuild(null), false)
+        assert.equal(shouldDeferRestoreForUnavailableGuild(undefined), false)
     })
 })
 
@@ -240,6 +433,51 @@ describe("shouldMarkPreservePriorAfterDeferredRestore", () => {
             }),
             false
         )
+    })
+})
+
+describe("shouldMarkPreservePriorIfSessionRowExists", () => {
+    it("marks when the persisted row is still present (protect fuller snapshot)", () => {
+        assert.equal(shouldMarkPreservePriorIfSessionRowExists(true), true)
+    })
+
+    it("does not mark after /stop or /leave force-cleared the row during restore", () => {
+        // Skip-with-content and concurrent-abandon used to mark unconditionally (#279/#240).
+        // After force-clear the successor multi-track queue must be allowed to persist once
+        // restore-in-progress clears — same hole the deferred-voice path already closed.
+        assert.equal(shouldMarkPreservePriorIfSessionRowExists(false), false)
+    })
+})
+
+describe("markPreservePriorIfSessionRowExists", () => {
+    it("marks preserve-prior when the session row still exists", async () => {
+        const guildId = "preserve-row-exists"
+        clearPlayerSessionPreservePriorSnapshot(guildId)
+        const marked = await markPreservePriorIfSessionRowExists(guildId, async () => ({
+            guildId,
+        }))
+        assert.equal(marked, true)
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), true)
+        clearPlayerSessionPreservePriorSnapshot(guildId)
+    })
+
+    it("skips preserve-prior when /stop|/leave already deleted the session row", async () => {
+        const guildId = "preserve-row-gone"
+        clearPlayerSessionPreservePriorSnapshot(guildId)
+        const marked = await markPreservePriorIfSessionRowExists(guildId, async () => null)
+        assert.equal(marked, false)
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), false)
+    })
+
+    it("fails closed (marks) when the session read throws", async () => {
+        const guildId = "preserve-row-read-error"
+        clearPlayerSessionPreservePriorSnapshot(guildId)
+        const marked = await markPreservePriorIfSessionRowExists(guildId, async () => {
+            throw new Error("db down")
+        })
+        assert.equal(marked, true)
+        assert.equal(shouldPreservePriorPlayerSessionSnapshot(guildId), true)
+        clearPlayerSessionPreservePriorSnapshot(guildId)
     })
 })
 
@@ -459,6 +697,65 @@ describe("shouldDeleteStaleRestoredSession", () => {
                 evaluated,
                 latest: null,
                 livePlayerExists: false,
+            }),
+            false
+        )
+    })
+})
+
+describe("shouldHydrateRestoredSessionFromList", () => {
+    const evaluated = {
+        voiceChannelId: "vc-1",
+        updatedAt: new Date("2026-10-08T12:00:00.000Z"),
+    }
+
+    it("hydrates when the DB row still matches the list snapshot and clear epoch is unchanged", () => {
+        assert.equal(
+            shouldHydrateRestoredSessionFromList({
+                evaluated,
+                latest: { ...evaluated },
+                clearEpochAtStart: 0,
+                clearEpochNow: 0,
+            }),
+            true
+        )
+    })
+
+    it("skips hydrate after /leave force-cleared the row (stale list entry must not resurrect)", () => {
+        // Batch listed the session, then /leave deleted it while earlier guilds restored.
+        assert.equal(
+            shouldHydrateRestoredSessionFromList({
+                evaluated,
+                latest: null,
+                clearEpochAtStart: 0,
+                clearEpochNow: 0,
+            }),
+            false
+        )
+    })
+
+    it("skips hydrate when clear epoch advanced even if a racy re-read still sees a row", () => {
+        assert.equal(
+            shouldHydrateRestoredSessionFromList({
+                evaluated,
+                latest: { ...evaluated },
+                clearEpochAtStart: 1,
+                clearEpochNow: 2,
+            }),
+            false
+        )
+    })
+
+    it("skips hydrate when a successor session replaced the evaluated row", () => {
+        assert.equal(
+            shouldHydrateRestoredSessionFromList({
+                evaluated,
+                latest: {
+                    voiceChannelId: "vc-2",
+                    updatedAt: new Date("2026-10-08T12:05:00.000Z"),
+                },
+                clearEpochAtStart: 0,
+                clearEpochNow: 0,
             }),
             false
         )
