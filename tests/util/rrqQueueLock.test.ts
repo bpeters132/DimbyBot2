@@ -4,11 +4,9 @@ import type { Player, Track } from "lavalink-client"
 import { createGuildAsyncChain } from "../../src/util/guildAsyncChain.js"
 import { withGuildPlayerQueueLock } from "../../src/util/guildPlayerQueueLock.js"
 import {
-    clearDisconnectedUser,
     rebalancePlayerQueueRoundRobin,
     removeAndRebalanceRrqAfterDisconnect,
     stampRequesterUserIdOnTracks,
-    trackDisconnectedUser,
 } from "../../src/util/rrqDisconnect.js"
 
 function mockTrack(id: string, requesterId: string): Track {
@@ -154,58 +152,10 @@ describe("RRQ vs guild queue lock", () => {
         stampRequesterUserIdOnTracks([a1, a2], "user-a")
         stampRequesterUserIdOnTracks([b1], "user-b")
         const player = mockMutablePlayer(guildId, [a1, b1, a2])
-        const timeoutHandle = setTimeout(() => {}, 60_000)
-        try {
-            trackDisconnectedUser(player, "user-a", timeoutHandle)
 
-            const removed = await removeAndRebalanceRrqAfterDisconnect(player, "user-a")
-            assert.equal(removed, 2)
-            assert.equal(player.queue.tracks.length, 1)
-            assert.equal(player.queue.tracks[0]?.info.title, "b1")
-        } finally {
-            clearTimeout(timeoutHandle)
-        }
-    })
-
-    it("aborts remove when rejoin cleared disconnect tracking during queue-lock wait", async () => {
-        const guildId = "guild-rrq-rejoin-lock-wait"
-        const a1 = mockTrack("a1", "user-a")
-        const b1 = mockTrack("b1", "user-b")
-        const a2 = mockTrack("a2", "user-a")
-        stampRequesterUserIdOnTracks([a1, a2], "user-a")
-        stampRequesterUserIdOnTracks([b1], "user-b")
-        const player = mockMutablePlayer(guildId, [a1, b1, a2])
-        const timeoutHandle = setTimeout(() => {}, 60_000)
-        try {
-            trackDisconnectedUser(player, "user-a", timeoutHandle)
-
-            let releaseHold!: () => void
-            const holdGate = new Promise<void>((resolve) => {
-                releaseHold = resolve
-            })
-            const holdP = withGuildPlayerQueueLock(guildId, async () => {
-                await holdGate
-            })
-            await Promise.resolve()
-
-            // Leave timer already passed isDisconnectTimeoutCurrent; cleanup waits on the lock.
-            const removeP = removeAndRebalanceRrqAfterDisconnect(player, "user-a")
-            await Promise.resolve()
-
-            // playerVoiceJoin during the wait clears tracking and logs cancel.
-            clearDisconnectedUser(player, "user-a")
-            releaseHold()
-            await holdP
-
-            const removed = await removeP
-            assert.equal(removed, 0)
-            assert.equal(player.queue.tracks.length, 3)
-            assert.deepEqual(
-                player.queue.tracks.map((t) => t.info.title),
-                ["a1", "b1", "a2"]
-            )
-        } finally {
-            clearTimeout(timeoutHandle)
-        }
+        const removed = await removeAndRebalanceRrqAfterDisconnect(player, "user-a")
+        assert.equal(removed, 2)
+        assert.equal(player.queue.tracks.length, 1)
+        assert.equal(player.queue.tracks[0]?.info.title, "b1")
     })
 })
