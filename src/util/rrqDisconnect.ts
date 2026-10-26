@@ -248,6 +248,12 @@ export async function removeAndRebalanceRrqAfterDisconnect(
         }
         const live = player
 
+        // playerVoiceJoin clears disconnect tracking when the user rejoins during the 60s
+        // grace period. The leave timer only checks isDisconnectTimeoutCurrent *before*
+        // waiting on this lock; a rejoin during shuffle/enqueue lock wait must still abort
+        // so we do not delete tracks after the cancel path already ran.
+        if (!hasTrackedDisconnect(live, userId)) return 0
+
         let removedCount = 0
         let removeFailed = false
         try {
