@@ -876,6 +876,39 @@ const DNS_BOUNCE_SUFFIXES = [
     "localhost.usm.edu",
     "localhost.utas.edu.au",
     "localhost.vu.edu.au",
+    // Remaining unused localhost.<parent> aliases after #12/#17–#54 (apex → 127.0.0.1
+    // on Cloudflare+Google DoH; Java InetAddress loopback=true; anglia → 127.0.0.2).
+    // Do not deny public parents. Distinct from denied short forms / siblings:
+    // oxfordbrookes.ac.uk vs brookes.ac.uk, shef.ac.uk vs sheffield.ac.uk,
+    // neu.edu vs northeastern.edu, hw.ac.uk (Heriot-Watt) vs denied UK batch.
+    "localhost.acu.edu.au",
+    "localhost.anglia.ac.uk",
+    "localhost.beds.ac.uk",
+    "localhost.bolton.ac.uk",
+    "localhost.bond.edu.au",
+    "localhost.brocku.ca",
+    "localhost.dod.mil",
+    "localhost.doe.gov",
+    "localhost.energy.gov",
+    "localhost.flinders.edu.au",
+    "localhost.glyndwr.ac.uk",
+    "localhost.house.gov",
+    "localhost.hw.ac.uk",
+    "localhost.laurentian.ca",
+    "localhost.murdoch.edu.au",
+    "localhost.neu.edu",
+    "localhost.oxfordbrookes.ac.uk",
+    "localhost.pentagon.mil",
+    "localhost.polymtl.ca",
+    "localhost.shef.ac.uk",
+    "localhost.shu.ac.uk",
+    "localhost.solent.ac.uk",
+    "localhost.ulster.ac.uk",
+    "localhost.usherbrooke.ca",
+    "localhost.uwindsor.ca",
+    "localhost.uwtsd.ac.uk",
+    "localhost.wlu.ca",
+    "localhost.wlv.ac.uk",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
