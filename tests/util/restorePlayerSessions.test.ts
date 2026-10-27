@@ -24,6 +24,7 @@ import {
     shouldMarkPreservePriorAfterSkippingLiveHydrate,
     liveTracksForRestorePreserveDecision,
     storedTracksForRestorePreserveDecision,
+    restoreTrackIdentityKeys,
 } from "../../src/util/restorePlayerSessions.js"
 import {
     clearPlayerSessionPreservePriorSnapshot,
@@ -70,6 +71,100 @@ describe("retainedRestoredTrackCount", () => {
             { info: { uri: "https://youtu.be/c" } },
         ]
         assert.equal(retainedRestoredTrackCount(restored, live), 1)
+    })
+
+    it("counts a companion-reminted Spotify catalog track as retained via ISRC", () => {
+        // Prefetch replaces spotify: URIs with YouTube watch URLs but copies ISRC.
+        const restored = [
+            {
+                info: {
+                    uri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC",
+                    isrc: "GBUM71505078",
+                    identifier: "4uLU6hMCjMI75M1A2tKUQC",
+                },
+            },
+            {
+                info: {
+                    uri: "spotify:track:otherid00000000000000",
+                    identifier: "otherid00000000000000",
+                },
+            },
+        ]
+        const live = [
+            {
+                info: {
+                    uri: "https://www.youtube.com/watch?v=dQw4w9wgGcQ",
+                    isrc: "GBUM71505078",
+                    identifier: "4uLU6hMCjMI75M1A2tKUQC",
+                },
+            },
+            {
+                info: {
+                    uri: "https://www.youtube.com/watch?v=aaaaaaaaaaa",
+                    identifier: "otherid00000000000000",
+                },
+            },
+        ]
+        assert.equal(retainedRestoredTrackCount(restored, live), 2)
+    })
+
+    it("counts a reminted Spotify track as retained via identifier when ISRC is missing", () => {
+        const restored = [
+            {
+                info: {
+                    uri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC",
+                    identifier: "4uLU6hMCjMI75M1A2tKUQC",
+                },
+            },
+        ]
+        const live = [
+            {
+                info: {
+                    uri: "https://www.youtube.com/watch?v=dQw4w9wgGcQ",
+                    identifier: "4uLU6hMCjMI75M1A2tKUQC",
+                },
+            },
+        ]
+        assert.equal(retainedRestoredTrackCount(restored, live), 1)
+    })
+
+    it("does not count an unrelated YouTube remint as a retained Spotify catalog track", () => {
+        const restored = [
+            {
+                info: {
+                    uri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC",
+                    identifier: "4uLU6hMCjMI75M1A2tKUQC",
+                },
+            },
+        ]
+        const live = [
+            {
+                info: {
+                    uri: "https://www.youtube.com/watch?v=dQw4w9wgGcQ",
+                    identifier: "dQw4w9wgGcQ",
+                },
+            },
+        ]
+        assert.equal(retainedRestoredTrackCount(restored, live), 0)
+    })
+})
+
+describe("restoreTrackIdentityKeys", () => {
+    it("emits isrc, identifier, and uri keys when present", () => {
+        assert.deepEqual(
+            restoreTrackIdentityKeys({
+                info: {
+                    uri: "https://www.youtube.com/watch?v=dQw4w9wgGcQ",
+                    isrc: "GBUM71505078",
+                    identifier: "4uLU6hMCjMI75M1A2tKUQC",
+                },
+            }),
+            [
+                "isrc:gbum71505078",
+                "id:4ulu6hmcjmi75m1a2tkuqc",
+                "uri:https://www.youtube.com/watch?v=dqw4w9wggcq",
+            ]
+        )
     })
 })
 
@@ -359,6 +454,46 @@ describe("shouldMarkPreservePriorAfterSkippingLiveHydrate", () => {
                 liveTracks: [{ info: { uri: "https://youtu.be/a" } }],
             }),
             true
+        )
+    })
+
+    it("does not mark preserve-prior when live tracks are companion-reminted Spotify catalog items", () => {
+        // Full hydrate / skip-hydrate after prefetch: DB still has Spotify URIs, live has
+        // YouTube watch URLs with the same ISRC/identifier. URI-only matching would brick saves.
+        const snapshotTracks = storedTracksForRestorePreserveDecision({
+            current: { uri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC", isrc: "GBUM71505078" },
+            queue: [{ uri: "https://open.spotify.com/track/otherid00000000000000" }],
+        })
+        const liveTracks = [
+            {
+                info: {
+                    uri: "https://www.youtube.com/watch?v=dQw4w9wgGcQ",
+                    isrc: "GBUM71505078",
+                    identifier: "4uLU6hMCjMI75M1A2tKUQC",
+                },
+            },
+            {
+                info: {
+                    uri: "https://www.youtube.com/watch?v=bbbbbbbbbbb",
+                    identifier: "otherid00000000000000",
+                },
+            },
+        ]
+        assert.equal(
+            shouldMarkPreservePriorAfterSkippingLiveHydrate({
+                storedTracks: snapshotTracks,
+                liveTracks,
+            }),
+            false
+        )
+        assert.equal(
+            restoreHydratePersistAction({
+                transientFailures: 0,
+                storedPlayableCount: snapshotTracks.length,
+                liveTrackCount: liveTracks.length,
+                retainedRestoredCount: retainedRestoredTrackCount(snapshotTracks, liveTracks),
+            }),
+            "keep-db-cancel-pending"
         )
     })
 })

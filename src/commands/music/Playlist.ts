@@ -41,6 +41,7 @@ import {
     resolveOccupiedVoiceChannelId,
 } from "../../util/sameVoiceChannel.js"
 import { ensurePlayerConnected } from "../../util/musicManager.js"
+import { stopLocalPlaybackForLavalinkTakeover } from "../../util/stopLocalForLavalinkTakeover.js"
 
 export default {
     data: new SlashCommandBuilder()
@@ -354,6 +355,11 @@ export default {
                 const playOutcome = await withGuildPlayerLifecycleReservation(
                     guild.id,
                     async () => {
+                        // Dashboard playlistPlay goes through searchAndEnqueue (stops local).
+                        // Discord /play stops local in handleQueryAndPlay. Without this,
+                        // createPlayer + ensurePlayerConnected steals voice while
+                        // @discordjs/voice is still playing (dual playback).
+                        await stopLocalPlaybackForLavalinkTakeover(client, guild.id)
                         let player = client.lavalink.getPlayer(guild.id)
                         let createdHere = false
                         if (!player) {

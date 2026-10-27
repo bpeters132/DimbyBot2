@@ -130,7 +130,8 @@ export function queueMetadataTrackFromFields(fields: QueueMetadataFields): Track
     } as unknown as Track
 }
 
-function spotifyIdentifierFromUri(uri: string): string {
+/** Spotify track id from `spotify:track:` or open.spotify.com `/track/` URIs. */
+export function spotifyIdentifierFromUri(uri: string): string {
     const trackMatch = uri.match(/track\/([A-Za-z0-9]+)/)
     if (trackMatch?.[1]) return trackMatch[1]
     if (uri.startsWith("spotify:track:")) return uri.slice("spotify:track:".length)
