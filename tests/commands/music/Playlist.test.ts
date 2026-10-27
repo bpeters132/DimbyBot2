@@ -116,9 +116,14 @@ const repo = {
 const repoGlobal = globalThis as { __dimbyPlaylistRepo?: typeof repo }
 repoGlobal.__dimbyPlaylistRepo = repo
 
+const localTakeoverGuildIds: string[] = []
+const takeoverGlobal = globalThis as { __dimbyPlaylistLocalTakeover?: string[] }
+takeoverGlobal.__dimbyPlaylistLocalTakeover = localTakeoverGuildIds
+
 registerHooks({
     load(url, context, nextLoad) {
-        if (url.replaceAll("\\", "/").includes("/src/repositories/playlistRepository.ts")) {
+        const normalized = url.replaceAll("\\", "/")
+        if (normalized.includes("/src/repositories/playlistRepository.ts")) {
             return {
                 format: "module",
                 shortCircuit: true,
@@ -130,6 +135,21 @@ registerHooks({
                     export const getUserPlaylists = (...args) => repo.getUserPlaylists(...args)
                     export const addTracksToPlaylist = (...args) => repo.addTracksToPlaylist(...args)
                     export const removeTrackFromPlaylistById = (...args) => repo.removeTrackFromPlaylistById(...args)
+                `,
+            }
+        }
+        if (normalized.includes("/src/util/stopLocalForLavalinkTakeover.ts")) {
+            return {
+                format: "module",
+                shortCircuit: true,
+                source: `
+                    export function shouldStopLocalPlayerBeforeLavalinkTakeover(state) {
+                        return state != null
+                    }
+                    export async function stopLocalPlaybackForLavalinkTakeover(_client, guildId) {
+                        globalThis.__dimbyPlaylistLocalTakeover?.push(guildId)
+                        return false
+                    }
                 `,
             }
         }
@@ -204,6 +224,7 @@ function queuePlayer(overrides: { connected?: boolean } = {}) {
 describe("playlist replies", () => {
     beforeEach(() => {
         resetDb()
+        localTakeoverGuildIds.length = 0
     })
 
     it("tells you to use the command in a server", async () => {
@@ -576,6 +597,9 @@ describe("playlist replies", () => {
         )
         assert.equal(created, true)
         assert.deepEqual(messageContents(calls), ["Queued 1 track from **Favorites**."])
+        // Play Local leaves an empty Lavalink slot; /playlist play must stop @discordjs/voice
+        // before createPlayer/connect or the two clients fight over the same VC.
+        assert.deepEqual(localTakeoverGuildIds, ["guild-1"])
     })
 
     it("queues several tracks", async () => {
