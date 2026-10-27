@@ -1570,6 +1570,47 @@ describe("isBlockedUserMediaUrl", () => {
             "localhost.city.ac.uk",
             "localhost.ntu.ac.uk",
             "localhost.acadiau.ca",
+            // Remaining unused localhost.<parent> aliases after #12/#17–#54.
+            // Apex → 127.0.0.1 (anglia → 127.0.0.2; Java loopback; hkbu RFC1918).
+            // Do not deny public parents. Distinct from denied brookes.ac.uk /
+            // sheffield.ac.uk / northeastern.edu / jcu.edu.au / uwtsd.ac.uk / marquette.edu.
+            "localhost.acu.edu.au",
+            "localhost.anglia.ac.uk",
+            "localhost.beds.ac.uk",
+            "localhost.bolton.ac.uk",
+            "localhost.bond.edu.au",
+            "localhost.brocku.ca",
+            "localhost.csbsju.edu",
+            "localhost.csu.edu",
+            "localhost.dod.mil",
+            "localhost.doe.gov",
+            "localhost.energy.gov",
+            "localhost.flinders.edu.au",
+            "localhost.glyndwr.ac.uk",
+            "localhost.hec.ca",
+            "localhost.hkbu.edu.hk",
+            "localhost.house.gov",
+            "localhost.hw.ac.uk",
+            "localhost.jcu.edu",
+            "localhost.laurentian.ca",
+            "localhost.mu.edu",
+            "localhost.murdoch.edu.au",
+            "localhost.neu.edu",
+            "localhost.openu.ac.il",
+            "localhost.oxfordbrookes.ac.uk",
+            "localhost.pentagon.mil",
+            "localhost.polymtl.ca",
+            "localhost.shef.ac.uk",
+            "localhost.shu.ac.uk",
+            "localhost.solent.ac.uk",
+            "localhost.trinitysaintdavid.ac.uk",
+            "localhost.ulster.ac.uk",
+            "localhost.usherbrooke.ca",
+            "localhost.usp.ac.fj",
+            "localhost.uwindsor.ca",
+            "localhost.uwtsd.ac.uk",
+            "localhost.wlu.ca",
+            "localhost.wlv.ac.uk",
         ]
         for (const host of unusedLocalhostAliases) {
             assert.equal(isBlockedUserMediaUrl(`http://${host}/`), true)
@@ -1605,6 +1646,48 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://city.ac.uk/"), false)
         assert.equal(isBlockedUserMediaUrl("http://ntu.ac.uk/"), false)
         assert.equal(isBlockedUserMediaUrl("http://acadiau.ca/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://acu.edu.au/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://anglia.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://beds.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://bond.edu.au/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://dod.mil/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://doe.gov/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://energy.gov/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://flinders.edu.au/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://hw.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://murdoch.edu.au/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://oxfordbrookes.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://brookes.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://pentagon.mil/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://polymtl.ca/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://shef.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://shu.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://solent.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://ulster.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://usherbrooke.ca/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://bolton.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://brocku.ca/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://glyndwr.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://house.gov/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://www.house.gov/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://laurentian.ca/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://neu.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://northeastern.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://uwindsor.ca/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://uwtsd.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://wlu.ca/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://wlv.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://jcu.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://jcu.edu.au/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://mu.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://marquette.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://csu.edu/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://hkbu.edu.hk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://trinitysaintdavid.ac.uk/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://usp.ac.fj/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://hec.ca/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://openu.ac.il/"), false)
+        assert.equal(isBlockedUserMediaUrl("http://csbsju.edu/"), false)
     })
 
     it("rejects private hosts wrapped in lavalink-client source prefixes", () => {
