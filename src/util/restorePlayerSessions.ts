@@ -24,7 +24,12 @@ import {
     schedulePlayerSessionSave,
 } from "./playerSessionPersistence.js"
 import { resolvePersistedTracks } from "./playerSessionTracks.js"
-import { ensurePrefetchWindow, queueTrackIdentity } from "./youtubePlaybackWindow.js"
+import {
+    ensurePrefetchWindow,
+    queueTrackIdentity,
+    spotifyIdentifierFromUri,
+} from "./youtubePlaybackWindow.js"
+import { isSpotifyCatalogUri, youtubeVideoIdFromUri } from "./youtubeCompanionPlayback.js"
 import {
     withGuildPlayerLifecycleReservation,
     withGuildPlayerQueueLock,
@@ -42,26 +47,52 @@ export function restoredLiveTrackCount(player: {
 
 type QueueIdentityTrack = Parameters<typeof queueTrackIdentity>[0]
 
+type RestoreSkipTrack = {
+    info?: {
+        uri?: string | null
+        isrc?: string | null
+        identifier?: string | null
+    }
+}
+
 /**
- * How many restored tracks are still on the live queue, matched by URI identity.
- * A concurrent `/play` can replace a dropped restored track and keep the counts equal.
+ * Identity keys that survive companion remint. Spotify catalog enqueue persists
+ * `spotify:track:` / open.spotify.com URIs; prefetch then replaces those slots with
+ * YouTube watch URLs while copying ISRC and the Spotify identifier. URI-only matching
+ * treats that as a drop and bricks later session saves (preserve-prior).
+ */
+export function restoreTrackIdentityKeys(track: RestoreSkipTrack): string[] {
+    const keys: string[] = []
+    const isrc = track.info?.isrc?.trim().toLowerCase()
+    if (isrc) keys.push(`isrc:${isrc}`)
+    const identifier = track.info?.identifier?.trim()
+    if (identifier) keys.push(`id:${identifier.toLowerCase()}`)
+    const uri = queueTrackIdentity(track as QueueIdentityTrack)
+    if (uri) keys.push(`uri:${uri}`)
+    return keys
+}
+
+function restoreTracksShareIdentity(left: RestoreSkipTrack, right: RestoreSkipTrack): boolean {
+    const rightKeys = new Set(restoreTrackIdentityKeys(right))
+    if (rightKeys.size === 0) return false
+    return restoreTrackIdentityKeys(left).some((key) => rightKeys.has(key))
+}
+
+/**
+ * How many restored tracks are still on the live queue, matched by ISRC, catalog
+ * identifier, or URI. A concurrent `/play` can replace a dropped restored track and
+ * keep the counts equal.
  */
 export function retainedRestoredTrackCount(
-    restored: readonly { info?: { uri?: string | null } }[],
-    live: readonly { info?: { uri?: string | null } }[]
+    restored: readonly RestoreSkipTrack[],
+    live: readonly RestoreSkipTrack[]
 ): number {
-    const available = new Map<string, number>()
-    for (const track of live) {
-        const id = queueTrackIdentity(track as QueueIdentityTrack)
-        if (!id) continue
-        available.set(id, (available.get(id) ?? 0) + 1)
-    }
+    const available = live.filter((track) => restoreTrackIdentityKeys(track).length > 0)
     let retained = 0
     for (const track of restored) {
-        const id = queueTrackIdentity(track as QueueIdentityTrack)
-        const left = id ? (available.get(id) ?? 0) : 0
-        if (left <= 0) continue
-        available.set(id, left - 1)
+        const idx = available.findIndex((candidate) => restoreTracksShareIdentity(track, candidate))
+        if (idx < 0) continue
+        available.splice(idx, 1)
         retained += 1
     }
     return retained
@@ -150,8 +181,6 @@ export function shouldSkipRestoreHydrateForLivePlayer(
     return live != null && shouldAbandonRestoreForConcurrentQueue(live)
 }
 
-type RestoreSkipTrack = { info?: { uri?: string | null } }
-
 /**
  * When hydrate is skipped because the live player already has queue content, whether to
  * mark preserve-prior so later saves cannot replace the DB row.
@@ -163,7 +192,10 @@ type RestoreSkipTrack = { info?: { uri?: string | null } }
  * player) re-runs restore against guilds that already have a complete live queue. Marking
  * preserve-prior in that case bricks `schedulePlayerSessionSave` for the rest of the
  * process lifetime (until idle/`/stop`), so every subsequent enqueue/skip is lost on the
- * next crash. Only preserve when the live queue does not still contain every stored track.
+ * next crash. Companion remint of Spotify catalog tracks changes `info.uri` but keeps
+ * ISRC/identifier — those must count as retained so a complete reminted queue is not
+ * treated as a thin concurrent `/play`. Only preserve when the live queue does not still
+ * contain every stored track.
  */
 export function shouldMarkPreservePriorAfterSkippingLiveHydrate(options: {
     storedTracks: readonly RestoreSkipTrack[]
@@ -189,15 +221,32 @@ export function liveTracksForRestorePreserveDecision(player: {
 
 /**
  * Stored current + queue from a v1 session snapshot, shaped for
- * {@link retainedRestoredTrackCount} / {@link queueTrackIdentity} (URI under `info`).
+ * {@link retainedRestoredTrackCount} (ISRC / catalog identifier / URI under `info`).
  */
 export function storedTracksForRestorePreserveDecision(snapshot: {
-    current?: { uri?: string | null } | null
-    queue: readonly { uri?: string | null }[]
+    current?: { uri?: string | null; isrc?: string | null } | null
+    queue: readonly { uri?: string | null; isrc?: string | null }[]
 }): RestoreSkipTrack[] {
-    const asIdentityTrack = (track: { uri?: string | null }): RestoreSkipTrack => ({
-        info: { uri: track.uri },
-    })
+    const asIdentityTrack = (track: {
+        uri?: string | null
+        isrc?: string | null
+    }): RestoreSkipTrack => {
+        const uri = track.uri?.trim() ?? ""
+        const youtubeId = uri ? youtubeVideoIdFromUri(uri) : null
+        const identifier = youtubeId
+            ? youtubeId
+            : uri && isSpotifyCatalogUri(uri)
+              ? spotifyIdentifierFromUri(uri)
+              : undefined
+        const isrc = track.isrc?.trim() || undefined
+        return {
+            info: {
+                uri: track.uri,
+                ...(isrc ? { isrc } : {}),
+                ...(identifier ? { identifier } : {}),
+            },
+        }
+    }
     return [
         ...(snapshot.current ? [asIdentityTrack(snapshot.current)] : []),
         ...snapshot.queue.map(asIdentityTrack),
