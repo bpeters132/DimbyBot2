@@ -42,6 +42,7 @@ import {
     listAgedUntrackedGuildDownloadFiles,
     removeDownloadFilesWithPrefix,
 } from "../../util/downloadArtifacts.js"
+import { isAllowedYoutubeDownloadUrl } from "../../util/youtubeDownloadUrl.js"
 
 // Maximum age of files in days before automatic cleanup
 const MAX_FILE_AGE_DAYS = 7
@@ -378,18 +379,8 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
     const url = interaction.options.getString("url", true)
 
-    // Validate URL
-    let isValidHost = false
-    try {
-        const hostname = new URL(url).hostname
-        isValidHost =
-            hostname === "youtu.be" ||
-            hostname === "youtube.com" ||
-            hostname?.endsWith(".youtube.com")
-    } catch {
-        // Invalid URL format
-    }
-    if (!isValidHost) {
+    // urllib/yt-dlp, not WHATWG: `\` stays in userinfo so `youtube.com\@10.0.0.1` is host 10.0.0.1.
+    if (!isAllowedYoutubeDownloadUrl(url)) {
         return interaction.reply({
             content: "Please provide a valid YouTube URL.",
         })
