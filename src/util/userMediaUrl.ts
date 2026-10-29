@@ -144,13 +144,16 @@ export function trimmedHttpUrlQuery(query: string): string | null {
 
 /**
  * True when a User media URL must not be sent to Lavalink: loopback, RFC1918,
- * link-local, single-label Docker DNS names, DNS-bounce hosts that encode a private
+ * link-local, Docker DNS names (single-label and `name.network`), DNS-bounce hosts that encode a private
  * IP in the name (e.g. `10.0.0.1.nip.io` or `0a000001.rbndr.us`), or known
  * bounce-service suffixes. Non-URLs (ytsearch text) are allowed.
  *
  * Also rejects `link:` / `uri:` / `yt:` / `sc:` / `local:` / … wrappers that
  * lavalink-client strips before treating the remainder as a raw HTTP identifier,
  * lavaplayer `icy://` aliases that would otherwise skip the `https?://` gate,
+ * Docker embedded-DNS names qualified with the compose network
+ * (`postgres-db.bot_internal`: moby resolves `name.network`, and Compose names
+ * that network `{project}_{network}`),
  * hyphen-encoded IPv4 labels (`10-0-0-1` or `make-10-0-0-1-rr`) used by bounce DNS,
  * IPv6 dash-compressed labels (`0--1` → `::1`, `0--ffff-a00-1` → `::ffff:10.0.0.1`),
  * well-known IMDS hostnames (`metadata.goog`),
@@ -889,6 +892,12 @@ function isBlockedUserMediaHost(hostname: string): boolean {
     if (host === "localhost" || host.endsWith(".localhost")) return true
     if (isBlockedIpLiteral(host)) return true
     if (!host.includes(".") && !host.includes(":")) return true
+    // Compose network names are `{project}_{network}` (`bot_internal` when deploy
+    // runs from /home/bot). Docker embedded DNS resolves both `postgres-db` and
+    // `postgres-db.bot_internal` (moby Sandbox.ResolveName). The qualified form has
+    // a dot, so the single-label check misses it. `_` is not a public hostname
+    // character; WHATWG also decodes `%5F` before this check.
+    if (host.includes("_")) return true
     if (isImdsHost(host)) return true
     if (isDnsBounceHost(host)) return true
     if (hostnameEmbedsBlockedIpv4(host)) return true
