@@ -162,6 +162,27 @@ describe("isBlockedUserMediaUrl", () => {
         assert.equal(isBlockedUserMediaUrl("http://yt-cipher:8001/"), true)
     })
 
+    it("rejects Docker DNS names qualified with the compose network", () => {
+        assert.equal(isBlockedUserMediaUrl("http://postgres-db.bot_internal:5432/"), true)
+        assert.equal(
+            isBlockedUserMediaUrl("http://spotify-tokener.bot_internal:8080/api/token"),
+            true
+        )
+        assert.equal(isBlockedUserMediaUrl("http://invidious-companion.bot_internal:8282/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://lavalink.bot_internal:2333/v4/info"), true)
+        assert.equal(isBlockedUserMediaUrl("http://dimbybot.bot_internal:3001/health"), true)
+        assert.equal(isBlockedUserMediaUrl("http://yt-cipher.bot_internal:8001/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://postgres-db.bot%5Finternal:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("link:http://postgres-db.bot_internal:5432/"), true)
+        assert.equal(
+            isBlockedUserMediaUrl("uri:http://spotify-tokener.bot_internal:8080/api/token"),
+            true
+        )
+        assert.equal(isBlockedUserMediaUrl("icy://postgres-db.bot_internal:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("http://POSTGRES-DB.BOT_INTERNAL:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), false)
+    })
+
     it("rejects DNS-bounce hosts that resolve to private or loopback IPs", () => {
         assert.equal(isBlockedUserMediaUrl("http://10.0.0.1.nip.io/"), true)
         assert.equal(isBlockedUserMediaUrl("http://192.168.1.1.sslip.io/audio.mp3"), true)
