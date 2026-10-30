@@ -42,6 +42,7 @@ import {
     listAgedUntrackedGuildDownloadFiles,
     removeDownloadFilesWithPrefix,
 } from "../../util/downloadArtifacts.js"
+import { isAllowedYoutubeDownloadHostUrl } from "../../util/youtubeDownloadHost.js"
 import { isAllowedYoutubeDownloadUrl } from "../../util/youtubeDownloadUrl.js"
 
 // Maximum age of files in days before automatic cleanup
@@ -379,8 +380,10 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
     const url = interaction.options.getString("url", true)
 
-    // urllib/yt-dlp, not WHATWG: `\` stays in userinfo so `youtube.com\@10.0.0.1` is host 10.0.0.1.
-    if (!isAllowedYoutubeDownloadUrl(url)) {
+    // urllib keeps `\` in userinfo (`youtube.com\@10.0.0.1` fetches 10.0.0.1).
+    // WHATWG would call that host youtube.com, so the urllib check stays.
+    // The exact host list rejects `consent.youtube.com`, whose extractor follows `continue`.
+    if (!isAllowedYoutubeDownloadUrl(url) || !isAllowedYoutubeDownloadHostUrl(url)) {
         return interaction.reply({
             content: "Please provide a valid YouTube URL.",
         })
