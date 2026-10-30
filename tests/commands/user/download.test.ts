@@ -272,6 +272,17 @@ describe("download", () => {
         assert.deepEqual(texts(calls), ["Please provide a valid YouTube URL."])
     })
 
+    it("rejects consent.youtube.com continue URLs before yt-dlp runs", async () => {
+        const { interaction, calls } = createSlashInteraction({
+            options: {
+                url: "https://consent.youtube.com/m?continue=http%3A%2F%2F127.0.0.1%3A8765%2Flatest%2Fmeta-data%2F",
+            },
+        })
+        await download.execute(interaction, createBotClientFake())
+        assert.deepEqual(texts(calls), ["Please provide a valid YouTube URL."])
+        assert.equal(g.__downloadSpawnArgs, undefined)
+    })
+
     it("says it is preparing the workspace", async () => {
         g.__downloadSpawnMode = "throw"
         const { interaction, calls } = ready()
