@@ -24,6 +24,10 @@ const LAVALINK_SOURCE_PREFIXES = [
     "musicyoutube",
     "ytmsearch",
     "applemusic",
+    // Bare `apple` is its own DefaultSources key (`apple` → amsearch). `applemusic`
+    // does not cover it: `apple:http://…` does not start with `applemusic:`, and
+    // lavalink-client then sends the http remainder as a raw /loadtracks identifier.
+    "apple",
     "amsearch",
     "musicapple",
     "soundcloud",
