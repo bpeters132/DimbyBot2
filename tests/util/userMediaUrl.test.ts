@@ -66,6 +66,8 @@ describe("unwrapLavalinkSourcePrefix", () => {
     it("prefers longer prefixes over short aliases", () => {
         assert.equal(unwrapLavalinkSourcePrefix("ytsearch:http://127.0.0.1/"), "http://127.0.0.1/")
         assert.equal(unwrapLavalinkSourcePrefix("scsearch:http://10.0.0.1/"), "http://10.0.0.1/")
+        assert.equal(unwrapLavalinkSourcePrefix("applemusic:http://10.0.0.1/"), "http://10.0.0.1/")
+        assert.equal(unwrapLavalinkSourcePrefix("apple:http://10.0.0.1/"), "http://10.0.0.1/")
     })
 
     it("returns null when no wrapper is present", () => {
@@ -1648,6 +1650,16 @@ describe("isBlockedUserMediaUrl", () => {
         )
         assert.equal(isBlockedUserMediaUrl("uri:https://soundcloud.com/artist/track"), false)
         assert.equal(isBlockedUserMediaUrl("ytsearch:http://127.0.0.1/"), true)
+    })
+
+    it("rejects the apple: prefix around private HTTP targets", () => {
+        // lavalink-client maps `apple` → amsearch, strips one prefix, then sends a
+        // remainder matching /^https?:\/\// as the raw /loadtracks identifier.
+        assert.equal(isBlockedUserMediaUrl("apple:http://10.0.0.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("apple:http://127.0.0.1/"), true)
+        assert.equal(isBlockedUserMediaUrl("APPLE:https://169.254.169.254/latest/meta-data/"), true)
+        assert.equal(isBlockedUserMediaUrl("apple:http://postgres-db:5432/"), true)
+        assert.equal(isBlockedUserMediaUrl("apple:never gonna give you up"), false)
     })
 })
 
