@@ -43,6 +43,7 @@ import {
     removeDownloadFilesWithPrefix,
 } from "../../util/downloadArtifacts.js"
 import { isAllowedYoutubeDownloadHostUrl } from "../../util/youtubeDownloadHost.js"
+import { isAllowedYoutubeDownloadUrl as isAllowedYoutubeDownloadRedirectUrl } from "../../util/youtubeDownloadRedirect.js"
 import { isAllowedYoutubeDownloadUrl } from "../../util/youtubeDownloadUrl.js"
 
 // Maximum age of files in days before automatic cleanup
@@ -383,7 +384,12 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
     // urllib keeps `\` in userinfo (`youtube.com\@10.0.0.1` fetches 10.0.0.1).
     // WHATWG would call that host youtube.com, so the urllib check stays.
     // The exact host list rejects `consent.youtube.com`, whose extractor follows `continue`.
-    if (!isAllowedYoutubeDownloadUrl(url) || !isAllowedYoutubeDownloadHostUrl(url)) {
+    // `/redirect` is a YouTube host whose `q` query yt-dlp then fetches.
+    if (
+        !isAllowedYoutubeDownloadUrl(url) ||
+        !isAllowedYoutubeDownloadHostUrl(url) ||
+        !isAllowedYoutubeDownloadRedirectUrl(url)
+    ) {
         return interaction.reply({
             content: "Please provide a valid YouTube URL.",
         })

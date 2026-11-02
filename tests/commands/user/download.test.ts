@@ -292,6 +292,18 @@ describe("download", () => {
         assert.equal(g.__downloadSpawnArgs, undefined)
     })
 
+    it("rejects a YouTube /redirect URL before spawning yt-dlp", async () => {
+        g.__downloadSpawnArgs = undefined
+        const { interaction, calls } = createSlashInteraction({
+            options: {
+                url: "https://www.youtube.com/redirect?event=video_description&redir_token=x&q=http://127.0.0.1/latest/meta-data/",
+            },
+        })
+        await download.execute(interaction, createBotClientFake())
+        assert.deepEqual(texts(calls), ["Please provide a valid YouTube URL."])
+        assert.equal(g.__downloadSpawnArgs, undefined)
+    })
+
     it("says it is preparing the workspace", async () => {
         g.__downloadSpawnMode = "throw"
         const { interaction, calls } = ready()
