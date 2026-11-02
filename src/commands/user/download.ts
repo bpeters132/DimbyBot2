@@ -34,6 +34,7 @@ import {
     saveDownloadMetadataStore,
 } from "../../util/downloadMetadataStore.js"
 import { buildYtDlpMatchFilter, resolveDownloadsMaxMb } from "../../util/downloadsMaxMb.js"
+import { isAllowedYoutubeDownloadUrl } from "../../util/youtubeDownloadRedirect.js"
 import {
     DOWNLOAD_PROCESS_TIMEOUT_MS,
     UNTRACKED_DOWNLOAD_ORPHAN_AGE_MS,
@@ -378,18 +379,8 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
     const url = interaction.options.getString("url", true)
 
-    // Validate URL
-    let isValidHost = false
-    try {
-        const hostname = new URL(url).hostname
-        isValidHost =
-            hostname === "youtu.be" ||
-            hostname === "youtube.com" ||
-            hostname?.endsWith(".youtube.com")
-    } catch {
-        // Invalid URL format
-    }
-    if (!isValidHost) {
+    // Hostname alone is not enough: www.youtube.com/redirect?q= follows q.
+    if (!isAllowedYoutubeDownloadUrl(url)) {
         return interaction.reply({
             content: "Please provide a valid YouTube URL.",
         })
