@@ -42,6 +42,7 @@ import {
     listAgedUntrackedGuildDownloadFiles,
     removeDownloadFilesWithPrefix,
 } from "../../util/downloadArtifacts.js"
+import { isAllowedYoutubeDownloadMediaUrl } from "../../util/youtubeDownloadMediaPath.js"
 
 // Maximum age of files in days before automatic cleanup
 const MAX_FILE_AGE_DAYS = 7
@@ -378,18 +379,9 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
     const url = interaction.options.getString("url", true)
 
-    // Validate URL
-    let isValidHost = false
-    try {
-        const hostname = new URL(url).hostname
-        isValidHost =
-            hostname === "youtu.be" ||
-            hostname === "youtube.com" ||
-            hostname?.endsWith(".youtube.com")
-    } catch {
-        // Invalid URL format
-    }
-    if (!isValidHost) {
+    // Ordinary video URLs only. attribution_link and /redirect still have a
+    // YouTube hostname, and yt-dlp follows them to the query target.
+    if (!isAllowedYoutubeDownloadMediaUrl(url)) {
         return interaction.reply({
             content: "Please provide a valid YouTube URL.",
         })
