@@ -43,6 +43,7 @@ import {
     removeDownloadFilesWithPrefix,
 } from "../../util/downloadArtifacts.js"
 import { isAllowedYoutubeDownloadHostUrl } from "../../util/youtubeDownloadHost.js"
+import { isAllowedYoutubeDownloadMediaUrl } from "../../util/youtubeDownloadMediaPath.js"
 import { isAllowedYoutubeDownloadUrl as isAllowedYoutubeDownloadRedirectUrl } from "../../util/youtubeDownloadRedirect.js"
 import { isAllowedYoutubeDownloadUrl } from "../../util/youtubeDownloadUrl.js"
 
@@ -381,14 +382,18 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
     const url = interaction.options.getString("url", true)
 
-    // One urllib parse (the host and path yt-dlp will request), shared by all
-    // three checks. WHATWG treats `\` as `/`, so `youtube.com\@consent.youtube.com`
+    // Urllib host and path (what yt-dlp requests), then an ordinary-media
+    // allowlist. WHATWG treats `\` as `/`, so `youtube.com\@consent.youtube.com`
     // and `youtube.com\@youtube.com/redirect` look allowed in Node and still SSRF
-    // through `continue` / `q`. Exact hosts reject consent. Paths reject /redirect.
+    // through `continue` / `q`. Exact hosts reject consent. The redirect check
+    // rejects `/redirect`. `attribution_link` is an exact YouTube host whose
+    // path is not `/redirect`; only watch, short, embed, live, playlist, and
+    // youtu.be URLs pass the media allowlist.
     if (
         !isAllowedYoutubeDownloadUrl(url) ||
         !isAllowedYoutubeDownloadHostUrl(url) ||
-        !isAllowedYoutubeDownloadRedirectUrl(url)
+        !isAllowedYoutubeDownloadRedirectUrl(url) ||
+        !isAllowedYoutubeDownloadMediaUrl(url)
     ) {
         return interaction.reply({
             content: "Please provide a valid YouTube URL.",

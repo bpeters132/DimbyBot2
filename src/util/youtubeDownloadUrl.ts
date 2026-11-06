@@ -3,7 +3,7 @@
  * Exact names only: a suffix check would allow `consent.youtube.com`, whose
  * extractor follows the `continue` query to an arbitrary URL.
  */
-const YOUTUBE_DOWNLOAD_HOSTS = new Set([
+export const YOUTUBE_DOWNLOAD_HOSTS = new Set([
     "youtu.be",
     "youtube.com",
     "www.youtube.com",
@@ -15,6 +15,8 @@ type YtDlpDownloadUrl = {
     protocol: string
     hostname: string
     pathname: string
+    /** Query without `?`, the same bytes urllib leaves after the path. */
+    search: string
 }
 
 /**
@@ -25,12 +27,13 @@ type YtDlpDownloadUrl = {
  * host after `@`. Host and path checks must use this parse, or they disagree
  * and a second YouTube name can hide `/redirect` or `consent.youtube.com`.
  */
-function parseYtDlpDownloadUrl(raw: string): YtDlpDownloadUrl | null {
-    const match = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)/i.exec(raw.trim())
+export function parseYtDlpDownloadUrl(raw: string): YtDlpDownloadUrl | null {
+    const match = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)(?:\?([^#]*))?/i.exec(raw.trim())
     if (!match) return null
     const protocol = (match[1] ?? "").toLowerCase()
     let authority = match[2] ?? ""
     const pathname = match[3] ?? ""
+    const search = match[4] ?? ""
     const at = authority.lastIndexOf("@")
     if (at !== -1) authority = authority.slice(at + 1)
     if (!authority) return null
@@ -47,7 +50,7 @@ function parseYtDlpDownloadUrl(raw: string): YtDlpDownloadUrl | null {
         hostname = authority.toLowerCase()
     }
     if (!hostname) return null
-    return { protocol, hostname, pathname }
+    return { protocol, hostname, pathname, search }
 }
 
 /** Hostname urllib (and therefore yt-dlp) will request. */
@@ -60,7 +63,7 @@ export function urllibRequestHostname(url: string): string | null {
  * `\` in the path is folded to `/` so `redirect\videos` stays a redirect.
  * That fold must not run on the authority: urllib keeps `\` in userinfo.
  */
-function youtubeDownloadPathSegments(pathname: string): string[] {
+export function youtubeDownloadPathSegments(pathname: string): string[] {
     let decoded: string
     try {
         decoded = decodeURIComponent(pathname)

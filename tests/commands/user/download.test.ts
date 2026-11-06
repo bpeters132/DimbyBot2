@@ -326,6 +326,18 @@ describe("download", () => {
         assert.equal(g.__downloadSpawnArgs, undefined)
     })
 
+    it("rejects a YouTube attribution_link that wraps a private redirect", async () => {
+        const wrapped = `/redirect?event=video_description&redir_token=x&q=${encodeURIComponent("http://127.0.0.1/latest/meta-data/")}`
+        const { interaction, calls } = createSlashInteraction({
+            options: {
+                url: `https://www.youtube.com/attribution_link?a=1&u=${encodeURIComponent(wrapped)}`,
+            },
+        })
+        await download.execute(interaction, createBotClientFake())
+        assert.deepEqual(texts(calls), ["Please provide a valid YouTube URL."])
+        assert.equal(g.__downloadSpawnArgs, undefined)
+    })
+
     it("says it is preparing the workspace", async () => {
         g.__downloadSpawnMode = "throw"
         const { interaction, calls } = ready()
