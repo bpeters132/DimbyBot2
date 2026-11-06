@@ -18,6 +18,11 @@ export function playWouldSendNullEncoded(track: { encoded?: unknown } | null | u
 
 type PlayFn = Player["play"]
 
+/** lavalink-client types `Player.play()` as `any`; the runtime value is this player. */
+function playPlayer(play: PlayFn, options: Parameters<PlayFn>[0]): Promise<Player> {
+    return play(options) as Promise<Player>
+}
+
 function reconnectPlayTarget(player: Player): Track | UnresolvedTrack | null {
     return player.queue.current ?? player.queue.tracks[0] ?? null
 }
@@ -56,21 +61,24 @@ export function armAutoReconnectPlayPrepare(
     const originalPlay: PlayFn = player.play.bind(player)
     let consumed = false
     player.play = async (options) => {
-        if (consumed) return originalPlay(options)
+        if (consumed) return playPlayer(originalPlay, options)
         consumed = true
         player.play = originalPlay
 
         const liveBefore = getLivePlayer()
         if (!liveBefore || liveBefore !== player) {
-            return originalPlay(options)
+            return playPlayer(originalPlay, options)
         }
 
         const readyHead = reconnectPlayTarget(liveBefore)
         if (readyHead && isYoutubePlaybackReady(readyHead) && liveBefore.queue.current) {
-            return originalPlay(playOptionsForPreparedCurrent(options, liveBefore.queue.current))
+            return playPlayer(
+                originalPlay,
+                playOptionsForPreparedCurrent(options, liveBefore.queue.current)
+            )
         }
         if (readyHead && isYoutubePlaybackReady(readyHead)) {
-            return originalPlay(options)
+            return playPlayer(originalPlay, options)
         }
 
         const prepared = await ensureCurrentPlayable(getLivePlayer, player.guildId, config)
@@ -78,13 +86,16 @@ export function armAutoReconnectPlayPrepare(
         if (!live || live !== player) return player
 
         if (prepared === "ok" && live.queue.current && isYoutubePlaybackReady(live.queue.current)) {
-            return originalPlay(playOptionsForPreparedCurrent(options, live.queue.current))
+            return playPlayer(
+                originalPlay,
+                playOptionsForPreparedCurrent(options, live.queue.current)
+            )
         }
 
         if (prepared === "ok" && !live.queue.current) {
             const upcoming = live.queue.tracks[0]
             if (upcoming && isYoutubePlaybackReady(upcoming)) {
-                return originalPlay(options)
+                return playPlayer(originalPlay, options)
             }
         }
 
@@ -95,7 +106,10 @@ export function armAutoReconnectPlayPrepare(
         if (prepared === "deferred") {
             void resumeWhenCurrentPrepared(live, getLivePlayer, originalPlay, options, config)
         } else if (live.queue.current && isYoutubePlaybackReady(live.queue.current)) {
-            return originalPlay(playOptionsForPreparedCurrent(options, live.queue.current))
+            return playPlayer(
+                originalPlay,
+                playOptionsForPreparedCurrent(options, live.queue.current)
+            )
         }
         return live
     }

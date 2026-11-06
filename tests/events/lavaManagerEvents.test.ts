@@ -14,7 +14,11 @@ async function initEmptySettings() {
     resetGuildSettingsStoreForTests()
     setGuildSettingsStoreDbForTests({
         getGuildSettingsStoreFromDatabase: async () => ({}),
-        replaceGuildSettingsStoreInDatabase: async () => undefined,
+        replaceGuildSettingsStoreInDatabase: async () => ({
+            rowsUpserted: 0,
+            rowsDeleted: 0,
+            rowsAffected: 0,
+        }),
     })
     await initializeGuildSettingsStore({ debug() {} })
 }

@@ -143,8 +143,7 @@ function levenshtein(a: string, b: string) {
     const n = b.length
     if (m === 0) return n
     if (n === 0) return m
-    const row = new Array(n + 1)
-    for (let j = 0; j <= n; j++) row[j] = j
+    const row = Array.from({ length: n + 1 }, (_, index) => index)
     for (let i = 1; i <= m; i++) {
         let prev = row[0]
         row[0] = i

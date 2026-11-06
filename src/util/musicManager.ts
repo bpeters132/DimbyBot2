@@ -375,9 +375,11 @@ export async function handleQueryAndPlay(
                 await buttonInteraction.deferUpdate()
                 await confirmationMessage
                     .delete()
-                    .catch((e) =>
+                    .catch((e: unknown) =>
                         client.warn(
-                            `[MusicManager] Failed to delete confirmation message: ${e.message}`
+                            `[MusicManager] Failed to delete confirmation message: ${
+                                e instanceof Error ? e.message : String(e)
+                            }`
                         )
                     )
 
@@ -424,9 +426,11 @@ export async function handleQueryAndPlay(
                 )
                 await confirmationMessage
                     .delete()
-                    .catch((e) =>
+                    .catch((e: unknown) =>
                         client.warn(
-                            `[MusicManager] Failed to delete confirmation message on timeout: ${e.message}`
+                            `[MusicManager] Failed to delete confirmation message on timeout: ${
+                                e instanceof Error ? e.message : String(e)
+                            }`
                         )
                     )
                 if (localMatchSourceIsUrlTitle && potentialUrlTrackInfo) {

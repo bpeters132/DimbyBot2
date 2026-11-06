@@ -643,7 +643,7 @@ async function restoreSingleSession(
     }
 
     const existingBeforeRestore = client.lavalink.getPlayer(guildId)
-    if (shouldSkipRestoreHydrateForLivePlayer(existingBeforeRestore)) {
+    if (existingBeforeRestore && shouldSkipRestoreHydrateForLivePlayer(existingBeforeRestore)) {
         // Concurrent thin `/play` during multi-guild restore must keep the fuller DB row
         // (#240 / #279). A complete live queue (e.g. second node connect while this guild
         // is already playing) must not mark preserve-prior — that bricks all later saves.
@@ -746,7 +746,7 @@ async function restoreSingleSession(
             }
             // Re-check under the reservation: a concurrent create may have won the race.
             const liveBeforeCreate = client.lavalink.getPlayer(guildId)
-            if (shouldSkipRestoreHydrateForLivePlayer(liveBeforeCreate)) {
+            if (liveBeforeCreate && shouldSkipRestoreHydrateForLivePlayer(liveBeforeCreate)) {
                 if (
                     shouldMarkPreservePriorAfterSkippingLiveHydrate({
                         storedTracks: storedTracksForRestorePreserveDecision(snapshot),
@@ -979,9 +979,10 @@ async function restoreSingleSession(
         // successor would look like a live orphan and must not be destroyed here.
         const liveNow = client.lavalink.getPlayer(guildId)
         if (restorePlayer && liveNow && isRestoreHydratePlayerStillLive(restorePlayer, liveNow)) {
+            const hydratePlayer = restorePlayer
             const abandoned = await withGuildPlayerQueueLock(guildId, async () => {
                 const live = client.lavalink.getPlayer(guildId)
-                if (!isRestoreHydratePlayerStillLive(restorePlayer, live)) {
+                if (!isRestoreHydratePlayerStillLive(hydratePlayer, live)) {
                     return "successor" as const
                 }
                 if (shouldAbandonRestoreForConcurrentQueue(liveNow)) return "concurrent" as const

@@ -57,11 +57,11 @@ export function isExpectedPlayerMoveConfirm<T extends object>(
  * True when a `playerUpdate` event confirms the expected player is connected in the target channel.
  */
 export function isExpectedPlayerUpdateConfirm<
-    T extends { connected: boolean; voiceChannelId: string | null },
+    T extends { connected?: boolean; voiceChannelId: string | null },
 >(updatedPlayer: T, expectedPlayer: T, targetChannelId: string): boolean {
     return (
         updatedPlayer === expectedPlayer &&
-        updatedPlayer.connected &&
+        updatedPlayer.connected === true &&
         updatedPlayer.voiceChannelId === targetChannelId
     )
 }

@@ -112,7 +112,11 @@ async function boot() {
         },
         updateYoutubeAlert: async () => updateResult,
         deleteYoutubeAlert: async () => deleteResult,
-        upsertYoutubeChannelLease: async () => undefined,
+        upsertYoutubeChannelLease: async (youtubeChannelId, leaseExpiresAt) => ({
+            youtubeChannelId,
+            leaseExpiresAt,
+            updatedAt: leaseExpiresAt,
+        }),
         deleteYoutubeChannelLease: async () => undefined,
     })
     await initializeYoutubeAlertStore()

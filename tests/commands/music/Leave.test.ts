@@ -30,8 +30,17 @@ function idleGuild() {
 
 async function withUnrefTimers(work: () => Promise<void>) {
     const original = globalThis.setTimeout
-    globalThis.setTimeout = ((handler, timeout, ...args) => {
-        const timer = original(handler, timeout, ...args)
+    const start = original as (
+        handler: (...callbackArgs: unknown[]) => void,
+        timeout?: number,
+        ...args: unknown[]
+    ) => ReturnType<typeof setTimeout>
+    globalThis.setTimeout = ((
+        handler: (...callbackArgs: unknown[]) => void,
+        timeout?: number,
+        ...args: unknown[]
+    ) => {
+        const timer = start(handler, timeout, ...args)
         timer.unref?.()
         return timer
     }) as typeof setTimeout

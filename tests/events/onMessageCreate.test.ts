@@ -12,7 +12,11 @@ async function initSettings(store: Record<string, { controlChannelId?: string }>
     resetGuildSettingsStoreForTests()
     setGuildSettingsStoreDbForTests({
         getGuildSettingsStoreFromDatabase: async () => store,
-        replaceGuildSettingsStoreInDatabase: async () => undefined,
+        replaceGuildSettingsStoreInDatabase: async () => ({
+            rowsUpserted: 0,
+            rowsDeleted: 0,
+            rowsAffected: 0,
+        }),
     })
     await initializeGuildSettingsStore({ debug() {} })
 }
