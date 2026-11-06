@@ -172,7 +172,7 @@ const trackBody = {
 }
 
 function details(result: { body: { ok: boolean; error?: { details?: string; error?: string } } }) {
-    return result.body.ok ? "" : (result.body.error?.details ?? result.body.error?.error)
+    return result.body.ok ? "" : (result.body.error?.details ?? result.body.error?.error ?? "")
 }
 
 describe("playlist handlers", () => {

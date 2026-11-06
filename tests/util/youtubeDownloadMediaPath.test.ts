@@ -91,6 +91,28 @@ describe("isAllowedYoutubeDownloadMediaUrl", () => {
             false
         )
         assert.equal(
+            isAllowedYoutubeDownloadMediaUrl(`https://consent.youtube.com/watch?v=${VIDEO}`),
+            false
+        )
+        assert.equal(
+            isAllowedYoutubeDownloadMediaUrl(
+                "http://www.youtube.com\\@127.0.0.1/latest/meta-data/"
+            ),
+            false
+        )
+        assert.equal(
+            isAllowedYoutubeDownloadMediaUrl(
+                "https://www.youtube.com\\@consent.youtube.com/m?continue=http://169.254.169.254/latest/meta-data/"
+            ),
+            false
+        )
+        assert.equal(
+            isAllowedYoutubeDownloadMediaUrl(
+                "https://www.youtube.com\\@www.youtube.com/redirect?q=http://127.0.0.1/latest/meta-data/"
+            ),
+            false
+        )
+        assert.equal(
             isAllowedYoutubeDownloadMediaUrl("https://example.com/watch?v=" + VIDEO),
             false
         )

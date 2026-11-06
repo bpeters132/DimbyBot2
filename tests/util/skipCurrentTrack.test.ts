@@ -134,7 +134,7 @@ describe("skipCurrentTrack", () => {
         const player = {
             guildId: "guild-skip-double",
             queue: {
-                current,
+                current: current as typeof current | null,
                 get tracks() {
                     return upcoming
                 },

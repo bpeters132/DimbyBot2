@@ -37,11 +37,11 @@ async function runUserCode(code: string) {
         const context = vm.createContext(sandbox)
         const wrapped = `;(async () => {\n${code}\n})()`
         const script = new vm.Script(wrapped, { filename: "eval-user.js" })
-        const maybePromise = script.runInContext(context, { timeout: VM_SYNC_MS })
+        const maybePromise: unknown = script.runInContext(context, { timeout: VM_SYNC_MS })
         const asyncTimeout = new Promise<never>((_, reject) => {
             setTimeout(() => reject(new Error("Eval async execution timed out.")), ASYNC_EVAL_MS)
         })
-        const settled = await Promise.race([Promise.resolve(maybePromise), asyncTimeout])
+        const settled: unknown = await Promise.race([Promise.resolve(maybePromise), asyncTimeout])
         let out: string
         if (typeof settled === "string") {
             out = settled

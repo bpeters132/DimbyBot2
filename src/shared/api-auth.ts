@@ -11,7 +11,10 @@ import {
 import type { GuildDashboardSnapshotResult } from "../types/web.js"
 import type BotClient from "../lib/BotClient.js"
 import { fetchDiscordUserGuilds } from "./discord-rest.js"
-import { resolveDiscordUserSnowflake } from "./discord-user-id.js"
+import {
+    getDiscordBetterAuthAccountId,
+    resolveDiscordUserSnowflake,
+} from "./discord-user-id.js"
 import { auth } from "./auth-node.js"
 import { tryGetBotClient } from "../lib/botClientRegistry.js"
 import { webPlayerDebug, webPlayerWarn } from "./web-player-debug-log.js"
@@ -160,8 +163,16 @@ export async function verifyGuildAccess(
     try {
         async function verifyMembershipViaOAuth(): Promise<GuildAccessResult> {
             try {
+                const discordAccountId = await getDiscordBetterAuthAccountId(session.user.id)
+                if (!discordAccountId) {
+                    return {
+                        ok: false,
+                        retryable: true,
+                        error: "Missing or expired Discord access token.",
+                    }
+                }
                 const accessTokenResult = (await auth.api.getAccessToken({
-                    body: { providerId: "discord" },
+                    body: { accountId: discordAccountId },
                     headers: asHeaders(headers),
                 })) as { accessToken?: string } | null
 

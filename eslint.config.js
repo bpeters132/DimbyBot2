@@ -34,8 +34,34 @@ export default tseslint.config(
     {
         files: ["**/*.{ts,tsx}"],
         extends: [tseslint.configs.recommended],
+        languageOptions: {
+            parserOptions: {
+                projectService: {
+                    allowDefaultProject: ["prisma.config.ts"],
+                    defaultProject: "tsconfig.eslint.json",
+                },
+                tsconfigRootDir: import.meta.dirname,
+            },
+        },
         rules: {
             semi: ["error", "never"],
+            "@typescript-eslint/no-explicit-any": "error",
+            "@typescript-eslint/no-unsafe-assignment": "error",
+            "@typescript-eslint/no-unsafe-argument": "error",
+            "@typescript-eslint/no-unsafe-call": "error",
+            "@typescript-eslint/no-unsafe-member-access": "error",
+            "@typescript-eslint/no-unsafe-return": "error",
+            // Descriptions only. ts-nocheck stays banned (it is a file-wide waiver).
+            "@typescript-eslint/ban-ts-comment": [
+                "error",
+                {
+                    "ts-expect-error": "allow-with-description",
+                    "ts-ignore": "allow-with-description",
+                    "ts-nocheck": true,
+                    "ts-check": false,
+                    minimumDescriptionLength: 10,
+                },
+            ],
         },
     },
     eslintConfigPrettier

@@ -16,7 +16,11 @@ async function signOutAndGoHome(): Promise<void> {
 }
 
 export function UserHeader({ showAdminLink = false }: { showAdminLink?: boolean }) {
-    const { data: session } = authClient.useSession()
+    const { data } = authClient.useSession()
+    // better-auth 1.7 client types `useSession().data` as `never` without a server-instance plugin.
+    const session = data as {
+        user?: { name?: string | null; image?: string | null }
+    } | null
     const [signOutError, setSignOutError] = useState<string | null>(null)
     const [signOutLoading, setSignOutLoading] = useState(false)
     const signOutInFlight = useRef(false)

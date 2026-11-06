@@ -164,7 +164,11 @@ describe("armAutoReconnectPlayPrepare", () => {
         const before = player.play
         armAutoReconnectPlayPrepare(player, () => player)
         assert.equal(player.play, before)
-        await player.play({ position: 12_000, paused: false, clientTrack: player.queue.current })
+        await player.play({
+            position: 12_000,
+            paused: false,
+            clientTrack: player.queue.current ?? undefined,
+        })
         assert.deepEqual(player.playCalls, [
             { position: 12_000, paused: false, clientTrack: player.queue.current },
         ])
@@ -216,7 +220,11 @@ describe("armAutoReconnectPlayPrepare", () => {
         const zombie = makePlayer(youtubeMetadata(VIDEO_A))
         const live = makePlayer(youtubeReady(VIDEO_B))
         armAutoReconnectPlayPrepare(zombie, () => live, configWith(companionOkFetch()))
-        await zombie.play({ position: 0, paused: false, clientTrack: zombie.queue.current })
+        await zombie.play({
+            position: 0,
+            paused: false,
+            clientTrack: zombie.queue.current ?? undefined,
+        })
         assert.equal(zombie.playCalls.length, 1)
         assert.equal(isYoutubePlaybackReady(zombie.queue.current!), false)
     })

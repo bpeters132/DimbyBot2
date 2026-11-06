@@ -26,6 +26,14 @@ describe("ws-connect-token", () => {
         assert.equal(parseWsConnectToken("", secret), null)
     })
 
+    it("rejects a signed payload that is not an object", () => {
+        const payload = Buffer.from("null", "utf8").toString("base64url")
+        const sig = createHmac("sha256", Buffer.from(secret, "utf8"))
+            .update(payload)
+            .digest("base64url")
+        assert.equal(parseWsConnectToken(`${payload}.${sig}`, secret), null)
+    })
+
     it("rejects expired tokens", () => {
         const token = createWsConnectToken("user-1", secret, 60)
         const i = token.lastIndexOf(".")

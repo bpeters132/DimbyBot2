@@ -28,18 +28,30 @@ export async function voiceContextGET(
 
     const discordUserId = await resolveDiscordUserSnowflake(sessionResult.session.user.id, headers)
     const client = tryGetBotClient()
-    const identity = mapVoiceContextIdentityFailure({
-        discordUserId,
-        botReady: Boolean(client),
-    })
-    if (identity.ok === false) {
+    if (!discordUserId || !client) {
+        const identity = mapVoiceContextIdentityFailure({
+            discordUserId,
+            botReady: Boolean(client),
+        })
+        if (identity.ok === false) {
+            return {
+                status: identity.status,
+                body: {
+                    ok: false,
+                    error: {
+                        error: identity.error,
+                        details: identity.details,
+                    },
+                },
+            }
+        }
         return {
-            status: identity.status,
+            status: 503,
             body: {
                 ok: false,
                 error: {
-                    error: identity.error,
-                    details: identity.details,
+                    error: "Bot is starting up",
+                    details: "The Discord bot is not connected yet.",
                 },
             },
         }

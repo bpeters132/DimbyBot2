@@ -257,6 +257,7 @@ export function companionLengthMsFromPlayerJson(playerJson: {
     video_details?: { length_seconds?: string | number }
 }): number | null {
     const raw = playerJson.videoDetails?.lengthSeconds ?? playerJson.video_details?.length_seconds
+    if (typeof raw !== "string" && typeof raw !== "number") return null
     const seconds = typeof raw === "string" ? Number(raw) : raw
     if (!Number.isFinite(seconds) || seconds <= 0) return null
     return Math.floor(seconds * 1000)
@@ -588,7 +589,10 @@ export async function resolveYoutubePlaybackTracks(
 ): Promise<Array<Track | UnresolvedTrack>> {
     if (tracks.length === 0) return tracks
     const log = companionLogger(config)
-    const slots: Array<Track | UnresolvedTrack | undefined> = new Array(tracks.length)
+    const slots: Array<Track | UnresolvedTrack | undefined> = Array.from(
+        { length: tracks.length },
+        () => undefined
+    )
     let nextIndex = 0
 
     async function worker(): Promise<void> {

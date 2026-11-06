@@ -50,6 +50,35 @@ export async function getDiscordAccountSnowflake(betterAuthUserId: string): Prom
 }
 
 /**
+ * Better Auth `getAccessToken` selects an account by its row `id`.
+ * Returns that id for the linked Discord provider, or null when the row is missing.
+ */
+export async function getDiscordBetterAuthAccountId(
+    betterAuthUserId: string
+): Promise<string | null> {
+    let accounts: { id: string; providerId: string }[]
+    try {
+        accounts = await getWebPrismaClient().account.findMany({
+            where: { userId: betterAuthUserId },
+            select: { id: true, providerId: true },
+        })
+    } catch (e) {
+        const code =
+            e && typeof e === "object" && "code" in e ? String((e as { code: unknown }).code) : ""
+        const errName = e instanceof Error ? e.name : "unknown"
+        console.warn(
+            "[discord-user-id] account id lookup skipped (database unavailable?)",
+            code || errName || "account lookup failed"
+        )
+        return null
+    }
+    const discordRow = accounts.find(
+        (a) => a.id?.trim() && a.providerId && a.providerId.toLowerCase() === "discord"
+    )
+    return discordRow?.id.trim() ?? null
+}
+
+/**
  * Resolves the signed-in user's Discord snowflake for guild/voice/permission logic.
  * Uses DB `account.accountId`, then Better Auth `user.id` if it is already a snowflake, then Discord
  * `GET /users/@me` with the session access token when the DB row is missing or mis-keyed.
@@ -66,9 +95,14 @@ export async function resolveDiscordUserSnowflake(
         return betterAuthUserId.trim()
     }
 
+    const betterAuthAccountId = await getDiscordBetterAuthAccountId(betterAuthUserId)
+    if (!betterAuthAccountId) {
+        return null
+    }
+
     try {
         const accessResult: unknown = await auth.api.getAccessToken({
-            body: { providerId: "discord" },
+            body: { accountId: betterAuthAccountId },
             headers: sessionHeaders,
         })
         if (!accessResult || typeof accessResult !== "object") {

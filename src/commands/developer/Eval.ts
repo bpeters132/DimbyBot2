@@ -66,8 +66,9 @@ function runSnippetInWorker(code: string): Promise<EvalWorkerMessage> {
                 finish({ ok: false, error: "Invalid worker response." })
             }
         })
-        worker.on("error", (err) => {
-            finish({ ok: false, error: err.stack || err.message })
+        worker.on("error", (err: unknown) => {
+            const error = err instanceof Error ? err : new Error(String(err))
+            finish({ ok: false, error: error.stack || error.message })
         })
         worker.on("exit", (code) => {
             if (!settled) {

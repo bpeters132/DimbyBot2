@@ -114,7 +114,11 @@ function createPlayer(overrides: Record<string, unknown> = {}) {
         paused: false,
         voiceChannelId: "voice-1",
         repeatMode: "off",
-        queue: { current: { info: { title: "Song" } }, tracks, previous: [] },
+        queue: {
+            current: { info: { title: "Song" } } as { info: { title: string } } | null,
+            tracks,
+            previous: [] as unknown[],
+        },
         get: (key: string) => bag.get(key),
         set: (key: string, value: unknown) => bag.set(key, value),
         async pause() {},
@@ -153,7 +157,11 @@ async function initControlSettings() {
         getGuildSettingsStoreFromDatabase: async () => ({
             "guild-1": { controlChannelId: "channel-1", controlMessageId: "message-1" },
         }),
-        replaceGuildSettingsStoreInDatabase: async () => undefined,
+        replaceGuildSettingsStoreInDatabase: async () => ({
+            rowsUpserted: 0,
+            rowsDeleted: 0,
+            rowsAffected: 0,
+        }),
     })
     await initializeGuildSettingsStore({ debug() {} })
 }

@@ -291,7 +291,7 @@ export async function handleControlButtonInteraction(
                         )
                         try {
                             const idleReconnect = resolveControlIdlePlayReconnect({
-                                playerConnected: player.connected,
+                                playerConnected: player.connected === true,
                                 playerVoiceChannelId: player.voiceChannelId,
                                 memberVoiceChannelId: member.voice?.channel?.id,
                             })

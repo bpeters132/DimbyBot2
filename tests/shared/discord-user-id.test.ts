@@ -6,7 +6,7 @@ const ME_SNOWFLAKE = "234567890123456789"
 const INTERNAL_USER_ID = "user_internal_cuid"
 
 const state = {
-    accounts: [] as { providerId: string; accountId: string }[],
+    accounts: [] as { id?: string; providerId: string; accountId: string }[],
     dbThrows: false as boolean | Error,
     accessToken: { accessToken: "tok" } as unknown,
     accessTokenThrows: false,
@@ -14,6 +14,7 @@ const state = {
     meCalls: 0,
     meToken: null as string | null,
     tokenCalls: 0,
+    tokenBody: null as { accountId?: string } | null,
 }
 
 function resetState() {
@@ -25,6 +26,7 @@ function resetState() {
     state.meCalls = 0
     state.meToken = null
     state.tokenCalls = 0
+    state.tokenBody = null
 }
 
 mock.module("../../src/lib/webPrisma.js", {
@@ -50,8 +52,9 @@ mock.module("../../src/shared/auth-node.js", {
     namedExports: {
         auth: {
             api: {
-                getAccessToken: async () => {
+                getAccessToken: async (args: { body?: { accountId?: string } }) => {
                     state.tokenCalls += 1
+                    state.tokenBody = args?.body ?? null
                     if (state.accessTokenThrows) {
                         throw new Error("token lookup failed")
                     }
@@ -76,6 +79,7 @@ const {
     isDiscordSnowflake,
     parseDashboardGuildId,
     getDiscordAccountSnowflake,
+    getDiscordBetterAuthAccountId,
     resolveDiscordUserSnowflake,
 } = await import("../../src/shared/discord-user-id.js")
 
@@ -150,6 +154,27 @@ describe("getDiscordAccountSnowflake", () => {
     })
 })
 
+describe("getDiscordBetterAuthAccountId", () => {
+    beforeEach(() => {
+        resetState()
+    })
+
+    it("returns the Discord account row id, not the provider name", async () => {
+        state.accounts = [
+            { id: "acct_google", providerId: "google", accountId: "g" },
+            { id: "  acct_discord  ", providerId: "Discord", accountId: "not-a-snowflake" },
+        ]
+        assert.equal(await getDiscordBetterAuthAccountId(INTERNAL_USER_ID), "acct_discord")
+    })
+
+    it("returns null when no Discord row or id is present", async () => {
+        state.accounts = [{ providerId: "discord", accountId: ACCOUNT_SNOWFLAKE }]
+        assert.equal(await getDiscordBetterAuthAccountId(INTERNAL_USER_ID), null)
+        state.accounts = [{ id: "acct_google", providerId: "google", accountId: "g" }]
+        assert.equal(await getDiscordBetterAuthAccountId(INTERNAL_USER_ID), null)
+    })
+})
+
 describe("resolveDiscordUserSnowflake", () => {
     beforeEach(() => {
         resetState()
@@ -178,22 +203,39 @@ describe("resolveDiscordUserSnowflake", () => {
         assert.equal(state.meCalls, 0)
     })
 
-    it("falls through to Discord @me when the DB misses and user.id is not a snowflake", async () => {
+    it("returns null without getAccessToken when no Discord account row exists", async () => {
+        const id = await resolveDiscordUserSnowflake(INTERNAL_USER_ID, new Headers())
+        assert.equal(id, null)
+        assert.equal(state.tokenCalls, 0)
+        assert.equal(state.meCalls, 0)
+    })
+
+    it("falls through to Discord @me using the Discord account row id", async () => {
+        state.accounts = [
+            { id: "acct_discord", providerId: "discord", accountId: "not-a-snowflake" },
+        ]
         state.accessToken = { accessToken: "  live-token  " }
         const id = await resolveDiscordUserSnowflake(INTERNAL_USER_ID, new Headers())
         assert.equal(id, ME_SNOWFLAKE)
         assert.equal(state.tokenCalls, 1)
+        assert.deepEqual(state.tokenBody, { accountId: "acct_discord" })
         assert.equal(state.meCalls, 1)
         assert.equal(state.meToken, "live-token")
     })
 
     it("returns null when getAccessToken returns a non-object", async () => {
+        state.accounts = [
+            { id: "acct_discord", providerId: "discord", accountId: "not-a-snowflake" },
+        ]
         state.accessToken = "not-an-object"
         assert.equal(await resolveDiscordUserSnowflake(INTERNAL_USER_ID, new Headers()), null)
         assert.equal(state.meCalls, 0)
     })
 
     it("returns null when getAccessToken returns no usable accessToken", async () => {
+        state.accounts = [
+            { id: "acct_discord", providerId: "discord", accountId: "not-a-snowflake" },
+        ]
         state.accessToken = { accessToken: "   " }
         assert.equal(await resolveDiscordUserSnowflake(INTERNAL_USER_ID, new Headers()), null)
         state.accessToken = {}
@@ -202,12 +244,18 @@ describe("resolveDiscordUserSnowflake", () => {
     })
 
     it("returns null when getAccessToken throws", async () => {
+        state.accounts = [
+            { id: "acct_discord", providerId: "discord", accountId: "not-a-snowflake" },
+        ]
         state.accessTokenThrows = true
         assert.equal(await resolveDiscordUserSnowflake(INTERNAL_USER_ID, new Headers()), null)
         assert.equal(state.meCalls, 0)
     })
 
     it("returns null when Discord @me fail-closes", async () => {
+        state.accounts = [
+            { id: "acct_discord", providerId: "discord", accountId: "not-a-snowflake" },
+        ]
         state.meId = null
         assert.equal(await resolveDiscordUserSnowflake(INTERNAL_USER_ID, new Headers()), null)
         assert.equal(state.meCalls, 1)

@@ -89,7 +89,7 @@ function postableChannel(input?: { hasPerms?: boolean; send?: () => Promise<unkn
     }
 }
 
-function clientWith(channel: unknown | null, user: BotClient["user"] | null = undefined) {
+function clientWith(channel: unknown | null, user?: BotClient["user"] | null) {
     const client = createBotClientFake(user === null ? { user: null } : {})
     const raw = client as unknown as { channels: { fetch: (id: string) => Promise<unknown> } }
     raw.channels.fetch = async () => channel

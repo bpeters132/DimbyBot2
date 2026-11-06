@@ -12,6 +12,22 @@ import { schedulePrefetchWindow } from "../../util/youtubePlaybackWindow.js"
 import { parseQueueIndex, parseQueueReorderNewIndex } from "../parseBotApiParams.js"
 import { clampQueueReorderInsertIndex } from "../queueReorderInsert.js"
 import { mapQueueIndexLockFailure } from "../queueIndexLockFailure.js"
+import type { Track, UnresolvedTrack } from "lavalink-client"
+
+/**
+ * `Queue.splice` is typed as `any`. Amount 1 returns the track itself, not a one-element array.
+ */
+function trackRemovedBySplice(removed: unknown): Track | UnresolvedTrack | undefined {
+    const value = firstSpliceValue(removed)
+    if (value == null || typeof value !== "object") return undefined
+    return value as Track | UnresolvedTrack
+}
+
+function firstSpliceValue(removed: unknown): unknown {
+    if (!Array.isArray(removed)) return removed
+    const list = removed as readonly unknown[]
+    return list[0]
+}
 
 export async function queueIndexDELETE(
     headers: Headers,
@@ -144,8 +160,8 @@ export async function queueIndexPATCH(
             // lavalink-client Queue.splice returns the Track itself when amount === 1
             // (not a one-element array). Array-destructuring that value throws after the
             // remove already landed, permanently dropping the track from the live queue.
-            const removed = await live.queue.splice(sourceIndex, 1)
-            const track = Array.isArray(removed) ? removed[0] : removed
+            const removed: unknown = await live.queue.splice(sourceIndex, 1)
+            const track = trackRemovedBySplice(removed)
             if (!track) {
                 return { ok: false as const, reason: "out_of_range" as const }
             }
