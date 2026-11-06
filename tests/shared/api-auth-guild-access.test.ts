@@ -18,6 +18,8 @@ const state = {
     discordUserId: USER as string | null,
     accessToken: "discord-oauth-token" as string | null,
     accessTokenThrows: false as boolean,
+    discordAccountId: "acct-discord" as string | null,
+    tokenBody: null as { accountId?: string } | null,
     guilds: async (): Promise<
         | { ok: true; guilds: Array<{ id: string; name: string; icon: string | null }> }
         | { ok: false; status: number; message: string }
@@ -47,6 +49,8 @@ function resetState() {
     state.discordUserId = USER
     state.accessToken = "discord-oauth-token"
     state.accessTokenThrows = false
+    state.discordAccountId = "acct-discord"
+    state.tokenBody = null
     state.guilds = async () => ({
         ok: true,
         guilds: [{ id: GUILD, name: "Friends", icon: null }],
@@ -91,7 +95,8 @@ mock.module("../../src/shared/auth-node.js", {
         auth: {
             api: {
                 getSession: async () => state.session,
-                getAccessToken: async () => {
+                getAccessToken: async (args: { body?: { accountId?: string } }) => {
+                    state.tokenBody = args?.body ?? null
                     if (state.accessTokenThrows) throw new Error("token lookup failed")
                     return state.accessToken ? { accessToken: state.accessToken } : {}
                 },
@@ -103,6 +108,7 @@ mock.module("../../src/shared/auth-node.js", {
 mock.module("../../src/shared/discord-user-id.js", {
     namedExports: {
         resolveDiscordUserSnowflake: async () => state.discordUserId,
+        getDiscordBetterAuthAccountId: async () => state.discordAccountId,
     },
 })
 
@@ -142,6 +148,18 @@ describe("verifyGuildAccess", () => {
     it("allows OAuth guild-list membership without a bot GuildMember (memberResolved false)", async () => {
         const result = await verifyGuildAccess(session, GUILD, new Headers(), USER)
         assert.deepEqual(result, { ok: true, memberResolved: false })
+        assert.deepEqual(state.tokenBody, { accountId: "acct-discord" })
+    })
+
+    it("does not call getAccessToken when the Discord account row id is missing", async () => {
+        state.discordAccountId = null
+        const result = await verifyGuildAccess(session, GUILD, new Headers(), USER)
+        assert.deepEqual(result, {
+            ok: false,
+            retryable: true,
+            error: "Missing or expired Discord access token.",
+        })
+        assert.equal(state.tokenBody, null)
     })
 
     it("rejects OAuth guild-list misses as non-retryable (HTTP 403 via the mapper)", async () => {

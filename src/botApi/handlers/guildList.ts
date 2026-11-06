@@ -3,7 +3,10 @@ import { fetchDiscordUserGuilds } from "../../util/discordUserGuilds.js"
 import { discordGuildIconUrl } from "../../util/discordGuildIconUrl.js"
 import { DISCORD_BOT_INVITE_PERMISSIONS } from "../../shared/discordBotPermissions.js"
 import { getAuthenticatedSession } from "../../shared/api-auth.js"
-import { resolveDiscordUserSnowflake } from "../../shared/discord-user-id.js"
+import {
+    getDiscordBetterAuthAccountId,
+    resolveDiscordUserSnowflake,
+} from "../../shared/discord-user-id.js"
 import { snapshotGuildListPlayer } from "../../shared/player-state.js"
 import { tryGetBotClient } from "../../lib/botClientRegistry.js"
 import { mapDiscordGuildListFailureStatus } from "../guildListDiscordStatus.js"
@@ -27,8 +30,19 @@ export async function guildListGET(
 
     let accessTokenResult: { accessToken?: string } | null
     try {
+        const discordAccountId = await getDiscordBetterAuthAccountId(sessionResult.session.user.id)
+        if (!discordAccountId) {
+            const mapped = mapGuildListSetupFailure("access_token_missing")
+            return {
+                status: mapped.status,
+                body: {
+                    ok: false,
+                    error: { error: mapped.error, details: mapped.details },
+                },
+            }
+        }
         accessTokenResult = (await auth.api.getAccessToken({
-            body: { providerId: "discord" },
+            body: { accountId: discordAccountId },
             headers,
         })) as { accessToken?: string } | null
     } catch (err: unknown) {

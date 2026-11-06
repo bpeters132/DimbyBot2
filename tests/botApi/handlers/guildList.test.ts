@@ -26,6 +26,8 @@ const state = {
             | { ok: true; guilds: Array<{ id: string; name: string; icon: string | null }> }
             | { ok: false; status: number },
     discordUserId: "100000000000000001" as string | null,
+    discordAccountId: "acct-discord" as string | null,
+    tokenBody: null as { accountId?: string } | null,
     client: readyClient() as null | ReturnType<typeof readyClient>,
 }
 
@@ -56,7 +58,14 @@ mock.module("../../../src/shared/api-auth.js", {
 
 mock.module("../../../src/shared/auth-node.js", {
     namedExports: {
-        auth: { api: { getAccessToken: () => state.token() } },
+        auth: {
+            api: {
+                getAccessToken: (args: { body?: { accountId?: string } }) => {
+                    state.tokenBody = args?.body ?? null
+                    return state.token()
+                },
+            },
+        },
     },
 })
 
@@ -76,6 +85,7 @@ mock.module("../../../src/lib/botClientRegistry.js", {
 mock.module("../../../src/shared/discord-user-id.js", {
     namedExports: {
         resolveDiscordUserSnowflake: async () => state.discordUserId,
+        getDiscordBetterAuthAccountId: async () => state.discordAccountId,
     },
 })
 
@@ -154,8 +164,19 @@ describe("guildListGET", () => {
         const result = await guildListGET(new Headers())
         assert.equal(result.status, 200)
         assert.equal(result.body.ok, true)
+        assert.deepEqual(state.tokenBody, { accountId: "acct-discord" })
         if (result.body.ok) {
             assert.equal(result.body.data.guilds[0]?.name, "Friends")
         }
+    })
+
+    it("returns 403 without getAccessToken when the Discord account row id is missing", async () => {
+        state.tokenBody = null
+        state.discordAccountId = null
+        const result = await guildListGET(new Headers())
+        assert.equal(result.status, 403)
+        assert.equal(errorOf(result.body as never), "Forbidden")
+        assert.equal(state.tokenBody, null)
+        state.discordAccountId = "acct-discord"
     })
 })
