@@ -381,10 +381,10 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
 
     const url = interaction.options.getString("url", true)
 
-    // urllib keeps `\` in userinfo (`youtube.com\@10.0.0.1` fetches 10.0.0.1).
-    // WHATWG would call that host youtube.com, so the urllib check stays.
-    // The exact host list rejects `consent.youtube.com`, whose extractor follows `continue`.
-    // `/redirect` is a YouTube host whose `q` query yt-dlp then fetches.
+    // One urllib parse (the host and path yt-dlp will request), shared by all
+    // three checks. WHATWG treats `\` as `/`, so `youtube.com\@consent.youtube.com`
+    // and `youtube.com\@youtube.com/redirect` look allowed in Node and still SSRF
+    // through `continue` / `q`. Exact hosts reject consent. Paths reject /redirect.
     if (
         !isAllowedYoutubeDownloadUrl(url) ||
         !isAllowedYoutubeDownloadHostUrl(url) ||

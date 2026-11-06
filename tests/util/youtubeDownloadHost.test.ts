@@ -44,6 +44,39 @@ describe("isAllowedYoutubeDownloadHostUrl", () => {
         )
     })
 
+    it("rejects backslash userinfo whose urllib host is consent.youtube.com or a /redirect path", () => {
+        assert.equal(
+            isAllowedYoutubeDownloadHostUrl(
+                "https://www.youtube.com\\@consent.youtube.com/m?continue=http://127.0.0.1/latest/meta-data/"
+            ),
+            false
+        )
+        assert.equal(
+            isAllowedYoutubeDownloadHostUrl(
+                "https://music.youtube.com\\@consent.youtube.com/m?continue=http://lavalink/"
+            ),
+            false
+        )
+        assert.equal(
+            isAllowedYoutubeDownloadHostUrl(
+                "https://www.youtube.com\\@www.youtube.com/redirect?q=http://127.0.0.1/latest/meta-data/"
+            ),
+            false
+        )
+        assert.equal(
+            isAllowedYoutubeDownloadHostUrl(
+                "https://youtu.be\\@m.youtube.com/redirect?q=http://169.254.169.254/latest/meta-data/"
+            ),
+            false
+        )
+        assert.equal(
+            isAllowedYoutubeDownloadHostUrl(
+                "http://m.youtube.com\\@www.youtube.com/redirect?q=http://postgres-db:5432/"
+            ),
+            false
+        )
+    })
+
     it("rejects other non-download YouTube subdomains and non-YouTube hosts", () => {
         assert.equal(isAllowedYoutubeDownloadHostUrl("https://studio.youtube.com/"), false)
         assert.equal(isAllowedYoutubeDownloadHostUrl("https://example.com/watch"), false)

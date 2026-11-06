@@ -61,6 +61,63 @@ describe("isAllowedYoutubeDownloadUrl", () => {
             ),
             false
         )
+        assert.equal(
+            isAllowedYoutubeDownloadUrl(
+                "https://www.youtube.com/redirect\\videos?q=http://127.0.0.1/latest/meta-data/"
+            ),
+            false
+        )
+    })
+
+    it("rejects backslash userinfo whose urllib path is /redirect or whose host is consent.youtube.com", () => {
+        assert.equal(
+            isAllowedYoutubeDownloadUrl(
+                "https://www.youtube.com\\@www.youtube.com/redirect?q=http://127.0.0.1/latest/meta-data/"
+            ),
+            false
+        )
+        assert.equal(
+            isAllowedYoutubeDownloadUrl(
+                "https://www.youtube.com\\@www.youtube.com/redirect/videos?q=http://10.0.0.1/latest/meta-data/"
+            ),
+            false
+        )
+        assert.equal(
+            isAllowedYoutubeDownloadUrl(
+                "https://www.youtube.com\\@www.youtube.com/watch/../redirect?q=http://127.0.0.1/latest/meta-data/"
+            ),
+            false
+        )
+        assert.equal(
+            isAllowedYoutubeDownloadUrl(
+                "https://www.youtube.com\\@www.youtube.com/Redirect?q=http://127.0.0.1/"
+            ),
+            false
+        )
+        assert.equal(
+            isAllowedYoutubeDownloadUrl(
+                "https://www.youtube.com\\@www.youtube.com/redirect%2Fvideos?q=http://169.254.169.254/latest/meta-data/"
+            ),
+            false
+        )
+        assert.equal(
+            isAllowedYoutubeDownloadUrl(
+                "https://youtu.be\\@m.youtube.com/redirect?q=http://postgres-db:5432/"
+            ),
+            false
+        )
+        assert.equal(
+            isAllowedYoutubeDownloadUrl(
+                "https://www.youtube.com\\@consent.youtube.com/m?continue=http://127.0.0.1/latest/meta-data/"
+            ),
+            false
+        )
+        assert.equal(
+            isAllowedYoutubeDownloadUrl(
+                "https://music.youtube.com\\@consent.youtube.com/m?continue=http://lavalink/"
+            ),
+            false
+        )
     })
 
     it("rejects non-YouTube hosts", () => {

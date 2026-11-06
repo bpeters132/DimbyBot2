@@ -1,28 +1,7 @@
 /**
- * Hosts `/download` may pass to yt-dlp.
- * Exact names only: a suffix check would allow `consent.youtube.com`, whose
- * extractor follows the `continue` query to an arbitrary URL.
+ * `/download` host check. Same urllib parse and decision as
+ * `isAllowedYoutubeDownloadUrl`: exact YouTube hosts, including the rejection
+ * of `consent.youtube.com`. A separate WHATWG parse allowed
+ * `youtube.com\@consent.youtube.com` because Node reads the host before `\`.
  */
-const YOUTUBE_DOWNLOAD_HOSTS = new Set([
-    "youtu.be",
-    "youtube.com",
-    "www.youtube.com",
-    "m.youtube.com",
-    "music.youtube.com",
-])
-
-/**
- * True when `url` is an http(s) URL on a downloadable YouTube host.
- * Rejects other `*.youtube.com` names, including `consent.youtube.com`.
- */
-export function isAllowedYoutubeDownloadHostUrl(url: string): boolean {
-    let parsed: URL
-    try {
-        parsed = new URL(url.trim())
-    } catch {
-        return false
-    }
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false
-    const host = parsed.hostname.toLowerCase().replace(/\.+$/, "")
-    return YOUTUBE_DOWNLOAD_HOSTS.has(host)
-}
+export { isAllowedYoutubeDownloadUrl as isAllowedYoutubeDownloadHostUrl } from "./youtubeDownloadUrl.js"
