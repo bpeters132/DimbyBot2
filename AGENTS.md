@@ -72,8 +72,6 @@ A new feature ships with a unit test in the same change: one assertion per disti
 
 Keep messages short and descriptive (e.g. `fix lavalink reconnect`). PRs need a clear summary; include config notes and screenshots or logs when behavior changes.
 
-**CodeRabbit:** [`.coderabbit.yaml`](.coderabbit.yaml). Draft PRs, titles containing `WIP` / `DO NOT MERGE` / `[skip review]`, or the `wip` label skip automatic reviews. Remove the label or mark the PR ready to review, or comment `@coderabbitai review`.
-
 ## Configuration and secrets
 
 Local dev needs `.env` and `lavaNodesConfig.js` in the repo root. Use `.env.example` and `lavaNodesConfig.js.example`. Never commit tokens or credentials.

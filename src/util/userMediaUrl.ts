@@ -24,6 +24,10 @@ const LAVALINK_SOURCE_PREFIXES = [
     "musicyoutube",
     "ytmsearch",
     "applemusic",
+    // Bare `apple` is its own DefaultSources key (`apple` → amsearch). `applemusic`
+    // does not cover it: `apple:http://…` does not start with `applemusic:`, and
+    // lavalink-client then sends the http remainder as a raw /loadtracks identifier.
+    "apple",
     "amsearch",
     "musicapple",
     "soundcloud",
@@ -144,13 +148,16 @@ export function trimmedHttpUrlQuery(query: string): string | null {
 
 /**
  * True when a User media URL must not be sent to Lavalink: loopback, RFC1918,
- * link-local, single-label Docker DNS names, DNS-bounce hosts that encode a private
+ * link-local, Docker DNS names (single-label and `name.network`), DNS-bounce hosts that encode a private
  * IP in the name (e.g. `10.0.0.1.nip.io` or `0a000001.rbndr.us`), or known
  * bounce-service suffixes. Non-URLs (ytsearch text) are allowed.
  *
  * Also rejects `link:` / `uri:` / `yt:` / `sc:` / `local:` / … wrappers that
  * lavalink-client strips before treating the remainder as a raw HTTP identifier,
  * lavaplayer `icy://` aliases that would otherwise skip the `https?://` gate,
+ * Docker embedded-DNS names qualified with the compose network
+ * (`postgres-db.bot_internal`: moby resolves `name.network`, and Compose names
+ * that network `{project}_{network}`),
  * hyphen-encoded IPv4 labels (`10-0-0-1` or `make-10-0-0-1-rr`) used by bounce DNS,
  * IPv6 dash-compressed labels (`0--1` → `::1`, `0--ffff-a00-1` → `::ffff:10.0.0.1`),
  * well-known IMDS hostnames (`metadata.goog`),
@@ -876,6 +883,81 @@ const DNS_BOUNCE_SUFFIXES = [
     "localhost.usm.edu",
     "localhost.utas.edu.au",
     "localhost.vu.edu.au",
+    // Remaining unused localhost.<parent> aliases after #12/#17–#54 (apex → 127.0.0.1
+    // on Cloudflare+Google DoH; Java InetAddress loopback=true; anglia → 127.0.0.2;
+    // hkbu.edu.hk → 192.168.254.254 RFC1918 siteLocal). Do not deny public parents.
+    // Distinct from denied short forms / siblings: oxfordbrookes.ac.uk vs brookes.ac.uk,
+    // shef.ac.uk vs sheffield.ac.uk, neu.edu vs northeastern.edu, jcu.edu vs jcu.edu.au,
+    // trinitysaintdavid.ac.uk vs uwtsd.ac.uk, mu.edu vs marquette.edu,
+    // hw.ac.uk (Heriot-Watt) vs denied UK batch.
+    "localhost.acu.edu.au",
+    "localhost.anglia.ac.uk",
+    "localhost.beds.ac.uk",
+    "localhost.bolton.ac.uk",
+    "localhost.bond.edu.au",
+    "localhost.brocku.ca",
+    "localhost.csbsju.edu",
+    "localhost.css.edu",
+    "localhost.csu.edu",
+    "localhost.csus.edu",
+    "localhost.csusb.edu",
+    "localhost.cwu.edu",
+    "localhost.dod.mil",
+    "localhost.doe.gov",
+    "localhost.energy.gov",
+    "localhost.eou.edu",
+    "localhost.flinders.edu.au",
+    "localhost.gac.edu",
+    "localhost.glyndwr.ac.uk",
+    "localhost.hec.ca",
+    "localhost.heidelberg.edu",
+    "localhost.hkbu.edu.hk",
+    "localhost.house.gov",
+    "localhost.hw.ac.uk",
+    "localhost.jcu.edu",
+    "localhost.laurentian.ca",
+    "localhost.ln.edu.hk",
+    "localhost.msun.edu",
+    "localhost.mu.edu",
+    "localhost.murdoch.edu.au",
+    "localhost.neu.edu",
+    "localhost.nmt.edu",
+    "localhost.openu.ac.il",
+    "localhost.oxfordbrookes.ac.uk",
+    "localhost.pentagon.mil",
+    "localhost.plu.edu",
+    "localhost.polymtl.ca",
+    "localhost.ripon.edu",
+    "localhost.sdstate.edu",
+    "localhost.shawnee.edu",
+    "localhost.shef.ac.uk",
+    "localhost.shu.ac.uk",
+    "localhost.smu.ca",
+    "localhost.snow.edu",
+    "localhost.solent.ac.uk",
+    "localhost.sou.edu",
+    "localhost.spu.edu",
+    "localhost.suu.edu",
+    "localhost.trinitysaintdavid.ac.uk",
+    "localhost.ubishops.ca",
+    "localhost.uccs.edu",
+    "localhost.ufv.ca",
+    "localhost.uhi.ac.uk",
+    "localhost.uindy.edu",
+    "localhost.ulster.ac.uk",
+    "localhost.unbc.ca",
+    "localhost.uqac.ca",
+    "localhost.uqtr.ca",
+    "localhost.usherbrooke.ca",
+    "localhost.usp.ac.fj",
+    "localhost.uwindsor.ca",
+    "localhost.uwplatt.edu",
+    "localhost.uwtsd.ac.uk",
+    "localhost.westminstercollege.edu",
+    "localhost.willamette.edu",
+    "localhost.winona.edu",
+    "localhost.wlu.ca",
+    "localhost.wlv.ac.uk",
 ] as const
 
 /** Public hostnames that always resolve to link-local IMDS (169.254.169.254), not IP-in-name. */
@@ -889,6 +971,12 @@ function isBlockedUserMediaHost(hostname: string): boolean {
     if (host === "localhost" || host.endsWith(".localhost")) return true
     if (isBlockedIpLiteral(host)) return true
     if (!host.includes(".") && !host.includes(":")) return true
+    // Compose network names are `{project}_{network}` (`bot_internal` when deploy
+    // runs from /home/bot). Docker embedded DNS resolves both `postgres-db` and
+    // `postgres-db.bot_internal` (moby Sandbox.ResolveName). The qualified form has
+    // a dot, so the single-label check misses it. `_` is not a public hostname
+    // character; WHATWG also decodes `%5F` before this check.
+    if (host.includes("_")) return true
     if (isImdsHost(host)) return true
     if (isDnsBounceHost(host)) return true
     if (hostnameEmbedsBlockedIpv4(host)) return true

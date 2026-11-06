@@ -19,8 +19,8 @@ _Avoid_: dashboard API, backend API, web API
 ## Contribution
 
 **Source PR**:
-An open bot or automation pull request whose commits are cherry-picked onto the Integration Branch.
-_Avoid_: original PR, constituent PR, wave PR
+An open pull request whose commits are cherry-picked onto the Integration Branch.
+_Avoid_: bot PR (as the only kind), original PR, constituent PR, wave PR
 
 **Integration Branch**:
 A `chore/consolidated-<topic>` branch created from current `main`, holding every confirmed Source PR as one review unit.
@@ -29,6 +29,10 @@ _Avoid_: wave branch, stack, batch branch
 **Supersede**:
 Closing a Source PR with a comment that names the Integration Branch pull request as soon as that pull request exists, so Source PRs cannot be merged one-by-one.
 _Avoid_: close after merge, leave open
+
+**Security Branch**:
+A `security/<topic>` branch from current `main` that holds human-authored dependency bumps for Dependabot alerts that have no Source PR.
+_Avoid_: Integration Branch, Source PR
 
 ## Observability
 
