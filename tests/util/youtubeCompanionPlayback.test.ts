@@ -300,7 +300,7 @@ describe("youtube companion itag + URL helpers", () => {
                     uri: "https://open.spotify.com/track/abc",
                     identifier: "abc",
                 },
-            } as Track),
+            } as unknown as Track),
             true
         )
         assert.equal(isSpotifyCatalogTrack(youtubeTrack()), false)
@@ -320,7 +320,7 @@ describe("youtube companion itag + URL helpers", () => {
                     sourceName: undefined,
                     uri: `https://music.youtube.com/watch?v=${VIDEO_ID}`,
                 },
-            } as Track),
+            } as unknown as Track),
             true
         )
         assert.equal(isYoutubeSourceTrack(spotifyTrack()), false)

@@ -28,6 +28,11 @@ export function playWouldSendNullEncoded(track: { encoded?: unknown } | null | u
 
 type PlayFn = Player["play"]
 
+/** lavalink-client types `Player.play()` as `any`; the runtime value is this player. */
+function playPlayer(play: PlayFn, options: Parameters<PlayFn>[0]): Promise<Player> {
+    return play(options) as Promise<Player>
+}
+
 /**
  * Arms the next `player.play()` after lavalink-client's trackStuck `queueTrackEnd` so an
  * unprepared Queue-metadata head is hydrated before the library talks to the node.
@@ -43,17 +48,17 @@ export function armTrackStuckPlayPrepare(
     const originalPlay: PlayFn = player.play.bind(player)
     let consumed = false
     player.play = async (options) => {
-        if (consumed) return originalPlay(options)
+        if (consumed) return playPlayer(originalPlay, options)
         consumed = true
         player.play = originalPlay
 
         const liveBefore = getLivePlayer()
         if (!liveBefore || liveBefore !== player) {
-            return originalPlay(options)
+            return playPlayer(originalPlay, options)
         }
 
         if (liveBefore.queue.current && isYoutubePlaybackReady(liveBefore.queue.current)) {
-            return originalPlay({ noReplace: false })
+            return playPlayer(originalPlay, { noReplace: false })
         }
 
         const prepared = await ensureCurrentPlayable(getLivePlayer, player.guildId, config)
@@ -61,7 +66,7 @@ export function armTrackStuckPlayPrepare(
         if (!live || live !== player) return player
 
         if (prepared === "ok" && live.queue.current && isYoutubePlaybackReady(live.queue.current)) {
-            return originalPlay({ noReplace: false })
+            return playPlayer(originalPlay, { noReplace: false })
         }
 
         // Do not play encoded:"" — that null-stops the node and double-advances past this head.

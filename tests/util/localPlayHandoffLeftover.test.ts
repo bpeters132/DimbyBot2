@@ -267,7 +267,7 @@ describe("runLocalHandoffLavalinkStopAndDestroy", () => {
         assert.equal(destroyed, true)
         assert.equal(sawSuccessorDuringDestroy, false)
         // Cache slot stays empty until the reservation blocked on the lock can create.
-        assert.equal(live, null)
+        assert.equal(live === null, true)
         await successorCreate
         await waitForPendingOrphanDestroyForTests(guildId)
         assert.equal(live?.id, "successor")

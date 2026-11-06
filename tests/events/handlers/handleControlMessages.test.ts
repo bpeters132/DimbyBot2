@@ -35,7 +35,7 @@ function createMessage(overrides: Record<string, unknown> = {}) {
     const deleted: string[] = []
     const member = {
         id: "user-1",
-        voice: { channel: voiceChannel(true) },
+        voice: { channel: voiceChannel(true) as ReturnType<typeof voiceChannel> | null },
         toString() {
             return "<@user-1>"
         },
@@ -66,7 +66,7 @@ function createMessage(overrides: Record<string, unknown> = {}) {
         channel,
         guild: {
             id: "guild-1",
-            members: { me: { voice: { channelId: null } } },
+            members: { me: { voice: { channelId: null as string | null } } },
         },
         author: { id: "user-1" },
         async delete() {

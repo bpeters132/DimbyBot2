@@ -45,15 +45,21 @@ export function parseWsConnectToken(token: string, secret: string): string | nul
     } catch {
         return null
     }
-    let data: { userId: string; exp: number }
+    let data: unknown
     try {
         data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"))
     } catch {
         return null
     }
-    if (typeof data.userId !== "string" || data.userId.length === 0) return null
-    if (typeof data.exp !== "number" || !Number.isFinite(data.exp) || !Number.isInteger(data.exp))
+    if (!data || typeof data !== "object") return null
+    const record = data as { userId?: unknown; exp?: unknown }
+    if (typeof record.userId !== "string" || record.userId.length === 0) return null
+    if (
+        typeof record.exp !== "number" ||
+        !Number.isFinite(record.exp) ||
+        !Number.isInteger(record.exp)
+    )
         return null
-    if (data.exp <= Math.floor(Date.now() / 1000)) return null
-    return data.userId
+    if (record.exp <= Math.floor(Date.now() / 1000)) return null
+    return record.userId
 }

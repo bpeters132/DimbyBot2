@@ -39,7 +39,7 @@ export function shuffleArray<T>(items: T[]): T[] {
 
 function isResolvedTrack(track: unknown): track is Track {
     return (
-        Boolean(track) &&
+        track != null &&
         typeof track === "object" &&
         "info" in track &&
         typeof (track as Track).info?.uri === "string"

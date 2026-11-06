@@ -15,8 +15,6 @@
         "incremental": true,
         "isolatedModules": true,
         "strict": true,
-        "strictNullChecks": false,
-        "noImplicitAny": false,
         "plugins": [
             {
                 "name": "next"

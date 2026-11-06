@@ -257,9 +257,10 @@ async function run(): Promise<void> {
             })()
         })
 
-        client.on("voiceStateUpdate", (oldState, newState) => {
+        const runningClient = client
+        runningClient.on("voiceStateUpdate", (oldState, newState) => {
             const userId = newState.id
-            const botUserId = client.user?.id
+            const botUserId = runningClient.user?.id
             const guildIds = new Set<string>()
             if (newState.guild?.id) {
                 guildIds.add(newState.guild.id)

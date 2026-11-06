@@ -51,7 +51,8 @@ Bring-up, Compose, and Node-on-host details: [README.md](README.md).
 
 - TypeScript ESM. Bot local imports use `.js` extensions (NodeNext). Indentation: 4 spaces. Semicolons off; Prettier in `.prettierrc.json` (print width 100, double quotes).
 - **TSDoc:** Short `/** … */` summaries on non-obvious exports and non-trivial logic (Discord/Lavalink/security invariants). Use real TypeScript parameter and return types; do not duplicate them with `@param {import('…')}`. Skip noise on obvious getters and wrappers.
-- **`strict` is on** in both tsconfigs; **`strictNullChecks` and `noImplicitAny` are off**. Leave those flags as they are unless a human asks. New code should still be well-typed (guards, no new implicit `any` at boundaries).
+- **`strict` is on** in both tsconfigs, including `strictNullChecks`, `noImplicitAny`, and the rest of the strict family (`strictFunctionTypes`, `strictBindCallApply`, `strictPropertyInitialization`, `noImplicitThis`, `useUnknownInCatchVariables`, `alwaysStrict`, `strictBuiltinIteratorReturn`). Do not relax those flags.
+- **ESLint** (`eslint.config.js`, both apps) errors on `@typescript-eslint/no-explicit-any`, unsafe assignment, argument, call, member access, and return, and on `@ts-ignore` / `@ts-expect-error` unless the directive has a description. Implicit `any` is the compiler flag (`noImplicitAny`); the plugin has no separate rule. A justified exception is an inline `eslint-disable` for that line, or a `@ts-expect-error` / `@ts-ignore` with a description on that line — never a file-wide or repo-wide waiver.
 - Root `lavaNodesConfig.d.ts` types generated `lavaNodesConfig.js`.
 
 ## Testing
