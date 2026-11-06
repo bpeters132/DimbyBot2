@@ -51,15 +51,14 @@ export default tseslint.config(
             "@typescript-eslint/no-unsafe-call": "error",
             "@typescript-eslint/no-unsafe-member-access": "error",
             "@typescript-eslint/no-unsafe-return": "error",
-            // Descriptions only. ts-nocheck stays banned (it is a file-wide waiver).
+            // Banned outright. A description is not an exception. ts-nocheck stays banned.
             "@typescript-eslint/ban-ts-comment": [
                 "error",
                 {
-                    "ts-expect-error": "allow-with-description",
-                    "ts-ignore": "allow-with-description",
+                    "ts-expect-error": true,
+                    "ts-ignore": true,
                     "ts-nocheck": true,
                     "ts-check": false,
-                    minimumDescriptionLength: 10,
                 },
             ],
         },
