@@ -108,17 +108,30 @@ function truncateForDiscord(text: string): string {
 }
 
 /**
+ * First guild snowflake the process itself attached to a log line.
+ * Only the text before the first double quote is trusted: slash queries, control-channel
+ * messages, track titles, and quote breakouts (`x" guild <id>`) sit in or after that quote.
+ * A later `guild <snowflake>` in an unquoted title cannot add a second destination.
+ * Log lines must place the guild id before any `"` or they will not be forwarded.
+ */
+function routingGuildId(message: string): string | null {
+    const quoteAt = message.indexOf('"')
+    const trusted = quoteAt === -1 ? message : message.slice(0, quoteAt)
+    const match = trusted.match(/\bguild(?:id)?\b\s*[:=]?\s*(\d{17,19})(?!\d)/i)
+    return match?.[1] ?? null
+}
+
+/**
  * Whether a process log line should be forwarded to a guild's Discord log channel.
- * Requires an explicit guild snowflake in the message so one server cannot receive
- * other tenants' operational logs (queries, URLs, paths, user tags, error stacks).
+ * Requires the first trusted guild marker (before any quoted user text) to be this guild,
+ * so a member cannot steer another tenant's log channel by embedding that guild's snowflake
+ * in a query, URL, path, or track title.
  */
 export function logMessageBelongsToGuild(message: string, guildId: string): boolean {
     if (!guildId || !DISCORD_SNOWFLAKE_RE.test(guildId)) {
         return false
     }
-    // Word-ish boundary: snowflakes are digits; avoid matching a longer digit run.
-    const re = new RegExp(`(?<!\\d)${guildId}(?!\\d)`)
-    return re.test(message)
+    return routingGuildId(message) === guildId
 }
 
 /**

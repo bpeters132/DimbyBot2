@@ -59,6 +59,27 @@ describe("logMessageBelongsToGuild", () => {
         assert.equal(logMessageBelongsToGuild(`guild ${guildA}`, "not-a-snowflake"), false)
         assert.equal(logMessageBelongsToGuild(`id ${guildA}9`, guildA), false)
     })
+
+    it("does not route a quoted query that contains another guild snowflake", () => {
+        const line = `[MusicManager] handleQueryAndPlay called for guild ${guildA}. Query: "${guildB}"`
+        assert.equal(logMessageBelongsToGuild(line, guildA), true)
+        assert.equal(logMessageBelongsToGuild(line, guildB), false)
+    })
+
+    it("does not route a query-only line or a quote breakout to the embedded guild", () => {
+        const queryOnly = `[MusicManager] No matches found for query "guild ${guildB}".`
+        assert.equal(logMessageBelongsToGuild(queryOnly, guildB), false)
+        assert.equal(logMessageBelongsToGuild(queryOnly, guildA), false)
+
+        const breakout = `[MusicManager] Direct search (non-URL) failed for query "x" guild ${guildB}". Error: no`
+        assert.equal(logMessageBelongsToGuild(breakout, guildB), false)
+    })
+
+    it("keeps an unquoted track title from adding a second guild", () => {
+        const line = `[LavaMgrEvents] Track error in Guild: ${guildA}, Track: guild ${guildB}`
+        assert.equal(logMessageBelongsToGuild(line, guildA), true)
+        assert.equal(logMessageBelongsToGuild(line, guildB), false)
+    })
 })
 
 describe("discordLogLevelAllowed", () => {
