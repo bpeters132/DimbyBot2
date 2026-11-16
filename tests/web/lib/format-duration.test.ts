@@ -2,6 +2,8 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { formatDurationMs } from "@/lib/format-duration"
 
+// Throwaway comment so the pull request tests workflow has a diff to run.
+
 describe("formatDurationMs", () => {
     it("returns 00:00 for non-positive or non-finite values", () => {
         assert.equal(formatDurationMs(0), "00:00")
