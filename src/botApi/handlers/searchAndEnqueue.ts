@@ -332,7 +332,9 @@ export async function searchAndEnqueue(
         } catch (err: unknown) {
             await cleanupCreatedPlayer()
             const message = err instanceof Error ? err.message : "YouTube playback resolve failed."
-            client.error("[searchAndEnqueue] companion resolve failed", { guildId, requesterId })
+            client
+                .child({ guildId })
+                .error("[searchAndEnqueue] companion resolve failed", { guildId, requesterId })
             return {
                 ok: false,
                 status: 503,

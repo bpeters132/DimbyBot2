@@ -5,6 +5,7 @@ import loadCommands from "../util/loadCommands.js"
 import createLavalinkManager from "./LavalinkManager.js"
 import type { Command } from "../types/index.js"
 import type Logger from "./Logger.js"
+import type { LoggerInterface } from "../types/index.js"
 import { initializeDatabaseConnection, runPrismaMigrateDeploy } from "./database.js"
 import { migrateDownloadMetadata, migrateGuildSettings } from "../util/migrateJsonToDatabase.js"
 import { initializeGuildSettingsStore } from "../util/saveControlChannel.js"
@@ -58,6 +59,17 @@ export default class BotClient extends Client {
 
     debug(text: string, ...args: unknown[]) {
         this.logger.debug(text, ...args)
+    }
+
+    /** Logger whose Discord forwarding is limited to `guildId`. Console and file output are unchanged. */
+    forGuild(
+        guildId: string
+    ): Pick<LoggerInterface, "debug" | "info" | "warn" | "error" | "child"> {
+        return this.child({ guildId })
+    }
+
+    child(bindings: { guildId: string }): LoggerInterface {
+        return this.logger.child(bindings)
     }
 
     async start(token: string | undefined = process.env.BOT_TOKEN): Promise<void> {

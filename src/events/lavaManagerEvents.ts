@@ -71,9 +71,11 @@ const QUEUE_UPDATE_BROADCAST_MIN_INTERVAL_MS = 2000
 function scheduleControlMessageUpdate(client: BotClient, guildId: string, context: string) {
     void updateControlMessage(client, guildId).catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err)
-        client.error(
-            `[LavaMgrEvents] updateControlMessage failed (${context}, guildId=${guildId}): ${msg}`
-        )
+        client
+            .child({ guildId })
+            .error(
+                `[LavaMgrEvents] updateControlMessage failed (${context}, guildId=${guildId}): ${msg}`
+            )
     })
 }
 
@@ -95,9 +97,11 @@ function getControlChannelIdSafe(client: BotClient, guildId: string): string | u
         const currentGuildSettings = getGuildSettings()
         return currentGuildSettings[guildId]?.controlChannelId
     } catch (error: unknown) {
-        client.warn(
-            `[LavaMgrEvents] Failed to read guild settings for guild ${guildId}; treating as no control channel. Error: ${error}`
-        )
+        client
+            .child({ guildId })
+            .warn(
+                `[LavaMgrEvents] Failed to read guild settings for guild ${guildId}; treating as no control channel. Error: ${error}`
+            )
         return undefined
     }
 }
@@ -125,12 +129,16 @@ export default async (client: BotClient) => {
          * Player Lifecycle Events
          */
         .on("playerCreate", (player: Player) => {
-            client.debug(`[LavaMgrEvents] Player created for Guild: ${player.guildId}`)
+            client
+                .child({ guildId: player.guildId })
+                .debug(`[LavaMgrEvents] Player created for Guild: ${player.guildId}`)
         })
         .on("playerDestroy", (player: Player, reason: unknown) => {
-            client.debug(
-                `[LavaMgrEvents] Player destroyed for Guild: ${player.guildId}, Reason: ${reason}`
-            )
+            client
+                .child({ guildId: player.guildId })
+                .debug(
+                    `[LavaMgrEvents] Player destroyed for Guild: ${player.guildId}, Reason: ${reason}`
+                )
             lastQueueUpdateBroadcastAtMs.delete(player.guildId)
             player.set(DASHBOARD_REQUESTER_KEY, undefined)
             // Lavalink deletes the map entry before this emit; a successor may already be live.
@@ -140,24 +148,30 @@ export default async (client: BotClient) => {
                 void clearPlayerSession(player.guildId, { destroyReason: reason }).catch(
                     (err: unknown) => {
                         const msg = err instanceof Error ? err.message : String(err)
-                        client.error(
-                            `[LavaMgrEvents] clearPlayerSession failed (guildId=${player.guildId}): ${msg}`
-                        )
+                        client
+                            .child({ guildId: player.guildId })
+                            .error(
+                                `[LavaMgrEvents] clearPlayerSession failed (guildId=${player.guildId}): ${msg}`
+                            )
                     }
                 )
             } else if (clearAction === "skip-successor") {
                 // Destroy finished after a replacement player was created — keep its session.
                 consumePlayerSessionClearSuppressLease(player.guildId)
-                client.debug(
-                    `[LavaMgrEvents] Skipping session clear for guild ${player.guildId}: successor player already live`
-                )
+                client
+                    .child({ guildId: player.guildId })
+                    .debug(
+                        `[LavaMgrEvents] Skipping session clear for guild ${player.guildId}: successor player already live`
+                    )
             } else {
                 // preserve-reason: still consume a handoff lease so markDestroyEventSeen cannot
                 // leave it unreleased for a later intentional clear.
                 consumePlayerSessionClearSuppressLease(player.guildId)
-                client.debug(
-                    `[LavaMgrEvents] Preserving player session for guild ${player.guildId} after destroy reason: ${String(reason)}`
-                )
+                client
+                    .child({ guildId: player.guildId })
+                    .debug(
+                        `[LavaMgrEvents] Preserving player session for guild ${player.guildId} after destroy reason: ${String(reason)}`
+                    )
             }
             // Destroyed player's debounced save must not overwrite a live successor's session.
             if (livePlayer != null && livePlayer !== player) {
@@ -167,22 +181,28 @@ export default async (client: BotClient) => {
             playerBroadcaster.broadcastPlayerEvent(player.guildId, null, "playerDestroy")
         })
         .on("playerDisconnect", (player: Player, oldChannelId: string | null) => {
-            client.debug(
-                `[LavaMgrEvents] Player disconnected from Guild: ${player.guildId}, Old Channel: ${oldChannelId}`
-            )
+            client
+                .child({ guildId: player.guildId })
+                .debug(
+                    `[LavaMgrEvents] Player disconnected from Guild: ${player.guildId}, Old Channel: ${oldChannelId}`
+                )
             scheduleControlMessageUpdate(client, player.guildId, "playerDisconnect")
         })
         .on(
             "playerMove",
             (player: Player, oldChannelId: string | null, newChannelId: string | null) => {
-                client.debug(
-                    `[LavaMgrEvents] Player moved in Guild: ${player.guildId}, Old: ${oldChannelId}, New: ${newChannelId}`
-                )
+                client
+                    .child({ guildId: player.guildId })
+                    .debug(
+                        `[LavaMgrEvents] Player moved in Guild: ${player.guildId}, Old: ${oldChannelId}, New: ${newChannelId}`
+                    )
                 schedulePlayerSessionSave(player)
             }
         )
         .on("playerReconnect", (player: Player) => {
-            client.debug(`[LavaMgrEvents] Player reconnected in Guild: ${player.guildId}`)
+            client
+                .child({ guildId: player.guildId })
+                .debug(`[LavaMgrEvents] Player reconnected in Guild: ${player.guildId}`)
             // lavalink-client autoReconnect emits then play()s without JIT prepare.
             // Arm synchronously: emit is not awaited before that play().
             armAutoReconnectPlayPrepare(player, () => client.lavalink.getPlayer(player.guildId))
@@ -210,9 +230,11 @@ export default async (client: BotClient) => {
             } else {
                 player.set(DASHBOARD_REQUESTER_KEY, null)
             }
-            client.debug(
-                `[LavaMgrEvents] Track started in Guild: ${player.guildId}, Title: ${track.info.title}`
-            )
+            client
+                .child({ guildId: player.guildId })
+                .debug(
+                    `[LavaMgrEvents] Track started in Guild: ${player.guildId}, Title: ${track.info.title}`
+                )
             scheduleControlMessageUpdate(client, player.guildId, "trackStart")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "trackStart")
 
@@ -237,9 +259,11 @@ export default async (client: BotClient) => {
             const channel = textId ? client.channels.cache.get(textId) : undefined
             const controlChannelId = getControlChannelIdSafe(client, player.guildId)
             if (channel && textId !== controlChannelId && isTextSendable(channel)) {
-                client.debug(
-                    `[LavaMgrEvents] Sending trackStart message to non-control channel ${player.textChannelId} in guild ${player.guildId}.`
-                )
+                client
+                    .child({ guildId: player.guildId })
+                    .debug(
+                        `[LavaMgrEvents] Sending trackStart message to non-control channel ${player.textChannelId} in guild ${player.guildId}.`
+                    )
                 channel
                     .send(`Now playing: **${track.info.title}**`)
                     .then((msg: Message) => {
@@ -270,9 +294,11 @@ export default async (client: BotClient) => {
                         client.error("[LavaMgrEvents] Failed to send trackStart message:", e)
                     )
             } else {
-                client.debug(
-                    `[LavaMgrEvents] Not sending trackStart message for guild ${player.guildId} (channel ${player.textChannelId}, control ${controlChannelId}).`
-                )
+                client
+                    .child({ guildId: player.guildId })
+                    .debug(
+                        `[LavaMgrEvents] Not sending trackStart message for guild ${player.guildId} (channel ${player.textChannelId}, control ${controlChannelId}).`
+                    )
             }
         })
         .on("trackEnd", (player: Player, track: Track | null, payload: TrackEndEvent) => {
@@ -281,17 +307,21 @@ export default async (client: BotClient) => {
             // and TrackEnd(stopped) advances again — cascading through the remaining queue.
             // Arm synchronously so the next play hydrates first (distinct from trackStuck #311).
             armLibraryAutoSkipPlayPrepare(player, () => client.lavalink.getPlayer(player.guildId))
-            client.debug(
-                `[LavaMgrEvents] Track ended in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "N/A"}, Reason: ${payload.reason}`
-            )
+            client
+                .child({ guildId: player.guildId })
+                .debug(
+                    `[LavaMgrEvents] Track ended in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "N/A"}, Reason: ${payload.reason}`
+                )
             scheduleControlMessageUpdate(client, player.guildId, "trackEnd")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "trackEnd")
             schedulePlayerSessionSave(player)
         })
         .on("trackStuck", async (player: Player, track: Track | null, payload: TrackStuckEvent) => {
-            client.warn(
-                `[LavaMgrEvents] Track stuck in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "N/A"}, Threshold: ${payload.thresholdMs}`
-            )
+            client
+                .child({ guildId: player.guildId })
+                .warn(
+                    `[LavaMgrEvents] Track stuck in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "N/A"}, Threshold: ${payload.thresholdMs}`
+                )
             scheduleControlMessageUpdate(client, player.guildId, "trackStuck")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "queueUpdate")
 
@@ -304,9 +334,11 @@ export default async (client: BotClient) => {
                 track &&
                 isTextSendable(channelStuck)
             ) {
-                client.debug(
-                    `[LavaMgrEvents] Sending trackStuck message to non-control channel ${textIdStuck} in guild ${player.guildId}.`
-                )
+                client
+                    .child({ guildId: player.guildId })
+                    .debug(
+                        `[LavaMgrEvents] Sending trackStuck message to non-control channel ${textIdStuck} in guild ${player.guildId}.`
+                    )
                 channelStuck
                     .send(`Track stuck: **${track.info.title}**`)
                     .catch((e: unknown) =>
@@ -320,19 +352,23 @@ export default async (client: BotClient) => {
             // JIT metadata head.
             if (!shouldApplicationSkipOnTrackStuck()) {
                 armTrackStuckPlayPrepare(player, () => client.lavalink.getPlayer(player.guildId))
-                client.debug(
-                    `[LavaMgrEvents] Stuck track reported for guild ${player.guildId}; library will advance.`
-                )
+                client
+                    .child({ guildId: player.guildId })
+                    .debug(
+                        `[LavaMgrEvents] Stuck track reported for guild ${player.guildId}; library will advance.`
+                    )
             } else {
                 try {
                     await skipCurrentTrack(player, undefined, () =>
                         client.lavalink.getPlayer(player.guildId)
                     )
                 } catch (e: unknown) {
-                    client.error(
-                        `[LavaMgrEvents] Failed to skip stuck track in guild ${player.guildId}:`,
-                        e
-                    )
+                    client
+                        .child({ guildId: player.guildId })
+                        .error(
+                            `[LavaMgrEvents] Failed to skip stuck track in guild ${player.guildId}:`,
+                            e
+                        )
                 }
             }
         })
@@ -343,10 +379,12 @@ export default async (client: BotClient) => {
                 track: Track | UnresolvedTrack | null,
                 payload: TrackExceptionEvent
             ) => {
-                client.error(
-                    `[LavaMgrEvents] Track error in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "Unknown Track"}`,
-                    payload
-                )
+                client
+                    .child({ guildId: player.guildId })
+                    .error(
+                        `[LavaMgrEvents] Track error in Guild: ${player.guildId}, Track: ${track?.info?.title ?? "Unknown Track"}`,
+                        payload
+                    )
                 scheduleControlMessageUpdate(client, player.guildId, "trackError")
                 playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "queueUpdate")
 
@@ -360,9 +398,11 @@ export default async (client: BotClient) => {
                     tInfo &&
                     isTextSendable(channelErr)
                 ) {
-                    client.debug(
-                        `[LavaMgrEvents] Sending trackError message to non-control channel ${textIdErr} in guild ${player.guildId}.`
-                    )
+                    client
+                        .child({ guildId: player.guildId })
+                        .debug(
+                            `[LavaMgrEvents] Sending trackError message to non-control channel ${textIdErr} in guild ${player.guildId}.`
+                        )
 
                     let errorMessage = `Error playing **${tInfo.title ?? "the track"}**\n\n`
 
@@ -416,9 +456,11 @@ export default async (client: BotClient) => {
                         )
                 }
 
-                client.debug(
-                    `[LavaMgrEvents] Attempting to skip track after error in guild ${player.guildId}.`
-                )
+                client
+                    .child({ guildId: player.guildId })
+                    .debug(
+                        `[LavaMgrEvents] Attempting to skip track after error in guild ${player.guildId}.`
+                    )
                 const retried = await retryCompanionPlaybackOnce(
                     () =>
                         getLivePlayerIfUnchanged(
@@ -438,9 +480,11 @@ export default async (client: BotClient) => {
                     player
                 )
                 if (recovery.kind === "stale") {
-                    client.debug(
-                        `[LavaMgrEvents] Player replaced during trackError recovery for guild ${player.guildId}; skipping zombie advance.`
-                    )
+                    client
+                        .child({ guildId: player.guildId })
+                        .debug(
+                            `[LavaMgrEvents] Player replaced during trackError recovery for guild ${player.guildId}; skipping zombie advance.`
+                        )
                     return
                 }
                 const livePlayer = recovery.player
@@ -450,33 +494,41 @@ export default async (client: BotClient) => {
                             client.lavalink.getPlayer(livePlayer.guildId)
                         )
                     } catch (e: unknown) {
-                        client.error(
-                            `[LavaMgrEvents] Failed to skip after track error in guild ${livePlayer.guildId}:`,
-                            e
-                        )
+                        client
+                            .child({ guildId: livePlayer.guildId })
+                            .error(
+                                `[LavaMgrEvents] Failed to skip after track error in guild ${livePlayer.guildId}:`,
+                                e
+                            )
                     }
                 } else if (recovery.kind === "autoplay") {
                     // Library trackError does not advance to queueEnd; ending the current track
                     // lets onEmptyQueue.autoPlayFunction run instead of wiping the session.
                     // Prefer stopPlaying over skip(): skip sets internal_skipped and bypasses
                     // minAutoPlayMs, which can tight-loop autoplay when catalog picks keep erroring.
-                    client.debug(
-                        `[LavaMgrEvents] Queue empty with autoplay on; ending current track for guild ${livePlayer.guildId}.`
-                    )
+                    client
+                        .child({ guildId: livePlayer.guildId })
+                        .debug(
+                            `[LavaMgrEvents] Queue empty with autoplay on; ending current track for guild ${livePlayer.guildId}.`
+                        )
                     try {
                         await endCurrentTrackForAutoplay(livePlayer)
                     } catch (e: unknown) {
-                        client.error(
-                            `[LavaMgrEvents] Failed to end track for autoplay after error in guild ${livePlayer.guildId}:`,
-                            e
-                        )
+                        client
+                            .child({ guildId: livePlayer.guildId })
+                            .error(
+                                `[LavaMgrEvents] Failed to end track for autoplay after error in guild ${livePlayer.guildId}:`,
+                                e
+                            )
                     }
                 } else {
                     // Reservation-aware: in-flight dashboard search/enqueue must not be destroyed.
                     const trackErrorGuildId = livePlayer.guildId
-                    client.debug(
-                        `[LavaMgrEvents] Queue is empty after track error in guild ${trackErrorGuildId}; attempting reservation-aware destroy.`
-                    )
+                    client
+                        .child({ guildId: trackErrorGuildId })
+                        .debug(
+                            `[LavaMgrEvents] Queue is empty after track error in guild ${trackErrorGuildId}; attempting reservation-aware destroy.`
+                        )
                     await safeIdlePlayerDestroy(
                         trackErrorGuildId,
                         {
@@ -488,9 +540,11 @@ export default async (client: BotClient) => {
                             destroyPlayer: async () => {
                                 const live = client.lavalink.getPlayer(trackErrorGuildId)
                                 if (!live || live !== livePlayer || playerHasQueueContent(live)) {
-                                    client.debug(
-                                        `[LavaMgrEvents] Player ${trackErrorGuildId} regained queue content after track error; not destroying.`
-                                    )
+                                    client
+                                        .child({ guildId: trackErrorGuildId })
+                                        .debug(
+                                            `[LavaMgrEvents] Player ${trackErrorGuildId} regained queue content after track error; not destroying.`
+                                        )
                                     return
                                 }
                                 // Tag QueueEmpty so preserve-prior can skip the DB delete after a
@@ -500,9 +554,11 @@ export default async (client: BotClient) => {
                         },
                         (err: unknown) => {
                             const msg = err instanceof Error ? err.message : String(err)
-                            client.error(
-                                `[LavaMgrEvents] Idle destroy after track error failed (guildId=${trackErrorGuildId}): ${msg}`
-                            )
+                            client
+                                .child({ guildId: trackErrorGuildId })
+                                .error(
+                                    `[LavaMgrEvents] Idle destroy after track error failed (guildId=${trackErrorGuildId}): ${msg}`
+                                )
                         }
                     )
                 }
@@ -513,7 +569,9 @@ export default async (client: BotClient) => {
          * Queue Events
          */
         .on("queueEnd", (player: Player) => {
-            client.debug(`[LavaMgrEvents] Queue ended for Guild: ${player.guildId}`)
+            client
+                .child({ guildId: player.guildId })
+                .debug(`[LavaMgrEvents] Queue ended for Guild: ${player.guildId}`)
             scheduleControlMessageUpdate(client, player.guildId, "queueEnd")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "queueUpdate")
             schedulePlayerSessionSave(player)
@@ -523,9 +581,11 @@ export default async (client: BotClient) => {
             const channelQ = textIdQ ? client.channels.cache.get(textIdQ) : undefined
             const controlChannelIdQ = getControlChannelIdSafe(client, player.guildId)
             if (channelQ && textIdQ !== controlChannelIdQ && isTextSendable(channelQ)) {
-                client.debug(
-                    `[LavaMgrEvents] Sending queueEnd message to non-control channel ${textIdQ} in guild ${player.guildId}.`
-                )
+                client
+                    .child({ guildId: player.guildId })
+                    .debug(
+                        `[LavaMgrEvents] Sending queueEnd message to non-control channel ${textIdQ} in guild ${player.guildId}.`
+                    )
                 channelQ
                     .send("Queue has ended.")
                     .catch((e: unknown) =>
@@ -535,15 +595,19 @@ export default async (client: BotClient) => {
 
             // Standard player destroy timeout — reservation-aware so in-flight search/enqueue
             // (web dashboard) is not torn down mid-request when the queue just ended.
-            client.debug(
-                `[LavaMgrEvents] Setting standard timeout to destroy player ${player.guildId} after queue end.`
-            )
+            client
+                .child({ guildId: player.guildId })
+                .debug(
+                    `[LavaMgrEvents] Setting standard timeout to destroy player ${player.guildId} after queue end.`
+                )
             const queueEndGuildId = player.guildId
             setTimeout(() => {
                 void (async () => {
-                    client.debug(
-                        `[LavaMgrEvents] Executing standard queue end timeout check for player ${queueEndGuildId}.`
-                    )
+                    client
+                        .child({ guildId: queueEndGuildId })
+                        .debug(
+                            `[LavaMgrEvents] Executing standard queue end timeout check for player ${queueEndGuildId}.`
+                        )
                     await safeIdlePlayerDestroy(
                         queueEndGuildId,
                         {
@@ -556,14 +620,18 @@ export default async (client: BotClient) => {
                             destroyPlayer: async () => {
                                 const live = client.lavalink.getPlayer(queueEndGuildId)
                                 if (!live || playerHasQueueContent(live)) {
-                                    client.debug(
-                                        `[LavaMgrEvents] Player ${queueEndGuildId} has new tracks or state changed, not destroying after standard timeout.`
-                                    )
+                                    client
+                                        .child({ guildId: queueEndGuildId })
+                                        .debug(
+                                            `[LavaMgrEvents] Player ${queueEndGuildId} has new tracks or state changed, not destroying after standard timeout.`
+                                        )
                                     return
                                 }
-                                client.debug(
-                                    `[LavaMgrEvents] Player ${queueEndGuildId} is idle, destroying after queue end timeout.`
-                                )
+                                client
+                                    .child({ guildId: queueEndGuildId })
+                                    .debug(
+                                        `[LavaMgrEvents] Player ${queueEndGuildId} is idle, destroying after queue end timeout.`
+                                    )
                                 // Tag QueueEmpty so preserve-prior can skip the DB delete after a
                                 // partial restore; /stop and /leave use destroy() with no reason.
                                 await live.destroy("QueueEmpty")
@@ -571,16 +639,20 @@ export default async (client: BotClient) => {
                         },
                         (err: unknown) => {
                             const msg = err instanceof Error ? err.message : String(err)
-                            client.error(
-                                `[LavaMgrEvents] Idle destroy after queue end failed (guildId=${queueEndGuildId}): ${msg}`
-                            )
+                            client
+                                .child({ guildId: queueEndGuildId })
+                                .error(
+                                    `[LavaMgrEvents] Idle destroy after queue end failed (guildId=${queueEndGuildId}): ${msg}`
+                                )
                         }
                     )
                 })().catch((err: unknown) => {
                     const msg = err instanceof Error ? err.message : String(err)
-                    client.error(
-                        `[LavaMgrEvents] Queue end idle-destroy task rejected (guildId=${queueEndGuildId}): ${msg}`
-                    )
+                    client
+                        .child({ guildId: queueEndGuildId })
+                        .error(
+                            `[LavaMgrEvents] Queue end idle-destroy task rejected (guildId=${queueEndGuildId}): ${msg}`
+                        )
                 })
             }, 5000)
         })
@@ -589,32 +661,42 @@ export default async (client: BotClient) => {
          * Voice Channel User Events
          */
         .on("playerVoiceJoin", (player: Player, userId: string) => {
-            client.debug(
-                `[LavaMgrEvents] User joined player's channel: Guild ${player.guildId}, User: ${userId}`
-            )
+            client
+                .child({ guildId: player.guildId })
+                .debug(
+                    `[LavaMgrEvents] User joined player's channel: Guild ${player.guildId}, User: ${userId}`
+                )
             if (hasTrackedDisconnect(player, userId)) {
                 clearDisconnectedUser(player, userId)
-                client.debug(
-                    `[LavaMgrEvents] User ${userId} rejoined VC in guild ${player.guildId}; RRQ queue removal cancelled.`
-                )
+                client
+                    .child({ guildId: player.guildId })
+                    .debug(
+                        `[LavaMgrEvents] User ${userId} rejoined VC in guild ${player.guildId}; RRQ queue removal cancelled.`
+                    )
             }
         })
         .on("playerVoiceLeave", (player: Player, userId: string) => {
-            client.debug(
-                `[LavaMgrEvents] User left player's channel: Guild ${player.guildId}, User: ${userId}`
-            )
+            client
+                .child({ guildId: player.guildId })
+                .debug(
+                    `[LavaMgrEvents] User left player's channel: Guild ${player.guildId}, User: ${userId}`
+                )
             const aloneGuildId = player.guildId
             const voiceChannel = player.voiceChannelId
                 ? client.channels.cache.get(player.voiceChannelId)
                 : undefined
             if (voiceChannel) {
-                client.debug(
-                    `[LavaMgrEvents] Setting timeout to check if bot is alone in VC ${player.voiceChannelId} for guild ${aloneGuildId}.`
-                )
-                setTimeout(async () => {
-                    client.debug(
-                        `[LavaMgrEvents] Executing check if bot is alone for player ${aloneGuildId}.`
+                client
+                    .child({ guildId: aloneGuildId })
+                    .debug(
+                        `[LavaMgrEvents] Setting timeout to check if bot is alone in VC ${player.voiceChannelId} for guild ${aloneGuildId}.`
                     )
+                setTimeout(async () => {
+                    client
+                        .child({ guildId: aloneGuildId })
+                        .debug(
+                            `[LavaMgrEvents] Executing check if bot is alone for player ${aloneGuildId}.`
+                        )
                     try {
                         const livePlayer = client.lavalink.getPlayer(aloneGuildId)
                         const vcId = livePlayer?.voiceChannelId
@@ -628,9 +710,11 @@ export default async (client: BotClient) => {
                                 `[LavaMgrEvents] Current human member count in VC ${vcId}: ${humanCount}`
                             )
                             if (humanCount === 0) {
-                                client.info(
-                                    `[LavaMgrEvents] Bot alone in Guild ${aloneGuildId}; reservation-aware destroy.`
-                                )
+                                client
+                                    .child({ guildId: aloneGuildId })
+                                    .info(
+                                        `[LavaMgrEvents] Bot alone in Guild ${aloneGuildId}; reservation-aware destroy.`
+                                    )
                                 // reservedByCaller=0: in-flight search/playlist resolve must finish
                                 // (or defer teardown) instead of being killed mid-request.
                                 await tryDestroyOrphanGuildPlayer(
@@ -653,9 +737,11 @@ export default async (client: BotClient) => {
                                                 !stillAloneChannel.isVoiceBased() ||
                                                 countHumanMembers(stillAloneChannel) > 0
                                             ) {
-                                                client.debug(
-                                                    `[LavaMgrEvents] Skipping alone destroy for ${aloneGuildId}; humans present or channel gone.`
-                                                )
+                                                client
+                                                    .child({ guildId: aloneGuildId })
+                                                    .debug(
+                                                        `[LavaMgrEvents] Skipping alone destroy for ${aloneGuildId}; humans present or channel gone.`
+                                                    )
                                                 return
                                             }
                                             await updateControlMessage(client, aloneGuildId).catch(
@@ -664,9 +750,11 @@ export default async (client: BotClient) => {
                                                         ctrlErr instanceof Error
                                                             ? ctrlErr.message
                                                             : String(ctrlErr)
-                                                    client.error(
-                                                        `[LavaMgrEvents] updateControlMessage failed (beforeDestroyAlone, guildId=${aloneGuildId}): ${msg}`
-                                                    )
+                                                    client
+                                                        .child({ guildId: aloneGuildId })
+                                                        .error(
+                                                            `[LavaMgrEvents] updateControlMessage failed (beforeDestroyAlone, guildId=${aloneGuildId}): ${msg}`
+                                                        )
                                                 }
                                             )
                                             // Tag AloneInVoice so preserve-prior can skip the DB
@@ -681,15 +769,19 @@ export default async (client: BotClient) => {
                                 )
                             }
                         } else {
-                            client.warn(
-                                `[LavaMgrEvents] Could not verify member count for player ${aloneGuildId}. Channel ${vcId} not found or not voice-based.`
-                            )
+                            client
+                                .child({ guildId: aloneGuildId })
+                                .warn(
+                                    `[LavaMgrEvents] Could not verify member count for player ${aloneGuildId}. Channel ${vcId} not found or not voice-based.`
+                                )
                         }
                     } catch (error: unknown) {
-                        client.error(
-                            `[LavaMgrEvents] Error checking channel members for player ${aloneGuildId}:`,
-                            error
-                        )
+                        client
+                            .child({ guildId: aloneGuildId })
+                            .error(
+                                `[LavaMgrEvents] Error checking channel members for player ${aloneGuildId}:`,
+                                error
+                            )
                     }
                 }, 60000)
             }
@@ -740,9 +832,11 @@ export default async (client: BotClient) => {
                                 textIdRrq !== controlChannelIdRrq &&
                                 isTextSendable(channelRrq)
                             ) {
-                                client.debug(
-                                    `[LavaMgrEvents] Sending RRQ disconnect cleanup to non-control channel ${textIdRrq} in guild ${p.guildId}.`
-                                )
+                                client
+                                    .child({ guildId: p.guildId })
+                                    .debug(
+                                        `[LavaMgrEvents] Sending RRQ disconnect cleanup to non-control channel ${textIdRrq} in guild ${p.guildId}.`
+                                    )
                                 const who = await displayNameForRRQMessage(
                                     client,
                                     p.guildId,
@@ -763,9 +857,11 @@ export default async (client: BotClient) => {
                         }
                     })().catch((err: unknown) => {
                         const msg = err instanceof Error ? err.message : String(err)
-                        client.error(
-                            `[LavaMgrEvents] RRQ disconnect cleanup task rejected (guildId=${guildId}, userId=${userId}): ${msg}`
-                        )
+                        client
+                            .child({ guildId })
+                            .error(
+                                `[LavaMgrEvents] RRQ disconnect cleanup task rejected (guildId=${guildId}, userId=${userId}): ${msg}`
+                            )
                     })
                 }, 60_000)
                 trackDisconnectedUser(player, userId, timeoutHandle)
@@ -776,17 +872,21 @@ export default async (client: BotClient) => {
          * Player State Change Events
          */
         .on("playerSocketClosed", (player: Player, payload: unknown) => {
-            client.warn(
-                `[LavaMgrEvents] Player WebSocket closed for Guild: ${player.guildId}`,
-                payload
-            )
+            client
+                .child({ guildId: player.guildId })
+                .warn(
+                    `[LavaMgrEvents] Player WebSocket closed for Guild: ${player.guildId}`,
+                    payload
+                )
             scheduleControlMessageUpdate(client, player.guildId, "playerSocketClosed")
             playerBroadcaster.broadcastPlayerEvent(player.guildId, player, "queueUpdate")
         })
         .on("playerSuppressChange", (player: Player, suppress: boolean) => {
-            client.debug(
-                `[LavaMgrEvents] Player suppress state changed for Guild: ${player.guildId}, Suppressed: ${suppress}`
-            )
+            client
+                .child({ guildId: player.guildId })
+                .debug(
+                    `[LavaMgrEvents] Player suppress state changed for Guild: ${player.guildId}, Suppressed: ${suppress}`
+                )
         })
         .on("playerUpdate", (oldPlayerJson: PlayerJson, newPlayer: Player) => {
             const current = newPlayer.queue?.current

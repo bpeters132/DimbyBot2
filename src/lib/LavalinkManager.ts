@@ -282,9 +282,11 @@ async function tryQueueAndPlayAutoplay(
 
     if (catalogFailure) {
         const detail = failureDetail ? ` ${failureDetail}` : ""
-        client.warn(
-            `[LavalinkManager] Autoplay: catalog similar-tracks unavailable (${catalogFailure})${detail} — guild ${player.guildId}, seed "${seed.artist}" — "${seed.title}". Tries Spotify (related-artists + top-tracks) then MusicBrainz; no free-form YouTube mix. For 401/403 check Spotify Developer Dashboard; set MUSICBRAINZ_CONTACT per https://musicbrainz.org/doc/MusicBrainz_API`
-        )
+        client
+            .child({ guildId: player.guildId })
+            .warn(
+                `[LavalinkManager] Autoplay: catalog similar-tracks unavailable (${catalogFailure})${detail} — guild ${player.guildId}, seed "${seed.artist}" — "${seed.title}". Tries Spotify (related-artists + top-tracks) then MusicBrainz; no free-form YouTube mix. For 401/403 check Spotify Developer Dashboard; set MUSICBRAINZ_CONTACT per https://musicbrainz.org/doc/MusicBrainz_API`
+            )
         return false
     }
 
@@ -301,9 +303,11 @@ async function tryQueueAndPlayAutoplay(
     })
 
     if (!similar.length) {
-        client.warn(
-            `[LavalinkManager] Autoplay: no catalog tracks left after filtering (same-as-seed) for guild ${player.guildId}. Seed: "${seed.artist}" — "${seed.title}".`
-        )
+        client
+            .child({ guildId: player.guildId })
+            .warn(
+                `[LavalinkManager] Autoplay: no catalog tracks left after filtering (same-as-seed) for guild ${player.guildId}. Seed: "${seed.artist}" — "${seed.title}".`
+            )
         return false
     }
 
@@ -327,9 +331,11 @@ async function tryQueueAndPlayAutoplay(
         if (track && (await tryOne(track, q))) return true
     }
 
-    client.warn(
-        `[LavalinkManager] Autoplay: ${similar.length} catalog pick(s) from Spotify/MusicBrainz but none could be resolved on YouTube for guild ${player.guildId}. Seed: "${seed.artist}" — "${seed.title}".`
-    )
+    client
+        .child({ guildId: player.guildId })
+        .warn(
+            `[LavalinkManager] Autoplay: ${similar.length} catalog pick(s) from Spotify/MusicBrainz but none could be resolved on YouTube for guild ${player.guildId}. Seed: "${seed.artist}" — "${seed.title}".`
+        )
     return false
 }
 
@@ -338,9 +344,11 @@ async function runAutoplay(client: BotClient, player: Player, endedTrack: Track 
 
     const seed = resolveAutoplaySeed(player, endedTrack)
     if (!seed) {
-        client.warn(
-            `[LavalinkManager] Autoplay is on but artist/title could not be resolved for guild ${player.guildId}.`
-        )
+        client
+            .child({ guildId: player.guildId })
+            .warn(
+                `[LavalinkManager] Autoplay is on but artist/title could not be resolved for guild ${player.guildId}.`
+            )
         return
     }
 

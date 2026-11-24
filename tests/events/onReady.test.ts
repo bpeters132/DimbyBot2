@@ -41,6 +41,12 @@ function createReadyClient(
         info: log("info"),
         debug: log("debug"),
         warn: log("warn"),
+        child() {
+            return this
+        },
+        forGuild() {
+            return this
+        },
         logger: { setDiscordForwarder() {} },
         guilds: { cache: new Map() },
         lavalink: { init() {} },

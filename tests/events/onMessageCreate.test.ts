@@ -34,6 +34,12 @@ function createMessageClient() {
         debug: log("debug"),
         warn: log("warn"),
         info: log("info"),
+        child() {
+            return this
+        },
+        forGuild() {
+            return this
+        },
         user: { id: "bot-1" },
         on(event: string, cb: (message: unknown) => Promise<void>) {
             listeners.set(event, cb)

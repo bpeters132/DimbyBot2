@@ -130,9 +130,11 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                             return null
                         }
                         const msg = err instanceof Error ? err.message : String(err)
-                        client.warn(
-                            `[Downloads] list file access failed for key=${key} file=${file} (guildId=${guildId}): ${msg}`
-                        )
+                        client
+                            .child({ guildId })
+                            .warn(
+                                `[Downloads] list file access failed for key=${key} file=${file} (guildId=${guildId}): ${msg}`
+                            )
                         return null
                     }
                 })
@@ -235,9 +237,11 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                     const file = parseDownloadMetadataStoreKey(key).fileName
                     const filePath = path.join(downloadsDir, file)
                     if (!isResolvedPathInsideDir(downloadsDir, filePath)) {
-                        client.warn(
-                            `[Downloads] Refusing path traversal for metadata file "${file}" (guildId=${guildId})`
-                        )
+                        client
+                            .child({ guildId })
+                            .warn(
+                                `[Downloads] Refusing path traversal for metadata file "${file}" (guildId=${guildId})`
+                            )
                         return {
                             name: file,
                             path: filePath,
@@ -259,9 +263,11 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                                 date = new Date(0)
                             } else {
                                 const msg = err instanceof Error ? err.message : String(err)
-                                client.warn(
-                                    `[Downloads] cleanup stat failed for ${file} (guildId=${guildId}): ${msg}`
-                                )
+                                client
+                                    .child({ guildId })
+                                    .warn(
+                                        `[Downloads] cleanup stat failed for ${file} (guildId=${guildId}): ${msg}`
+                                    )
                                 date = null
                             }
                         }
@@ -286,9 +292,11 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
             if (!removeAll) {
                 const skippedCount = fileRows.filter((f) => f.date === null).length
                 if (skippedCount > 0) {
-                    client.warn(
-                        `[Downloads] Skipped ${skippedCount} file(s) due to stat errors (date=null); cleanup may be incomplete (guildId=${guildId}).`
-                    )
+                    client
+                        .child({ guildId })
+                        .warn(
+                            `[Downloads] Skipped ${skippedCount} file(s) due to stat errors (date=null); cleanup may be incomplete (guildId=${guildId}).`
+                        )
                 }
             }
 
@@ -319,10 +327,12 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                             deletedStoreKeys.add(metaKey)
                         }
                     } else {
-                        client.warn(
-                            `[Downloads] cleanup unlink failed for ${file.name} (guildId=${guildId})`,
-                            err
-                        )
+                        client
+                            .child({ guildId })
+                            .warn(
+                                `[Downloads] cleanup unlink failed for ${file.name} (guildId=${guildId})`,
+                                err
+                            )
                         errors.push(`${file.name}: Could not delete this file.`)
                     }
                 }
@@ -356,10 +366,12 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                             ? (err as NodeJS.ErrnoException).code
                             : ""
                     if (code !== "ENOENT") {
-                        client.warn(
-                            `[Downloads] orphan cleanup unlink failed for ${orphan.name} (guildId=${guildId})`,
-                            err
-                        )
+                        client
+                            .child({ guildId })
+                            .warn(
+                                `[Downloads] orphan cleanup unlink failed for ${orphan.name} (guildId=${guildId})`,
+                                err
+                            )
                         errors.push(`${orphan.name}: Could not delete orphan file.`)
                     }
                 }
@@ -377,9 +389,11 @@ async function execute(interaction: ChatInputCommandInteraction, client: BotClie
                 deleteStoreKeys: [...deletedStoreKeys],
             })
             if (!metadataSaved) {
-                client.error(
-                    `[Downloads] Failed to persist metadata cleanup updates to database (guildId=${guildId}, subcommand=${subcommand}).`
-                )
+                client
+                    .child({ guildId })
+                    .error(
+                        `[Downloads] Failed to persist metadata cleanup updates to database (guildId=${guildId}, subcommand=${subcommand}).`
+                    )
             }
 
             const sizeMB = (totalSize / (1024 * 1024)).toFixed(2)

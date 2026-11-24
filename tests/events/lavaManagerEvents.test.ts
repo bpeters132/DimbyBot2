@@ -120,6 +120,12 @@ function createHarness() {
         warn: log("warn"),
         info: log("info"),
         debug: log("debug"),
+        child() {
+            return this
+        },
+        forGuild() {
+            return this
+        },
         channels: {
             cache: new Map<string, unknown>([["text-1", channel]]),
             fetch: async () => channel,

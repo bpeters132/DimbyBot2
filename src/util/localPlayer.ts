@@ -94,9 +94,11 @@ export async function playLocalFile(
     requester: User | undefined
 ): Promise<QueryPlayResult> {
     const guildId = voiceChannel.guild.id
-    client.debug(
-        `[LocalPlayer] Attempting to play local file: "${localFile.title}" in guild ${guildId}`
-    )
+    client
+        .child({ guildId })
+        .debug(
+            `[LocalPlayer] Attempting to play local file: "${localFile.title}" in guild ${guildId}`
+        )
 
     try {
         await fs.promises.access(localFile.path, fs.constants.R_OK)
@@ -123,9 +125,11 @@ export async function playLocalFile(
     // button await was open. Never flush/destroy/join against a different live player.
     const liveBeforePending = client.lavalink.getPlayer(guildId)
     if (shouldAbortLocalPlayForLivePlayerConflict(lavalinkPlayer, liveBeforePending)) {
-        client.debug(
-            `[LocalPlayer] Aborting local play for guild ${guildId}: live Lavalink player is not the handoff target.`
-        )
+        client
+            .child({ guildId })
+            .debug(
+                `[LocalPlayer] Aborting local play for guild ${guildId}: live Lavalink player is not the handoff target.`
+            )
         return {
             success: false,
             feedbackText:
@@ -169,15 +173,19 @@ export async function playLocalFile(
                         await sessionHandoff.clearSessionAfterLocalReady()
                     } else {
                         sessionHandoff.releaseLeftoverSuppressLease()
-                        client.debug(
-                            `[LocalPlayer] Skipping session clear after cancel for guild ${guildId}: successor owns the slot.`
-                        )
+                        client
+                            .child({ guildId })
+                            .debug(
+                                `[LocalPlayer] Skipping session clear after cancel for guild ${guildId}: successor owns the slot.`
+                            )
                     }
                 } catch (e: unknown) {
                     const msg = e instanceof Error ? e.message : String(e)
-                    client.warn(
-                        `[LocalPlayer] session cleanup after cancel for guild ${guildId}: ${msg}`
-                    )
+                    client
+                        .child({ guildId })
+                        .warn(
+                            `[LocalPlayer] session cleanup after cancel for guild ${guildId}: ${msg}`
+                        )
                 }
             }
             return {
@@ -188,16 +196,20 @@ export async function playLocalFile(
         }
 
         if (lavalinkPlayer) {
-            client.debug(
-                `[LocalPlayer] Checking Lavalink player state for guild ${guildId}. Connected: ${lavalinkPlayer.connected}, Playing: ${lavalinkPlayer.playing}`
-            )
+            client
+                .child({ guildId })
+                .debug(
+                    `[LocalPlayer] Checking Lavalink player state for guild ${guildId}. Connected: ${lavalinkPlayer.connected}, Playing: ${lavalinkPlayer.playing}`
+                )
             // Identity match only — `players.has(guildId)` is true for a successor and would
             // flush the stale handoff Player over that session then steal Discord voice.
             const liveForHandoff = client.lavalink.getPlayer(guildId)
             if (shouldAbortLocalPlayForLivePlayerConflict(lavalinkPlayer, liveForHandoff)) {
-                client.debug(
-                    `[LocalPlayer] Aborting local play for guild ${guildId}: player replaced before handoff.`
-                )
+                client
+                    .child({ guildId })
+                    .debug(
+                        `[LocalPlayer] Aborting local play for guild ${guildId}: player replaced before handoff.`
+                    )
                 return {
                     success: false,
                     feedbackText:
@@ -219,15 +231,19 @@ export async function playLocalFile(
                             isPlaying: lavalinkPlayer.playing,
                             stopPlaying: async () => {
                                 await lavalinkPlayer.stopPlaying(true, false)
-                                client.debug(
-                                    `[LocalPlayer] Stopped Lavalink player in guild ${guildId}.`
-                                )
+                                client
+                                    .child({ guildId })
+                                    .debug(
+                                        `[LocalPlayer] Stopped Lavalink player in guild ${guildId}.`
+                                    )
                             },
                             onStopError: (e: unknown) => {
                                 const msg = e instanceof Error ? e.message : String(e)
-                                client.warn(
-                                    `[LocalPlayer] Failed to stop Lavalink player in guild ${guildId}: ${msg}`
-                                )
+                                client
+                                    .child({ guildId })
+                                    .warn(
+                                        `[LocalPlayer] Failed to stop Lavalink player in guild ${guildId}: ${msg}`
+                                    )
                             },
                             beforeDestroy: () => {
                                 destroyEventWait = waitForLavalinkPlayerDestroy(
@@ -235,15 +251,19 @@ export async function playLocalFile(
                                     guildId,
                                     2000
                                 )
-                                client.debug(
-                                    `[LocalPlayer] Attempting to destroy existing Lavalink player for guild ${guildId}.`
-                                )
+                                client
+                                    .child({ guildId })
+                                    .debug(
+                                        `[LocalPlayer] Attempting to destroy existing Lavalink player for guild ${guildId}.`
+                                    )
                             },
                             destroy: async () => {
                                 await lavalinkPlayer.destroy()
-                                client.debug(
-                                    `[LocalPlayer] Destroyed Lavalink player for guild ${guildId}.`
-                                )
+                                client
+                                    .child({ guildId })
+                                    .debug(
+                                        `[LocalPlayer] Destroyed Lavalink player for guild ${guildId}.`
+                                    )
                                 // Lavalink-client already removed this guild from the manager
                                 // cache before awaiting node.destroyPlayer. A successful
                                 // Map.delete here would drop a concurrent createPlayer successor
@@ -258,9 +278,11 @@ export async function playLocalFile(
                             },
                         })
                         if (!destroyed) {
-                            client.debug(
-                                `[LocalPlayer] Skipping Lavalink stop/destroy for guild ${guildId}: player replaced during teardown.`
-                            )
+                            client
+                                .child({ guildId })
+                                .debug(
+                                    `[LocalPlayer] Skipping Lavalink stop/destroy for guild ${guildId}: player replaced during teardown.`
+                                )
                         }
                         return destroyed
                     },
@@ -268,9 +290,11 @@ export async function playLocalFile(
                 )
                 const liveAfterFlush = client.lavalink.getPlayer(guildId)
                 if (shouldAbortLocalPlayForLivePlayerConflict(lavalinkPlayer, liveAfterFlush)) {
-                    client.debug(
-                        `[LocalPlayer] Aborting local play for guild ${guildId}: player replaced during session flush.`
-                    )
+                    client
+                        .child({ guildId })
+                        .debug(
+                            `[LocalPlayer] Aborting local play for guild ${guildId}: player replaced during session flush.`
+                        )
                     sessionHandoff.releaseLeftoverSuppressLease()
                     return {
                         success: false,
@@ -280,17 +304,21 @@ export async function playLocalFile(
                     }
                 }
                 if (!sessionHandoff.destroyedLavalink) {
-                    client.warn(
-                        `[LocalPlayer] Failed to destroy Lavalink player in guild ${guildId}. Proceeding with @discordjs/voice connection attempt.`
-                    )
+                    client
+                        .child({ guildId })
+                        .warn(
+                            `[LocalPlayer] Failed to destroy Lavalink player in guild ${guildId}. Proceeding with @discordjs/voice connection attempt.`
+                        )
                 }
                 postLavalinkHandoff = destroyEventWait.then((eventSeen) => {
                     if (eventSeen) sessionHandoff?.markDestroyEventSeen()
                 })
             } else {
-                client.debug(
-                    `[LocalPlayer] No matching Lavalink player in manager for guild ${guildId} prior to local play.`
-                )
+                client
+                    .child({ guildId })
+                    .debug(
+                        `[LocalPlayer] No matching Lavalink player in manager for guild ${guildId} prior to local play.`
+                    )
             }
         }
 
@@ -315,7 +343,9 @@ export async function playLocalFile(
                 oldPlayer.connection.destroy()
             }
             activeLocalPlayers.delete(guildId)
-            client.debug(`[LocalPlayer] Destroyed previous local player for guild ${guildId}`)
+            client
+                .child({ guildId })
+                .debug(`[LocalPlayer] Destroyed previous local player for guild ${guildId}`)
         }
 
         let connection: VoiceConnection | undefined
@@ -327,20 +357,26 @@ export async function playLocalFile(
                 selfDeaf: true,
             })
 
-            client.debug(
-                `[LocalPlayer] Joined voice channel: ${voiceChannel.name} (${voiceChannel.id}) in guild ${guildId}`
-            )
+            client
+                .child({ guildId })
+                .debug(
+                    `[LocalPlayer] Joined voice channel: ${voiceChannel.name} (${voiceChannel.id}) in guild ${guildId}`
+                )
 
             await entersState(connection, VoiceConnectionStatus.Ready, 30_000)
-            client.debug(`[LocalPlayer] Voice connection Ready for guild ${guildId}`)
+            client
+                .child({ guildId })
+                .debug(`[LocalPlayer] Voice connection Ready for guild ${guildId}`)
 
             const cancelledAfterReady = await abortIfCancelled(connection)
             if (cancelledAfterReady) return cancelledAfterReady
         } catch (error: unknown) {
-            client.error(
-                `[LocalPlayer] Failed to join or get ready in voice channel ${voiceChannel.id} for guild ${guildId}:`,
-                error
-            )
+            client
+                .child({ guildId })
+                .error(
+                    `[LocalPlayer] Failed to join or get ready in voice channel ${voiceChannel.id} for guild ${guildId}:`,
+                    error
+                )
             // Destroy-fail may leave the original empty player in the map — tear it down
             // under the suppress lease. Do not destroy a concurrent successor that filled
             // the guild slot after destroy deleted the cache entry then rejected.
@@ -358,14 +394,18 @@ export async function playLocalFile(
                     } catch (destroyErr: unknown) {
                         const msg =
                             destroyErr instanceof Error ? destroyErr.message : String(destroyErr)
-                        client.warn(
-                            `[LocalPlayer] Leftover Lavalink destroy after join fail for guild ${guildId}: ${msg}`
-                        )
+                        client
+                            .child({ guildId })
+                            .warn(
+                                `[LocalPlayer] Leftover Lavalink destroy after join fail for guild ${guildId}: ${msg}`
+                            )
                     }
                 } else if (leftover) {
-                    client.debug(
-                        `[LocalPlayer] Skipping leftover destroy after join fail for guild ${guildId}: live player is not the handoff instance.`
-                    )
+                    client
+                        .child({ guildId })
+                        .debug(
+                            `[LocalPlayer] Skipping leftover destroy after join fail for guild ${guildId}: live player is not the handoff instance.`
+                        )
                 }
             }
             // Keep the persisted Lavalink session (full queue flushed before stop/destroy).
@@ -403,14 +443,18 @@ export async function playLocalFile(
                                 destroyErr instanceof Error
                                     ? destroyErr.message
                                     : String(destroyErr)
-                            client.warn(
-                                `[LocalPlayer] Leftover Lavalink destroy after local Ready for guild ${guildId}: ${msg}`
-                            )
+                            client
+                                .child({ guildId })
+                                .warn(
+                                    `[LocalPlayer] Leftover Lavalink destroy after local Ready for guild ${guildId}: ${msg}`
+                                )
                         }
                     } else if (leftover) {
-                        client.debug(
-                            `[LocalPlayer] Skipping leftover destroy after local Ready for guild ${guildId}: live player is not the handoff instance.`
-                        )
+                        client
+                            .child({ guildId })
+                            .debug(
+                                `[LocalPlayer] Skipping leftover destroy after local Ready for guild ${guildId}: live player is not the handoff instance.`
+                            )
                     }
                 }
                 // Re-read after optional leftover destroy: node.destroyPlayer await can admit a
@@ -424,9 +468,11 @@ export async function playLocalFile(
                     if (connection.state.status !== VoiceConnectionStatus.Destroyed) {
                         connection.destroy()
                     }
-                    client.debug(
-                        `[LocalPlayer] Aborting local audio for guild ${guildId}: successor Lavalink player owns the slot after Ready.`
-                    )
+                    client
+                        .child({ guildId })
+                        .debug(
+                            `[LocalPlayer] Aborting local audio for guild ${guildId}: successor Lavalink player owns the slot after Ready.`
+                        )
                     return {
                         success: false,
                         feedbackText:
@@ -440,31 +486,39 @@ export async function playLocalFile(
             }
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e)
-            client.warn(
-                `[LocalPlayer] clearPlayerSession after local Ready failed for guild ${guildId}: ${msg}`
-            )
+            client
+                .child({ guildId })
+                .warn(
+                    `[LocalPlayer] clearPlayerSession after local Ready failed for guild ${guildId}: ${msg}`
+                )
         }
 
         const conn = connection!
         const audioPlayer = createAudioPlayer()
         const onDisconnected = () => {
             void (async () => {
-                client.warn(
-                    `[LocalPlayer] Voice connection Disconnected in guild ${guildId}. Attempting to rejoin if possible.`
-                )
+                client
+                    .child({ guildId })
+                    .warn(
+                        `[LocalPlayer] Voice connection Disconnected in guild ${guildId}. Attempting to rejoin if possible.`
+                    )
                 try {
                     await Promise.race([
                         entersState(conn, VoiceConnectionStatus.Signalling, 5_000),
                         entersState(conn, VoiceConnectionStatus.Connecting, 5_000),
                     ])
-                    client.debug(
-                        `[LocalPlayer] Voice connection re-entered Signalling/Connecting for guild ${guildId}; rejoin in progress.`
-                    )
+                    client
+                        .child({ guildId })
+                        .debug(
+                            `[LocalPlayer] Voice connection re-entered Signalling/Connecting for guild ${guildId}; rejoin in progress.`
+                        )
                 } catch (error: unknown) {
-                    client.error(
-                        `[LocalPlayer] Voice connection lost or could not reconnect in guild ${guildId}:`,
-                        error
-                    )
+                    client
+                        .child({ guildId })
+                        .error(
+                            `[LocalPlayer] Voice connection lost or could not reconnect in guild ${guildId}:`,
+                            error
+                        )
                     if (conn.state.status !== VoiceConnectionStatus.Destroyed) {
                         conn.destroy()
                     }
@@ -488,17 +542,21 @@ export async function playLocalFile(
         audioPlayer.play(resource)
         conn.subscribe(audioPlayer)
 
-        client.debug(
-            `[LocalPlayer] Started playing local file: "${localFile.title}" in guild ${guildId}`
-        )
+        client
+            .child({ guildId })
+            .debug(
+                `[LocalPlayer] Started playing local file: "${localFile.title}" in guild ${guildId}`
+            )
 
         const safeRequester = requester ?? "someone"
         const feedbackText = `Now playing local file: **${localFile.title}** (requested by ${safeRequester})`
 
         audioPlayer.once(AudioPlayerStatus.Idle, () => {
-            client.debug(
-                `[LocalPlayer] Finished playing local file: "${localFile.title}" in guild ${guildId}`
-            )
+            client
+                .child({ guildId })
+                .debug(
+                    `[LocalPlayer] Finished playing local file: "${localFile.title}" in guild ${guildId}`
+                )
             if (conn.state.status !== VoiceConnectionStatus.Destroyed) {
                 conn.destroy()
             }
@@ -509,18 +567,20 @@ export async function playLocalFile(
 
         conn.once(VoiceConnectionStatus.Destroyed, () => {
             conn.off(VoiceConnectionStatus.Disconnected, onDisconnected)
-            client.debug(
-                `[LocalPlayer] Voice connection Destroyed in guild ${guildId}. Cleaning up.`
-            )
+            client
+                .child({ guildId })
+                .debug(`[LocalPlayer] Voice connection Destroyed in guild ${guildId}. Cleaning up.`)
             audioPlayer.stop(true)
             activeLocalPlayers.delete(guildId)
         })
 
         audioPlayer.on("error", (error: Error) => {
-            client.error(
-                `[LocalPlayer] Error with audio player in guild ${guildId} for file "${localFile.title}":`,
-                error
-            )
+            client
+                .child({ guildId })
+                .error(
+                    `[LocalPlayer] Error with audio player in guild ${guildId} for file "${localFile.title}":`,
+                    error
+                )
             if (conn.state.status !== VoiceConnectionStatus.Destroyed) {
                 conn.destroy()
             }
@@ -560,7 +620,9 @@ export function stopLocalPlayer(client: BotClient, guildId: string) {
             playerInstance.connection.destroy()
         }
         activeLocalPlayers.delete(guildId)
-        client.debug(`[LocalPlayer] Stopped and cleaned up local player for guild ${guildId}`)
+        client
+            .child({ guildId })
+            .debug(`[LocalPlayer] Stopped and cleaned up local player for guild ${guildId}`)
         return true
     }
     return false

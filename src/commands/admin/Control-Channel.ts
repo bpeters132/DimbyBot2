@@ -41,20 +41,26 @@ export default {
         const channel = interaction.channel
         const options = interaction.options
         const subcommand = options.getSubcommand()
-        client.debug(`[Control-Channel] Executing subcommand: ${subcommand} in guild ${guild.id}`)
+        client
+            .child({ guildId: guild.id })
+            .debug(`[Control-Channel] Executing subcommand: ${subcommand} in guild ${guild.id}`)
 
         const guildSettings = getGuildSettings()
 
         if (!guildSettings[guild.id]) {
-            client.debug(`[Control-Channel] Initializing settings for guild ${guild.id}`)
+            client
+                .child({ guildId: guild.id })
+                .debug(`[Control-Channel] Initializing settings for guild ${guild.id}`)
             guildSettings[guild.id] = {}
         }
 
         if (subcommand === "set") {
             if (!channel || channel.type !== ChannelType.GuildText) {
-                client.warn(
-                    `[Control-Channel] Invalid channel for set: ${channel?.id ?? "none"} in guild ${guild.id}`
-                )
+                client
+                    .child({ guildId: guild.id })
+                    .warn(
+                        `[Control-Channel] Invalid channel for set: ${channel?.id ?? "none"} in guild ${guild.id}`
+                    )
                 return interaction.reply({
                     content:
                         "Control channel must be a server text channel. Run this command from that channel.",
@@ -62,9 +68,11 @@ export default {
                 })
             }
             const targetChannel = channel
-            client.debug(
-                `[Control-Channel] Setting control channel to ${targetChannel.id} (${targetChannel.name}) in guild ${guild.id}`
-            )
+            client
+                .child({ guildId: guild.id })
+                .debug(
+                    `[Control-Channel] Setting control channel to ${targetChannel.id} (${targetChannel.name}) in guild ${guild.id}`
+                )
 
             const botUser = client.user
             if (!botUser) {
@@ -83,9 +91,11 @@ export default {
             const hasPerms = botPermissions?.has(requiredPerms)
 
             if (!hasPerms) {
-                client.warn(
-                    `[Control-Channel] Missing permissions in target channel ${targetChannel.id} for guild ${guild.id}. Has: ${botPermissions?.toArray()}, Needs: ${requiredPerms}`
-                )
+                client
+                    .child({ guildId: guild.id })
+                    .warn(
+                        `[Control-Channel] Missing permissions in target channel ${targetChannel.id} for guild ${guild.id}. Has: ${botPermissions?.toArray()}, Needs: ${requiredPerms}`
+                    )
                 return interaction.reply({
                     content:
                         "I need permissions to View Channel, Send Messages, Embed Links, and Manage Messages in the designated control channel.",
@@ -101,20 +111,26 @@ export default {
 
             // Send the new control message
             try {
-                client.debug(
-                    `[Control-Channel] Fetching player for initial control message state in guild ${guild.id}.`
-                )
+                client
+                    .child({ guildId: guild.id })
+                    .debug(
+                        `[Control-Channel] Fetching player for initial control message state in guild ${guild.id}.`
+                    )
                 const player = client.lavalink?.getPlayer(guild.id)
 
-                client.debug(
-                    `[Control-Channel] Creating initial embed and buttons for guild ${guild.id}.`
-                )
+                client
+                    .child({ guildId: guild.id })
+                    .debug(
+                        `[Control-Channel] Creating initial embed and buttons for guild ${guild.id}.`
+                    )
                 const controlEmbed = createControlEmbed(client, player, guild.id)
                 const controlButtons = createControlButtons(client, player)
 
-                client.debug(
-                    `[Control-Channel] Sending new control message to channel ${targetChannel.id} in guild ${guild.id}.`
-                )
+                client
+                    .child({ guildId: guild.id })
+                    .debug(
+                        `[Control-Channel] Sending new control message to channel ${targetChannel.id} in guild ${guild.id}.`
+                    )
                 const controlMessage = await targetChannel.send({
                     embeds: [controlEmbed],
                     components: controlButtons,
@@ -123,9 +139,11 @@ export default {
 
                 guildSettings[guild.id].controlChannelId = targetChannel.id
                 guildSettings[guild.id].controlMessageId = controlMessage.id
-                client.debug(
-                    `[Control-Channel] Saving new settings for guild ${guild.id}: Channel ${targetChannel.id}, Message ${controlMessage.id}.`
-                )
+                client
+                    .child({ guildId: guild.id })
+                    .debug(
+                        `[Control-Channel] Saving new settings for guild ${guild.id}: Channel ${targetChannel.id}, Message ${controlMessage.id}.`
+                    )
                 const persisted = await saveGuildSettings(guildSettings, client, {
                     touchedGuildIds: [guild.id],
                     touchedGuildFields: {
@@ -134,9 +152,11 @@ export default {
                 })
                 if (!persisted) {
                     await controlMessage.delete().catch((rollbackErr: unknown) => {
-                        client.warn(
-                            `[Control-Channel] Failed to roll back newly posted control message ${controlMessage.id} after save failure in guild ${guild.id}: ${rollbackErr}`
-                        )
+                        client
+                            .child({ guildId: guild.id })
+                            .warn(
+                                `[Control-Channel] Failed to roll back newly posted control message ${controlMessage.id} after save failure in guild ${guild.id}: ${rollbackErr}`
+                            )
                     })
                     return interaction.reply({
                         content:
@@ -173,9 +193,11 @@ export default {
                             )
                         }
                     } catch (error) {
-                        client.warn(
-                            `[Control-Channel] Could not delete old control message ${oldMessageId} in guild ${guild.id}: ${error}`
-                        )
+                        client
+                            .child({ guildId: guild.id })
+                            .warn(
+                                `[Control-Channel] Could not delete old control message ${oldMessageId} in guild ${guild.id}: ${error}`
+                            )
                     }
                 }
 
@@ -183,9 +205,11 @@ export default {
                     content: `Set ${targetChannel} as the music control channel. The control message has been created.`,
                 })
             } catch (error) {
-                client.error(
-                    `[Control-Channel] Failed to send control message in guild ${guild.id}: ${error}`
-                )
+                client
+                    .child({ guildId: guild.id })
+                    .error(
+                        `[Control-Channel] Failed to send control message in guild ${guild.id}: ${error}`
+                    )
                 return interaction.reply({
                     content:
                         "Failed to create the control message. Please check my permissions in this channel.",
@@ -193,12 +217,16 @@ export default {
                 })
             }
         } else if (subcommand === "unset") {
-            client.debug(`[Control-Channel] Unsetting control channel for guild ${guild.id}.`)
+            client
+                .child({ guildId: guild.id })
+                .debug(`[Control-Channel] Unsetting control channel for guild ${guild.id}.`)
             const settings = guildSettings[guild.id]
             if (!settings?.controlChannelId) {
-                client.debug(
-                    `[Control-Channel] No control channel set for guild ${guild.id}. Nothing to unset.`
-                )
+                client
+                    .child({ guildId: guild.id })
+                    .debug(
+                        `[Control-Channel] No control channel set for guild ${guild.id}. Nothing to unset.`
+                    )
                 return interaction.reply({
                     content: "No control channel is currently set for this guild.",
                     ephemeral: true,
@@ -209,15 +237,15 @@ export default {
             const controlMessageId = settings.controlMessageId
             delete settings.controlChannelId
             delete settings.controlMessageId
-            client.debug(
-                `[Control-Channel] Removed control channel settings for guild ${guild.id}.`
-            )
+            client
+                .child({ guildId: guild.id })
+                .debug(`[Control-Channel] Removed control channel settings for guild ${guild.id}.`)
 
             const rowEmpty = Object.keys(settings).length === 0
             if (rowEmpty) {
-                client.debug(
-                    `[Control-Channel] Removing empty settings entry for guild ${guild.id}.`
-                )
+                client
+                    .child({ guildId: guild.id })
+                    .debug(`[Control-Channel] Removing empty settings entry for guild ${guild.id}.`)
                 delete guildSettings[guild.id]
             }
             const persisted = await saveGuildSettings(guildSettings, client, {
@@ -227,9 +255,11 @@ export default {
                 },
                 clearedGuildFields: { [guild.id]: ["controlChannelId", "controlMessageId"] },
             })
-            client.debug(
-                `[Control-Channel] Persist settings after unset for guild ${guild.id}: ${persisted ? "ok" : "failed"}.`
-            )
+            client
+                .child({ guildId: guild.id })
+                .debug(
+                    `[Control-Channel] Persist settings after unset for guild ${guild.id}: ${persisted ? "ok" : "failed"}.`
+                )
 
             if (!persisted) {
                 return interaction.reply({
@@ -267,9 +297,11 @@ export default {
                         )
                     }
                 } catch (error) {
-                    client.warn(
-                        `[Control-Channel] Could not delete control message ${controlMessageId} in guild ${guild.id} during unset: ${error}`
-                    )
+                    client
+                        .child({ guildId: guild.id })
+                        .warn(
+                            `[Control-Channel] Could not delete control message ${controlMessageId} in guild ${guild.id} during unset: ${error}`
+                        )
                 }
             }
 

@@ -262,6 +262,12 @@ export function createBotClientFake(
         info: log("info"),
         debug: log("debug"),
         warn: log("warn"),
+        child() {
+            return this
+        },
+        forGuild() {
+            return this
+        },
         logger: input.logger,
         on: () => client,
         once: () => client,

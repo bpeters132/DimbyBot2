@@ -153,13 +153,27 @@ export interface JsonMigrationOptions {
     allowPartialMigration?: boolean
 }
 
-export type DiscordLogForwarder = (level: DiscordLogLevelName, message: string) => void
+/** Guild id stamped on a logger for Discord forwarding. It is not read from the message text. */
+export type LogGuildBindings = {
+    guildId: string
+}
+
+export type DiscordLogForwarder = (
+    level: DiscordLogLevelName,
+    message: string,
+    guildId: string | null
+) => void
 
 export interface LoggerInterface {
     info(text: string, ...args: unknown[]): void
     warn(text: string, ...args: unknown[]): void
     error(text: string, ...args: unknown[]): void
     debug(text: string, ...args: unknown[]): void
+    /**
+     * Logger that writes the same console and file lines, and forwards Discord logs only to
+     * `guildId`. A missing or invalid id does not forward.
+     */
+    child(bindings: LogGuildBindings): LoggerInterface
     setDebugEnabled(enabled: boolean): void
     getDebugEnabled(): boolean
     getLogFilePath(): string | null

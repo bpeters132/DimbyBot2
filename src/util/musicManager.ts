@@ -143,7 +143,9 @@ export async function handleQueryAndPlay(
     requester: User,
     player: Player
 ): Promise<QueryPlayResult> {
-    client.debug(`[MusicManager] handleQueryAndPlay called for guild ${guildId}. Query: "${query}"`)
+    client
+        .child({ guildId })
+        .debug(`[MusicManager] handleQueryAndPlay called for guild ${guildId}. Query: "${query}"`)
     const queueSize = player?.queue?.tracks?.length ?? 0
     client.debug(
         `[MusicManager] Player state in handleQueryAndPlay: connected=${player?.connected ?? "unknown"}, playing=${player?.playing ?? "unknown"}, position=${player?.position ?? "unknown"}`
@@ -170,9 +172,11 @@ export async function handleQueryAndPlay(
             player.voiceChannelId !== voiceChannel.id &&
             player.connected
         ) {
-            client.warn(
-                `[MusicManager] Player is in VC ${player.voiceChannelId}, but user ${requester.id} is in VC ${voiceChannel.id} for guild ${guildId}. Attempting to move player.`
-            )
+            client
+                .child({ guildId })
+                .warn(
+                    `[MusicManager] Player is in VC ${player.voiceChannelId}, but user ${requester.id} is in VC ${voiceChannel.id} for guild ${guildId}. Attempting to move player.`
+                )
         }
 
         const urlQuery = trimmedHttpUrlQuery(query)
@@ -455,22 +459,30 @@ export async function handleQueryAndPlay(
                     error: new Error("other voice channel during local playback"),
                 }
             }
-            client.debug(
-                `[MusicManager] Active local player found in guild ${guildId}. Stopping it before Lavalink playback.`
-            )
+            client
+                .child({ guildId })
+                .debug(
+                    `[MusicManager] Active local player found in guild ${guildId}. Stopping it before Lavalink playback.`
+                )
             if (stopLocalPlayer(client, guildId)) {
-                client.debug(
-                    `[MusicManager] Successfully stopped active local player in guild ${guildId}. Pausing for 500ms.`
-                )
+                client
+                    .child({ guildId })
+                    .debug(
+                        `[MusicManager] Successfully stopped active local player in guild ${guildId}. Pausing for 500ms.`
+                    )
                 await new Promise((resolve) => setTimeout(resolve, 500))
-                client.debug(
-                    `[MusicManager] Re-validating Lavalink player for guild ${guildId} after stopping local player.`
-                )
+                client
+                    .child({ guildId })
+                    .debug(
+                        `[MusicManager] Re-validating Lavalink player for guild ${guildId} after stopping local player.`
+                    )
                 let newPlayerInstance = client.lavalink.getPlayer(guildId)
                 if (!newPlayerInstance) {
-                    client.warn(
-                        `[MusicManager] Lavalink player for guild ${guildId} was destroyed or not found. Creating a new one.`
-                    )
+                    client
+                        .child({ guildId })
+                        .warn(
+                            `[MusicManager] Lavalink player for guild ${guildId} was destroyed or not found. Creating a new one.`
+                        )
                     newPlayerInstance = client.lavalink.createPlayer({
                         guildId: guildId,
                         voiceChannelId: voiceChannel.id,
@@ -490,9 +502,11 @@ export async function handleQueryAndPlay(
                 }
                 player = newPlayerInstance
             } else {
-                client.warn(
-                    `[MusicManager] Failed to stop local player in guild ${guildId}. Proceeding with Lavalink with potential conflict.`
-                )
+                client
+                    .child({ guildId })
+                    .warn(
+                        `[MusicManager] Failed to stop local player in guild ${guildId}. Proceeding with Lavalink with potential conflict.`
+                    )
             }
         }
 
@@ -709,9 +723,11 @@ export async function handleQueryAndPlay(
                                 if (!feedbackText) {
                                     feedbackText = enqueued.feedbackText
                                 }
-                                client.debug(
-                                    `[MusicManager] Enqueued via live player for guild ${guildId}.`
-                                )
+                                client
+                                    .child({ guildId })
+                                    .debug(
+                                        `[MusicManager] Enqueued via live player for guild ${guildId}.`
+                                    )
 
                                 // Play outside the queue lock so trackError → safeIdlePlayerDestroy cannot
                                 // nest on the same non-reentrant guild chain.
@@ -790,14 +806,18 @@ export async function handleQueryAndPlay(
         }
 
         if (trackToAdd || isPlaylistLoadType(loadT)) {
-            client.debug(`[MusicManager] Triggering control message update for guild ${guildId}.`)
+            client
+                .child({ guildId })
+                .debug(`[MusicManager] Triggering control message update for guild ${guildId}.`)
             try {
                 await updateControlMessage(client, guildId)
             } catch (error: unknown) {
                 const em = error instanceof Error ? error.message : String(error)
-                client.warn(
-                    `[MusicManager] Control message update failed for guild ${guildId}: ${em}`
-                )
+                client
+                    .child({ guildId })
+                    .warn(
+                        `[MusicManager] Control message update failed for guild ${guildId}: ${em}`
+                    )
             }
         }
 
@@ -807,10 +827,12 @@ export async function handleQueryAndPlay(
             error: errorResult ?? undefined,
         }
     } catch (error: unknown) {
-        client.error(
-            `[MusicManager] Uncaught error in handleQueryAndPlay for guild ${guildId}:`,
-            error
-        )
+        client
+            .child({ guildId })
+            .error(
+                `[MusicManager] Uncaught error in handleQueryAndPlay for guild ${guildId}:`,
+                error
+            )
         const finalFeedback = feedbackText || `${requester}, An unexpected error occurred.`
         return {
             success: false,

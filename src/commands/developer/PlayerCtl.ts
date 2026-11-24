@@ -96,9 +96,11 @@ export default {
         const guildId = interaction.options.getString("guildid", true)
         const player = client.lavalink.players.get(guildId)
 
-        client.debug(
-            `[PlayerCtl] Developer ${interaction.user.tag} executing '${subcommand}' for guild ${guildId}`
-        )
+        client
+            .child({ guildId })
+            .debug(
+                `[PlayerCtl] Developer ${interaction.user.tag} executing '${subcommand}' for guild ${guildId}`
+            )
 
         if (!player) {
             return interaction.reply({
@@ -201,7 +203,9 @@ export default {
                     }
 
                     await interaction.editReply({ embeds: [embed] })
-                    client.debug(`[PlayerCtl] Showed player view for guild ${guildId}`)
+                    client
+                        .child({ guildId })
+                        .debug(`[PlayerCtl] Showed player view for guild ${guildId}`)
                     break
                 }
                 case "skip": {
@@ -232,7 +236,9 @@ export default {
                         return
                     }
                     await interaction.editReply(`✅ Force-skipped track in Guild ID: ${guildId}`)
-                    client.debug(`[PlayerCtl] Force-skipped track for guild ${guildId}`)
+                    client
+                        .child({ guildId })
+                        .debug(`[PlayerCtl] Force-skipped track for guild ${guildId}`)
                     break
                 }
                 case "stop": {
@@ -247,7 +253,9 @@ export default {
                     await interaction.editReply(
                         `✅ Stopped player and cleared queue in Guild ID: ${guildId}`
                     )
-                    client.debug(`[PlayerCtl] Stopped player for guild ${guildId}`)
+                    client
+                        .child({ guildId })
+                        .debug(`[PlayerCtl] Stopped player for guild ${guildId}`)
                     break
                 }
                 case "destroy": {
@@ -262,7 +270,9 @@ export default {
                     await interaction.editReply(
                         `✅ Destroyed player instance for Guild ID: ${guildId}`
                     )
-                    client.debug(`[PlayerCtl] Destroyed player for guild ${guildId}`)
+                    client
+                        .child({ guildId })
+                        .debug(`[PlayerCtl] Destroyed player for guild ${guildId}`)
                     break
                 }
                 case "reconnect": {
@@ -309,12 +319,16 @@ export default {
                     await interaction.editReply(
                         `✅ Rejoined voice channel for Guild ID: ${guildId} (queue unchanged).`
                     )
-                    client.debug(`[PlayerCtl] Reconnected voice for guild ${guildId}`)
+                    client
+                        .child({ guildId })
+                        .debug(`[PlayerCtl] Reconnected voice for guild ${guildId}`)
                     break
                 }
             }
         } catch (error: unknown) {
-            client.error(`[PlayerCtl] Error executing '${subcommand}' for guild ${guildId}:`, error)
+            client
+                .child({ guildId })
+                .error(`[PlayerCtl] Error executing '${subcommand}' for guild ${guildId}:`, error)
             const msg = error instanceof Error ? error.message : String(error)
             await interaction.editReply(
                 `❌ An error occurred while executing the command for Guild ID ${guildId}. Check console. Error: ${msg}`

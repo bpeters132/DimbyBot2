@@ -136,9 +136,11 @@ export default {
                     await interaction.editReply("❌ Guild ID is required for local deploys.")
                     return
                 }
-                client.debug(
-                    `[DeployCmd] Refreshing ${commands.length} application (/) commands for guild ${targetGuildId}.`
-                )
+                client
+                    .child({ guildId: targetGuildId })
+                    .debug(
+                        `[DeployCmd] Refreshing ${commands.length} application (/) commands for guild ${targetGuildId}.`
+                    )
                 await rest.put(
                     Routes.applicationGuildCommands(interaction.client.user.id, targetGuildId),
                     {
@@ -148,9 +150,11 @@ export default {
                 await interaction.editReply(
                     `✅ Successfully reloaded ${commands.length} application (/) commands for guild ${targetGuildId}.`
                 )
-                client.info(
-                    `[DeployCmd] Successfully deployed ${commands.length} commands to guild ${targetGuildId} by ${interaction.user.tag}`
-                )
+                client
+                    .child({ guildId: targetGuildId })
+                    .info(
+                        `[DeployCmd] Successfully deployed ${commands.length} commands to guild ${targetGuildId} by ${interaction.user.tag}`
+                    )
             } else {
                 client.debug(
                     `[DeployCmd] Refreshing ${commands.length} application (/) commands globally.`
