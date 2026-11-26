@@ -25,15 +25,17 @@ function getLogger(loggerInstance?: Partial<LoggerInterface>): LoggerInterface {
         return logger
     }
 
-    return {
+    const noop: LoggerInterface = {
         debug: () => {},
         info: () => {},
         warn: () => {},
         error: () => {},
+        child: () => noop,
         setDebugEnabled: () => {},
         getDebugEnabled: () => false,
         getLogFilePath: () => null,
     }
+    return noop
 }
 
 /** Returns the process-wide Prisma client singleton after {@link initializeDatabaseConnection}. */

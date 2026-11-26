@@ -436,7 +436,9 @@ export function schedulePlayerSessionSave(player: Player): void {
             const client = tryGetBotClient()
             const msg = err instanceof Error ? err.message : String(err)
             if (client) {
-                client.error(`[playerSession] save failed for guild ${guildId}: ${msg}`)
+                client
+                    .child({ guildId })
+                    .error(`[playerSession] save failed for guild ${guildId}: ${msg}`)
             } else {
                 console.error(`[playerSession] save failed for guild ${guildId}: ${msg}`)
             }
@@ -488,9 +490,9 @@ export async function flushAllPlayerSessionSaves(): Promise<void> {
             await writePlayerSession(player, getSessionClearEpoch(player.guildId))
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err)
-            client.error(
-                `[playerSession] flushAll write failed for guild ${player.guildId}: ${msg}`
-            )
+            client
+                .child({ guildId: player.guildId })
+                .error(`[playerSession] flushAll write failed for guild ${player.guildId}: ${msg}`)
         }
     }
 }

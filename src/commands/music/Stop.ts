@@ -73,14 +73,18 @@ export default {
         if (isPendingLocalPlay(guild.id)) {
             cancelPendingLocalPlay(guild.id)
             cancelledPendingLocal = true
-            client.debug(`[StopCmd] Cancelled pending local play for guild ${guild.id}`)
+            client
+                .child({ guildId: guild.id })
+                .debug(`[StopCmd] Cancelled pending local play for guild ${guild.id}`)
         }
 
         const localState = getLocalPlayerState(guild.id)
         const localPlayerWasActive = localState?.isPlaying || false
         if (localState != null) {
             if (stopLocalPlayer(client, guild.id)) {
-                client.debug(`[StopCmd] Stopped local player for guild ${guild.id}`)
+                client
+                    .child({ guildId: guild.id })
+                    .debug(`[StopCmd] Stopped local player for guild ${guild.id}`)
                 stoppedLocal = true
             }
         }
@@ -99,20 +103,26 @@ export default {
                     client.lavalink.getPlayer(guild.id)
                 )
                 if (hadContent) {
-                    client.debug(`[StopCmd] Destroyed Lavalink player for guild ${guild.id}`)
+                    client
+                        .child({ guildId: guild.id })
+                        .debug(`[StopCmd] Destroyed Lavalink player for guild ${guild.id}`)
                     stoppedLavalink = true
                 } else {
                     lavalinkIdleCleaned = true
-                    client.debug(
-                        `[StopCmd] Cleaned up inactive Lavalink player for guild ${guild.id}`
-                    )
+                    client
+                        .child({ guildId: guild.id })
+                        .debug(
+                            `[StopCmd] Cleaned up inactive Lavalink player for guild ${guild.id}`
+                        )
                 }
             } catch (destroyErr: unknown) {
                 lavalinkDestroyFailed = true
-                client.error(
-                    `[StopCmd] Failed to destroy Lavalink player for guild ${guild.id}:`,
-                    destroyErr
-                )
+                client
+                    .child({ guildId: guild.id })
+                    .error(
+                        `[StopCmd] Failed to destroy Lavalink player for guild ${guild.id}:`,
+                        destroyErr
+                    )
             }
         }
 
@@ -131,10 +141,12 @@ export default {
                     client.lavalink.getPlayer(guild.id)
                 )
             } catch (clearErr: unknown) {
-                client.error(
-                    `[StopCmd] Failed to force-clear session after local stop for guild ${guild.id}:`,
-                    clearErr
-                )
+                client
+                    .child({ guildId: guild.id })
+                    .error(
+                        `[StopCmd] Failed to force-clear session after local stop for guild ${guild.id}:`,
+                        clearErr
+                    )
             }
         }
 

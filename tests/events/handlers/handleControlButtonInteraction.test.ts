@@ -144,6 +144,12 @@ function createClient(player: unknown) {
         info: log("info"),
         warn: log("warn"),
         error: log("error"),
+        child() {
+            return this
+        },
+        forGuild() {
+            return this
+        },
         user: { id: "bot-1" },
         channels: { fetch: async () => null, cache: new Map() },
         lavalink: { getPlayer: () => player },

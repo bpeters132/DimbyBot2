@@ -113,13 +113,15 @@ export async function migrateGuildSettings(
             collectValidGuildSettingsEntries(parsed)
         result.failedCount = failedCount
         for (const guildId of Object.keys(validEntries)) {
-            logger.debug(`[JsonMigration] Prepared guild settings entry ${guildId} for migration.`)
+            logger
+                .child({ guildId })
+                .debug(`[JsonMigration] Prepared guild settings entry ${guildId} for migration.`)
         }
         for (const failed of failedEntries) {
             const guildId = failed.startsWith("guild:") ? failed.slice("guild:".length) : failed
-            logger.warn(
-                `[JsonMigration] Skipping invalid guild settings entry for key "${guildId}".`
-            )
+            logger
+                .child({ guildId })
+                .warn(`[JsonMigration] Skipping invalid guild settings entry for key "${guildId}".`)
         }
 
         if (result.failedCount > 0) {

@@ -101,7 +101,9 @@ export async function queueIndexDELETE(
         const message = err instanceof Error ? err.message : String(err)
         const client = tryGetBotClient()
         if (client) {
-            client.error("[queueIndexDELETE] unhandled error", { guildId, message, err })
+            client
+                .child({ guildId })
+                .error("[queueIndexDELETE] unhandled error", { guildId, message, err })
         } else {
             console.error("[queueIndexDELETE] unhandled error", { guildId, message, err })
         }
@@ -177,12 +179,15 @@ export async function queueIndexPATCH(
                         restoreErr instanceof Error ? restoreErr.message : String(restoreErr)
                     const bot = tryGetBotClient()
                     if (bot) {
-                        bot.error("[queueIndexPATCH] failed to restore track after reorder error", {
-                            guildId,
-                            sourceIndex,
-                            restoreMessage,
-                            insertErr,
-                        })
+                        bot.child({ guildId }).error(
+                            "[queueIndexPATCH] failed to restore track after reorder error",
+                            {
+                                guildId,
+                                sourceIndex,
+                                restoreMessage,
+                                insertErr,
+                            }
+                        )
                     } else {
                         console.error(
                             "[queueIndexPATCH] failed to restore track after reorder error",
@@ -226,7 +231,9 @@ export async function queueIndexPATCH(
         const message = err instanceof Error ? err.message : String(err)
         const client = tryGetBotClient()
         if (client) {
-            client.error("[queueIndexPATCH] unhandled error", { guildId, message, err })
+            client
+                .child({ guildId })
+                .error("[queueIndexPATCH] unhandled error", { guildId, message, err })
         } else {
             console.error("[queueIndexPATCH] unhandled error", { guildId, message, err })
         }

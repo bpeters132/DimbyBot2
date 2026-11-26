@@ -37,6 +37,12 @@ function createInteractionClient() {
         info: log("info"),
         debug: log("debug"),
         warn: log("warn"),
+        child() {
+            return this
+        },
+        forGuild() {
+            return this
+        },
         commands,
         on(event: string, cb: (interaction: unknown) => Promise<void>) {
             listeners.set(event, cb)

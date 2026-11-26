@@ -53,7 +53,7 @@ export function downloadMetadataFileBelongsToGuild(
     metadata: Record<string, { guildId?: string } | undefined>,
     fileName: string,
     guildId: string,
-    loggerInstance?: Pick<LoggerInterface, "debug">
+    loggerInstance?: Pick<LoggerInterface, "debug" | "child">
 ): boolean {
     const compositeKey = downloadMetadataStoreKey(guildId, fileName)
     if (metadata[compositeKey]) {
@@ -64,13 +64,12 @@ export function downloadMetadataFileBelongsToGuild(
     // misattributes during migration. Populate guildId in migration/reconciliation (target: remove by
     // 2026-07-01 or when tracking issue is closed). Same caveat applies to other legacy fallbacks below.
     if (legacy && (legacy.guildId === undefined || legacy.guildId === "")) {
-        loggerInstance?.debug(
-            "[download-metadata] legacy guildId missing; cross-guild match possible",
-            {
+        loggerInstance
+            ?.child({ guildId })
+            ?.debug("[download-metadata] legacy guildId missing; cross-guild match possible", {
                 fileName,
                 attemptedGuildId: guildId,
-            }
-        )
+            })
     }
     return Boolean(
         legacy &&

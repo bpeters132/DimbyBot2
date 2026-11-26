@@ -46,7 +46,9 @@ export default {
         if (!guild) {
             return interaction.reply({ content: "Use this command in a server." })
         }
-        client.debug(`Leave command invoked by ${interaction.user.tag} in guild ${guild.id}`)
+        client
+            .child({ guildId: guild.id })
+            .debug(`Leave command invoked by ${interaction.user.tag} in guild ${guild.id}`)
         const member = guildMemberFromInteraction(interaction)
         if (!member) {
             return interaction.reply({
@@ -84,15 +86,19 @@ export default {
         const localState = getLocalPlayerState(guild.id)
         if (localState != null) {
             if (stopLocalPlayer(client, guild.id)) {
-                client.debug(`[LeaveCmd] Stopped local player for guild ${guild.id}`)
+                client
+                    .child({ guildId: guild.id })
+                    .debug(`[LeaveCmd] Stopped local player for guild ${guild.id}`)
                 stoppedLocal = true
             }
         }
 
         if (!player) {
-            client.debug(
-                `Leave command check: No Lavalink player for guild ${guild.id}. Checking bot voice / local cleanup.`
-            )
+            client
+                .child({ guildId: guild.id })
+                .debug(
+                    `Leave command check: No Lavalink player for guild ${guild.id}. Checking bot voice / local cleanup.`
+                )
             const botVoiceState = guild.members.me?.voice
             const botInVoice = Boolean(botVoiceState?.channel)
             if (stoppedLocal || botInVoice) {
@@ -107,9 +113,11 @@ export default {
                         })
                     const initial = planNow()
                     if (!initial.disconnectOrphanVoice && !initial.forceClearSession) {
-                        client.debug(
-                            `Leave: skipping Lavalink teardown for guild ${guild.id}; successor player already live`
-                        )
+                        client
+                            .child({ guildId: guild.id })
+                            .debug(
+                                `Leave: skipping Lavalink teardown for guild ${guild.id}; successor player already live`
+                            )
                     } else {
                         // Never destroyPlayer(guildId): plan.destroyPlayerByGuildId is always false.
                         if (initial.disconnectOrphanVoice) {
@@ -123,9 +131,11 @@ export default {
                                 client.lavalink.getPlayer(guild.id)
                             )
                         } else {
-                            client.debug(
-                                `Leave: skipping force-clear for guild ${guild.id}; successor player already live`
-                            )
+                            client
+                                .child({ guildId: guild.id })
+                                .debug(
+                                    `Leave: skipping force-clear for guild ${guild.id}; successor player already live`
+                                )
                         }
                     }
                     await interaction.editReply({ content: "Left the voice channel." })
@@ -150,22 +160,26 @@ export default {
             return
         }
 
-        client.debug(
-            `Found player for guild ${guild.id}. Connected: ${player.connected}, Playing: ${player.playing}`
-        )
+        client
+            .child({ guildId: guild.id })
+            .debug(
+                `Found player for guild ${guild.id}. Connected: ${player.connected}, Playing: ${player.playing}`
+            )
 
-        client.debug(`Destroying player for guild ${guild.id}`)
+        client.child({ guildId: guild.id }).debug(`Destroying player for guild ${guild.id}`)
         try {
             // Shared with /stop: force-clears in finally so node.destroyPlayer throw after
             // cache delete cannot skip the clear (playerDestroy never emits in that case).
             await destroyLavalinkPlayerForStop(player, () => client.lavalink.getPlayer(guild.id))
-            client.debug(`Player destroyed for guild ${guild.id}`)
+            client.child({ guildId: guild.id }).debug(`Player destroyed for guild ${guild.id}`)
             await interaction.editReply({ content: "BYE!" })
             const msg = await interaction.fetchReply()
             client.debug("Leave command successfully executed")
             deleteWithRetry(msg, client)
         } catch (error) {
-            client.error(`Error destroying player for guild ${guild.id}:`, error)
+            client
+                .child({ guildId: guild.id })
+                .error(`Error destroying player for guild ${guild.id}:`, error)
             await interaction.editReply("An error occurred while trying to leave.")
         }
     },

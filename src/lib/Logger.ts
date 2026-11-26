@@ -1,18 +1,41 @@
 import winston from "winston"
 import colors from "colors"
-import type { DiscordLogForwarder, DiscordLogLevelName, LoggerInterface } from "../types/index.js"
+import type {
+    DiscordLogForwarder,
+    DiscordLogLevelName,
+    LogGuildBindings,
+    LoggerInterface,
+} from "../types/index.js"
 import { captureError } from "./errorHistory.js"
 
 /**
  * A simple logger class that logs to both the console with colors and a file.
  */
+type LoggerChildBinding = {
+    host: Logger
+    guildId: string
+}
+
 export default class Logger implements LoggerInterface {
+    private readonly host: Logger
+    /** Set only on {@link child}. Root logs are not forwarded to a guild channel. */
+    private readonly discordGuildId: string | null
     private logFilePath: string | null
     private debugEnabled: boolean
     private logger: winston.Logger
     private discordForwarder: DiscordLogForwarder | null = null
 
-    constructor(file?: string) {
+    constructor(file?: string, childOf?: LoggerChildBinding) {
+        if (childOf) {
+            this.host = childOf.host
+            this.discordGuildId = childOf.guildId
+            this.logFilePath = childOf.host.logFilePath
+            this.debugEnabled = childOf.host.debugEnabled
+            this.logger = childOf.host.logger
+            return
+        }
+        this.host = this
+        this.discordGuildId = null
         this.logFilePath = file ?? null
         this.debugEnabled = process.env.LOG_LEVEL?.toLowerCase() === "debug"
         if (!file) {
@@ -50,6 +73,11 @@ export default class Logger implements LoggerInterface {
         this.logger.level = this.debugEnabled ? "debug" : "info"
     }
 
+    /** Same console and file output. Discord forwarding uses only this guild id. */
+    child(bindings: LogGuildBindings): Logger {
+        return new Logger(undefined, { host: this.host, guildId: bindings.guildId })
+    }
+
     /**
      * Enables or disables debug logging for this logger instance.
      * Also assigns `process.env.LOG_LEVEL` to `"debug"` or `"info"` so other modules that read
@@ -57,29 +85,30 @@ export default class Logger implements LoggerInterface {
      * `_applyDebugLevel()` updates the Winston logger level locally.
      */
     setDebugEnabled(enabled: boolean) {
-        this.debugEnabled = Boolean(enabled)
-        process.env.LOG_LEVEL = this.debugEnabled ? "debug" : "info"
-        this._applyDebugLevel()
+        this.host.debugEnabled = Boolean(enabled)
+        process.env.LOG_LEVEL = this.host.debugEnabled ? "debug" : "info"
+        this.host._applyDebugLevel()
     }
 
     getDebugEnabled() {
-        return this.debugEnabled
+        return this.host.debugEnabled
     }
 
     getLogFilePath() {
-        return this.logFilePath
+        return this.host.logFilePath
     }
 
     setDiscordForwarder(callback: DiscordLogForwarder | null) {
-        this.discordForwarder = callback
+        this.host.discordForwarder = callback
     }
 
     private _notifyDiscord(level: DiscordLogLevelName, fullMessage: string) {
-        if (!this.discordForwarder) {
+        const forwarder = this.host.discordForwarder
+        if (!forwarder) {
             return
         }
         try {
-            this.discordForwarder(level, fullMessage)
+            forwarder(level, fullMessage, this.discordGuildId)
         } catch (err: unknown) {
             const safe =
                 err instanceof Error
@@ -183,7 +212,7 @@ export default class Logger implements LoggerInterface {
     info(text: string, ...args: unknown[]) {
         const messageArgs = this._formatArgs(args)
         const fullMessage = text + (messageArgs ? " " + messageArgs : "")
-        this.logger.info(fullMessage)
+        this.host.logger.info(fullMessage)
         console.log(colors.gray(this._getTimestamp()) + colors.green(` | INFO | ${fullMessage}`))
         this._notifyDiscord("info", fullMessage)
     }
@@ -191,7 +220,7 @@ export default class Logger implements LoggerInterface {
     warn(text: string, ...args: unknown[]) {
         const messageArgs = this._formatArgs(args)
         const fullMessage = text + (messageArgs ? " " + messageArgs : "")
-        this.logger.warn(fullMessage)
+        this.host.logger.warn(fullMessage)
         console.log(colors.gray(this._getTimestamp()) + colors.yellow(` | WARN | ${fullMessage}`))
         this._notifyDiscord("warn", fullMessage)
         try {
@@ -212,13 +241,13 @@ export default class Logger implements LoggerInterface {
                 : ""
         const consoleAndDiscordMessage = fullMessage + errorDetail
         if (errorArg) {
-            this.logger.log({
+            this.host.logger.log({
                 level: "error",
                 message: fullMessage,
                 stack: errorArg.stack,
             })
         } else {
-            this.logger.error(fullMessage)
+            this.host.logger.error(fullMessage)
         }
         console.log(
             colors.gray(this._getTimestamp()) + colors.red(` | ERROR | ${consoleAndDiscordMessage}`)
@@ -237,12 +266,12 @@ export default class Logger implements LoggerInterface {
     }
 
     debug(text: string, ...args: unknown[]) {
-        if (!this.debugEnabled) {
+        if (!this.host.debugEnabled) {
             return
         }
         const messageArgs = this._formatArgs(args)
         const fullMessage = text + (messageArgs ? " " + messageArgs : "")
-        this.logger.debug(fullMessage)
+        this.host.logger.debug(fullMessage)
         console.log(colors.gray(this._getTimestamp()) + colors.magenta(` | DEBUG | ${fullMessage}`))
         this._notifyDiscord("debug", fullMessage)
     }

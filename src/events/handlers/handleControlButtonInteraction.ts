@@ -27,14 +27,18 @@ export async function handleControlButtonInteraction(
 ) {
     const { customId, guildId, message, channelId } = interaction
     if (!guildId) return
-    client.debug(
-        `[ControlButtonHandler] Handling button interaction: ${customId} in guild ${guildId}`
-    )
+    client
+        .child({ guildId })
+        .debug(
+            `[ControlButtonHandler] Handling button interaction: ${customId} in guild ${guildId}`
+        )
 
     if (!isGuildSettingsInitialized()) {
-        client.warn(
-            `[ControlButtonHandler] Guild settings not initialized yet; ignoring button ${customId} in guild ${guildId}.`
-        )
+        client
+            .child({ guildId })
+            .warn(
+                `[ControlButtonHandler] Guild settings not initialized yet; ignoring button ${customId} in guild ${guildId}.`
+            )
         try {
             await interaction.reply({
                 content: "Bot is still starting up. Please try again in a moment.",
@@ -51,9 +55,11 @@ export async function handleControlButtonInteraction(
 
     // 1. Check if it's the correct control channel
     if (!settings || !settings.controlChannelId || channelId !== settings.controlChannelId) {
-        client.warn(
-            `[ControlButtonHandler] Button interaction ${customId} received outside configured control channel (${settings?.controlChannelId ?? "N/A"}) in guild ${guildId}. Ignoring.`
-        )
+        client
+            .child({ guildId })
+            .warn(
+                `[ControlButtonHandler] Button interaction ${customId} received outside configured control channel (${settings?.controlChannelId ?? "N/A"}) in guild ${guildId}. Ignoring.`
+            )
         try {
             await interaction.reply({
                 content: "Please use player controls in the designated channel.",
@@ -70,9 +76,11 @@ export async function handleControlButtonInteraction(
 
     // 2. Check if it's the correct control message
     if (!settings.controlMessageId || message.id !== settings.controlMessageId) {
-        client.warn(
-            `[ControlButtonHandler] Button interaction ${customId} received on message (${message.id}) other than configured control message (${settings.controlMessageId}) in guild ${guildId}. Ignoring.`
-        )
+        client
+            .child({ guildId })
+            .warn(
+                `[ControlButtonHandler] Button interaction ${customId} received on message (${message.id}) other than configured control message (${settings.controlMessageId}) in guild ${guildId}. Ignoring.`
+            )
         try {
             await interaction.reply({
                 content:
@@ -150,9 +158,11 @@ export async function handleControlButtonInteraction(
         if (customId === "control_stop") {
             const localStop = stopLocalPlaybackForUserStop(client, guildId)
             if (userStopAffectedLocalPlayback(localStop)) {
-                client.debug(
-                    `[ControlButtonHandler] Stopped local/pending playback with no Lavalink player for guild ${guildId}.`
-                )
+                client
+                    .child({ guildId })
+                    .debug(
+                        `[ControlButtonHandler] Stopped local/pending playback with no Lavalink player for guild ${guildId}.`
+                    )
                 try {
                     await interaction.followUp({ content: "BYE!", ephemeral: true })
                 } catch {
@@ -167,9 +177,11 @@ export async function handleControlButtonInteraction(
                 return
             }
         }
-        client.warn(
-            `[ControlButtonHandler] Player not found for guild ${guildId} when handling button ${customId}.`
-        )
+        client
+            .child({ guildId })
+            .warn(
+                `[ControlButtonHandler] Player not found for guild ${guildId} when handling button ${customId}.`
+            )
         await updateControlMessage(client, guildId)
         try {
             await interaction.followUp({
@@ -181,9 +193,11 @@ export async function handleControlButtonInteraction(
         }
         return
     }
-    client.debug(
-        `[ControlButtonHandler] Found player for guild ${guildId}. Connected: ${player.connected}, Playing: ${player.playing}`
-    )
+    client
+        .child({ guildId })
+        .debug(
+            `[ControlButtonHandler] Found player for guild ${guildId}. Connected: ${player.connected}, Playing: ${player.playing}`
+        )
 
     // 5. Execute Action & Update Control Message
     let actionTaken = false
@@ -224,9 +238,11 @@ export async function handleControlButtonInteraction(
                     break
                 }
                 if (!getLivePlayerIfUnchanged(() => client.lavalink?.getPlayer(guildId), player)) {
-                    client.warn(
-                        `[ControlButtonHandler] Aborting play/pause: player replaced for guild ${guildId}.`
-                    )
+                    client
+                        .child({ guildId })
+                        .warn(
+                            `[ControlButtonHandler] Aborting play/pause: player replaced for guild ${guildId}.`
+                        )
                     try {
                         await interaction.followUp({
                             content:
@@ -322,9 +338,11 @@ export async function handleControlButtonInteraction(
                                         player
                                     )
                                 ) {
-                                    client.warn(
-                                        `[ControlButtonHandler] Aborting play after connect: player replaced for guild ${guildId}.`
-                                    )
+                                    client
+                                        .child({ guildId })
+                                        .warn(
+                                            `[ControlButtonHandler] Aborting play after connect: player replaced for guild ${guildId}.`
+                                        )
                                     await interaction.followUp({
                                         content:
                                             "The player was replaced during reconnect. Try the control again.",
@@ -357,9 +375,11 @@ export async function handleControlButtonInteraction(
                     ) {
                         if (userStopAffectedLocalPlayback(localStop)) {
                             actionTaken = true
-                            client.debug(
-                                `[ControlButtonHandler] Local/pending stopped after player replace for guild ${guildId}.`
-                            )
+                            client
+                                .child({ guildId })
+                                .debug(
+                                    `[ControlButtonHandler] Local/pending stopped after player replace for guild ${guildId}.`
+                                )
                             try {
                                 await interaction.followUp({ content: "BYE!", ephemeral: true })
                             } catch {
@@ -367,9 +387,11 @@ export async function handleControlButtonInteraction(
                             }
                             break
                         }
-                        client.warn(
-                            `[ControlButtonHandler] Aborting stop: player replaced for guild ${guildId}.`
-                        )
+                        client
+                            .child({ guildId })
+                            .warn(
+                                `[ControlButtonHandler] Aborting stop: player replaced for guild ${guildId}.`
+                            )
                         await interaction.followUp({
                             content:
                                 "The player was replaced. Try the control again on the current session.",
@@ -413,9 +435,11 @@ export async function handleControlButtonInteraction(
                         player
                     )
                     if (!live) {
-                        client.warn(
-                            `[ControlButtonHandler] Aborting skip: player replaced for guild ${guildId}.`
-                        )
+                        client
+                            .child({ guildId })
+                            .warn(
+                                `[ControlButtonHandler] Aborting skip: player replaced for guild ${guildId}.`
+                            )
                         await interaction.followUp({
                             content:
                                 "The player was replaced. Try the control again on the current session.",

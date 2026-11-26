@@ -33,9 +33,11 @@ export default (client: BotClient) => {
         if (!member) return
         const guildId = message.guild.id
 
-        client.debug(
-            `[MessageCreate] Received message in guild ${guildId}, channel ${channel.id} from user ${member.id}. Content: "${content.substring(0, 50)}..."`
-        )
+        client
+            .child({ guildId })
+            .debug(
+                `[MessageCreate] Received message in guild ${guildId}, channel ${channel.id} from user ${member.id}. Content: "${content.substring(0, 50)}..."`
+            )
 
         const guildSettings = getGuildSettings()
         const settings = guildSettings[guildId]
@@ -44,16 +46,20 @@ export default (client: BotClient) => {
             return
         }
 
-        client.debug(
-            `[MessageCreate] Message is in control channel ${channel.id} for guild ${guildId}. Processing as query: "${content}"`
-        )
+        client
+            .child({ guildId })
+            .debug(
+                `[MessageCreate] Message is in control channel ${channel.id} for guild ${guildId}. Processing as query: "${content}"`
+            )
 
         // Pass the message to the dedicated handler
         handleControlMessages(client, message).catch((error: unknown) => {
-            client.error(
-                `[MessageCreate] Error bubbled up from control channel handler for guild ${guildId}:`,
-                error
-            )
+            client
+                .child({ guildId })
+                .error(
+                    `[MessageCreate] Error bubbled up from control channel handler for guild ${guildId}:`,
+                    error
+                )
             // Optionally send a generic error message back to the control channel if the handler failed catastrophically
             // message.channel.send(`${message.member}, A critical error occurred.`).catch(() => {});
         })

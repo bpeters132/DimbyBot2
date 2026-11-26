@@ -34,6 +34,12 @@ function createNodeClient() {
         warn: log("warn"),
         error: log("error"),
         debug: log("debug"),
+        child() {
+            return this
+        },
+        forGuild() {
+            return this
+        },
         lavalink: { nodeManager },
     }
     return { client, handlers, logs }

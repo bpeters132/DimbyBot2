@@ -31,6 +31,7 @@ type DiscordLogForwardJob = {
     client: BotClient
     level: DiscordLogLevelName
     message: string
+    guildId: string | null
 }
 
 const discordLogForwardQueue: DiscordLogForwardJob[] = []
@@ -46,7 +47,8 @@ function enqueueDiscordLogForward(job: DiscordLogForwardJob): void {
         last &&
         last.client === job.client &&
         last.level === job.level &&
-        last.message === job.message
+        last.message === job.message &&
+        last.guildId === job.guildId
     ) {
         return
     }
@@ -62,7 +64,12 @@ async function runDiscordLogForwardWorker(): Promise<void> {
         while (discordLogForwardQueue.length > 0) {
             const item = discordLogForwardQueue.shift()!
             try {
-                await forwardLogToDiscordChannels(item.client, item.level, item.message)
+                await forwardLogToDiscordChannels(
+                    item.client,
+                    item.level,
+                    item.message,
+                    item.guildId
+                )
             } catch (err: unknown) {
                 console.error("[discordLogForward] Failed to forward log:", err)
             }
@@ -107,84 +114,77 @@ function truncateForDiscord(text: string): string {
     return text.slice(0, Math.max(0, keep)) + TRUNCATE_SUFFIX
 }
 
-/**
- * Whether a process log line should be forwarded to a guild's Discord log channel.
- * Requires an explicit guild snowflake in the message so one server cannot receive
- * other tenants' operational logs (queries, URLs, paths, user tags, error stacks).
- */
-export function logMessageBelongsToGuild(message: string, guildId: string): boolean {
+/** Snowflake passed by the logger, or null when the line must not be forwarded. */
+function explicitDiscordLogGuildId(guildId: string | null): string | null {
     if (!guildId || !DISCORD_SNOWFLAKE_RE.test(guildId)) {
-        return false
+        return null
     }
-    // Word-ish boundary: snowflakes are digits; avoid matching a longer digit run.
-    const re = new RegExp(`(?<!\\d)${guildId}(?!\\d)`)
-    return re.test(message)
+    return guildId
 }
 
 /**
- * Sends a log line to every guild that configured Discord logging for this level.
- * Skips guilds where the channel is missing or the bot lacks permission.
- * Only forwards lines that reference that guild's id (cross-tenant isolation).
+ * Sends a log line to the guild named by `guildId` when that guild configured Discord logging.
+ * Skips the send when the id is missing or not a snowflake, when the channel is missing, or when
+ * the bot lacks permission. Message text is never used to choose the guild.
  */
 export async function forwardLogToDiscordChannels(
     client: BotClient,
     level: DiscordLogLevelName,
-    message: string
+    message: string,
+    guildId: string | null
 ): Promise<void> {
-    const settings = getGuildSettings()
-    const description = truncateForDiscord(message)
-
-    for (const [guildId, guildSettings] of Object.entries(settings)) {
-        const cfg = guildSettings.discordLog
-        if (!cfg) {
-            continue
-        }
-        if (!logMessageBelongsToGuild(message, guildId)) {
-            continue
-        }
-        if (!discordLogLevelAllowed(cfg, level)) {
-            continue
-        }
-        const channelId = resolveDiscordLogChannelId(cfg, level)
-        if (!channelId) {
-            continue
-        }
-
-        const guild = client.guilds.cache.get(guildId)
-        if (!guild) {
-            continue
-        }
-
-        let channel = guild.channels.cache.get(channelId)
-        if (!channel) {
-            channel = (await guild.channels.fetch(channelId).catch((): null => null)) ?? undefined
-        }
-        if (!channel?.isTextBased() || !channel.isSendable()) {
-            continue
-        }
-
-        const embed = new EmbedBuilder()
-            .setColor(LEVEL_COLORS[level])
-            .setTitle(`Bot log — ${level.toUpperCase()}`)
-            .setDescription(description)
-            .setTimestamp()
-
-        await channel.send({ embeds: [embed] }).catch(() => {
-            /* avoid recursion into client.error */
-        })
+    const targetId = explicitDiscordLogGuildId(guildId)
+    if (!targetId) {
+        return
     }
+    const cfg = getGuildSettings()[targetId]?.discordLog
+    if (!cfg) {
+        return
+    }
+    if (!discordLogLevelAllowed(cfg, level)) {
+        return
+    }
+    const channelId = resolveDiscordLogChannelId(cfg, level)
+    if (!channelId) {
+        return
+    }
+
+    const guild = client.guilds.cache.get(targetId)
+    if (!guild) {
+        return
+    }
+
+    let channel = guild.channels.cache.get(channelId)
+    if (!channel) {
+        channel = (await guild.channels.fetch(channelId).catch((): null => null)) ?? undefined
+    }
+    if (!channel?.isTextBased() || !channel.isSendable()) {
+        return
+    }
+
+    const embed = new EmbedBuilder()
+        .setColor(LEVEL_COLORS[level])
+        .setTitle(`Bot log — ${level.toUpperCase()}`)
+        .setDescription(truncateForDiscord(message))
+        .setTimestamp()
+
+    await channel.send({ embeds: [embed] }).catch(() => {
+        /* avoid recursion into client.error */
+    })
 }
 
 /**
  * Schedules Discord forwarding so sync logger methods stay non-blocking.
  * Failures are logged to stderr only to avoid infinite loops.
+ * A null `guildId` is queued and then dropped: it is not fanned out to every guild.
  */
 export function scheduleDiscordLogForward(
     client: BotClient,
     level: DiscordLogLevelName,
-    message: string
+    message: string,
+    guildId: string | null
 ): void {
-    enqueueDiscordLogForward({ client, level, message })
+    enqueueDiscordLogForward({ client, level, message, guildId })
     if (discordLogForwardWorkerScheduled) {
         return
     }
@@ -200,8 +200,8 @@ export function attachDiscordLogForwarding(client: BotClient): void {
     if (typeof client.logger.setDiscordForwarder !== "function") {
         return
     }
-    client.logger.setDiscordForwarder((level, message) => {
-        scheduleDiscordLogForward(client, level, message)
+    client.logger.setDiscordForwarder((level, message, guildId) => {
+        scheduleDiscordLogForward(client, level, message, guildId)
     })
 }
 

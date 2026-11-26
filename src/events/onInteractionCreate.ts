@@ -10,7 +10,8 @@ export default (client: BotClient) => {
         // --- Button Interaction Handling ---
         if (interaction.isButton()) {
             const { customId, user, guildId } = interaction
-            client.debug(
+            const log = guildId ? client.child({ guildId }) : client
+            log.debug(
                 `[InteractionCreate] Received button interaction: ${customId} in guild ${guildId} from user ${user.id}`
             )
 
@@ -85,7 +86,8 @@ export default (client: BotClient) => {
             const channelId = interaction.channelId
             const user = interaction.user
 
-            client.debug(
+            const log = guildId ? client.child({ guildId }) : client
+            log.debug(
                 `[InteractionCreate] Received chat input command: /${commandName} in guild ${guildId} from user ${user.tag} (${user.id}) in channel ${channelId}`
             )
 
@@ -109,22 +111,28 @@ export default (client: BotClient) => {
                             })
                         }
                     } catch (notifyErr: unknown) {
-                        client.error(
-                            `[InteractionCreate] Failed to notify user after guild settings lookup failure in guild ${guildId}:`,
-                            notifyErr
-                        )
+                        client
+                            .child({ guildId })
+                            .error(
+                                `[InteractionCreate] Failed to notify user after guild settings lookup failure in guild ${guildId}:`,
+                                notifyErr
+                            )
                     }
-                    client.error(
-                        `[InteractionCreate] Error fetching guild settings for guild ${guildId} during control channel check:`,
-                        error
-                    )
+                    client
+                        .child({ guildId })
+                        .error(
+                            `[InteractionCreate] Error fetching guild settings for guild ${guildId} during control channel check:`,
+                            error
+                        )
                     return
                 }
 
                 if (guildSettings && guildSettings.controlChannelId === channelId) {
-                    client.warn(
-                        `[InteractionCreate] User ${user.tag} (${user.id}) attempted to use command /${commandName} in the control channel (${channelId}) of guild ${guildId}. Rejecting.`
-                    )
+                    client
+                        .child({ guildId })
+                        .warn(
+                            `[InteractionCreate] User ${user.tag} (${user.id}) attempted to use command /${commandName} in the control channel (${channelId}) of guild ${guildId}. Rejecting.`
+                        )
                     try {
                         await interaction.reply({
                             content: "Commands cannot be used in the control channel.",
@@ -171,9 +179,11 @@ export default (client: BotClient) => {
             }
 
             try {
-                client.info(
-                    `[InteractionCreate] Executing command "${commandName}" for user ${interaction.user.tag} (${interaction.user.id}) in guild ${interaction.guild?.name ?? "DM"} (${interaction.guild?.id ?? "N/A"})`
-                )
+                client
+                    .child({ guildId: interaction.guild?.id ?? "N/A" })
+                    .info(
+                        `[InteractionCreate] Executing command "${commandName}" for user ${interaction.user.tag} (${interaction.user.id}) in guild ${interaction.guild?.name ?? "DM"} (${interaction.guild?.id ?? "N/A"})`
+                    )
                 await command.execute(interaction, client)
                 client.debug(`[InteractionCreate] Successfully executed command "${commandName}".`)
             } catch (error: unknown) {

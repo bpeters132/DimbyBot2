@@ -385,7 +385,9 @@ export function schedulePrefetchWindow(
 ): void {
     void ensurePrefetchWindow(getLivePlayer, guildId, config).catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err)
-        windowLogger(config).warn(`${LOG_PREFIX} prefetch failed for ${guildId}: ${msg}`)
+        windowLogger(config)
+            .child({ guildId })
+            .warn(`${LOG_PREFIX} prefetch failed for ${guildId}: ${msg}`)
     })
 }
 

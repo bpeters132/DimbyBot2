@@ -26,6 +26,12 @@ function createLoggerClient(extra: Record<string, unknown> = {}) {
         info: log("info"),
         warn: log("warn"),
         error: log("error"),
+        child() {
+            return this
+        },
+        forGuild() {
+            return this
+        },
         channels: { fetch: async () => null, cache: new Map() },
         lavalink: { getPlayer: () => null },
         logs,

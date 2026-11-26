@@ -282,7 +282,9 @@ export async function updateControlMessage(
     guildId: string,
     performCleanup = true
 ) {
-    client.debug(`[ControlHandler] Attempting to update control message for guild ${guildId}`)
+    client
+        .child({ guildId })
+        .debug(`[ControlHandler] Attempting to update control message for guild ${guildId}`)
 
     let controlChannel: GuildTextBasedChannel | null = null
 
@@ -291,53 +293,69 @@ export async function updateControlMessage(
         const settings = guildSettings[guildId]
 
         if (!settings || !settings.controlChannelId || !settings.controlMessageId) {
-            client.debug(
-                `[ControlHandler] No control channel/message configured for guild ${guildId}, skipping update.`
-            )
+            client
+                .child({ guildId })
+                .debug(
+                    `[ControlHandler] No control channel/message configured for guild ${guildId}, skipping update.`
+                )
             return
         }
-        client.debug(
-            `[ControlHandler] Found settings for guild ${guildId}: Channel ${settings.controlChannelId}, Message ${settings.controlMessageId}`
-        )
+        client
+            .child({ guildId })
+            .debug(
+                `[ControlHandler] Found settings for guild ${guildId}: Channel ${settings.controlChannelId}, Message ${settings.controlMessageId}`
+            )
 
         ensureStorageDir(client)
         const fetched = await client.channels.fetch(settings.controlChannelId).catch(() => null)
         if (!fetched || !fetched.isTextBased()) {
-            client.warn(
-                `[ControlHandler] Control channel ${settings.controlChannelId} not found or not text-based for guild ${guildId}. Cannot update message.`
-            )
+            client
+                .child({ guildId })
+                .warn(
+                    `[ControlHandler] Control channel ${settings.controlChannelId} not found or not text-based for guild ${guildId}. Cannot update message.`
+                )
             return
         }
         controlChannel = fetched as GuildTextBasedChannel
-        client.debug(
-            `[ControlHandler] Fetched control channel ${controlChannel.id} for guild ${guildId}`
-        )
+        client
+            .child({ guildId })
+            .debug(
+                `[ControlHandler] Fetched control channel ${controlChannel.id} for guild ${guildId}`
+            )
 
         const controlMessage = await controlChannel.messages
             .fetch(settings.controlMessageId)
             .catch(() => null)
         if (!controlMessage) {
-            client.warn(
-                `[ControlHandler] Control message ${settings.controlMessageId} not found in channel ${controlChannel.id} for guild ${guildId}. Cannot update message.`
-            )
+            client
+                .child({ guildId })
+                .warn(
+                    `[ControlHandler] Control message ${settings.controlMessageId} not found in channel ${controlChannel.id} for guild ${guildId}. Cannot update message.`
+                )
             return
         }
-        client.debug(
-            `[ControlHandler] Fetched control message ${controlMessage.id} for guild ${guildId}`
-        )
+        client
+            .child({ guildId })
+            .debug(
+                `[ControlHandler] Fetched control message ${controlMessage.id} for guild ${guildId}`
+            )
 
         const player = client.lavalink?.getPlayer(guildId)
-        client.debug(
-            `[ControlHandler] Fetched player state for guild ${guildId}: ${player ? "Exists" : "null"}`
-        )
+        client
+            .child({ guildId })
+            .debug(
+                `[ControlHandler] Fetched player state for guild ${guildId}: ${player ? "Exists" : "null"}`
+            )
 
         const updatedEmbed = createControlEmbed(client, player, guildId)
         const updatedButtons = createControlButtons(client, player)
 
         await controlMessage.edit({ embeds: [updatedEmbed], components: updatedButtons })
-        client.debug(
-            `[ControlHandler] Successfully edited control message ${controlMessage.id} in guild ${guildId}`
-        )
+        client
+            .child({ guildId })
+            .debug(
+                `[ControlHandler] Successfully edited control message ${controlMessage.id} in guild ${guildId}`
+            )
 
         if (performCleanup) {
             // Don't await cleanup; let it run in the background after a delay.
@@ -353,14 +371,18 @@ export async function updateControlMessage(
     } catch (error: unknown) {
         const code = getDiscordErrorCode(error)
         if (code === 50001 || code === 10008 || code === 50013) {
-            client.warn(
-                `[ControlHandler] Failed to update control message for guild ${guildId} (Code: ${code}). Might be missing permissions or message/channel deleted.`
-            )
+            client
+                .child({ guildId })
+                .warn(
+                    `[ControlHandler] Failed to update control message for guild ${guildId} (Code: ${code}). Might be missing permissions or message/channel deleted.`
+                )
         } else {
-            client.error(
-                `[ControlHandler] Failed to update control message for guild ${guildId}:`,
-                error
-            )
+            client
+                .child({ guildId })
+                .error(
+                    `[ControlHandler] Failed to update control message for guild ${guildId}:`,
+                    error
+                )
         }
     }
 }

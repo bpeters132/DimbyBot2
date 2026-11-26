@@ -52,9 +52,11 @@ export default async function handleControlMessages(client: BotClient, message: 
         // 1. Check voice state
         const voiceChannel = member.voice.channel
         if (!voiceChannel) {
-            client.debug(
-                `[ControlHandler] User ${member.id} is not in a voice channel in guild ${guildId}.`
-            )
+            client
+                .child({ guildId })
+                .debug(
+                    `[ControlHandler] User ${member.id} is not in a voice channel in guild ${guildId}.`
+                )
             feedbackMessage = await sendChannel.send(
                 `${member}, you need to be in a voice channel to play music.`
             )
@@ -69,9 +71,11 @@ export default async function handleControlMessages(client: BotClient, message: 
             !permissions?.has(PermissionsBitField.Flags.Connect) ||
             !permissions?.has(PermissionsBitField.Flags.Speak)
         ) {
-            client.warn(
-                `[ControlHandler] Missing Connect/Speak permissions for VC ${voiceChannel.id} in guild ${guildId}.`
-            )
+            client
+                .child({ guildId })
+                .warn(
+                    `[ControlHandler] Missing Connect/Speak permissions for VC ${voiceChannel.id} in guild ${guildId}.`
+                )
             feedbackMessage = await sendChannel.send(
                 `${member}, I need permissions to connect and speak in your voice channel.`
             )
@@ -88,9 +92,11 @@ export default async function handleControlMessages(client: BotClient, message: 
             const existingPlayer = client.lavalink?.getPlayer(guildId)
             const occupiedVoiceChannelId = resolveOccupiedVoiceChannelId(guild, existingPlayer)
             if (!memberMayJoinOccupiedVoice(occupiedVoiceChannelId, voiceChannel.id)) {
-                client.warn(
-                    `[ControlHandler] User ${member.id} in VC ${voiceChannel.id}, but bot occupies VC ${occupiedVoiceChannelId} for guild ${guildId}.`
-                )
+                client
+                    .child({ guildId })
+                    .warn(
+                        `[ControlHandler] User ${member.id} in VC ${voiceChannel.id}, but bot occupies VC ${occupiedVoiceChannelId} for guild ${guildId}.`
+                    )
                 const otherVc = occupiedVoiceChannelId
                     ? client.channels.cache.get(occupiedVoiceChannelId)
                     : undefined
@@ -115,9 +121,11 @@ export default async function handleControlMessages(client: BotClient, message: 
             let player = client.lavalink?.getPlayer(guildId)
             let createdHere = false
             if (!player) {
-                client.debug(
-                    `[ControlHandler] No existing player for guild ${guildId}. Creating one.`
-                )
+                client
+                    .child({ guildId })
+                    .debug(
+                        `[ControlHandler] No existing player for guild ${guildId}. Creating one.`
+                    )
                 player = client.lavalink?.createPlayer({
                     guildId,
                     voiceChannelId: voiceChannel.id,
@@ -126,11 +134,15 @@ export default async function handleControlMessages(client: BotClient, message: 
                     volume: 100, // TODO: Make volume configurable?
                 })
                 createdHere = true
-                client.debug(`[ControlHandler] Created Lavalink player for guild ${guildId}.`)
+                client
+                    .child({ guildId })
+                    .debug(`[ControlHandler] Created Lavalink player for guild ${guildId}.`)
             } else {
-                client.debug(
-                    `[ControlHandler] Found existing player for guild ${guildId}. Connected: ${player.connected}`
-                )
+                client
+                    .child({ guildId })
+                    .debug(
+                        `[ControlHandler] Found existing player for guild ${guildId}. Connected: ${player.connected}`
+                    )
             }
 
             if (!player) {
@@ -162,29 +174,37 @@ export default async function handleControlMessages(client: BotClient, message: 
             }
 
             if (!player.connected) {
-                client.debug(
-                    `[ControlHandler] Player not connected for guild ${guildId}. Attempting connection to VC ${voiceChannel.id}.`
-                )
+                client
+                    .child({ guildId })
+                    .debug(
+                        `[ControlHandler] Player not connected for guild ${guildId}. Attempting connection to VC ${voiceChannel.id}.`
+                    )
                 player.voiceChannelId = voiceChannel.id
                 player.textChannelId = sendChannel.id
                 try {
                     await player.connect()
-                    client.debug(
-                        `[ControlHandler] Player successfully connected to VC ${voiceChannel.id} in guild ${guildId}.`
-                    )
+                    client
+                        .child({ guildId })
+                        .debug(
+                            `[ControlHandler] Player successfully connected to VC ${voiceChannel.id} in guild ${guildId}.`
+                        )
                 } catch (connectError: unknown) {
-                    client.error(
-                        `[ControlHandler] Player failed to connect in guild ${guildId}:`,
-                        connectError
-                    )
+                    client
+                        .child({ guildId })
+                        .error(
+                            `[ControlHandler] Player failed to connect in guild ${guildId}:`,
+                            connectError
+                        )
                     await cleanupCreatedPlayer()
                     return { kind: "connect_failed" as const }
                 }
             } else if (player.voiceChannelId !== voiceChannel.id) {
                 // If the user is in a different VC than the bot
-                client.warn(
-                    `[ControlHandler] User ${member.id} in VC ${voiceChannel.id}, but player is in VC ${player.voiceChannelId} for guild ${guildId}.`
-                )
+                client
+                    .child({ guildId })
+                    .warn(
+                        `[ControlHandler] User ${member.id} in VC ${voiceChannel.id}, but player is in VC ${player.voiceChannelId} for guild ${guildId}.`
+                    )
                 const otherVc = player.voiceChannelId
                     ? client.channels.cache.get(player.voiceChannelId)
                     : undefined
@@ -196,9 +216,11 @@ export default async function handleControlMessages(client: BotClient, message: 
                         : "Unknown Channel"
                 return { kind: "wrong_channel" as const, otherName }
             }
-            client.debug(
-                `[ControlHandler] Player connected status checked/handled for guild ${guildId}.`
-            )
+            client
+                .child({ guildId })
+                .debug(
+                    `[ControlHandler] Player connected status checked/handled for guild ${guildId}.`
+                )
 
             // 5, 6, 7: Use the centralized handler
             const result = await handleQueryAndPlay(
@@ -237,9 +259,11 @@ export default async function handleControlMessages(client: BotClient, message: 
             return
         }
 
-        client.debug(
-            `[ControlHandler] handleQueryAndPlay result for guild ${guildId}: Success=${controlOutcome.result.success}, Feedback="${controlOutcome.result.feedbackText}"`
-        )
+        client
+            .child({ guildId })
+            .debug(
+                `[ControlHandler] handleQueryAndPlay result for guild ${guildId}: Success=${controlOutcome.result.success}, Feedback="${controlOutcome.result.feedbackText}"`
+            )
 
         // Send feedback from the result
         if (controlOutcome.result.feedbackText) {
@@ -247,10 +271,12 @@ export default async function handleControlMessages(client: BotClient, message: 
         }
         // Note: updateControlMessage is called inside handleQueryAndPlay if needed.
     } catch (error: unknown) {
-        client.error(
-            `[ControlHandler] Uncaught error processing message in control channel for guild ${guildId}:`,
-            error
-        )
+        client
+            .child({ guildId })
+            .error(
+                `[ControlHandler] Uncaught error processing message in control channel for guild ${guildId}:`,
+                error
+            )
         try {
             if (feedbackMessage) {
                 await feedbackMessage.delete().catch(() => {})
@@ -262,48 +288,62 @@ export default async function handleControlMessages(client: BotClient, message: 
             /* Ignore */
         }
     } finally {
-        client.debug(
-            `[ControlHandler] Entering finally block for message ${message.id} in guild ${guildId}.`
-        )
+        client
+            .child({ guildId })
+            .debug(
+                `[ControlHandler] Entering finally block for message ${message.id} in guild ${guildId}.`
+            )
         // 9. Delete user query
         try {
             const botPermissions = botUser ? sendChannel.permissionsFor(botUser) : null
             if (botPermissions?.has(PermissionsBitField.Flags.ManageMessages)) {
                 await message.delete()
-                client.debug(
-                    `[ControlHandler] Deleted user query message ${message.id} in guild ${guildId}.`
-                )
+                client
+                    .child({ guildId })
+                    .debug(
+                        `[ControlHandler] Deleted user query message ${message.id} in guild ${guildId}.`
+                    )
             } else {
-                client.warn(
-                    `[ControlHandler] Missing ManageMessages permission in control channel ${sendChannel.id} for guild ${guildId}, cannot delete query.`
-                )
+                client
+                    .child({ guildId })
+                    .warn(
+                        `[ControlHandler] Missing ManageMessages permission in control channel ${sendChannel.id} for guild ${guildId}, cannot delete query.`
+                    )
             }
         } catch (deleteError: unknown) {
             const { code, message: errMsg } = discordDeleteErrorDetails(deleteError)
             if (code === "10008") {
-                client.debug(
-                    `[ControlHandler] User query message ${message.id} already deleted or missing in guild ${guildId}.`
-                )
+                client
+                    .child({ guildId })
+                    .debug(
+                        `[ControlHandler] User query message ${message.id} already deleted or missing in guild ${guildId}.`
+                    )
             } else {
-                client.warn(
-                    `[ControlHandler] Failed to delete query message ${message.id} in guild ${guildId}: ${errMsg}`
-                )
+                client
+                    .child({ guildId })
+                    .warn(
+                        `[ControlHandler] Failed to delete query message ${message.id} in guild ${guildId}: ${errMsg}`
+                    )
             }
         }
 
         // 10. Delete feedback message after a delay
         if (feedbackMessage) {
             const fm = feedbackMessage
-            client.debug(
-                `[ControlHandler] Scheduling deletion for feedback message ${fm.id} in guild ${guildId}.`
-            )
+            client
+                .child({ guildId })
+                .debug(
+                    `[ControlHandler] Scheduling deletion for feedback message ${fm.id} in guild ${guildId}.`
+                )
             setTimeout(() => {
                 void (async () => {
                     try {
                         await fm.delete()
-                        client.debug(
-                            `[ControlHandler] Deleted feedback message ${fm.id} in guild ${guildId}.`
-                        )
+                        client
+                            .child({ guildId })
+                            .debug(
+                                `[ControlHandler] Deleted feedback message ${fm.id} in guild ${guildId}.`
+                            )
                     } catch (feedbackDeleteError: unknown) {
                         const fe = feedbackDeleteError as { code?: number; message?: string }
                         if (fe.code !== 10008) {
@@ -315,8 +355,10 @@ export default async function handleControlMessages(client: BotClient, message: 
                 })()
             }, 5000)
         }
-        client.debug(
-            `[ControlHandler] Exiting finally block for message ${message.id} in guild ${guildId}.`
-        )
+        client
+            .child({ guildId })
+            .debug(
+                `[ControlHandler] Exiting finally block for message ${message.id} in guild ${guildId}.`
+            )
     }
 }

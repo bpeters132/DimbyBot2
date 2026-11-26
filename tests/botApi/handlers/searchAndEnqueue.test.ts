@@ -75,6 +75,12 @@ function createClient(
         debug() {},
         warn() {},
         info() {},
+        child() {
+            return this
+        },
+        forGuild() {
+            return this
+        },
         guilds: { cache: options.guild === false ? new Map() : new Map([[GUILD, guild]]) },
         channels: { cache: new Map() },
         lavalink: {

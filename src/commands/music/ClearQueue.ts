@@ -104,7 +104,9 @@ export default {
             }
 
             await interaction.reply({ content: `Cleared ${cleared} tracks from the queue.` })
-            client.debug(`[ClearQueue] Successfully cleared queue for guild ${guild.id}`)
+            client
+                .child({ guildId: guild.id })
+                .debug(`[ClearQueue] Successfully cleared queue for guild ${guild.id}`)
         } catch (error) {
             client.error("[ClearQueue] Error clearing the queue:", error)
             await interaction.reply({

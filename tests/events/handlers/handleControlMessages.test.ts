@@ -102,6 +102,12 @@ function createClient(player?: Record<string, unknown> | null) {
         info: log("info"),
         warn: log("warn"),
         error: log("error"),
+        child() {
+            return this
+        },
+        forGuild() {
+            return this
+        },
         channels: { cache: new Map<string, { name?: string }>() },
         lavalink: {
             getPlayer: () => live,

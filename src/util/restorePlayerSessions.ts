@@ -603,9 +603,11 @@ async function deleteStaleSessionIfUnchanged(
                 livePlayerExists: Boolean(client.lavalink.getPlayer(session.guildId)),
             })
         ) {
-            client.debug(
-                `[playerSession] skip stale delete for ${session.guildId}: live player or successor session present`
-            )
+            client
+                .child({ guildId: session.guildId })
+                .debug(
+                    `[playerSession] skip stale delete for ${session.guildId}: live player or successor session present`
+                )
             return
         }
         await deletePlayerSessionIfUnchanged(session)
@@ -620,7 +622,9 @@ async function safeDeleteStaleSession(
         await deleteStaleSessionIfUnchanged(client, session)
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
-        client.info(`[playerSession] stale session delete failed for ${session.guildId}: ${msg}`)
+        client
+            .child({ guildId: session.guildId })
+            .info(`[playerSession] stale session delete failed for ${session.guildId}: ${msg}`)
     }
 }
 
@@ -638,7 +642,9 @@ async function restoreSingleSession(
     const { guildId, voiceChannelId, snapshot } = session
 
     if (guildHasLocalPlayback(guildId)) {
-        client.debug(`[playerSession] restore skipped for ${guildId}: local playback in progress`)
+        client
+            .child({ guildId })
+            .debug(`[playerSession] restore skipped for ${guildId}: local playback in progress`)
         return "completed"
     }
 
@@ -657,9 +663,11 @@ async function restoreSingleSession(
         ) {
             await markPreservePriorIfSessionRowExists(guildId)
         }
-        client.debug(
-            `[playerSession] restore skipped for ${guildId}: live player already has queue content`
-        )
+        client
+            .child({ guildId })
+            .debug(
+                `[playerSession] restore skipped for ${guildId}: live player already has queue content`
+            )
         return "completed"
     }
 
@@ -675,18 +683,22 @@ async function restoreSingleSession(
                 clearEpochNow: getPlayerSessionClearEpoch(guildId),
             })
         ) {
-            client.debug(
-                `[playerSession] restore skipped for ${guildId}: session cleared or replaced before hydrate`
-            )
+            client
+                .child({ guildId })
+                .debug(
+                    `[playerSession] restore skipped for ${guildId}: session cleared or replaced before hydrate`
+                )
             return "completed"
         }
     }
 
     const voiceResult = await fetchVoiceChannel(client, guildId, voiceChannelId)
     if (voiceResult.status === "transient_error") {
-        client.warn(
-            `[playerSession] restore deferred for ${guildId}: transient Discord error fetching voice channel ${voiceChannelId}`
-        )
+        client
+            .child({ guildId })
+            .warn(
+                `[playerSession] restore deferred for ${guildId}: transient Discord error fetching voice channel ${voiceChannelId}`
+            )
         // Do not mark preserve-prior here. `/stop` can delete the session row while
         // this fetch is in flight, and a successor `/play` can fill the live queue
         // before we return. An early mark would stick after the batch finally sees
@@ -697,13 +709,17 @@ async function restoreSingleSession(
     // Local handoff can start during the voice fetch await. Do not stale-delete the
     // flushed snapshot or createPlayer into the empty slot (would steal Discord voice).
     if (guildHasLocalPlayback(guildId)) {
-        client.debug(`[playerSession] restore skipped for ${guildId}: local playback in progress`)
+        client
+            .child({ guildId })
+            .debug(`[playerSession] restore skipped for ${guildId}: local playback in progress`)
         return "completed"
     }
     if (voiceResult.status === "missing") {
-        client.info(
-            `[playerSession] stale session removed for ${guildId}: voice channel ${voiceChannelId} not found`
-        )
+        client
+            .child({ guildId })
+            .info(
+                `[playerSession] stale session removed for ${guildId}: voice channel ${voiceChannelId} not found`
+            )
         await safeDeleteStaleSession(client, session)
         return "completed"
     }
@@ -711,15 +727,19 @@ async function restoreSingleSession(
 
     const humans = countHumanMembers(voiceChannel)
     if (humans === 0 && shouldDeferRestoreForUnavailableGuild(voiceChannel.guild)) {
-        client.warn(
-            `[playerSession] restore deferred for ${guildId}: guild unavailable (voice state cache is not authoritative)`
-        )
+        client
+            .child({ guildId })
+            .warn(
+                `[playerSession] restore deferred for ${guildId}: guild unavailable (voice state cache is not authoritative)`
+            )
         return "deferred"
     }
     if (humans === 0) {
-        client.info(
-            `[playerSession] stale session removed for ${guildId}: no humans in VC ${voiceChannelId}`
-        )
+        client
+            .child({ guildId })
+            .info(
+                `[playerSession] stale session removed for ${guildId}: no humans in VC ${voiceChannelId}`
+            )
         await safeDeleteStaleSession(client, session)
         return "completed"
     }
@@ -739,9 +759,11 @@ async function restoreSingleSession(
     try {
         await withGuildPlayerLifecycleReservation(guildId, async () => {
             if (guildHasLocalPlayback(guildId)) {
-                client.debug(
-                    `[playerSession] restore skipped for ${guildId}: local playback in progress`
-                )
+                client
+                    .child({ guildId })
+                    .debug(
+                        `[playerSession] restore skipped for ${guildId}: local playback in progress`
+                    )
                 return
             }
             // Re-check under the reservation: a concurrent create may have won the race.
@@ -755,9 +777,11 @@ async function restoreSingleSession(
                 ) {
                     await markPreservePriorIfSessionRowExists(guildId)
                 }
-                client.debug(
-                    `[playerSession] restore skipped for ${guildId}: player appeared before hydrate`
-                )
+                client
+                    .child({ guildId })
+                    .debug(
+                        `[playerSession] restore skipped for ${guildId}: player appeared before hydrate`
+                    )
                 return
             }
 
@@ -772,9 +796,11 @@ async function restoreSingleSession(
                     clearEpochNow: getPlayerSessionClearEpoch(guildId),
                 })
             ) {
-                client.debug(
-                    `[playerSession] restore skipped for ${guildId}: session cleared or replaced before createPlayer`
-                )
+                client
+                    .child({ guildId })
+                    .debug(
+                        `[playerSession] restore skipped for ${guildId}: session cleared or replaced before createPlayer`
+                    )
                 return
             }
 
@@ -823,15 +849,19 @@ async function restoreSingleSession(
                     return "destroyed" as const
                 })
                 if (zeroResolve === "successor") {
-                    client.warn(
-                        `[playerSession] restore for ${guildId}: no tracks resolved but live player changed; leaving successor alone`
-                    )
+                    client
+                        .child({ guildId })
+                        .warn(
+                            `[playerSession] restore for ${guildId}: no tracks resolved but live player changed; leaving successor alone`
+                        )
                     return
                 }
                 if (zeroResolve === "concurrent") {
-                    client.warn(
-                        `[playerSession] restore for ${guildId}: no tracks resolved but live queue has content; keeping player`
-                    )
+                    client
+                        .child({ guildId })
+                        .warn(
+                            `[playerSession] restore for ${guildId}: no tracks resolved but live queue has content; keeping player`
+                        )
                     if (
                         shouldPersistConcurrentAbandonSession({
                             playableCount: 0,
@@ -850,14 +880,18 @@ async function restoreSingleSession(
                 // Lavalink/source blips that throw during decode/search must not wipe the snapshot.
                 // Deterministic no-match (search returned nothing usable) still deletes.
                 if (transientTotal > 0) {
-                    client.warn(
-                        `[playerSession] restore for ${guildId}: no tracks resolved due to transient failures; preserving session`
-                    )
+                    client
+                        .child({ guildId })
+                        .warn(
+                            `[playerSession] restore for ${guildId}: no tracks resolved due to transient failures; preserving session`
+                        )
                     return
                 }
-                client.warn(
-                    `[playerSession] restore for ${guildId}: no tracks resolved; destroying player`
-                )
+                client
+                    .child({ guildId })
+                    .warn(
+                        `[playerSession] restore for ${guildId}: no tracks resolved; destroying player`
+                    )
                 await deletePlayerSessionIfUnchanged(session)
                 return
             }
@@ -877,16 +911,20 @@ async function restoreSingleSession(
             })
 
             if (hydrated === "successor") {
-                client.warn(
-                    `[playerSession] restore for ${guildId}: skipped hydrate; live player changed during resolve`
-                )
+                client
+                    .child({ guildId })
+                    .warn(
+                        `[playerSession] restore for ${guildId}: skipped hydrate; live player changed during resolve`
+                    )
                 return
             }
 
             if (hydrated === "concurrent") {
-                client.warn(
-                    `[playerSession] restore for ${guildId}: skipped hydrate; concurrent queue content present`
-                )
+                client
+                    .child({ guildId })
+                    .warn(
+                        `[playerSession] restore for ${guildId}: skipped hydrate; concurrent queue content present`
+                    )
                 // Keep the prior full snapshot: schedulePlayerSessionSave of the thin concurrent
                 // queue would permanently drop the restored session from the DB. Skip the mark
                 // when `/stop`/`/leave` already cleared the row so the successor may save.
@@ -898,9 +936,11 @@ async function restoreSingleSession(
 
             // Re-check after releasing the queue lock: /stop may have replaced the player.
             if (!isRestoreHydratePlayerStillLive(player, client.lavalink.getPlayer(guildId))) {
-                client.warn(
-                    `[playerSession] restore for ${guildId}: live player changed after hydrate; skipping playback setup`
-                )
+                client
+                    .child({ guildId })
+                    .warn(
+                        `[playerSession] restore for ${guildId}: live player changed after hydrate; skipping playback setup`
+                    )
                 return
             }
 
@@ -925,15 +965,19 @@ async function restoreSingleSession(
             }
 
             if (!isRestoreHydratePlayerStillLive(player, client.lavalink.getPlayer(guildId))) {
-                client.warn(
-                    `[playerSession] restore for ${guildId}: live player changed during playback setup; not persisting restore player`
-                )
+                client
+                    .child({ guildId })
+                    .warn(
+                        `[playerSession] restore for ${guildId}: live player changed during playback setup; not persisting restore player`
+                    )
                 return
             }
 
-            client.info(
-                `[playerSession] restored player for guild ${guildId} (${playable.length} tracks, humans=${humans})`
-            )
+            client
+                .child({ guildId })
+                .info(
+                    `[playerSession] restored player for guild ${guildId} (${playable.length} tracks, humans=${humans})`
+                )
 
             scheduleControlMessageUpdate(client, guildId)
             playerBroadcaster.broadcastPlayerEvent(guildId, player, "queueUpdate")
@@ -974,7 +1018,9 @@ async function restoreSingleSession(
         })
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
-        client.error(`[playerSession] restore failed for guild ${guildId}: ${msg}`)
+        client
+            .child({ guildId })
+            .error(`[playerSession] restore failed for guild ${guildId}: ${msg}`)
         // Compare against the restore-created Player. getPlayer alone is not enough: a
         // successor would look like a live orphan and must not be destroyed here.
         const liveNow = client.lavalink.getPlayer(guildId)
@@ -990,18 +1036,22 @@ async function restoreSingleSession(
                 return "destroyed" as const
             })
             if (abandoned === "concurrent") {
-                client.warn(
-                    `[playerSession] restore for ${guildId}: error after concurrent enqueue; keeping player`
-                )
+                client
+                    .child({ guildId })
+                    .warn(
+                        `[playerSession] restore for ${guildId}: error after concurrent enqueue; keeping player`
+                    )
                 // Failed restore must not overwrite the prior snapshot with a concurrent thin queue.
                 await markPreservePriorIfSessionRowExists(guildId)
             }
             playerToPersist = null
         } else {
             if (liveNow && restorePlayer && liveNow !== restorePlayer) {
-                client.warn(
-                    `[playerSession] restore for ${guildId}: error after live player changed; leaving successor alone`
-                )
+                client
+                    .child({ guildId })
+                    .warn(
+                        `[playerSession] restore for ${guildId}: error after live player changed; leaving successor alone`
+                    )
             }
             playerToPersist = null
         }
@@ -1026,7 +1076,9 @@ async function restoreSingleSession(
 function scheduleControlMessageUpdate(client: BotClient, guildId: string): void {
     void updateControlMessage(client, guildId).catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err)
-        client.error(`[playerSession] updateControlMessage failed for ${guildId}: ${msg}`)
+        client
+            .child({ guildId })
+            .error(`[playerSession] updateControlMessage failed for ${guildId}: ${msg}`)
     })
 }
 
